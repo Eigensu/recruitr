@@ -2,8 +2,7 @@
 
 from datetime import datetime
 
-from beanie import Document
-from beanie import PydanticObjectId
+from beanie import Document, PydanticObjectId
 from pydantic import Field
 from pymongo import IndexModel
 

@@ -1,6 +1,6 @@
 """Gamification service — leaderboard and lazy daily score reset."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from beanie import PydanticObjectId
 
@@ -26,11 +26,11 @@ async def get_recruiter_with_lazy_reset(user_id: str) -> RecruiterProfile | None
     # Reset daily
     if now.date() > last.date():
         recruiter.daily_score = 0
-        
+
         # Reset weekly if it's a new ISO week (or more than 7 days have passed)
         if now.isocalendar()[1] != last.isocalendar()[1] or (now - last).days >= 7:
             recruiter.weekly_score = 0
-            
+
         recruiter.last_reset = now
         await recruiter.save()
 
@@ -39,7 +39,7 @@ async def get_recruiter_with_lazy_reset(user_id: str) -> RecruiterProfile | None
 
 async def get_leaderboard(brand_id: str, period: str = "daily") -> list[LeaderboardEntry]:
     sort_field = f"{period}_score"
-    
+
     recruiters = await RecruiterProfile.find(
         RecruiterProfile.brand_id == PydanticObjectId(brand_id)
     ).sort(-getattr(RecruiterProfile, sort_field)).to_list()

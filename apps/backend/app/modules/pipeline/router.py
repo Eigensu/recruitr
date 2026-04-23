@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, Query
 
+from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
 from app.modules.candidates.schemas import CandidateMatchScore
-from app.dependencies import get_current_user
 from app.modules.pipeline import service
 from app.modules.pipeline.schemas import MatchRequest, MatchResponse
 

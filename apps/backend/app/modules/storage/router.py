@@ -1,15 +1,12 @@
 """Storage API router — Cloudinary signed upload and webhook."""
 
-import hashlib
-import hmac
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 
-from app.modules.auth.schemas import TokenPayload
-from app.config import settings
 from app.dependencies import get_current_user
+from app.modules.auth.schemas import TokenPayload
 from app.modules.storage import service
-from app.modules.storage.schemas import CloudinarySignatureResponse, CloudinaryWebhookPayload
+from app.modules.storage.schemas import CloudinarySignatureResponse
 
 router = APIRouter()
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from beanie import Document, before_event, Update, Replace
+from beanie import Document, Replace, Update, before_event
 from pydantic import Field
 from pymongo import IndexModel
 

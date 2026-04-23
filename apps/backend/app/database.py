@@ -3,10 +3,10 @@
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from app.modules.brands.models import Brand
-from app.modules.candidates.models import Candidate
 from app.config import settings
 from app.modules.auth.models import User
+from app.modules.brands.models import Brand
+from app.modules.candidates.models import Candidate
 from app.modules.gamification.models import RecruiterProfile
 from app.modules.positions.models import Position
 

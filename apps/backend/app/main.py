@@ -5,11 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
+from app.database import init_db
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
 from app.modules.candidates.router import router as candidates_router
-from app.config import settings
-from app.database import init_db
 from app.modules.gamification.router import router as gamification_router
 from app.modules.pipeline.router import router as pipeline_router
 from app.modules.positions.router import router as positions_router

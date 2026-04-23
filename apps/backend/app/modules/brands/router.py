@@ -2,10 +2,10 @@
 
 from fastapi import APIRouter, Depends
 
+from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
 from app.modules.brands import service
 from app.modules.brands.schemas import BrandCreate, BrandResponse
-from app.dependencies import get_current_user
 
 router = APIRouter()
 

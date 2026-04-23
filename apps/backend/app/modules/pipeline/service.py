@@ -3,10 +3,10 @@
 from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 
-from app.modules.candidates.models import Candidate
 from app.database import get_client
+from app.modules.candidates.models import Candidate
 from app.modules.gamification.models import RecruiterProfile
-from app.modules.positions.models import MatchedCandidate, Position
+from app.modules.positions.models import Position
 
 
 async def find_top_candidates(

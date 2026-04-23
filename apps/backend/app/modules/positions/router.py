@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends
 
-from app.modules.auth.schemas import TokenPayload
 from app.dependencies import get_current_user
+from app.modules.auth.schemas import TokenPayload
 from app.modules.positions import service
 from app.modules.positions.schemas import PositionCreate, PositionResponse, PositionUpdate
 

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, Query
 
+from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
 from app.modules.candidates import service
 from app.modules.candidates.schemas import (
@@ -9,7 +10,6 @@ from app.modules.candidates.schemas import (
     CandidateResponse,
     CandidateUploadConfirm,
 )
-from app.dependencies import get_current_user
 
 router = APIRouter()
 

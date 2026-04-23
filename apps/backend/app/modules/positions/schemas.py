@@ -2,7 +2,6 @@
 
 from typing import Literal
 
-from beanie import PydanticObjectId
 from pydantic import BaseModel
 
 

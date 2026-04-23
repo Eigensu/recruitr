@@ -1,13 +1,14 @@
 """Auth API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
 from datetime import timedelta
 
-from app.modules.auth.schemas import TokenPayload, UserInfoResponse, UserCreate, UserLogin
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+
+from app.config import settings
 from app.dependencies import get_current_user
 from app.modules.auth.models import User
-from app.modules.auth.security import get_password_hash, verify_password, create_access_token
-from app.config import settings
+from app.modules.auth.schemas import TokenPayload, UserCreate, UserInfoResponse, UserLogin
+from app.modules.auth.security import create_access_token, get_password_hash, verify_password
 
 router = APIRouter()
 
@@ -22,7 +23,7 @@ async def signup(user_in: UserCreate) -> dict:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The user with this email already exists in the system.",
         )
-    
+
     user = User(
         email=email,
         hashed_password=get_password_hash(user_in.password),
@@ -42,12 +43,12 @@ async def login(user_in: UserLogin, response: Response) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
-    
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
-    
+
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -56,7 +57,7 @@ async def login(user_in: UserLogin, response: Response) -> dict:
         samesite="lax",       # lax is safer for dev
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
-    
+
     return {"status": "ok", "message": "Logged in successfully"}
 
 
@@ -73,7 +74,7 @@ async def read_user_me(current_user: TokenPayload = Depends(get_current_user)) -
     user = await User.get(current_user.sub)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
+
     return UserInfoResponse(
         user_id=str(user.id),
         email=user.email,

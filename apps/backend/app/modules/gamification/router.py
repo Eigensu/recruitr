@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends, Query
 
-from app.modules.auth.schemas import TokenPayload
 from app.dependencies import get_current_user
+from app.modules.auth.schemas import TokenPayload
 from app.modules.gamification import service
 from app.modules.gamification.schemas import LeaderboardEntry, RecruiterStatsResponse
 

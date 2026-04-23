@@ -2,8 +2,7 @@
 
 from typing import Literal
 
-from beanie import Document
-from beanie import PydanticObjectId
+from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
 

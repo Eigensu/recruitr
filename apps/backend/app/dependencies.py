@@ -1,7 +1,7 @@
 """Global FastAPI dependencies for authentication and common services."""
 
-from fastapi import Depends, HTTPException, status, Request
-from jose import jwt, JWTError
+from fastapi import HTTPException, Request, status
+from jose import JWTError, jwt
 
 from app.config import settings
 from app.modules.auth.schemas import TokenPayload
