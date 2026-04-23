@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+# .husky/pre-commit
+# Runs frontend (ESLint + Prettier via lint-staged) and backend (ruff) checks
+# on staged files before every git commit.
+#
+# Structure: apps/frontend/ and apps/backend/
+
+set -e  # exit immediately on any non-zero command
+
+echo "🔍 Running pre-commit checks..."
+
+# ── Frontend: lint-staged (ESLint + Prettier on staged TS/TSX/CSS files) ──────
+STAGED_FRONTEND=$(git diff --cached --name-only --diff-filter=ACMR | grep "^apps/frontend/" || true)
+
+if [ -n "$STAGED_FRONTEND" ]; then
+  echo "▶ Frontend: running lint-staged..."
+  export PATH="$HOME/.local/share/pnpm:$PATH:/usr/local/bin"
+  cd apps/frontend && pnpm exec lint-staged
+  cd ../..
+  echo "✅ Frontend passed."
+fi
+
+# ── Backend: ruff (lint + format) on staged Python files ─────────────────────
+STAGED_PYTHON=$(git diff --cached --name-only --diff-filter=ACMR | grep "^apps/backend/.*\.py$" || true)
+
+if [ -n "$STAGED_PYTHON" ]; then
+  echo "▶ Backend: running ruff check + format..."
+
+  # Use venv ruff if available, fall back to system
+  RUFF_BIN="apps/backend/.venv/bin/ruff"
+  if [ ! -f "$RUFF_BIN" ]; then
+    RUFF_BIN=$(which ruff 2>/dev/null || echo "")
+  fi
+
+  if [ -z "$RUFF_BIN" ]; then
+    echo "⚠  ruff not found — skipping backend checks."
+    echo "   Install with: cd apps/backend && pip install ruff"
+  else
+    echo "$STAGED_PYTHON" | xargs "$RUFF_BIN" check --fix --quiet
+    echo "$STAGED_PYTHON" | xargs "$RUFF_BIN" format --quiet
+    echo "$STAGED_PYTHON" | xargs git add   # re-stage auto-fixed files
+    echo "✅ Backend passed."
+  fi
+fi
+
+echo "✨ All checks passed!"

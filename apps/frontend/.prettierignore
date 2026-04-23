@@ -1,0 +1,7 @@
+# Prettier ignore — files that should not be formatted
+.next/
+node_modules/
+.turbo/
+public/
+*.lock
+package-lock.json

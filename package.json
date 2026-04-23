@@ -1,0 +1,20 @@
+{
+  "name": "eigensu",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "dev:frontend": "turbo run dev --filter=frontend",
+    "dev:backend": "cd apps/backend && uvicorn app.main:app --reload --port 8000",
+    "build:frontend": "turbo run build --filter=frontend",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "turbo": "latest"
+  }
+}
