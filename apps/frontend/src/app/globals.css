@@ -1,26 +1,142 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Explicitly include all source files — fixes Tailwind v4 auto-detection
+   skipping directories with special characters like (auth), (dashboard), etc. */
+@source "../../src/**/*.{ts,tsx,js,jsx}";
+
+/* ==========================================================================
+   BINGE CONSULTING — Brand Design System
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   @font-face — Self-hosted brand fonts
+   Place .woff2 / .woff files in public/fonts/
+   -------------------------------------------------------------------------- */
+
+/* --- Galderglynn Titling (Headings & Sub-headings) --- */
+@font-face {
+  font-family: "Galderglynn Titling";
+  src:
+    url("/fonts/galderglynn-titling-light.woff2") format("woff2"),
+    url("/fonts/galderglynn-titling-light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
 }
 
+@font-face {
+  font-family: "Galderglynn Titling";
+  src:
+    url("/fonts/galderglynn-titling-regular.woff2") format("woff2"),
+    url("/fonts/galderglynn-titling-regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Galderglynn Titling";
+  src:
+    url("/fonts/galderglynn-titling-bold.woff2") format("woff2"),
+    url("/fonts/galderglynn-titling-bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --- MADE Outer Sans (Subtitles & UI elements) --- */
+@font-face {
+  font-family: "MADE Outer Sans";
+  src:
+    url("/fonts/made-outer-sans-light.woff2") format("woff2"),
+    url("/fonts/made-outer-sans-light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MADE Outer Sans";
+  src:
+    url("/fonts/made-outer-sans-regular.woff2") format("woff2"),
+    url("/fonts/made-outer-sans-regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MADE Outer Sans";
+  src:
+    url("/fonts/made-outer-sans-bold.woff2") format("woff2"),
+    url("/fonts/made-outer-sans-bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------------------
+   Tailwind v4 @theme — Register brand tokens as Tailwind utilities
+   Usage: bg-navy, text-yellow, font-heading, etc.
+   -------------------------------------------------------------------------- */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-navy: #002348;
+  --color-navy-dark: #001a36;
+  --color-yellow: #f3ff54;
+  --color-yellow-dark: #e0ec4d;
+  --color-charcoal: #2e2626;
+  --color-light: #f9f7f8;
+  --color-muted: #6b7280;
+
+  --font-heading: "Galderglynn Titling", "Arimo", sans-serif;
+  --font-subtitle: "MADE Outer Sans", "Arimo", sans-serif;
+  --font-body: "Arimo", sans-serif;
+  --font-sans: "Arimo", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --------------------------------------------------------------------------
+   Base Styles (Tailwind preflight handles resets — don't duplicate)
+   -------------------------------------------------------------------------- */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+}
+
+/* --------------------------------------------------------------------------
+   Focus & Accessibility
+   -------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--color-yellow);
+  outline-offset: 2px;
+}
+
+::selection {
+  background-color: var(--color-yellow);
+  color: var(--color-navy);
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbar Styling (Webkit)
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-navy);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-navy-dark);
 }
