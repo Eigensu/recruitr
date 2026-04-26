@@ -44,7 +44,7 @@ export default function SignInPage() {
           src="/login-hero.png"
           alt=""
           fill
-          sizes="100vw"
+          sizes="(max-width: 1024px) 100vw, 50vw"
           className="object-cover anim-in"
           priority
         />
@@ -79,7 +79,7 @@ export default function SignInPage() {
           src="/login-hero.png"
           alt=""
           fill
-          sizes="50vw"
+          sizes="(max-width: 1024px) 100vw, 50vw"
           className="object-cover anim-in"
           priority
         />
@@ -126,7 +126,6 @@ export default function SignInPage() {
             alt=""
             width={256}
             height={100}
-            className="h-auto w-full"
             style={{ width: "100%", height: "auto" }}
           />
         </div>
@@ -295,9 +294,9 @@ export default function SignInPage() {
               <span className="h-px flex-1 bg-gray-200" />
             </div>
 
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white px-6 py-3 text-sm font-medium text-charcoal transition-all hover:-translate-y-px hover:border-gray-300 hover:bg-light hover:shadow-sm anim-up d9"
+            <a
+              href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/google/login`}
+              className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white px-6 py-3 text-sm font-medium text-charcoal transition-all hover:-translate-y-px hover:border-gray-300 hover:bg-light hover:shadow-sm anim-up d9"
               id="si-g"
             >
               <svg width="18" height="18" viewBox="0 0 48 48">
@@ -319,7 +318,7 @@ export default function SignInPage() {
                 />
               </svg>
               Sign In with Google
-            </button>
+            </a>
           </form>
 
           <p className="mt-7 text-center text-sm text-muted anim-in d10">
