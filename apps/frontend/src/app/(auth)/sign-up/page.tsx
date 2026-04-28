@@ -79,12 +79,12 @@ export default function SignUpPage() {
         </div>
         <div className="absolute top-5 right-5 z-30 anim-down d2">
           <span className="font-heading text-lg font-bold tracking-tight text-white">
-            binge <span className="text-yellow">ai</span>
+            binge <span className="text-yellow font-normal">ai</span>
           </span>
         </div>
         <div className="absolute right-6 bottom-6 left-6 z-30">
           <h2 className="font-heading text-2xl font-bold uppercase leading-[1.1] tracking-tight text-white anim-up d4">
-            Build Your <span className="text-yellow">Dream Team.</span>
+            Build Your <span className="text-yellow font-normal">Dream Team.</span>
           </h2>
           <p className="mt-1 font-subtitle text-xs tracking-wide text-white/50 anim-up d5">
             Join the future of hospitality recruitment.
@@ -121,7 +121,7 @@ export default function SignUpPage() {
           <h2 className="mb-3 font-heading text-[clamp(2rem,3.5vw,3.5rem)] font-bold uppercase leading-[1.05] tracking-tight text-white anim-up d7">
             Build Your
             <br />
-            <span className="text-yellow">Dream Team.</span>
+            <span className="text-yellow font-normal">Dream Team.</span>
             <br />
             Start Now.
           </h2>
@@ -152,7 +152,7 @@ export default function SignUpPage() {
         {/* binge ai — desktop only */}
         <div className="absolute right-8 top-6 z-10 hidden anim-down d2 lg:block">
           <span className="font-heading text-xl font-bold tracking-tight text-navy">
-            binge <span className="text-yellow">ai</span>
+            binge <span className="text-yellow font-normal">ai</span>
           </span>
         </div>
 

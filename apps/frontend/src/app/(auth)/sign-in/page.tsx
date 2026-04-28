@@ -60,12 +60,12 @@ export default function SignInPage() {
         </div>
         <div className="absolute top-5 right-5 z-30 anim-down d2">
           <span className="font-heading text-lg font-bold tracking-tight text-white">
-            binge <span className="text-yellow">ai</span>
+            binge <span className="text-yellow font-normal">ai</span>
           </span>
         </div>
         <div className="absolute right-6 bottom-6 left-6 z-30">
           <h2 className="font-heading text-2xl font-bold uppercase leading-[1.1] tracking-tight text-white anim-up d4">
-            Find The <span className="text-yellow">Right Talent.</span>
+            Find The <span className="text-yellow font-normal">Right Talent.</span>
           </h2>
           <p className="mt-1 font-subtitle text-xs tracking-wide text-white/50 anim-up d5">
             Hospitality Recruitment, Reimagined.
@@ -102,7 +102,7 @@ export default function SignInPage() {
           <h2 className="mb-3 font-heading text-[clamp(2rem,3.5vw,3.5rem)] font-bold uppercase leading-[1.05] tracking-tight text-white anim-up d7">
             Find The
             <br />
-            <span className="text-yellow">Right Talent.</span>
+            <span className="text-yellow font-normal">Right Talent.</span>
             <br />
             Every Time.
           </h2>
@@ -133,7 +133,7 @@ export default function SignInPage() {
         {/* binge ai — desktop only (mobile has it in the banner) */}
         <div className="absolute right-8 top-6 z-10 hidden anim-down d2 lg:block">
           <span className="font-heading text-xl font-bold tracking-tight text-navy">
-            binge <span className="text-yellow">ai</span>
+            binge <span className="text-yellow font-normal">ai</span>
           </span>
         </div>
 
