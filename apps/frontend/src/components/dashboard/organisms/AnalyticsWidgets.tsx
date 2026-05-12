@@ -2,8 +2,12 @@
 
 import { motion } from "motion/react";
 import { IconChartDots3, IconPercentage, IconRoute, IconTargetArrow } from "@tabler/icons-react";
-import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
-import { DASHBOARD_PANEL_CLASS, TONE_CLASSES } from "@/lib/dashboard-constants";
+import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard";
+import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
+import {
+  DASHBOARD_PANEL_CLASS,
+  TONE_CLASSES,
+} from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { DashboardAnalyticsWidget } from "@/types/dashboard";
 
@@ -43,12 +47,12 @@ export default function AnalyticsWidgets({ widgets }: AnalyticsWidgetsProps) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl text-white">Analytics Widgets</h2>
-          <p className="mt-1 text-sm text-white/50">Derived from synced client activity</p>
+          <p className="mt-1 text-sm text-white">Derived from synced client activity</p>
         </div>
         <IconChartDots3 className="size-6 text-yellow" />
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {widgets.map((widget, index) => {
           const tone = TONE_CLASSES[widget.tone];
           const Icon = iconMap[widget.id as keyof typeof iconMap] ?? IconChartDots3;
@@ -66,7 +70,7 @@ export default function AnalyticsWidgets({ widgets }: AnalyticsWidgetsProps) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-normal text-white/45">
+                  <p className="text-xs font-semibold uppercase tracking-normal text-white">
                     {widget.label}
                   </p>
                   <p className={cn("mt-2 font-heading text-3xl", valueClass[widget.tone])}>
@@ -83,7 +87,7 @@ export default function AnalyticsWidgets({ widgets }: AnalyticsWidgetsProps) {
                   <Icon className="size-5" />
                 </div>
               </div>
-              <p className="mt-4 text-sm text-white/55">{widget.helper}</p>
+              <p className="mt-4 text-sm text-white">{widget.helper}</p>
             </motion.article>
           );
         })}

@@ -3,8 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { IconChartPie } from "@tabler/icons-react";
-import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
-import { DASHBOARD_PANEL_CLASS } from "@/lib/dashboard-constants";
+import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
+import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { PipelineStageMetric } from "@/types/dashboard";
 
@@ -65,21 +65,21 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
   }, [stages, total]);
 
   return (
-    <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "p-5")}>
+    <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl text-white">Pipeline Pie Chart</h2>
-          <p className="mt-1 text-sm text-white/50">Interactive share of pipeline stages</p>
+          <p className="mt-1 text-sm text-white">Interactive share of pipeline stages</p>
         </div>
         <IconChartPie className="size-6 text-yellow" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-center">
+      <div className="mt-4 flex flex-1 items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.94 }}
           animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.94 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
-          className="relative mx-auto size-64"
+          className="relative mx-auto aspect-square w-full max-w-[24rem]"
         >
           <svg viewBox="0 0 120 120" className="size-full -rotate-90 drop-shadow-lg">
             <circle
@@ -124,52 +124,28 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
           </svg>
 
           <div className="absolute inset-10 flex flex-col items-center justify-center rounded-full border border-white/10 bg-[#111827] p-5 text-center shadow-inner shadow-black/50">
-            <p className="text-xs font-semibold uppercase tracking-normal text-white/45">
-              Selected
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-normal text-white">Selected</p>
             <p className="mt-2 font-heading text-3xl text-white">
               <AnimatedNumber value={active?.count ?? total} />
             </p>
             <p className="mt-1 text-sm text-yellow">{active?.label ?? "All stages"}</p>
-            <p className="mt-1 text-xs text-white/45">
+            <p className="mt-1 text-xs text-white">
               <AnimatedNumber value={active?.percent ?? 100} suffix="%" /> of pipeline
             </p>
           </div>
         </motion.div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {segments.map((segment) => {
-            const isActive = segment.stage === activeStage;
-
-            return (
-              <button
-                key={segment.stage}
-                type="button"
-                onMouseEnter={() => setActiveStage(segment.stage)}
-                onFocus={() => setActiveStage(segment.stage)}
-                onClick={() => setActiveStage(segment.stage)}
-                title={`${segment.label}: ${segment.count} candidates, ${segment.percent}% of pipeline`}
-                className={cn(
-                  "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition-colors",
-                  isActive
-                    ? "border-yellow/60 bg-yellow/10 text-white"
-                    : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:bg-white/[0.06]",
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: segment.color }}
-                  />
-                  <span className="truncate text-sm font-medium">{segment.label}</span>
-                </span>
-                <span className="shrink-0 font-heading text-lg text-yellow">
-                  <AnimatedNumber value={segment.count} />
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <p className="text-xs leading-relaxed text-white">
+          <span className="text-white">Pipeline Overview:</span> Your recruitment pipeline is
+          distributed across {stages.length} stages. The largest concentration is in{" "}
+          {segments[0]?.label}, which represents{" "}
+          <span className="font-semibold text-white">
+            {segments[0]?.percent}% of total candidates
+          </span>
+          . Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.
+        </p>
       </div>
     </section>
   );
