@@ -14,6 +14,7 @@ import {
 } from "@tabler/icons-react";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import SignOutButton from "@/components/sidebar/SignOutButton";
+import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -69,7 +70,10 @@ const BingeLogo = () => (
 
 /** Icon-only logo when sidebar is collapsed */
 const BingeLogoIcon = () => (
-  <Link href="/" className="relative z-20 flex items-center py-1 no-underline">
+  <Link
+    href="/"
+    className="relative z-20 flex w-full items-center justify-center py-1 no-underline"
+  >
     <div className="size-8 shrink-0 overflow-hidden rounded-lg shadow">
       <Image
         src="/logo-yellow.jpeg"
@@ -87,9 +91,14 @@ function UserRow({ user }: { user: { full_name: string; email: string } | null }
   const { open, animate } = useSidebar();
 
   return (
-    <div className="flex items-center gap-3 px-2 py-2">
+    <div
+      className={cn(
+        "flex items-center gap-3 py-2 mt-2 pt-4 border-t border-border",
+        open ? "px-2" : "justify-center px-0 w-full",
+      )}
+    >
       {/* Avatar */}
-      <div className="size-8 shrink-0 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-white uppercase select-none">
+      <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
         {user?.full_name?.[0] ?? "?"}
       </div>
 
@@ -104,7 +113,7 @@ function UserRow({ user }: { user: { full_name: string; email: string } | null }
         <span className="text-sm font-medium text-white truncate leading-tight">
           {user?.full_name ?? "Loading…"}
         </span>
-        <span className="text-xs text-gray-500 truncate leading-tight">{user?.email ?? ""}</span>
+        <span className="text-xs text-white/40 truncate leading-tight">{user?.email ?? ""}</span>
       </motion.div>
 
       {/* Sign out — only shows when open */}
@@ -161,7 +170,7 @@ export default function DashboardSidebar() {
         </div>
 
         {/* Bottom: user + sign-out */}
-        <div className="border-t border-gray-800 pt-4">
+        <div>
           <UserRow user={user} />
         </div>
       </SidebarBody>

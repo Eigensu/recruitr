@@ -121,6 +121,12 @@ async def google_login(request: Request) -> RedirectResponse:
     Step 1: Redirect the browser to Google's consent screen.
     A random `state` token is stored in the session to prevent CSRF.
     """
+    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth is not configured.",
+        )
+
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 

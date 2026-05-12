@@ -2,7 +2,7 @@
 
 /* Explicitly include all source files — fixes Tailwind v4 auto-detection
    skipping directories with special characters like (auth), (dashboard), etc. */
-@source "../../src/**/*.{ts,tsx,js,jsx}";
+@source "../**/*.{ts,tsx,js,jsx}";
 
 /* ==========================================================================
    BINGE CONSULTING — Brand Design System
@@ -44,42 +44,12 @@
   font-display: swap;
 }
 
-/* --- MADE Outer Sans (Subtitles & UI elements) --- */
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-light.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-light.woff") format("woff");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-regular.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-regular.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-bold.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* --------------------------------------------------------------------------
    Tailwind v4 @theme — Register brand tokens as Tailwind utilities
    Usage: bg-navy, text-yellow, font-heading, etc.
    -------------------------------------------------------------------------- */
 @theme inline {
+  /* ── Core brand ── */
   --color-navy: #002348;
   --color-navy-dark: #001a36;
   --color-yellow: #f3ff54;
@@ -87,6 +57,19 @@
   --color-charcoal: #2e2626;
   --color-light: #f9f7f8;
   --color-muted: #6b7280;
+
+  /* ── Dashboard surface palette ──
+     sidebar      → deep navy  (#001228)
+     canvas       → mid-dark   (#0a1929)  — main content bg
+     surface      → raised card (#0f2237)  — card / panel bg
+     surface-2    → hover/elevated (#162d45)
+     border       → subtle divider
+  */
+  --color-sidebar: #001228;
+  --color-canvas: #070f1a;
+  --color-surface: #0d1e30;
+  --color-surface-2: #162d45;
+  --color-border: rgba(255, 255, 255, 0.07);
 
   --font-heading: "Galderglynn Titling", var(--font-arimo), sans-serif;
   --font-subtitle: "MADE Outer Sans", var(--font-arimo), sans-serif;

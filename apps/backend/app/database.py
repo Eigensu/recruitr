@@ -21,6 +21,7 @@ async def init_db() -> None:
     await init_beanie(
         database=_client[settings.MONGODB_DB_NAME],
         document_models=[User, Brand, Position, Candidate, RecruiterProfile],
+        allow_index_dropping=True,
     )
 
 
