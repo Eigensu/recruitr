@@ -171,41 +171,44 @@ async def google_callback(
     if not code:
         return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
-        # Exchange authorization code → access token
-        token_resp = await client.post(
-            _GOOGLE_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        if token_resp.status_code != 200:
-            return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+            # Exchange authorization code → access token
+            token_resp = await client.post(
+                _GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_resp.status_code != 200:
+                return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
 
-        token_data = token_resp.json()
-        google_access_token = token_data.get("access_token")
-        if not google_access_token:
-            token_error = token_data.get("error") or "token_exchange_failed"
-            token_error_description = token_data.get("error_description")
-            if token_error_description:
-                error_value = urllib.parse.quote(
-                    f"{token_error}:{token_error_description}", safe=""
-                )
-            else:
-                error_value = urllib.parse.quote(token_error, safe="")
-            return RedirectResponse(f"{frontend}/sign-in?error={error_value}")
+            token_data = token_resp.json()
+            google_access_token = token_data.get("access_token")
+            if not google_access_token:
+                token_error = token_data.get("error") or "token_exchange_failed"
+                token_error_description = token_data.get("error_description")
+                if token_error_description:
+                    error_value = urllib.parse.quote(
+                        f"{token_error}:{token_error_description}", safe=""
+                    )
+                else:
+                    error_value = urllib.parse.quote(token_error, safe="")
+                return RedirectResponse(f"{frontend}/sign-in?error={error_value}")
 
-        # Fetch user profile from Google
-        userinfo_resp = await client.get(
-            _GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {google_access_token}"},
-        )
-        if userinfo_resp.status_code != 200:
-            return RedirectResponse(f"{frontend}/sign-in?error=userinfo_failed")
+            # Fetch user profile from Google
+            userinfo_resp = await client.get(
+                _GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {google_access_token}"},
+            )
+            if userinfo_resp.status_code != 200:
+                return RedirectResponse(f"{frontend}/sign-in?error=userinfo_failed")
+    except (httpx.RequestError, httpx.TimeoutException):
+        return RedirectResponse(f"{frontend}/sign-in?error=network_error")
 
     profile = userinfo_resp.json()
     google_id = profile.get("sub")

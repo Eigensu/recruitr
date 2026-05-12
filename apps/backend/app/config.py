@@ -34,10 +34,11 @@ class Settings(BaseSettings):
     # ── MongoDB ──
     MONGODB_URI: str = "mongodb://localhost:27017/eigensu?replicaSet=rs0"
     MONGODB_DB_NAME: str = "eigensu"
+    ALLOW_INDEX_DROPPING: bool = False
 
     # ── Auth (Custom JWT) ──
     JWT_SECRET: str = "changeme_in_production"
-    SESSION_SECRET: str = secrets.token_urlsafe(32)
+    SESSION_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
@@ -59,8 +60,18 @@ class Settings(BaseSettings):
     @field_validator("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
     @classmethod
     def validate_google_credentials(cls, v: str, info: ValidationInfo) -> str:
+        v = v.strip()
         if not v and not info.data.get("DEBUG", False):
             raise ValueError(f"{info.field_name} must not be empty.")
+        return v
+
+    @field_validator("SESSION_SECRET")
+    @classmethod
+    def validate_session_secret(cls, v: str, info: ValidationInfo) -> str:
+        if not v:
+            if info.data.get("DEBUG", False):
+                return secrets.token_urlsafe(32)
+            raise ValueError("SESSION_SECRET must be set in non-debug mode.")
         return v
 
     # ── Frontend ──

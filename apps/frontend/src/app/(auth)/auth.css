@@ -271,3 +271,18 @@
 .str-good {
   background: #10b981;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-up,
+  .anim-down,
+  .anim-in,
+  .anim-left,
+  .anim-scale,
+  .anim-shake,
+  .anim-glow,
+  .hero-frame,
+  .btn-shimmer::after,
+  .spinner {
+    animation: none !important;
+  }
+}
