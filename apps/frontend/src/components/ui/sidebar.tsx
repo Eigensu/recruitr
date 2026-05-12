@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
+import Link from "next/link";
 
 interface Links {
   label: string;
@@ -108,10 +109,14 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
       {...props}
     >
       <div className="flex justify-end z-20 w-full">
-        <IconMenu2
-          className="text-gray-400 cursor-pointer hover:text-white transition-colors"
+        <button
+          type="button"
+          aria-label="Toggle menu"
+          className="text-white cursor-pointer hover:text-white transition-colors"
           onClick={() => setOpen(!open)}
-        />
+        >
+          <IconMenu2 />
+        </button>
       </div>
       <AnimatePresence>
         {open && (
@@ -125,12 +130,14 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
               className,
             )}
           >
-            <div
-              className="absolute right-8 top-8 z-50 text-gray-400 cursor-pointer hover:text-white transition-colors"
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="absolute right-8 top-8 z-50 text-white cursor-pointer hover:text-white transition-colors"
               onClick={() => setOpen(!open)}
             >
               <IconX />
-            </div>
+            </button>
             {children}
           </motion.div>
         )}
@@ -151,7 +158,7 @@ export const SidebarLink = ({
 }) => {
   const { open, animate } = useSidebar();
   return (
-    <a
+    <Link
       href={link.href}
       className={cn(
         "flex items-center justify-start gap-3 group/sidebar py-2.5 px-2 rounded-lg transition-colors",
@@ -170,6 +177,6 @@ export const SidebarLink = ({
       >
         {link.label}
       </motion.span>
-    </a>
+    </Link>
   );
 };

@@ -12,7 +12,6 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -249,31 +248,7 @@ export default function SignInPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between anim-up d6">
-              <label className="flex cursor-pointer items-center gap-2" htmlFor="si-rem">
-                <input
-                  id="si-rem"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="ck-hide"
-                />
-                <span className="ck-box">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                  </svg>
-                </span>
-                <span className="text-[13px] text-charcoal">Remember me</span>
-              </label>
+            <div className="flex items-center justify-end anim-up d6">
               <Link href="#" className="text-[13px] font-medium text-navy hover:text-charcoal">
                 Forgot Password
               </Link>

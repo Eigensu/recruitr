@@ -88,10 +88,10 @@
   --color-light: #f9f7f8;
   --color-muted: #6b7280;
 
-  --font-heading: "Galderglynn Titling", "Arimo", sans-serif;
-  --font-subtitle: "MADE Outer Sans", "Arimo", sans-serif;
-  --font-body: "Arimo", sans-serif;
-  --font-sans: "Arimo", sans-serif;
+  --font-heading: "Galderglynn Titling", var(--font-arimo), sans-serif;
+  --font-subtitle: "MADE Outer Sans", var(--font-arimo), sans-serif;
+  --font-body: var(--font-arimo), sans-serif;
+  --font-sans: var(--font-arimo), sans-serif;
 }
 
 /* --------------------------------------------------------------------------

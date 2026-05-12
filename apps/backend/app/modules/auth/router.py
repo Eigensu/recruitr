@@ -177,7 +177,18 @@ async def google_callback(
         if token_resp.status_code != 200:
             return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
 
-        google_access_token = token_resp.json().get("access_token")
+        token_data = token_resp.json()
+        google_access_token = token_data.get("access_token")
+        if not google_access_token:
+            token_error = token_data.get("error") or "token_exchange_failed"
+            token_error_description = token_data.get("error_description")
+            if token_error_description:
+                error_value = urllib.parse.quote(
+                    f"{token_error}:{token_error_description}", safe=""
+                )
+            else:
+                error_value = urllib.parse.quote(token_error, safe="")
+            return RedirectResponse(f"{frontend}/sign-in?error={error_value}")
 
         # Fetch user profile from Google
         userinfo_resp = await client.get(
@@ -188,9 +199,19 @@ async def google_callback(
             return RedirectResponse(f"{frontend}/sign-in?error=userinfo_failed")
 
     profile = userinfo_resp.json()
-    google_id: str = profile["sub"]
-    email: str = profile["email"].lower()
+    google_id = profile.get("sub")
+    email = profile.get("email")
+    email_verified = profile.get("email_verified")
     full_name: str | None = profile.get("name")
+
+    if not isinstance(google_id, str) or not google_id:
+        return RedirectResponse(f"{frontend}/sign-in?error=missing_google_sub")
+    if not isinstance(email, str) or not email:
+        return RedirectResponse(f"{frontend}/sign-in?error=missing_email")
+    if email_verified is not True:
+        return RedirectResponse(f"{frontend}/sign-in?error=unverified_email")
+
+    email = email.lower()
 
     # ── Find or create user ───────────────────────────────────────────────────
     user = await User.find_one(User.google_id == google_id)
