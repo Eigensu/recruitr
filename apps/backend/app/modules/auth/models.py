@@ -9,8 +9,9 @@ from pymongo import IndexModel
 
 class User(Document):
     email: str
-    hashed_password: str
+    hashed_password: str | None = None  # None for Google-only accounts
     full_name: str | None = None
+    google_id: str | None = None  # Google sub (unique user ID)
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -23,4 +24,6 @@ class User(Document):
         name = "users"
         indexes = [
             IndexModel("email", unique=True),
+            # sparse: allows multiple null values
+            IndexModel("google_id", unique=True, sparse=True),
         ]
