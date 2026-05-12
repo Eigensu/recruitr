@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
+    # ── Redis ──
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_ENABLED: bool = False
+    REDIS_NAMESPACE: str = "dashboard"
+    REDIS_CACHE_TTL_SECONDS: int = 300
+
     # ── Cloudinary ──
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""

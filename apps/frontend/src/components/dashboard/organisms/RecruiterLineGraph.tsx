@@ -153,8 +153,8 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
               </linearGradient>
             </defs>
 
-            {chart.yTicks.map((tick) => (
-              <g key={tick.value}>
+            {chart.yTicks.map((tick, index) => (
+              <g key={`${tick.value}-${index}`}>
                 <line
                   x1={chart.padding.left}
                   x2={chart.width - chart.padding.right}
@@ -209,10 +209,10 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
               </g>
             ) : null}
 
-            {chart.points.map((point) => {
+            {chart.points.map((point, index) => {
               const isActive = point.recruiter.name === activeRecruiter;
               return (
-                <g key={point.recruiter.name}>
+                <g key={`${point.recruiter.name}-${index}`}>
                   <circle
                     cx={point.x}
                     cy={point.y}
