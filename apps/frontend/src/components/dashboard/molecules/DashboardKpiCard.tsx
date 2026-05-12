@@ -9,8 +9,8 @@ import {
   IconSend,
   IconUsers,
 } from "@tabler/icons-react";
-import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
-import { TONE_CLASSES } from "@/lib/dashboard-constants";
+import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
+import { TONE_CLASSES } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { DashboardKpi } from "@/types/dashboard";
 
@@ -41,14 +41,14 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.4, delay: index * 0.035, ease: "easeOut" }}
       whileHover={{ y: -2 }}
-      className={cn("rounded-lg border p-4 shadow-sm transition-colors", tone.card)}
+      className={cn("rounded-lg border p-3 shadow-sm transition-colors h-full", tone.card)}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={cn("text-xs font-semibold uppercase tracking-normal", tone.muted)}>
             {metric.label}
           </p>
-          <p className={cn("mt-3 font-heading text-4xl leading-none", tone.text)}>
+          <p className={cn("mt-2 font-heading text-4xl leading-none", tone.text)}>
             <AnimatedNumber value={metric.value} />
           </p>
         </div>
@@ -58,7 +58,7 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
           <Icon className="size-5" />
         </div>
       </div>
-      <div className="mt-5 flex items-center justify-between gap-3">
+      <div className="mt-3 flex items-center justify-between gap-3">
         <span className={cn("text-sm", tone.muted)}>{metric.helper}</span>
         <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", tone.chip)}>
           {metric.trend}
