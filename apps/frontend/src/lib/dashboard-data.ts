@@ -1,6 +1,6 @@
 import { PIPELINE_STAGE_LABELS } from "@/lib/dashboard-constants";
 import {
-  getDashboardActivities,
+  getAllDashboardActivities,
   getDashboardClients,
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
@@ -50,22 +50,6 @@ const EMPTY_DATA: DashboardDemoData = {
   totals: DEFAULT_TOTALS,
   analytics: [],
 };
-
-/** How long a bundled demo-dashboard response may be reused (process-scoped). */
-const DEMO_DASHBOARD_CACHE_TTL_MS = 60_000;
-
-function cloneDashboardDemoData(data: DashboardDemoData): DashboardDemoData {
-  return {
-    ...data,
-    kpis: data.kpis.map((k) => ({ ...k })),
-    pipelineStages: data.pipelineStages.map((s) => ({ ...s })),
-    recruiters: data.recruiters.map((r) => ({ ...r })),
-    clients: data.clients.map((c) => ({ ...c })),
-    activity: data.activity.map((a) => ({ ...a })),
-    analytics: data.analytics.map((w) => ({ ...w })),
-    totals: { ...data.totals },
-  };
-}
 
 function percentString(value: number) {
   return `${Math.round(value)}%`;
@@ -291,13 +275,7 @@ function buildActivity(
   }));
 }
 
-/** Process-scoped cache with TTL; concurrent callers share one in-flight fetch. */
-type DashboardDemoCacheEntry = { data: DashboardDemoData; expiresAt: number };
-
-let dashboardDemoCacheEntry: DashboardDemoCacheEntry | null = null;
-let dashboardDemoDataPromise: Promise<DashboardDemoData> | null = null;
-
-async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
+async function loadDashboardDemoData(): Promise<DashboardDemoData> {
   const [
     overviewResult,
     pipelineResult,
@@ -311,7 +289,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     getDashboardClients({ page: 1, limit: 100 }),
     getEmployeesForDashboard(100),
     getCandidateMappingsForDashboard(),
-    getDashboardActivities({ page: 1, limit: 60 }),
+    getAllDashboardActivities(60),
   ]);
 
   if (overviewResult.status === "rejected") {
@@ -340,7 +318,6 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const mappings = mappingsResult.status === "fulfilled" ? mappingsResult.value : [];
   const activitiesResponse =
     activitiesResult.status === "fulfilled" ? activitiesResult.value : null;
-  const activities = activitiesResponse?.items ?? [];
 
   const totals: DashboardTotals = overview
     ? {
@@ -374,30 +351,10 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     pipelineStages,
     recruiters,
     clients,
-    activity: buildActivity(activities),
+    activity: buildActivity(activitiesResponse?.items ?? []),
     totals,
     analytics: buildAnalytics(totals),
   };
-}
-
-async function loadDashboardDemoData(): Promise<DashboardDemoData> {
-  const now = Date.now();
-  if (dashboardDemoCacheEntry !== null && now < dashboardDemoCacheEntry.expiresAt) {
-    return cloneDashboardDemoData(dashboardDemoCacheEntry.data);
-  }
-
-  dashboardDemoDataPromise ??= fetchDashboardDemoDataOnce();
-
-  try {
-    const data = await dashboardDemoDataPromise;
-    dashboardDemoCacheEntry = {
-      data,
-      expiresAt: Date.now() + DEMO_DASHBOARD_CACHE_TTL_MS,
-    };
-    return cloneDashboardDemoData(data);
-  } finally {
-    dashboardDemoDataPromise = null;
-  }
 }
 
 export async function getDashboardDemoData() {
