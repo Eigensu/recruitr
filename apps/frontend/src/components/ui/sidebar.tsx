@@ -109,7 +109,7 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
     >
       <div className="flex justify-end z-20 w-full">
         <IconMenu2
-          className="text-gray-400 cursor-pointer hover:text-white transition-colors"
+          className="text-white cursor-pointer hover:text-white transition-colors"
           onClick={() => setOpen(!open)}
         />
       </div>
@@ -126,7 +126,7 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
             )}
           >
             <div
-              className="absolute right-8 top-8 z-50 text-gray-400 cursor-pointer hover:text-white transition-colors"
+              className="absolute right-8 top-8 z-50 text-white cursor-pointer hover:text-white transition-colors"
               onClick={() => setOpen(!open)}
             >
               <IconX />
@@ -155,7 +155,7 @@ export const SidebarLink = ({
       href={link.href}
       className={cn(
         "flex items-center justify-start gap-3 group/sidebar py-2.5 px-2 rounded-lg transition-colors",
-        active ? "bg-gray-800 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800/60",
+        active ? "bg-gray-800 text-white" : "text-white hover:text-white hover:bg-gray-800/60",
         className,
       )}
       {...props}
