@@ -3,6 +3,7 @@
 import secrets
 import urllib.parse
 from datetime import timedelta
+from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -98,8 +99,10 @@ async def logout(response: Response) -> dict:
     return {"status": "ok", "message": "Logged out successfully"}
 
 
-@router.get("/me", response_model=UserInfoResponse)
-async def read_user_me(current_user: TokenPayload = Depends(get_current_user)) -> UserInfoResponse:  # noqa: B008
+@router.get("/me")
+async def read_user_me(
+    current_user: Annotated[TokenPayload, Depends(get_current_user)],
+) -> UserInfoResponse:
     """Get current user details."""
     user = await User.get(current_user.sub)
     if not user:
