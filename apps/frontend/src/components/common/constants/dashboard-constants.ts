@@ -66,16 +66,15 @@ export const DASHBOARD_TABLE_HEADER_CLASS =
   "text-xs font-semibold uppercase tracking-normal text-white/45";
 
 export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
+  added: "Added",
+  shortlisted: "Shortlisted",
   sent_to_client: "Sent to Client",
-  interview_scheduled: "Interview Scheduled",
-  result_awaited: "Result Awaited",
-  selected: "Selected",
   rejected: "Rejected",
   hold: "Hold",
   offer_sent: "Offer Sent",
   offer_accepted: "Offer Accepted",
   joined: "Joined",
-  candidate_dropped: "Candidate Dropped",
+  dropped: "Candidate Dropped",
 };
 
 export const TONE_CLASSES: Record<

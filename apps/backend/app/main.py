@@ -11,6 +11,7 @@ from app.database import init_db
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
 from app.modules.candidates.router import router as candidates_router
+from app.modules.dashboard.router import router as dashboard_router
 from app.modules.gamification.router import router as gamification_router
 from app.modules.pipeline.router import router as pipeline_router
 from app.modules.positions.router import router as positions_router
@@ -59,6 +60,7 @@ app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candid
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
 app.include_router(gamification_router, prefix="/api/v1/gamify", tags=["Gamification"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
+app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 
 
 @app.get("/health", tags=["Health"])

@@ -1,16 +1,15 @@
 export type DashboardTone = "yellow" | "navy" | "green" | "red" | "neutral";
 
 export type PipelineStage =
+  | "added"
+  | "shortlisted"
   | "sent_to_client"
-  | "interview_scheduled"
-  | "result_awaited"
-  | "selected"
   | "rejected"
   | "hold"
   | "offer_sent"
   | "offer_accepted"
   | "joined"
-  | "candidate_dropped";
+  | "dropped";
 
 export interface DashboardKpi {
   id: string;
