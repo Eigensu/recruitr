@@ -8,7 +8,7 @@ import Link from "next/link";
 interface Links {
   label: string;
   href: string;
-  icon: React.JSX.Element | React.ReactNode;
+  icon: React.ReactNode;
 }
 
 interface SidebarContextProps {
@@ -66,10 +66,30 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = ({
+  animate,
+  initial,
+  exit,
+  transition,
+  variants,
+  style,
+  layout,
+  layoutId,
+  ...props
+}: React.ComponentProps<typeof motion.div>) => {
   return (
     <>
-      <DesktopSidebar {...props} />
+      <DesktopSidebar
+        animate={animate}
+        initial={initial}
+        exit={exit}
+        transition={transition}
+        variants={variants}
+        style={style}
+        layout={layout}
+        layoutId={layoutId}
+        {...props}
+      />
       <MobileSidebar {...(props as React.ComponentProps<"div">)} />
     </>
   );

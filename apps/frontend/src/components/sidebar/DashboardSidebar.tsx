@@ -129,11 +129,19 @@ export default function DashboardSidebar() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/auth/me`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (!r.ok) {
+          console.error(`Fetch failed with status: ${r.status} for ${API_URL}/api/v1/auth/me`);
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
         if (data) setUser({ full_name: data.full_name, email: data.email });
       })
-      .catch(() => null);
+      .catch((error) => {
+        console.error("Error fetching user session:", error);
+      });
   }, []);
 
   return (

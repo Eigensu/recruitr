@@ -39,7 +39,7 @@ app = FastAPI(
 # It stores the OAuth `state` token between /google/login and /google/callback.
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.JWT_SECRET,
+    secret_key=settings.SESSION_SECRET,
     https_only=_COOKIE_SECURE,
     same_site="lax",
 )

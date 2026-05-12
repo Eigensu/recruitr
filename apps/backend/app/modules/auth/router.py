@@ -162,7 +162,7 @@ async def google_callback(
     if not code:
         return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
         # Exchange authorization code → access token
         token_resp = await client.post(
             _GOOGLE_TOKEN_URL,

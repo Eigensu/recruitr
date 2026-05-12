@@ -6,8 +6,10 @@ so we compute the absolute path here to be safe regardless of where the
 server is started from.
 """
 
+import secrets
 from pathlib import Path
 
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Monorepo root = two directories above apps/backend/app/config.py
@@ -35,6 +37,7 @@ class Settings(BaseSettings):
 
     # ── Auth (Custom JWT) ──
     JWT_SECRET: str = "changeme_in_production"
+    SESSION_SECRET: str = secrets.token_urlsafe(32)
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 
@@ -52,6 +55,13 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+
+    @field_validator("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
+    @classmethod
+    def validate_google_credentials(cls, v: str, info: ValidationInfo) -> str:
+        if not v and not info.data.get("DEBUG", False):
+            raise ValueError(f"{info.field_name} must not be empty.")
+        return v
 
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
