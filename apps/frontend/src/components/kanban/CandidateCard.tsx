@@ -38,8 +38,8 @@ export default function CandidateCardComponent({ card, isDragging = false }: Can
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-100 truncate">{card.name}</p>
-          <p className="text-xs text-gray-500 truncate">{card.email}</p>
+          <p className="text-sm font-medium text-white truncate">{card.name}</p>
+          <p className="text-xs text-white truncate">{card.email}</p>
         </div>
         {card.match_score !== undefined && (
           <span className="shrink-0 text-xs font-bold text-violet-400 bg-violet-500/10 rounded px-1.5 py-0.5">
@@ -51,15 +51,12 @@ export default function CandidateCardComponent({ card, isDragging = false }: Can
       {card.extracted_skills.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {card.extracted_skills.slice(0, 3).map((skill) => (
-            <span
-              key={skill}
-              className="text-[10px] bg-gray-700 text-gray-400 rounded px-1.5 py-0.5"
-            >
+            <span key={skill} className="text-[10px] bg-gray-700 text-white rounded px-1.5 py-0.5">
               {skill}
             </span>
           ))}
           {card.extracted_skills.length > 3 && (
-            <span className="text-[10px] text-gray-600">+{card.extracted_skills.length - 3}</span>
+            <span className="text-[10px] text-white">+{card.extracted_skills.length - 3}</span>
           )}
         </div>
       )}
