@@ -38,9 +38,13 @@ export default function PipelineBreakdown({ stages }: PipelineBreakdownProps) {
           <table className="min-w-full table-fixed border-separate border-spacing-0">
             <thead>
               <tr className="bg-[#0f2747] text-white">
-                <th className="w-[52%] px-4 py-3 text-left font-heading text-lg">Stage</th>
-                <th className="w-[22%] px-4 py-3 text-center font-heading text-lg">Count</th>
-                <th className="w-[26%] px-4 py-3 text-center font-heading text-lg">
+                <th scope="col" className="w-[52%] px-4 py-3 text-left font-heading text-lg">
+                  Stage
+                </th>
+                <th scope="col" className="w-[22%] px-4 py-3 text-center font-heading text-lg">
+                  Count
+                </th>
+                <th scope="col" className="w-[26%] px-4 py-3 text-center font-heading text-lg">
                   % of Pipeline
                 </th>
               </tr>

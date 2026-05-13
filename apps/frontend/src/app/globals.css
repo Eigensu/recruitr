@@ -44,37 +44,6 @@
   font-display: swap;
 }
 
-/* --- MADE Outer Sans (Subtitles & UI elements) --- */
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-light.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-light.woff") format("woff");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-regular.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-regular.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "MADE Outer Sans";
-  src:
-    url("/fonts/made-outer-sans-bold.woff2") format("woff2"),
-    url("/fonts/made-outer-sans-bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* --------------------------------------------------------------------------
    Tailwind v4 @theme — Register brand tokens as Tailwind utilities
    Usage: bg-navy, text-yellow, font-heading, etc.
@@ -88,10 +57,10 @@
   --color-light: #f9f7f8;
   --color-muted: #6b7280;
 
-  --font-heading: "Galderglynn Titling", "Arimo", sans-serif;
-  --font-subtitle: "MADE Outer Sans", "Arimo", sans-serif;
-  --font-body: "Arimo", sans-serif;
-  --font-sans: "Arimo", sans-serif;
+  --font-heading: "Galderglynn Titling", sans-serif;
+  --font-subtitle: "MADE Outer Sans", sans-serif;
+  --font-body: sans-serif;
+  --font-sans: sans-serif;
 }
 
 /* --------------------------------------------------------------------------

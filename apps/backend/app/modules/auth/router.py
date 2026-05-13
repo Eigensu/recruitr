@@ -163,34 +163,44 @@ async def google_callback(
     if not code:
         return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
 
-    async with httpx.AsyncClient() as client:
-        # Exchange authorization code → access token
-        token_resp = await client.post(
-            _GOOGLE_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.GOOGLE_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        if token_resp.status_code != 200:
-            return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            # Exchange authorization code → access token
+            token_resp = await client.post(
+                _GOOGLE_TOKEN_URL,
+                data={
+                    "code": code,
+                    "client_id": settings.GOOGLE_CLIENT_ID,
+                    "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                    "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_resp.status_code != 200:
+                return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
 
-        google_access_token = token_resp.json().get("access_token")
+            google_access_token = token_resp.json().get("access_token")
 
-        # Fetch user profile from Google
-        userinfo_resp = await client.get(
-            _GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {google_access_token}"},
-        )
-        if userinfo_resp.status_code != 200:
-            return RedirectResponse(f"{frontend}/sign-in?error=userinfo_failed")
+            # Fetch user profile from Google
+            userinfo_resp = await client.get(
+                _GOOGLE_USERINFO_URL,
+                headers={"Authorization": f"Bearer {google_access_token}"},
+            )
+            if userinfo_resp.status_code != 200:
+                return RedirectResponse(f"{frontend}/sign-in?error=userinfo_failed")
+    except (httpx.RequestError, httpx.TimeoutException):
+        return RedirectResponse(f"{frontend}/sign-in?error=network_error")
 
     profile = userinfo_resp.json()
-    google_id: str = profile["sub"]
-    email: str = profile["email"].lower()
+    if profile.get("email_verified") is not True:
+        return RedirectResponse(f"{frontend}/sign-in?error=email_unverified")
+        
+    google_id = profile.get("sub")
+    email = profile.get("email")
+    if not google_id or not email:
+        return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
+
+    email = email.lower()
     full_name: str | None = profile.get("name")
 
     # ── Find or create user ───────────────────────────────────────────────────

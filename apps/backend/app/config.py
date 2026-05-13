@@ -60,5 +60,12 @@ class Settings(BaseSettings):
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
 
+    @field_validator("SESSION_SECRET", mode="before")
+    @classmethod
+    def set_session_secret(cls, v: str | None, info: ValidationInfo) -> str:
+        if v:
+            return v
+        return info.data.get("JWT_SECRET") or secrets.token_hex(32)
+
 
 settings = Settings()

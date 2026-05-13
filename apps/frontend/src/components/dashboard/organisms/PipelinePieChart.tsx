@@ -54,6 +54,14 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
     ).items;
   }, [stages, total]);
 
+  const largestSegment = useMemo(() => {
+    if (!segments.length) return null;
+    return segments.reduce(
+      (max, current) => (current.percent > max.percent ? current : max),
+      segments[0],
+    );
+  }, [segments]);
+
   if (!stages.length) {
     return (
       <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
@@ -147,9 +155,9 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
         <p className="text-xs leading-relaxed text-white">
           <span className="text-white">Pipeline Overview:</span> Your recruitment pipeline is
           distributed across {stages.length} stages. The largest concentration is in{" "}
-          {segments[0]?.label}, which represents{" "}
+          {largestSegment?.label ?? "Unknown"}, which represents{" "}
           <span className="font-semibold text-white">
-            {segments[0]?.percent}% of total candidates
+            {largestSegment?.percent ?? 0}% of total candidates
           </span>
           . Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.
         </p>

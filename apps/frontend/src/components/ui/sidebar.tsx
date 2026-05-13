@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
+import Link from "next/link";
 
 interface Links {
   label: string;
@@ -65,11 +66,17 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = ({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof motion.div>) => {
   return (
     <>
-      <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as React.ComponentProps<"div">)} />
+      <DesktopSidebar className={className} {...props}>
+        {children}
+      </DesktopSidebar>
+      <MobileSidebar className={className}>{children}</MobileSidebar>
     </>
   );
 };
@@ -108,10 +115,14 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
       {...props}
     >
       <div className="flex justify-end z-20 w-full">
-        <IconMenu2
+        <button
           className="text-gray-400 cursor-pointer hover:text-white transition-colors"
           onClick={() => setOpen(!open)}
-        />
+          aria-expanded={open}
+          aria-label="Open sidebar"
+        >
+          <IconMenu2 />
+        </button>
       </div>
       <AnimatePresence>
         {open && (
@@ -125,12 +136,13 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
               className,
             )}
           >
-            <div
+            <button
               className="absolute right-8 top-8 z-50 text-gray-400 cursor-pointer hover:text-white transition-colors"
               onClick={() => setOpen(!open)}
+              aria-label="Close sidebar"
             >
               <IconX />
-            </div>
+            </button>
             {children}
           </motion.div>
         )}
@@ -148,10 +160,10 @@ export const SidebarLink = ({
   link: Links;
   className?: string;
   active?: boolean;
-}) => {
+} & Omit<React.ComponentProps<typeof Link>, "href">) => {
   const { open, animate } = useSidebar();
   return (
-    <a
+    <Link
       href={link.href}
       className={cn(
         "flex items-center justify-start gap-3 group/sidebar py-2.5 px-2 rounded-lg transition-colors",
@@ -170,6 +182,6 @@ export const SidebarLink = ({
       >
         {link.label}
       </motion.span>
-    </a>
+    </Link>
   );
 };
