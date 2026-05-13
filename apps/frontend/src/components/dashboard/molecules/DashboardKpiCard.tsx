@@ -1,29 +1,11 @@
 "use client";
 
 import { motion } from "motion/react";
-import {
-  IconArrowUpRight,
-  IconBriefcase,
-  IconCheck,
-  IconCircleX,
-  IconSend,
-  IconUsers,
-} from "@tabler/icons-react";
+import { IconArrowUpRight } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
-import { TONE_CLASSES } from "@/components/common/constants/dashboard-constants";
+import { TONE_CLASSES, KPI_ICON_MAP } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { DashboardKpi } from "@/types/dashboard";
-
-const iconMap = {
-  open_positions: IconBriefcase,
-  total_seats_open: IconUsers,
-  seats_filled: IconCheck,
-  total_pipeline: IconUsers,
-  sent_to_client: IconSend,
-  offers_accepted: IconCheck,
-  candidate_dropped: IconCircleX,
-  joined: IconCheck,
-};
 
 interface DashboardKpiCardProps {
   metric: DashboardKpi;
@@ -32,7 +14,7 @@ interface DashboardKpiCardProps {
 
 export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProps) {
   const tone = TONE_CLASSES[metric.tone];
-  const Icon = iconMap[metric.id as keyof typeof iconMap] ?? IconArrowUpRight;
+  const Icon = KPI_ICON_MAP[metric.id as keyof typeof KPI_ICON_MAP] ?? IconArrowUpRight;
 
   return (
     <motion.article

@@ -20,7 +20,8 @@ type ChartPoint = {
 export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphProps) {
   const graphRef = useRef<HTMLElement>(null);
   const isInView = useInView(graphRef, { once: true, amount: 0.28 });
-  const [activeRecruiter, setActiveRecruiter] = useState(recruiters[0]?.name);
+  const defaultRecruiter = recruiters[0]?.name ?? "";
+  const [activeRecruiter, setActiveRecruiter] = useState(defaultRecruiter);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; visible: boolean }>({
     x: 0,
     y: 0,
@@ -75,6 +76,23 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
       yTicks,
     };
   }, [recruiters]);
+
+  if (!recruiters.length) {
+    return (
+      <section ref={graphRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-xl text-white">Recruiter Line Graph</h2>
+            <p className="mt-1 text-sm text-white">Pipeline load by recruiter</p>
+          </div>
+          <IconChartLine className="size-6 text-yellow" />
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-white/50">No recruiter pipeline data available.</p>
+        </div>
+      </section>
+    );
+  }
 
   const active =
     recruiters.find((recruiter) => recruiter.name === activeRecruiter) ?? recruiters[0];

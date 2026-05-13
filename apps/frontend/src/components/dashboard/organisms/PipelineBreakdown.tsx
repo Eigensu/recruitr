@@ -47,11 +47,11 @@ export default function PipelineBreakdown({ stages }: PipelineBreakdownProps) {
             </thead>
             <tbody>
               {stages.map((stage, index) => {
-                const isEven = index % 2 === 1;
+                const isOdd = index % 2 === 1;
                 return (
                   <tr
                     key={stage.stage}
-                    className={cn(isEven ? "bg-white/5" : "bg-white/3", "border-t border-white/10")}
+                    className={cn(isOdd ? "bg-white/5" : "bg-white/3", "border-t border-white/10")}
                   >
                     <td className="max-w-0 px-4 py-2 text-left text-base font-medium text-white">
                       <span className="block truncate">{stage.label}</span>

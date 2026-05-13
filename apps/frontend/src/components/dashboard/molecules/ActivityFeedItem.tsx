@@ -1,7 +1,10 @@
 "use client";
 
 import { motion } from "motion/react";
-import { TONE_CLASSES } from "@/components/common/constants/dashboard-constants";
+import {
+  TONE_CLASSES,
+  DASHBOARD_WIDGET_CLASS,
+} from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { DashboardActivityItem } from "@/types/dashboard";
 
@@ -19,7 +22,7 @@ export default function ActivityFeedItem({ item, index }: ActivityFeedItemProps)
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.25, delay: index * 0.045 }}
-      className="relative rounded-lg border border-white/10 bg-white/[0.035] p-4"
+      className={cn(DASHBOARD_WIDGET_CLASS, "relative")}
     >
       <span className={cn("absolute left-0 top-4 h-8 w-1 rounded-r-full", tone.accent)} />
       <p className="pl-3 text-sm font-semibold text-white">{item.title}</p>

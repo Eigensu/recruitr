@@ -6,25 +6,12 @@ import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard"
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import {
   DASHBOARD_PANEL_CLASS,
+  DASHBOARD_WIDGET_CLASS,
   TONE_CLASSES,
+  ANALYTICS_ICON_MAP,
 } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { DashboardAnalyticsWidget } from "@/types/dashboard";
-
-const iconMap = {
-  fill_rate: IconPercentage,
-  pipeline_depth: IconRoute,
-  join_conversion: IconTargetArrow,
-  seat_gap: IconChartDots3,
-};
-
-const valueClass = {
-  yellow: "text-yellow",
-  navy: "text-white",
-  green: "text-emerald-200",
-  red: "text-red-200",
-  neutral: "text-white",
-};
 
 const parseAnimatedValue = (value: string) => {
   const suffix = value.endsWith("%") ? "%" : "";
@@ -55,7 +42,8 @@ export default function AnalyticsWidgets({ widgets }: AnalyticsWidgetsProps) {
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {widgets.map((widget, index) => {
           const tone = TONE_CLASSES[widget.tone];
-          const Icon = iconMap[widget.id as keyof typeof iconMap] ?? IconChartDots3;
+          const Icon =
+            ANALYTICS_ICON_MAP[widget.id as keyof typeof ANALYTICS_ICON_MAP] ?? IconChartDots3;
           const animatedValue = parseAnimatedValue(widget.value);
 
           return (
@@ -66,14 +54,14 @@ export default function AnalyticsWidgets({ widgets }: AnalyticsWidgetsProps) {
               viewport={{ once: true, amount: 0.35 }}
               transition={{ duration: 0.35, delay: index * 0.04, ease: "easeOut" }}
               whileHover={{ y: -2 }}
-              className="rounded-lg border border-white/10 bg-white/[0.035] p-4"
+              className={cn(DASHBOARD_WIDGET_CLASS, "transition-transform")}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-normal text-white">
                     {widget.label}
                   </p>
-                  <p className={cn("mt-2 font-heading text-3xl", valueClass[widget.tone])}>
+                  <p className={cn("mt-2 font-heading text-3xl", tone.value)}>
                     <AnimatedNumber
                       value={animatedValue.value}
                       decimals={animatedValue.decimals}

@@ -308,21 +308,29 @@ const analytics: DashboardAnalyticsWidget[] = [
   {
     id: "fill_rate",
     label: "Fill Rate",
-    value: formatPercent((dashboardTotals.seatsFilled / dashboardTotals.totalSeats) * 100),
+    value: formatPercent(
+      dashboardTotals.totalSeats
+        ? (dashboardTotals.seatsFilled / dashboardTotals.totalSeats) * 100
+        : 0,
+    ),
     helper: `${dashboardTotals.seatsFilled} of ${dashboardTotals.totalSeats} seats filled`,
     tone: "green",
   },
   {
     id: "pipeline_depth",
     label: "Pipeline Depth",
-    value: (dashboardTotals.inPipeline / dashboardTotals.openPositions).toFixed(1),
+    value: dashboardTotals.openPositions
+      ? (dashboardTotals.inPipeline / dashboardTotals.openPositions).toFixed(1)
+      : "0.0",
     helper: "Candidates per open position",
     tone: "yellow",
   },
   {
     id: "join_conversion",
     label: "Join Conversion",
-    value: formatPercent((dashboardTotals.joined / dashboardTotals.inPipeline) * 100),
+    value: formatPercent(
+      dashboardTotals.inPipeline ? (dashboardTotals.joined / dashboardTotals.inPipeline) * 100 : 0,
+    ),
     helper: `${dashboardTotals.joined} joined from ${dashboardTotals.inPipeline} in pipeline`,
     tone: "navy",
   },
@@ -346,33 +354,33 @@ const dashboardDemoData: DashboardDemoData = {
 };
 
 export async function getDashboardDemoData() {
-  return dashboardDemoData;
+  return structuredClone(dashboardDemoData);
 }
 
 export async function getDashboardOverview() {
-  return {
+  return structuredClone({
     kpis: dashboardDemoData.kpis,
     activity: dashboardDemoData.activity,
     totals: dashboardDemoData.totals,
     analytics: dashboardDemoData.analytics,
-  };
+  });
 }
 
 export async function getPipelineDashboardData() {
-  return dashboardDemoData.pipelineStages;
+  return structuredClone(dashboardDemoData.pipelineStages);
 }
 
 export async function getRecruiterDashboardData() {
-  return dashboardDemoData.recruiters;
+  return structuredClone(dashboardDemoData.recruiters);
 }
 
 export async function getClientActivityData() {
-  return dashboardDemoData.clients;
+  return structuredClone(dashboardDemoData.clients);
 }
 
 export async function getDashboardAnalyticsData() {
-  return {
+  return structuredClone({
     totals: dashboardDemoData.totals,
     analytics: dashboardDemoData.analytics,
-  };
+  });
 }

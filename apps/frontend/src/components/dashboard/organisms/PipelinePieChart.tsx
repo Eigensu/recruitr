@@ -4,22 +4,12 @@ import { useMemo, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { IconChartPie } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
-import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
+import {
+  CHART_COLORS,
+  DASHBOARD_PANEL_CLASS,
+} from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { PipelineStageMetric } from "@/types/dashboard";
-
-const segmentColors = [
-  "#F3FF54",
-  "#3DDC97",
-  "#60A5FA",
-  "#F7C948",
-  "#FF8A8A",
-  "#C084FC",
-  "#FB923C",
-  "#2DD4BF",
-  "#FFFFFF",
-  "#94A3B8",
-];
 
 interface PipelinePieChartProps {
   stages: PipelineStageMetric[];
@@ -41,7 +31,7 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
         const length = Math.max(rawLength - gap, 0);
         const segment = {
           ...stage,
-          color: segmentColors[index % segmentColors.length],
+          color: CHART_COLORS[index % CHART_COLORS.length] ?? "#FFFFFF",
           dash: `${length} ${100 - length}`,
           offset: -acc.cursor,
         };
@@ -63,6 +53,23 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
       },
     ).items;
   }, [stages, total]);
+
+  if (!stages.length) {
+    return (
+      <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-xl text-white">Pipeline Pie Chart</h2>
+            <p className="mt-1 text-sm text-white">Interactive share of pipeline stages</p>
+          </div>
+          <IconChartPie className="size-6 text-yellow" />
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-white/50">No pipeline data available.</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>

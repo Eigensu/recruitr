@@ -7,7 +7,6 @@ import {
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
-  PipelineBreakdown,
 } from "@/components/dashboard";
 import {
   getDashboardAnalyticsData,
@@ -36,12 +35,6 @@ async function AnalyticsSection() {
   const { analytics } = await getDashboardAnalyticsData();
 
   return <AnalyticsWidgets widgets={analytics} />;
-}
-
-async function PipelineSection() {
-  const stages = await getPipelineDashboardData();
-
-  return <PipelineBreakdown stages={stages} />;
 }
 
 async function PipelinePieSection() {
