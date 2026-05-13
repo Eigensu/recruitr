@@ -7,7 +7,7 @@ from app.config import settings
 from app.modules.auth.schemas import TokenPayload
 
 
-async def get_current_user(request: Request) -> TokenPayload:
+def get_current_user(request: Request) -> TokenPayload:
     """Decode and validate the local JWT from the access_token HttpOnly cookie.
 
     Returns a TokenPayload with the user's sub.
@@ -37,4 +37,4 @@ async def get_current_user(request: Request) -> TokenPayload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token",
-        )
+        ) from None

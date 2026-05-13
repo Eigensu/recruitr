@@ -6,8 +6,10 @@ so we compute the absolute path here to be safe regardless of where the
 server is started from.
 """
 
+import secrets
 from pathlib import Path
 
+from pydantic import ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Monorepo root = two directories above apps/backend/app/config.py
@@ -32,9 +34,11 @@ class Settings(BaseSettings):
     # ── MongoDB ──
     MONGODB_URI: str = "mongodb://localhost:27017/eigensu?replicaSet=rs0"
     MONGODB_DB_NAME: str = "eigensu"
+    ALLOW_INDEX_DROPPING: bool = False
 
     # ── Auth (Custom JWT) ──
     JWT_SECRET: str = "changeme_in_production"
+    SESSION_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
 

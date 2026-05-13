@@ -3,6 +3,7 @@
 import secrets
 import urllib.parse
 from datetime import timedelta
+from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
