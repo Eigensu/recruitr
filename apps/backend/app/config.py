@@ -57,25 +57,15 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
-    @field_validator("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET")
-    @classmethod
-    def validate_google_credentials(cls, v: str, info: ValidationInfo) -> str:
-        v = v.strip()
-        if not v and not info.data.get("DEBUG", False):
-            raise ValueError(f"{info.field_name} must not be empty.")
-        return v
-
-    @field_validator("SESSION_SECRET")
-    @classmethod
-    def validate_session_secret(cls, v: str, info: ValidationInfo) -> str:
-        if not v:
-            if info.data.get("DEBUG", False):
-                return secrets.token_urlsafe(32)
-            raise ValueError("SESSION_SECRET must be set in non-debug mode.")
-        return v
-
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
+
+    @field_validator("SESSION_SECRET", mode="before")
+    @classmethod
+    def set_session_secret(cls, v: str | None, info: ValidationInfo) -> str:
+        if v:
+            return v
+        return info.data.get("JWT_SECRET") or secrets.token_hex(32)
 
 
 settings = Settings()

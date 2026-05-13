@@ -2,7 +2,7 @@
 
 /* Explicitly include all source files — fixes Tailwind v4 auto-detection
    skipping directories with special characters like (auth), (dashboard), etc. */
-@source "../**/*.{ts,tsx,js,jsx}";
+@source "../../src/**/*.{ts,tsx,js,jsx}";
 
 /* ==========================================================================
    BINGE CONSULTING — Brand Design System
@@ -49,7 +49,6 @@
    Usage: bg-navy, text-yellow, font-heading, etc.
    -------------------------------------------------------------------------- */
 @theme inline {
-  /* ── Core brand ── */
   --color-navy: #002348;
   --color-navy-dark: #001a36;
   --color-yellow: #f3ff54;
@@ -58,23 +57,10 @@
   --color-light: #f9f7f8;
   --color-muted: #6b7280;
 
-  /* ── Dashboard surface palette ──
-     sidebar      → deep navy  (#001228)
-     canvas       → mid-dark   (#0a1929)  — main content bg
-     surface      → raised card (#0f2237)  — card / panel bg
-     surface-2    → hover/elevated (#162d45)
-     border       → subtle divider
-  */
-  --color-sidebar: #001228;
-  --color-canvas: #070f1a;
-  --color-surface: #0d1e30;
-  --color-surface-2: #162d45;
-  --color-border: rgba(255, 255, 255, 0.07);
-
-  --font-heading: "Galderglynn Titling", var(--font-arimo), sans-serif;
-  --font-subtitle: "MADE Outer Sans", var(--font-arimo), sans-serif;
-  --font-body: var(--font-arimo), sans-serif;
-  --font-sans: var(--font-arimo), sans-serif;
+  --font-heading: "Galderglynn Titling", sans-serif;
+  --font-subtitle: "MADE Outer Sans", sans-serif;
+  --font-body: sans-serif;
+  --font-sans: sans-serif;
 }
 
 /* --------------------------------------------------------------------------

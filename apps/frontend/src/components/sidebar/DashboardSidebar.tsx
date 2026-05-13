@@ -14,7 +14,6 @@ import {
 } from "@tabler/icons-react";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import SignOutButton from "@/components/sidebar/SignOutButton";
-import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -70,10 +69,7 @@ const BingeLogo = () => (
 
 /** Icon-only logo when sidebar is collapsed */
 const BingeLogoIcon = () => (
-  <Link
-    href="/"
-    className="relative z-20 flex w-full items-center justify-center py-1 no-underline"
-  >
+  <Link href="/" className="relative z-20 flex items-center py-1 no-underline">
     <div className="size-8 shrink-0 overflow-hidden rounded-lg shadow">
       <Image
         src="/logo-yellow.jpeg"
@@ -91,14 +87,9 @@ function UserRow({ user }: { user: { full_name: string; email: string } | null }
   const { open, animate } = useSidebar();
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3 py-2 mt-2 pt-4 border-t border-border",
-        open ? "px-2" : "justify-center px-0 w-full",
-      )}
-    >
+    <div className="flex items-center gap-3 px-2 py-2">
       {/* Avatar */}
-      <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
+      <div className="size-8 shrink-0 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-white uppercase select-none">
         {user?.full_name?.[0] ?? "?"}
       </div>
 
@@ -113,7 +104,7 @@ function UserRow({ user }: { user: { full_name: string; email: string } | null }
         <span className="text-sm font-medium text-white truncate leading-tight">
           {user?.full_name ?? "Loading…"}
         </span>
-        <span className="text-xs text-white/40 truncate leading-tight">{user?.email ?? ""}</span>
+        <span className="text-xs text-gray-500 truncate leading-tight">{user?.email ?? ""}</span>
       </motion.div>
 
       {/* Sign out — only shows when open */}
@@ -138,19 +129,11 @@ export default function DashboardSidebar() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/auth/me`, { credentials: "include" })
-      .then((r) => {
-        if (!r.ok) {
-          console.error(`Fetch failed with status: ${r.status} for ${API_URL}/api/v1/auth/me`);
-          return null;
-        }
-        return r.json();
-      })
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data) setUser({ full_name: data.full_name, email: data.email });
       })
-      .catch((error) => {
-        console.error("Error fetching user session:", error);
-      });
+      .catch(() => null);
   }, []);
 
   return (
@@ -170,7 +153,7 @@ export default function DashboardSidebar() {
         </div>
 
         {/* Bottom: user + sign-out */}
-        <div>
+        <div className="border-t border-gray-800 pt-4">
           <UserRow user={user} />
         </div>
       </SidebarBody>

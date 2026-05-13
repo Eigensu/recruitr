@@ -99,10 +99,8 @@ async def logout(response: Response) -> dict:
     return {"status": "ok", "message": "Logged out successfully"}
 
 
-@router.get("/me")
-async def read_user_me(
-    current_user: Annotated[TokenPayload, Depends(get_current_user)],
-) -> UserInfoResponse:
+@router.get("/me", response_model=UserInfoResponse)
+async def read_user_me(current_user: TokenPayload = Depends(get_current_user)) -> UserInfoResponse:  # noqa: B008
     """Get current user details."""
     user = await User.get(current_user.sub)
     if not user:
@@ -124,12 +122,6 @@ async def google_login(request: Request) -> RedirectResponse:
     Step 1: Redirect the browser to Google's consent screen.
     A random `state` token is stored in the session to prevent CSRF.
     """
-    if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Google OAuth is not configured.",
-        )
-
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 
@@ -172,7 +164,7 @@ async def google_callback(
         return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             # Exchange authorization code → access token
             token_resp = await client.post(
                 _GOOGLE_TOKEN_URL,
@@ -187,18 +179,7 @@ async def google_callback(
             if token_resp.status_code != 200:
                 return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
 
-            token_data = token_resp.json()
-            google_access_token = token_data.get("access_token")
-            if not google_access_token:
-                token_error = token_data.get("error") or "token_exchange_failed"
-                token_error_description = token_data.get("error_description")
-                if token_error_description:
-                    error_value = urllib.parse.quote(
-                        f"{token_error}:{token_error_description}", safe=""
-                    )
-                else:
-                    error_value = urllib.parse.quote(token_error, safe="")
-                return RedirectResponse(f"{frontend}/sign-in?error={error_value}")
+            google_access_token = token_resp.json().get("access_token")
 
             # Fetch user profile from Google
             userinfo_resp = await client.get(
@@ -211,19 +192,16 @@ async def google_callback(
         return RedirectResponse(f"{frontend}/sign-in?error=network_error")
 
     profile = userinfo_resp.json()
+    if profile.get("email_verified") is not True:
+        return RedirectResponse(f"{frontend}/sign-in?error=email_unverified")
+        
     google_id = profile.get("sub")
     email = profile.get("email")
-    email_verified = profile.get("email_verified")
-    full_name: str | None = profile.get("name")
-
-    if not isinstance(google_id, str) or not google_id:
-        return RedirectResponse(f"{frontend}/sign-in?error=missing_google_sub")
-    if not isinstance(email, str) or not email:
-        return RedirectResponse(f"{frontend}/sign-in?error=missing_email")
-    if email_verified is not True:
-        return RedirectResponse(f"{frontend}/sign-in?error=unverified_email")
+    if not google_id or not email:
+        return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
 
     email = email.lower()
+    full_name: str | None = profile.get("name")
 
     # ── Find or create user ───────────────────────────────────────────────────
     user = await User.find_one(User.google_id == google_id)

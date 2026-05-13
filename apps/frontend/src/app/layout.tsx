@@ -1,13 +1,5 @@
 import type { Metadata } from "next";
-import { Arimo } from "next/font/google";
 import "./globals.css";
-
-const arimo = Arimo({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-arimo",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Binge Consulting — Recruitment",
@@ -17,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={arimo.variable} data-scroll-behavior="smooth">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

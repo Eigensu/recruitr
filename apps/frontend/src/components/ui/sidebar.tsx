@@ -8,7 +8,7 @@ import Link from "next/link";
 interface Links {
   label: string;
   href: string;
-  icon: React.ReactNode;
+  icon: React.JSX.Element | React.ReactNode;
 }
 
 interface SidebarContextProps {
@@ -66,13 +66,17 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
-  const { animate, initial, exit, transition, variants, style, layout, layoutId, ...mobileProps } =
-    props;
+export const SidebarBody = ({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof motion.div> & { children?: React.ReactNode }) => {
   return (
     <>
-      <DesktopSidebar {...props} />
-      <MobileSidebar {...(mobileProps as React.ComponentProps<"div">)} />
+      <DesktopSidebar className={className} {...props}>
+        {children}
+      </DesktopSidebar>
+      <MobileSidebar className={className}>{children}</MobileSidebar>
     </>
   );
 };
@@ -86,7 +90,7 @@ export const DesktopSidebar = ({
   return (
     <motion.div
       className={cn(
-        "h-full px-4 py-4 hidden md:flex md:flex-col bg-sidebar border-r border-border shrink-0",
+        "h-full px-4 py-4 hidden md:flex md:flex-col bg-gray-900 border-r border-gray-800 shrink-0",
         className,
       )}
       animate={{
@@ -106,16 +110,16 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
   return (
     <div
       className={cn(
-        "h-12 px-4 flex flex-row md:hidden items-center justify-between bg-sidebar border-b border-border w-full",
+        "h-12 px-4 flex flex-row md:hidden items-center justify-between bg-gray-900 border-b border-gray-800 w-full",
       )}
       {...props}
     >
       <div className="flex justify-end z-20 w-full">
         <button
-          type="button"
-          aria-label="Toggle menu"
-          className="text-white cursor-pointer hover:text-white transition-colors"
+          className="text-gray-400 cursor-pointer hover:text-white transition-colors"
           onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-label="Open sidebar"
         >
           <IconMenu2 />
         </button>
@@ -128,15 +132,14 @@ export const MobileSidebar = ({ className, children, ...props }: React.Component
             exit={{ x: "-100%", opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeInOut" }}
             className={cn(
-              "fixed h-full w-full inset-0 bg-sidebar p-8 z-100 flex flex-col justify-between",
+              "fixed h-full w-full inset-0 bg-gray-900 p-8 z-[100] flex flex-col justify-between",
               className,
             )}
           >
             <button
-              type="button"
-              aria-label="Close menu"
-              className="absolute right-8 top-8 z-50 text-white cursor-pointer hover:text-white transition-colors"
+              className="absolute right-8 top-8 z-50 text-gray-400 cursor-pointer hover:text-white transition-colors"
               onClick={() => setOpen(!open)}
+              aria-label="Close sidebar"
             >
               <IconX />
             </button>
@@ -157,17 +160,14 @@ export const SidebarLink = ({
   link: Links;
   className?: string;
   active?: boolean;
-}) => {
+} & Omit<React.ComponentProps<typeof Link>, "href">) => {
   const { open, animate } = useSidebar();
   return (
     <Link
       href={link.href}
       className={cn(
-        "flex items-center gap-3 group/sidebar py-2.5 rounded-lg transition-all duration-150 overflow-hidden",
-        open ? "justify-start px-2" : "justify-center px-0 w-full",
-        active
-          ? "bg-surface-2 text-white shadow-sm"
-          : "text-white/50 hover:text-white hover:bg-surface",
+        "flex items-center justify-start gap-3 group/sidebar py-2.5 px-2 rounded-lg transition-colors",
+        active ? "bg-gray-800 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800/60",
         className,
       )}
       {...props}
@@ -178,7 +178,7 @@ export const SidebarLink = ({
           display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
         }}
-        className="text-sm font-medium whitespace-pre group-hover/sidebar:translate-x-0.5 transition duration-150 p-0! m-0!"
+        className="text-sm font-medium whitespace-pre group-hover/sidebar:translate-x-0.5 transition duration-150 !p-0 !m-0"
       >
         {link.label}
       </motion.span>

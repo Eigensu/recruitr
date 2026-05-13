@@ -25,14 +25,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({ name: agencyName, domain }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        let data;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          console.error("Failed to parse error response:", text);
-          throw new Error("Failed to create workspace: Invalid server response.");
-        }
+        const data = await res.json().catch(() => ({}));
         throw new Error(data?.detail ?? "Failed to create workspace.");
       }
       router.push("/");

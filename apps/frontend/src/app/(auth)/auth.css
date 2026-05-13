@@ -145,9 +145,6 @@
 .d10 {
   animation-delay: 1s;
 }
-.d11 {
-  animation-delay: 1.1s;
-}
 .d12 {
   animation-delay: 1.2s;
 }
@@ -270,19 +267,4 @@
 }
 .str-good {
   background: #10b981;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .anim-up,
-  .anim-down,
-  .anim-in,
-  .anim-left,
-  .anim-scale,
-  .anim-shake,
-  .anim-glow,
-  .hero-frame,
-  .btn-shimmer::after,
-  .spinner {
-    animation: none !important;
-  }
 }
