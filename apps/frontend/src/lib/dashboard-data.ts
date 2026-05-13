@@ -1,6 +1,6 @@
 import { PIPELINE_STAGE_LABELS } from "@/lib/dashboard-constants";
 import {
-  getDashboardActivities,
+  getAllDashboardActivities,
   getDashboardClients,
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
@@ -51,19 +51,26 @@ const EMPTY_DATA: DashboardDemoData = {
   analytics: [],
 };
 
-/** How long a bundled demo-dashboard response may be reused (process-scoped). */
-const DEMO_DASHBOARD_CACHE_TTL_MS = 60_000;
+const DASHBOARD_CACHE_TTL_MS = 60_000;
+
+type DashboardCacheEntry = {
+  data: DashboardDemoData;
+  expiresAt: number;
+};
+
+let dashboardCacheEntry: DashboardCacheEntry | null = null;
+let dashboardDataPromise: Promise<DashboardDemoData> | null = null;
 
 function cloneDashboardDemoData(data: DashboardDemoData): DashboardDemoData {
   return {
     ...data,
-    kpis: data.kpis.map((k) => ({ ...k })),
-    pipelineStages: data.pipelineStages.map((s) => ({ ...s })),
-    recruiters: data.recruiters.map((r) => ({ ...r })),
-    clients: data.clients.map((c) => ({ ...c })),
-    activity: data.activity.map((a) => ({ ...a })),
-    analytics: data.analytics.map((w) => ({ ...w })),
+    kpis: data.kpis.map((item) => ({ ...item })),
+    pipelineStages: data.pipelineStages.map((item) => ({ ...item })),
+    recruiters: data.recruiters.map((item) => ({ ...item })),
+    clients: data.clients.map((item) => ({ ...item })),
+    activity: data.activity.map((item) => ({ ...item })),
     totals: { ...data.totals },
+    analytics: data.analytics.map((item) => ({ ...item })),
   };
 }
 
@@ -291,12 +298,6 @@ function buildActivity(
   }));
 }
 
-/** Process-scoped cache with TTL; concurrent callers share one in-flight fetch. */
-type DashboardDemoCacheEntry = { data: DashboardDemoData; expiresAt: number };
-
-let dashboardDemoCacheEntry: DashboardDemoCacheEntry | null = null;
-let dashboardDemoDataPromise: Promise<DashboardDemoData> | null = null;
-
 async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const [
     overviewResult,
@@ -311,7 +312,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     getDashboardClients({ page: 1, limit: 100 }),
     getEmployeesForDashboard(100),
     getCandidateMappingsForDashboard(),
-    getDashboardActivities({ page: 1, limit: 60 }),
+    getAllDashboardActivities(60),
   ]);
 
   if (overviewResult.status === "rejected") {
@@ -338,9 +339,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const clientsResponse = clientsResult.status === "fulfilled" ? clientsResult.value : null;
   const employees = employeesResult.status === "fulfilled" ? employeesResult.value : [];
   const mappings = mappingsResult.status === "fulfilled" ? mappingsResult.value : [];
-  const activitiesResponse =
-    activitiesResult.status === "fulfilled" ? activitiesResult.value : null;
-  const activities = activitiesResponse?.items ?? [];
+  const activities = activitiesResult.status === "fulfilled" ? activitiesResult.value : [];
 
   const totals: DashboardTotals = overview
     ? {
@@ -382,21 +381,22 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
 
 async function loadDashboardDemoData(): Promise<DashboardDemoData> {
   const now = Date.now();
-  if (dashboardDemoCacheEntry !== null && now < dashboardDemoCacheEntry.expiresAt) {
-    return cloneDashboardDemoData(dashboardDemoCacheEntry.data);
+
+  if (dashboardCacheEntry !== null && dashboardCacheEntry.expiresAt > now) {
+    return cloneDashboardDemoData(dashboardCacheEntry.data);
   }
 
-  dashboardDemoDataPromise ??= fetchDashboardDemoDataOnce();
+  dashboardDataPromise ??= fetchDashboardDemoDataOnce();
 
   try {
-    const data = await dashboardDemoDataPromise;
-    dashboardDemoCacheEntry = {
+    const data = await dashboardDataPromise;
+    dashboardCacheEntry = {
       data,
-      expiresAt: Date.now() + DEMO_DASHBOARD_CACHE_TTL_MS,
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
     };
     return cloneDashboardDemoData(data);
   } finally {
-    dashboardDemoDataPromise = null;
+    dashboardDataPromise = null;
   }
 }
 

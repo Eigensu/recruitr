@@ -104,7 +104,7 @@ function UserRow({ user }: { user: { full_name: string; email: string } | null }
         <span className="text-sm font-medium text-white truncate leading-tight">
           {user?.full_name ?? "Loading…"}
         </span>
-        <span className="text-xs text-gray-500 truncate leading-tight">{user?.email ?? ""}</span>
+        <span className="text-xs text-white truncate leading-tight">{user?.email ?? ""}</span>
       </motion.div>
 
       {/* Sign out — only shows when open */}

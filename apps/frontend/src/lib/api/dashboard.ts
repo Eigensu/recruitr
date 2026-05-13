@@ -52,7 +52,7 @@ export interface ApiDashboardEmployeeItem {
   name: string;
   email: string;
   mappings: {
-    offers_sent: number;
+    offers_received: number;
     joined_candidates: number;
     rejected_candidates: number;
   };
@@ -135,6 +135,40 @@ async function dashboardFetch<T>(path: string, query?: Record<string, QueryValue
   return (await res.json()) as T;
 }
 
+async function fetchAllPages<T>(
+  path: string,
+  baseQuery: Record<string, QueryValue> = {},
+  limit = 100,
+  maxPages = 50,
+  maxItems = 5000,
+): Promise<T[]> {
+  const items: T[] = [];
+  let page = 1;
+
+  while (page <= maxPages && items.length < maxItems) {
+    const response = await dashboardFetch<ApiPaginatedResponse<T>>(path, {
+      ...baseQuery,
+      page,
+      limit,
+    });
+
+    if (response.items.length === 0) {
+      break;
+    }
+
+    const remaining = maxItems - items.length;
+    items.push(...response.items.slice(0, remaining));
+
+    if (!response.meta.has_next || page >= response.meta.pages || items.length >= maxItems) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return items;
+}
+
 export function getDashboardOverview() {
   return dashboardFetch<ApiDashboardOverviewResponse>("/api/v1/dashboard/overview");
 }
@@ -169,4 +203,19 @@ export function getDashboardActivities(query: Record<string, QueryValue> = {}) {
     "/api/v1/dashboard/activity",
     query,
   );
+}
+
+export function getAllDashboardMappings(maxMappings = 500) {
+  const limit = Math.min(100, Math.max(maxMappings, 1));
+  return fetchAllPages<ApiDashboardMappingItem>(
+    "/api/v1/dashboard/mappings",
+    {},
+    limit,
+    50,
+    maxMappings,
+  );
+}
+
+export function getAllDashboardActivities(limit = 60) {
+  return fetchAllPages<ApiDashboardActivityItem>("/api/v1/dashboard/activity", {}, limit);
 }
