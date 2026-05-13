@@ -70,7 +70,7 @@ export const SidebarBody = ({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof motion.div>) => {
+}: React.ComponentProps<typeof motion.div> & { children?: React.ReactNode }) => {
   return (
     <>
       <DesktopSidebar className={className} {...props}>
