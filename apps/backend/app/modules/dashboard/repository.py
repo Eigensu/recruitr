@@ -127,7 +127,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
             }
         },
     ]
-    job_result = await JobOpening.aggregate(job_pipeline).to_list()
+    job_result = await (await JobOpening.get_motor_collection().aggregate(job_pipeline)).to_list(length=None)
     job_totals = job_result[0] if job_result else {}
 
     mapping_match = _base_mapping_match(filters, include_terminal=False)
@@ -146,7 +146,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
             }
         },
     ]
-    mapping_result = await CandidateMapping.aggregate(mapping_pipeline).to_list()
+    mapping_result = await (await CandidateMapping.get_motor_collection().aggregate(mapping_pipeline)).to_list(length=None)
     mapping_totals = mapping_result[0] if mapping_result else {}
 
     return {
@@ -172,7 +172,7 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
             }
         },
     ]
-    results = await CandidateMapping.aggregate(pipeline).to_list()
+    results = await (await CandidateMapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     counts = {PipelineStage(item["_id"]): int(item["count"]) for item in results if item.get("_id")}
     total_candidates = sum(counts.values())
 
@@ -266,7 +266,7 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
             }
         },
     ]
-    result = await DashboardEmployee.aggregate(pipeline).to_list()
+    result = await (await DashboardEmployee.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     facet = result[0] if result else {"items": [], "meta": []}
     items = facet.get("items", [])
     total = int(facet.get("meta", [{}])[0].get("total", 0)) if facet.get("meta") else 0
@@ -350,7 +350,7 @@ async def fetch_clients(filters: DashboardFilters, page: int, limit: int) -> dic
             }
         },
     ]
-    result = await JobOpening.aggregate(pipeline).to_list()
+    result = await (await JobOpening.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     facet = result[0] if result else {"items": [], "meta": []}
     items = facet.get("items", [])
     total = int(facet.get("meta", [{}])[0].get("total", 0)) if facet.get("meta") else 0
@@ -403,7 +403,7 @@ async def fetch_candidates(filters: DashboardFilters, page: int, limit: int) -> 
             },
         ]
     )
-    result = await DashboardCandidate.aggregate(pipeline).to_list()
+    result = await (await DashboardCandidate.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     facet = result[0] if result else {"items": [], "meta": []}
     items = facet.get("items", [])
     total = int(facet.get("meta", [{}])[0].get("total", 0)) if facet.get("meta") else 0
@@ -430,7 +430,7 @@ async def fetch_mappings(filters: DashboardFilters, page: int, limit: int) -> di
             }
         },
     ]
-    result = await CandidateMapping.aggregate(pipeline).to_list()
+    result = await (await CandidateMapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     facet = result[0] if result else {"items": [], "meta": []}
     items = facet.get("items", [])
     total = int(facet.get("meta", [{}])[0].get("total", 0)) if facet.get("meta") else 0
@@ -455,7 +455,7 @@ async def fetch_activities(filters: DashboardFilters, page: int, limit: int) -> 
             }
         },
     ]
-    result = await ActivityLog.aggregate(pipeline).to_list()
+    result = await (await ActivityLog.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     facet = result[0] if result else {"items": [], "meta": []}
     items = facet.get("items", [])
     total = int(facet.get("meta", [{}])[0].get("total", 0)) if facet.get("meta") else 0
