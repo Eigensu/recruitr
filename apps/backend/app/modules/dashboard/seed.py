@@ -151,7 +151,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
                 "name": name,
                 "email": f"{email_local}@recruitr.demo",
                 "mappings": {
-                    "offers_received": 0,
+                    "offers_sent": 0,
                     "joined_candidates": 0,
                     "rejected_candidates": 0,
                 },
@@ -204,7 +204,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
     await candidates_col.insert_many(candidate_docs)
 
     job_docs: list[dict[str, Any]] = []
-    for idx, client_name in enumerate(_CLIENT_NAMES):
+    for client_name in _CLIENT_NAMES:
         total_seats = rng.randint(2, 12)
         status = rng.choices(
             [JobStatus.open, JobStatus.on_hold, JobStatus.closed],
@@ -320,7 +320,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
                 "$set": {
                     "total_mappings": total_per_employee.get(employee_id, 0),
                     "mappings": {
-                        "offers_received": offer_sent_per_employee.get(employee_id, 0),
+                        "offers_sent": offer_sent_per_employee.get(employee_id, 0),
                         "joined_candidates": joined_per_employee.get(employee_id, 0),
                         "rejected_candidates": rejected_per_employee.get(employee_id, 0),
                     },

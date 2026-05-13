@@ -6,8 +6,11 @@ import hashlib
 import json
 from typing import Any
 
-from app.common.dtos.pagination import PaginationMeta, PaginatedResponse
+from app.common.dtos.pagination import PaginationMeta
 from app.common.extras.redis_cache import dashboard_cache
+from app.config import settings
+from app.modules.dashboard.enums import ActivityType, PipelineStage, TargetEntityType
+from app.modules.dashboard.models import ActivityLog, CandidateMapping
 from app.modules.dashboard.repository import (
     create_activity_log,
     create_candidate_mapping,
@@ -36,8 +39,6 @@ from app.modules.dashboard.schemas import (
     PipelineStageMetric,
 )
 
-_CACHE_TTL_SECONDS = 300
-
 
 def _cache_key(prefix: str, filters: DashboardFilters, page: int | None = None, limit: int | None = None) -> str:
     payload = filters.model_dump(mode="json", exclude_none=True)
@@ -46,7 +47,10 @@ def _cache_key(prefix: str, filters: DashboardFilters, page: int | None = None, 
     return dashboard_cache.build_key(prefix, digest)
 
 
-def _make_paginated_response(items: list[Any], total: int, page: int, limit: int, item_type: type) -> Any:
+def _make_paginated_response(payload: dict[str, Any], items: list[Any], page_cls: type) -> Any:
+    total = int(payload["total"])
+    page = int(payload["page"])
+    limit = int(payload["limit"])
     pages = 0 if total == 0 else (total + limit - 1) // limit
     meta = PaginationMeta(
         page=page,
@@ -56,8 +60,7 @@ def _make_paginated_response(items: list[Any], total: int, page: int, limit: int
         has_next=page < pages,
         has_prev=page > 1,
     )
-    model = PaginatedResponse[item_type]  # type: ignore[index]
-    return model(items=items, meta=meta)
+    return page_cls(items=items, meta=meta)
 
 
 async def get_overview(filters: DashboardFilters) -> DashboardOverviewResponse:
@@ -72,7 +75,9 @@ async def get_overview(filters: DashboardFilters) -> DashboardOverviewResponse:
         summary=payload["summary"],
         pipeline=[PipelineStageMetric.model_validate(stage) for stage in pipeline_payload["stages"]],
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
+    )
     return response
 
 
@@ -87,7 +92,9 @@ async def get_pipeline(filters: DashboardFilters) -> DashboardPipelineResponse:
         stages=[PipelineStageMetric.model_validate(stage) for stage in payload["stages"]],
         total_candidates=payload["total_candidates"],
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
+    )
     return response
 
 
@@ -99,19 +106,10 @@ async def get_employees(filters: DashboardFilters, page: int, limit: int) -> Das
 
     payload = await fetch_employees(filters, page, limit)
     items = [EmployeeAnalyticsItem.model_validate(item) for item in payload["items"]]
-    pages = 0 if payload["total"] == 0 else (payload["total"] + limit - 1) // limit
-    response = DashboardEmployeePage(
-        items=items,
-        meta=PaginationMeta(
-            page=payload["page"],
-            limit=payload["limit"],
-            total=payload["total"],
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1,
-        ),
+    response = _make_paginated_response(payload, items, DashboardEmployeePage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
     return response
 
 
@@ -123,19 +121,10 @@ async def get_clients(filters: DashboardFilters, page: int, limit: int) -> Dashb
 
     payload = await fetch_clients(filters, page, limit)
     items = [ClientAnalyticsItem.model_validate(item) for item in payload["items"]]
-    pages = 0 if payload["total"] == 0 else (payload["total"] + limit - 1) // limit
-    response = DashboardClientPage(
-        items=items,
-        meta=PaginationMeta(
-            page=payload["page"],
-            limit=payload["limit"],
-            total=payload["total"],
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1,
-        ),
+    response = _make_paginated_response(payload, items, DashboardClientPage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
     return response
 
 
@@ -147,19 +136,10 @@ async def get_candidates(filters: DashboardFilters, page: int, limit: int) -> Da
 
     payload = await fetch_candidates(filters, page, limit)
     items = [CandidateAnalyticsItem.model_validate(item) for item in payload["items"]]
-    pages = 0 if payload["total"] == 0 else (payload["total"] + limit - 1) // limit
-    response = DashboardCandidatePage(
-        items=items,
-        meta=PaginationMeta(
-            page=payload["page"],
-            limit=payload["limit"],
-            total=payload["total"],
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1,
-        ),
+    response = _make_paginated_response(payload, items, DashboardCandidatePage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
     return response
 
 
@@ -171,19 +151,10 @@ async def get_mappings(filters: DashboardFilters, page: int, limit: int) -> Dash
 
     payload = await fetch_mappings(filters, page, limit)
     items = [MappingAnalyticsItem.model_validate(item) for item in payload["items"]]
-    pages = 0 if payload["total"] == 0 else (payload["total"] + limit - 1) // limit
-    response = DashboardMappingPage(
-        items=items,
-        meta=PaginationMeta(
-            page=payload["page"],
-            limit=payload["limit"],
-            total=payload["total"],
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1,
-        ),
+    response = _make_paginated_response(payload, items, DashboardMappingPage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
     return response
 
 
@@ -195,30 +166,21 @@ async def get_activities(filters: DashboardFilters, page: int, limit: int) -> Da
 
     payload = await fetch_activities(filters, page, limit)
     items = [ActivityAnalyticsItem.model_validate(item) for item in payload["items"]]
-    pages = 0 if payload["total"] == 0 else (payload["total"] + limit - 1) // limit
-    response = DashboardActivityPage(
-        items=items,
-        meta=PaginationMeta(
-            page=payload["page"],
-            limit=payload["limit"],
-            total=payload["total"],
-            pages=pages,
-            has_next=page < pages,
-            has_prev=page > 1,
-        ),
+    response = _make_paginated_response(payload, items, DashboardActivityPage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )
-    await dashboard_cache.set_json(cache_key, response.model_dump(mode="json"), _CACHE_TTL_SECONDS)
     return response
 
 
 async def log_dashboard_activity(
     *,
     employee_id: str | None,
-    activity_type,
-    target_entity_type,
+    activity_type: ActivityType,
+    target_entity_type: TargetEntityType,
     target_entity_id: str,
     description: str,
-):
+) -> ActivityLog:
     return await create_activity_log(
         employee_id=employee_id,
         activity_type=activity_type,
@@ -233,8 +195,8 @@ async def create_mapping(
     employee_id: str,
     candidate_id: str,
     job_opening_id: str,
-    pipeline_stage,
-):
+    pipeline_stage: PipelineStage,
+) -> CandidateMapping:
     return await create_candidate_mapping(
         employee_id=employee_id,
         candidate_id=candidate_id,

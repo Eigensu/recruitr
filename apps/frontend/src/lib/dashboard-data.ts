@@ -275,7 +275,11 @@ function buildActivity(
   }));
 }
 
-async function loadDashboardDemoData(): Promise<DashboardDemoData> {
+/** Process-scoped cache: concurrent demo-dashboard callers share one fetch. */
+let dashboardDemoDataCache: DashboardDemoData | null = null;
+let dashboardDemoDataPromise: Promise<DashboardDemoData> | null = null;
+
+async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const [
     overviewResult,
     pipelineResult,
@@ -316,8 +320,7 @@ async function loadDashboardDemoData(): Promise<DashboardDemoData> {
   const clientsResponse = clientsResult.status === "fulfilled" ? clientsResult.value : null;
   const employees = employeesResult.status === "fulfilled" ? employeesResult.value : [];
   const mappings = mappingsResult.status === "fulfilled" ? mappingsResult.value : [];
-  const activitiesResponse =
-    activitiesResult.status === "fulfilled" ? activitiesResult.value : null;
+  const activities = activitiesResult.status === "fulfilled" ? activitiesResult.value : [];
 
   const totals: DashboardTotals = overview
     ? {
@@ -351,10 +354,29 @@ async function loadDashboardDemoData(): Promise<DashboardDemoData> {
     pipelineStages,
     recruiters,
     clients,
-    activity: buildActivity(activitiesResponse?.items ?? []),
+    activity: buildActivity(activities),
     totals,
     analytics: buildAnalytics(totals),
   };
+}
+
+async function loadDashboardDemoData(): Promise<DashboardDemoData> {
+  if (dashboardDemoDataCache) {
+    return dashboardDemoDataCache;
+  }
+  if (dashboardDemoDataPromise) {
+    return dashboardDemoDataPromise;
+  }
+
+  dashboardDemoDataPromise = fetchDashboardDemoDataOnce();
+
+  try {
+    const data = await dashboardDemoDataPromise;
+    dashboardDemoDataCache = data;
+    return data;
+  } finally {
+    dashboardDemoDataPromise = null;
+  }
 }
 
 export async function getDashboardDemoData() {

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from redis.asyncio import Redis
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class RedisCache:
@@ -27,7 +30,12 @@ class RedisCache:
         payload = await self._client.get(key)
         if payload is None:
             return None
-        return json.loads(payload)
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:
+            snippet = payload if len(payload) <= 200 else f"{payload[:200]}…"
+            logger.warning("Redis cache JSON decode failed for key %s: %s; payload=%r", key, exc, snippet)
+            return None
 
     async def set_json(self, key: str, payload: Any, ttl_seconds: int) -> None:
         if not self.enabled or self._client is None:

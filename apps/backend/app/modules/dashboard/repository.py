@@ -140,14 +140,21 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
                 "offers_accepted": {
                     "$sum": {"$cond": [{"$eq": ["$pipeline_stage", PipelineStage.offer_accepted.value]}, 1, 0]}
                 },
-                "joined_candidates": {
-                    "$sum": {"$cond": [{"$eq": ["$pipeline_stage", PipelineStage.joined.value]}, 1, 0]}
-                },
             }
         },
     ]
     mapping_result = await (await CandidateMapping.get_motor_collection().aggregate(mapping_pipeline)).to_list(length=None)
     mapping_totals = mapping_result[0] if mapping_result else {}
+
+    joined_match = dict(_base_mapping_match(filters, include_terminal=True))
+    if filters.pipeline_stage is None:
+        joined_match["pipeline_stage"] = PipelineStage.joined.value
+    joined_pipeline = [
+        {"$match": joined_match},
+        {"$group": {"_id": None, "joined_candidates": {"$sum": 1}}},
+    ]
+    joined_result = await (await CandidateMapping.get_motor_collection().aggregate(joined_pipeline)).to_list(length=None)
+    joined_totals = joined_result[0] if joined_result else {}
 
     return {
         "summary": {
@@ -156,7 +163,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
             "seats_filled": int(job_totals.get("seats_filled", 0)),
             "candidates_in_pipeline": int(mapping_totals.get("candidates_in_pipeline", 0)),
             "offers_accepted": int(mapping_totals.get("offers_accepted", 0)),
-            "joined_candidates": int(mapping_totals.get("joined_candidates", 0)),
+            "joined_candidates": int(joined_totals.get("joined_candidates", 0)),
         }
     }
 
@@ -227,7 +234,7 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
                 "id": {"$toString": "$_id"},
                 "total_mappings": {"$size": "$employee_mappings"},
                 "mappings": {
-                    "offers_received": {
+                    "offers_sent": {
                         "$size": {
                             "$filter": {
                                 "input": "$employee_mappings",
@@ -489,7 +496,7 @@ async def create_candidate_mapping(
     pipeline_stage: PipelineStage,
 ) -> CandidateMapping:
     candidate_oid = to_object_id(candidate_id, "candidate_id")
-    job_opening_oid = to_object_id(job_opening_id, "client_id")
+    job_opening_oid = to_object_id(job_opening_id, "job_opening_id")
     existing = await CandidateMapping.find_one(
         CandidateMapping.candidate_id == candidate_oid,
         CandidateMapping.job_opening_id == job_opening_oid,

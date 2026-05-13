@@ -1,6 +1,8 @@
 """Pydantic schemas for the dashboard module."""
 
-from datetime import datetime
+from datetime import UTC, datetime
+from functools import partial
+
 from pydantic import BaseModel, Field
 
 from app.common.dtos.pagination import PaginatedResponse
@@ -35,13 +37,13 @@ class PipelineStageMetric(BaseModel):
 class DashboardOverviewResponse(BaseModel):
     summary: DashboardKpiSummary
     pipeline: list[PipelineStageMetric] = Field(default_factory=list)
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
 
 
 class DashboardPipelineResponse(BaseModel):
     stages: list[PipelineStageMetric] = Field(default_factory=list)
     total_candidates: int = 0
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
 
 
 class EmployeeAnalyticsItem(BaseModel):

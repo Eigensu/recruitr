@@ -52,7 +52,7 @@ export interface ApiDashboardEmployeeItem {
   name: string;
   email: string;
   mappings: {
-    offers_received: number;
+    offers_sent: number;
     joined_candidates: number;
     rejected_candidates: number;
   };
@@ -135,29 +135,37 @@ async function dashboardFetch<T>(path: string, query?: Record<string, QueryValue
   return (await res.json()) as T;
 }
 
+const FETCH_ALL_PAGES_DEFAULT_MAX = 500;
+
 async function fetchAllPages<T>(
   path: string,
   baseQuery: Record<string, QueryValue> = {},
   limit = 100,
+  maxPages = FETCH_ALL_PAGES_DEFAULT_MAX,
 ): Promise<T[]> {
   const items: T[] = [];
-  let page = 1;
 
-  while (true) {
+  for (let page = 1; page <= maxPages; page += 1) {
     const response = await dashboardFetch<ApiPaginatedResponse<T>>(path, {
       ...baseQuery,
       page,
       limit,
     });
-    items.push(...response.items);
-
-    if (!response.meta.has_next) {
-      break;
+    if (
+      !response.meta ||
+      typeof response.meta.has_next !== "boolean" ||
+      typeof response.meta.page !== "number" ||
+      typeof response.meta.limit !== "number"
+    ) {
+      throw new Error(`Malformed pagination metadata from ${path}`);
     }
-    page += 1;
+    items.push(...response.items);
+    if (!response.meta.has_next) {
+      return items;
+    }
   }
 
-  return items;
+  throw new Error(`Exceeded maximum page count (${maxPages}) while fetching ${path}`);
 }
 
 export function getDashboardOverview() {
@@ -200,12 +208,6 @@ export function getAllDashboardMappings() {
   return fetchAllPages<ApiDashboardMappingItem>("/api/v1/dashboard/mappings", {}, 100);
 }
 
-export function getAllDashboardActivities(limit = 60) {
-  return dashboardFetch<ApiPaginatedResponse<ApiDashboardActivityItem>>(
-    "/api/v1/dashboard/activity",
-    {
-      page: 1,
-      limit,
-    },
-  );
+export function getAllDashboardActivities(limit = 100, maxPages = FETCH_ALL_PAGES_DEFAULT_MAX) {
+  return fetchAllPages<ApiDashboardActivityItem>("/api/v1/dashboard/activity", {}, limit, maxPages);
 }

@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from beanie import Document, PydanticObjectId, Replace, Update, before_event
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from pymongo import IndexModel
 
 from app.modules.dashboard.enums import ActivityType, JobStatus, PipelineStage, TargetEntityType
@@ -14,7 +14,12 @@ def _touch_updated_at(document: Document) -> None:
 
 
 class EmployeeMappings(BaseModel):
-    offers_received: int = 0
+    model_config = ConfigDict(populate_by_name=True)
+
+    offers_sent: int = Field(
+        default=0,
+        validation_alias=AliasChoices("offers_sent", "offers_received"),
+    )
     joined_candidates: int = 0
     rejected_candidates: int = 0
 

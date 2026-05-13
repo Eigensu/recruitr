@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.common.extras.redis_cache import dashboard_cache
 from app.config import settings
 from app.database import init_db
 from app.modules.auth.router import router as auth_router
@@ -24,7 +25,10 @@ _COOKIE_SECURE = not settings.DEBUG  # True in prod (HTTPS), False in local dev
 async def lifespan(app: FastAPI):
     """Initialize database connection on startup, clean up on shutdown."""
     await init_db()
-    yield
+    try:
+        yield
+    finally:
+        await dashboard_cache.close()
 
 
 app = FastAPI(
