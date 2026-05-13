@@ -57,7 +57,7 @@ export function RankBadge({ rank, size = "md" }: RankBadgeProps) {
         style.border,
       )}
     >
-      {rank <= 3 ? (rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉") : `#${rank}`}
+      {rank >= 1 && rank <= 3 ? (rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉") : `#${rank}`}
     </motion.div>
   );
 }

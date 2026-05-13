@@ -12,9 +12,11 @@ import type { LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 type SortKey =
   | "rank"
+  | "name"
   | "totalMappings"
   | "offersReceived"
   | "joined"
+  | "rejected"
   | "successRate"
   | "monthlyGrowth";
 
@@ -24,7 +26,7 @@ interface LeaderboardTableProps {
 
 const COLUMNS: { key: SortKey; label: string; className: string }[] = [
   { key: "rank", label: "Rank", className: "w-14 px-4 py-3 text-left" },
-  { key: "totalMappings", label: "Recruiter", className: "px-4 py-3 text-left" },
+  { key: "name", label: "Recruiter", className: "px-4 py-3 text-left" },
   {
     key: "totalMappings",
     label: "Mappings",
@@ -36,7 +38,7 @@ const COLUMNS: { key: SortKey; label: string; className: string }[] = [
     className: "px-4 py-3 text-center hidden md:table-cell",
   },
   { key: "joined", label: "Joined", className: "px-4 py-3 text-center hidden lg:table-cell" },
-  { key: "joined", label: "Rejected", className: "px-4 py-3 text-center hidden xl:table-cell" },
+  { key: "rejected", label: "Rejected", className: "px-4 py-3 text-center hidden xl:table-cell" },
   {
     key: "successRate",
     label: "Success %",
@@ -56,7 +58,14 @@ export function LeaderboardTable({ recruiters }: LeaderboardTableProps) {
 
   const sorted = useMemo(() => {
     return [...recruiters].sort((a, b) => {
-      const diff = a[sortKey] - b[sortKey];
+      const left = a[sortKey];
+      const right = b[sortKey];
+
+      if (typeof left === "string" && typeof right === "string") {
+        return sortDir === "asc" ? left.localeCompare(right) : right.localeCompare(left);
+      }
+
+      const diff = Number(left) - Number(right);
       return sortDir === "asc" ? diff : -diff;
     });
   }, [recruiters, sortKey, sortDir]);
@@ -98,17 +107,24 @@ export function LeaderboardTable({ recruiters }: LeaderboardTableProps) {
               {COLUMNS.map((col, i) => (
                 <th
                   key={i}
-                  onClick={() => handleSort(col.key)}
-                  className={cn(
-                    DASHBOARD_TABLE_HEADER_CLASS,
-                    col.className,
-                    "cursor-pointer hover:text-white/70 transition-colors select-none",
-                  )}
+                  aria-sort={
+                    sortKey !== col.key ? "none" : sortDir === "asc" ? "ascending" : "descending"
+                  }
+                  className={cn(DASHBOARD_TABLE_HEADER_CLASS, col.className, "select-none")}
                 >
-                  {col.label}
-                  {sortKey === col.key && (
-                    <span className="ml-1 text-yellow">{sortDir === "asc" ? "↑" : "↓"}</span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleSort(col.key)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-sm cursor-pointer hover:text-white/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1220]",
+                      col.className,
+                    )}
+                  >
+                    <span>{col.label}</span>
+                    {sortKey === col.key && (
+                      <span className="text-yellow">{sortDir === "asc" ? "↑" : "↓"}</span>
+                    )}
+                  </button>
                 </th>
               ))}
             </tr>

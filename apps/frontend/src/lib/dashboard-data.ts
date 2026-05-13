@@ -51,6 +51,29 @@ const EMPTY_DATA: DashboardDemoData = {
   analytics: [],
 };
 
+const DASHBOARD_CACHE_TTL_MS = 60_000;
+
+type DashboardCacheEntry = {
+  data: DashboardDemoData;
+  expiresAt: number;
+};
+
+let dashboardCacheEntry: DashboardCacheEntry | null = null;
+let dashboardDataPromise: Promise<DashboardDemoData> | null = null;
+
+function cloneDashboardDemoData(data: DashboardDemoData): DashboardDemoData {
+  return {
+    ...data,
+    kpis: data.kpis.map((item) => ({ ...item })),
+    pipelineStages: data.pipelineStages.map((item) => ({ ...item })),
+    recruiters: data.recruiters.map((item) => ({ ...item })),
+    clients: data.clients.map((item) => ({ ...item })),
+    activity: data.activity.map((item) => ({ ...item })),
+    totals: { ...data.totals },
+    analytics: data.analytics.map((item) => ({ ...item })),
+  };
+}
+
 function percentString(value: number) {
   return `${Math.round(value)}%`;
 }
@@ -275,7 +298,7 @@ function buildActivity(
   }));
 }
 
-async function loadDashboardDemoData(): Promise<DashboardDemoData> {
+async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const [
     overviewResult,
     pipelineResult,
@@ -316,8 +339,7 @@ async function loadDashboardDemoData(): Promise<DashboardDemoData> {
   const clientsResponse = clientsResult.status === "fulfilled" ? clientsResult.value : null;
   const employees = employeesResult.status === "fulfilled" ? employeesResult.value : [];
   const mappings = mappingsResult.status === "fulfilled" ? mappingsResult.value : [];
-  const activitiesResponse =
-    activitiesResult.status === "fulfilled" ? activitiesResult.value : null;
+  const activities = activitiesResult.status === "fulfilled" ? activitiesResult.value : [];
 
   const totals: DashboardTotals = overview
     ? {
@@ -351,10 +373,31 @@ async function loadDashboardDemoData(): Promise<DashboardDemoData> {
     pipelineStages,
     recruiters,
     clients,
-    activity: buildActivity(activitiesResponse?.items ?? []),
+    activity: buildActivity(activities),
     totals,
     analytics: buildAnalytics(totals),
   };
+}
+
+async function loadDashboardDemoData(): Promise<DashboardDemoData> {
+  const now = Date.now();
+
+  if (dashboardCacheEntry !== null && dashboardCacheEntry.expiresAt > now) {
+    return cloneDashboardDemoData(dashboardCacheEntry.data);
+  }
+
+  dashboardDataPromise ??= fetchDashboardDemoDataOnce();
+
+  try {
+    const data = await dashboardDataPromise;
+    dashboardCacheEntry = {
+      data,
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+    };
+    return cloneDashboardDemoData(data);
+  } finally {
+    dashboardDataPromise = null;
+  }
 }
 
 export async function getDashboardDemoData() {

@@ -32,8 +32,7 @@ export function LeaderboardTableRow({ recruiter, index }: LeaderboardTableRowPro
         whileInView={{ opacity: 1, x: 0 }}
         viewport={{ once: true, amount: 0.5 }}
         transition={{ duration: 0.35, delay: index * 0.04, ease: "easeOut" }}
-        onClick={() => setExpanded((p) => !p)}
-        className={cn("border-b transition-colors cursor-pointer group", rowBg)}
+        className={cn("border-b transition-colors group", rowBg)}
       >
         {/* Rank */}
         <td className="px-4 py-3 w-14">
@@ -119,13 +118,20 @@ export function LeaderboardTableRow({ recruiter, index }: LeaderboardTableRowPro
 
         {/* Badge */}
         <td className="px-4 py-3 text-center">
-          <AchievementBadge badgeKey={recruiter.badge} size="sm" />
+          <button
+            type="button"
+            onClick={() => setExpanded((p) => !p)}
+            aria-expanded={expanded}
+            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1220]"
+          >
+            <AchievementBadge badgeKey={recruiter.badge} size="sm" />
+          </button>
         </td>
       </motion.tr>
 
       {/* Expanded mini-chart row */}
       {expanded && (
-        <tr className="border-b border-white/5 bg-white/[0.015]">
+        <tr className="border-b border-white/5 bg-white/1.5">
           <td colSpan={9} className="px-6 py-3">
             <motion.div
               initial={{ opacity: 0, height: 0 }}

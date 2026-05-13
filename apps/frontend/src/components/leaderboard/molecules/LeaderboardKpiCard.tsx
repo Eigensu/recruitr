@@ -49,7 +49,7 @@ interface LeaderboardKpiCardProps {
 }
 
 export function LeaderboardKpiCard({ kpi, index }: LeaderboardKpiCardProps) {
-  const styles = toneStyles[kpi.tone];
+  const styles = toneStyles[kpi.tone] ?? toneStyles.neutral;
 
   return (
     <motion.article

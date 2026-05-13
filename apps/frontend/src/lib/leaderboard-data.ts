@@ -353,10 +353,10 @@ export const LEADERBOARD_KPIS: LeaderboardKpi[] = [
     tone: "neutral",
   },
   {
-    id: "offers_received",
+    id: "offers_sent",
     label: "Offers Sent",
     value: 136,
-    helper: "Client-facing profiles",
+    helper: "Profiles sent to clients",
     tone: "navy",
   },
   {

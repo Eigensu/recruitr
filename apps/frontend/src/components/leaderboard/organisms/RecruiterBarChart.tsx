@@ -30,8 +30,9 @@ export function RecruiterBarChart() {
   const iW = W - PAD.l - PAD.r;
   const iH = H - PAD.t - PAD.b;
 
+  const count = Math.max(MOCK_RECRUITERS.length, 1);
   const maxVal = Math.max(...MOCK_RECRUITERS.map((r) => r.totalMappings), 1);
-  const barW = iW / MOCK_RECRUITERS.length;
+  const barW = iW / count;
   const barPad = barW * 0.2;
 
   return (

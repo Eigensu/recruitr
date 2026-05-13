@@ -33,11 +33,17 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {displayed.map((recruiter, index) => {
-          const xpPct = Math.min((recruiter.xp / 10000) * 100, 100);
-          const joinPct =
-            recruiter.totalMappings > 0
-              ? Math.round((recruiter.joined / recruiter.totalMappings) * 100)
+          const xpPct = Math.max(
+            0,
+            Math.min(100, Number.isFinite(recruiter.xp) ? (recruiter.xp / 10000) * 100 : 0),
+          );
+          const totalMappings = Number(recruiter.totalMappings);
+          const joined = Number(recruiter.joined);
+          const joinPctRaw =
+            totalMappings > 0 && Number.isFinite(joined) && Number.isFinite(totalMappings)
+              ? Math.round((joined / totalMappings) * 100)
               : 0;
+          const joinPct = Math.max(0, Math.min(100, joinPctRaw));
 
           return (
             <motion.div

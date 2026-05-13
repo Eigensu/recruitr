@@ -28,13 +28,16 @@ export function CompanyHiringProgress({ companies }: CompanyHiringProgressProps)
 
       <div className="space-y-4">
         {companies.map((company, index) => {
-          const pct = Math.round((company.filled / company.totalSeats) * 100);
+          const totalSeats = Number(company.totalSeats);
+          const filled = Number(company.filled);
+          const rawPct = totalSeats > 0 ? Math.round((filled / totalSeats) * 100) : 0;
+          const pct = Math.max(0, Math.min(100, Number.isFinite(rawPct) ? rawPct : 0));
           const isFull = company.filled >= company.totalSeats;
           const barColor = isFull ? "#3DDC97" : pct >= 50 ? "#F3FF54" : "#60A5FA";
 
           return (
             <motion.div
-              key={company.company}
+              key={`${company.company}-${company.role}`}
               initial={{ opacity: 0, x: -8 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, amount: 0.5 }}

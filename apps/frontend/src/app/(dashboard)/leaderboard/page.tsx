@@ -23,7 +23,7 @@ export const metadata = {
 };
 
 export default function LeaderboardPage() {
-  const topRecruiter = MOCK_RECRUITERS[0]!;
+  const topRecruiter = MOCK_RECRUITERS[0];
 
   return (
     <div className="min-h-full bg-black px-4 py-5 text-white sm:px-6 lg:px-8">
@@ -39,7 +39,16 @@ export default function LeaderboardPage() {
         </header>
 
         {/* ── Hero Spotlight ────────────────────────────────────────────── */}
-        <HeroSpotlight recruiter={topRecruiter} />
+        {topRecruiter ? (
+          <HeroSpotlight recruiter={topRecruiter} />
+        ) : (
+          <section
+            aria-label="Leaderboard spotlight"
+            className="rounded-lg border border-white/10 bg-white/[0.025] p-5"
+          >
+            <p className="text-sm text-white/50">No leaderboard data available yet.</p>
+          </section>
+        )}
 
         {/* ── KPI Cards ─────────────────────────────────────────────────── */}
         <section aria-label="Leaderboard KPIs">

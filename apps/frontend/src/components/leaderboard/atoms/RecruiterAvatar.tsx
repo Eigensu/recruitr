@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +40,7 @@ export function RecruiterAvatar({
           background: `${color}22`,
           color,
           border: `2px solid ${color}55`,
-          ...(ring ? { ringColor: color } : {}),
+          ...(ring ? ({ ["--tw-ring-color"]: color } as CSSProperties) : {}),
         }}
       >
         {initials}

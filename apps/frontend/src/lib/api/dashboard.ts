@@ -139,21 +139,30 @@ async function fetchAllPages<T>(
   path: string,
   baseQuery: Record<string, QueryValue> = {},
   limit = 100,
+  maxPages = 50,
+  maxItems = 5000,
 ): Promise<T[]> {
   const items: T[] = [];
   let page = 1;
 
-  while (true) {
+  while (page <= maxPages && items.length < maxItems) {
     const response = await dashboardFetch<ApiPaginatedResponse<T>>(path, {
       ...baseQuery,
       page,
       limit,
     });
-    items.push(...response.items);
 
-    if (!response.meta.has_next) {
+    if (response.items.length === 0) {
       break;
     }
+
+    const remaining = maxItems - items.length;
+    items.push(...response.items.slice(0, remaining));
+
+    if (!response.meta.has_next || page >= response.meta.pages || items.length >= maxItems) {
+      break;
+    }
+
     page += 1;
   }
 
@@ -196,16 +205,17 @@ export function getDashboardActivities(query: Record<string, QueryValue> = {}) {
   );
 }
 
-export function getAllDashboardMappings() {
-  return fetchAllPages<ApiDashboardMappingItem>("/api/v1/dashboard/mappings", {}, 100);
+export function getAllDashboardMappings(maxMappings = 500) {
+  const limit = Math.min(100, Math.max(maxMappings, 1));
+  return fetchAllPages<ApiDashboardMappingItem>(
+    "/api/v1/dashboard/mappings",
+    {},
+    limit,
+    50,
+    maxMappings,
+  );
 }
 
 export function getAllDashboardActivities(limit = 60) {
-  return dashboardFetch<ApiPaginatedResponse<ApiDashboardActivityItem>>(
-    "/api/v1/dashboard/activity",
-    {
-      page: 1,
-      limit,
-    },
-  );
+  return fetchAllPages<ApiDashboardActivityItem>("/api/v1/dashboard/activity", {}, limit);
 }
