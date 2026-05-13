@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
 from app.config import settings
 
@@ -17,7 +18,18 @@ class RedisCache:
     def __init__(self, url: str, enabled: bool, namespace: str = "dashboard") -> None:
         self.enabled = enabled
         self.namespace = namespace
-        self._client: Redis | None = Redis.from_url(url, decode_responses=True) if enabled else None
+        self._client: Redis | None = None
+        if enabled:
+            try:
+                self._client = Redis.from_url(url, decode_responses=True)
+            except (RedisError, OSError) as exc:
+                logger.warning(
+                    "Redis client initialization failed (namespace=%s): %s",
+                    namespace,
+                    exc,
+                    exc_info=False,
+                )
+                self._client = None
 
     def build_key(self, *parts: Any) -> str:
         suffix = ":".join(str(part) for part in parts if part is not None and str(part) != "")
@@ -27,7 +39,11 @@ class RedisCache:
         if not self.enabled or self._client is None:
             return None
 
-        payload = await self._client.get(key)
+        try:
+            payload = await self._client.get(key)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis get failed for key %s: %s", key, exc, exc_info=False)
+            return None
         if payload is None:
             return None
         try:
@@ -41,17 +57,26 @@ class RedisCache:
         if not self.enabled or self._client is None:
             return
 
-        await self._client.set(key, json.dumps(payload, default=str), ex=ttl_seconds)
+        try:
+            await self._client.set(key, json.dumps(payload, default=str), ex=ttl_seconds)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis set failed for key %s: %s", key, exc, exc_info=False)
 
     async def delete(self, key: str) -> None:
         if not self.enabled or self._client is None:
             return
 
-        await self._client.delete(key)
+        try:
+            await self._client.delete(key)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis delete failed for key %s: %s", key, exc, exc_info=False)
 
     async def close(self) -> None:
         if self._client is not None:
-            await self._client.aclose()
+            try:
+                await self._client.aclose()
+            except (RedisError, OSError) as exc:
+                logger.warning("Redis close failed: %s", exc, exc_info=False)
 
 
 dashboard_cache = RedisCache(

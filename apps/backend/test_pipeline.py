@@ -1,8 +1,13 @@
 import asyncio
+
 from app.database import init_db
-from app.modules.dashboard.schemas import DashboardFilters
 from app.modules.dashboard.repository import fetch_clients, fetch_mappings
-from app.modules.dashboard.schemas import ClientAnalyticsItem, MappingAnalyticsItem
+from app.modules.dashboard.schemas import (
+    ClientAnalyticsItem,
+    DashboardFilters,
+    MappingAnalyticsItem,
+)
+
 
 async def main():
     await init_db()
@@ -16,4 +21,6 @@ async def main():
         MappingAnalyticsItem.model_validate(item)
     print("mappings ok")
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())

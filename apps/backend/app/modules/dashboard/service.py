@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from typing import Any
@@ -69,8 +70,10 @@ async def get_overview(filters: DashboardFilters) -> DashboardOverviewResponse:
     if cached is not None:
         return DashboardOverviewResponse.model_validate(cached)
 
-    payload = await fetch_overview(filters)
-    pipeline_payload = await fetch_pipeline(filters)
+    payload, pipeline_payload = await asyncio.gather(
+        fetch_overview(filters),
+        fetch_pipeline(filters),
+    )
     response = DashboardOverviewResponse(
         summary=payload["summary"],
         pipeline=[PipelineStageMetric.model_validate(stage) for stage in pipeline_payload["stages"]],

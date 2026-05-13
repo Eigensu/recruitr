@@ -135,39 +135,6 @@ async function dashboardFetch<T>(path: string, query?: Record<string, QueryValue
   return (await res.json()) as T;
 }
 
-const FETCH_ALL_PAGES_DEFAULT_MAX = 500;
-
-async function fetchAllPages<T>(
-  path: string,
-  baseQuery: Record<string, QueryValue> = {},
-  limit = 100,
-  maxPages = FETCH_ALL_PAGES_DEFAULT_MAX,
-): Promise<T[]> {
-  const items: T[] = [];
-
-  for (let page = 1; page <= maxPages; page += 1) {
-    const response = await dashboardFetch<ApiPaginatedResponse<T>>(path, {
-      ...baseQuery,
-      page,
-      limit,
-    });
-    if (
-      !response.meta ||
-      typeof response.meta.has_next !== "boolean" ||
-      typeof response.meta.page !== "number" ||
-      typeof response.meta.limit !== "number"
-    ) {
-      throw new Error(`Malformed pagination metadata from ${path}`);
-    }
-    items.push(...response.items);
-    if (!response.meta.has_next) {
-      return items;
-    }
-  }
-
-  throw new Error(`Exceeded maximum page count (${maxPages}) while fetching ${path}`);
-}
-
 export function getDashboardOverview() {
   return dashboardFetch<ApiDashboardOverviewResponse>("/api/v1/dashboard/overview");
 }
@@ -202,12 +169,4 @@ export function getDashboardActivities(query: Record<string, QueryValue> = {}) {
     "/api/v1/dashboard/activity",
     query,
   );
-}
-
-export function getAllDashboardMappings() {
-  return fetchAllPages<ApiDashboardMappingItem>("/api/v1/dashboard/mappings", {}, 100);
-}
-
-export function getAllDashboardActivities(limit = 100, maxPages = FETCH_ALL_PAGES_DEFAULT_MAX) {
-  return fetchAllPages<ApiDashboardActivityItem>("/api/v1/dashboard/activity", {}, limit, maxPages);
 }
