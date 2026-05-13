@@ -10,6 +10,7 @@ import secrets
 from pathlib import Path
 
 from pydantic import ValidationInfo, field_validator
+from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Monorepo root = two directories above apps/backend/app/config.py
@@ -41,6 +42,12 @@ class Settings(BaseSettings):
     SESSION_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 days
+
+    # ── Redis ──
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_ENABLED: bool = False
+    REDIS_NAMESPACE: str = "dashboard"
+    REDIS_CACHE_TTL_SECONDS: PositiveInt = 300
 
     # ── Cloudinary ──
     CLOUDINARY_CLOUD_NAME: str = ""
