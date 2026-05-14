@@ -4,17 +4,23 @@ import { useRef } from "react";
 import { motion, useInView } from "motion/react";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
-import { MOCK_RECRUITERS, MONTH_LABELS } from "@/lib/leaderboard-data";
+import { MOCK_RECRUITERS, MONTH_LABELS, type LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 const CHART_COLORS = ["#F3FF54", "#3DDC97", "#60A5FA", "#F7C948", "#FB923C"];
 
 /** Custom SVG multi-line chart — no external chart lib required. */
-export function MonthlyLineChart() {
+export function MonthlyLineChart({
+  recruiters = MOCK_RECRUITERS,
+  monthLabels = MONTH_LABELS,
+}: {
+  recruiters?: LeaderboardRecruiter[];
+  monthLabels?: string[];
+}) {
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.25 });
 
   // Top 5 recruiters
-  const top5 = MOCK_RECRUITERS.slice(0, 5);
+  const top5 = recruiters.slice(0, 5);
 
   const W = 600;
   const H = 220;
@@ -24,7 +30,7 @@ export function MonthlyLineChart() {
 
   const allVals = top5.flatMap((r) => r.monthlyData);
   const maxVal = Math.max(...allVals, 1);
-  const months = MONTH_LABELS.length;
+  const months = monthLabels.length;
   const stepX = iW / (months - 1);
 
   function toPoints(data: number[]) {
@@ -111,7 +117,7 @@ export function MonthlyLineChart() {
           })}
 
           {/* X labels */}
-          {MONTH_LABELS.map((m, i) => (
+          {monthLabels.map((m, i) => (
             <text
               key={m}
               x={PAD.l + i * stepX}

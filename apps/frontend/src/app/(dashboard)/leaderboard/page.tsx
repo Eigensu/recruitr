@@ -9,12 +9,7 @@ import {
   AchievementBadgesSection,
   LeaderboardKpiCard,
 } from "@/components/leaderboard";
-import {
-  MOCK_RECRUITERS,
-  LEADERBOARD_KPIS,
-  COMPANY_HIRING,
-  RECENT_ACTIVITY,
-} from "@/lib/leaderboard-data";
+import { getLeaderboardPageData } from "@/lib/api/leaderboard";
 
 export const metadata = {
   title: "Leaderboard — Binge Recruiting Intelligence",
@@ -22,8 +17,9 @@ export const metadata = {
     "Gamified recruiter performance rankings, XP scores, achievement badges and analytics.",
 };
 
-export default function LeaderboardPage() {
-  const topRecruiter = MOCK_RECRUITERS[0];
+export default async function LeaderboardPage() {
+  const { topRecruiter, recruiters, kpis, companies, activity, monthLabels } =
+    await getLeaderboardPageData();
 
   return (
     <div className="min-h-full bg-black px-4 py-5 text-white sm:px-6 lg:px-8">
@@ -53,7 +49,7 @@ export default function LeaderboardPage() {
         {/* ── KPI Cards ─────────────────────────────────────────────────── */}
         <section aria-label="Leaderboard KPIs">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
-            {LEADERBOARD_KPIS.map((kpi, index) => (
+            {kpis.map((kpi, index) => (
               <LeaderboardKpiCard key={kpi.id} kpi={kpi} index={index} />
             ))}
           </div>
@@ -61,22 +57,22 @@ export default function LeaderboardPage() {
 
         {/* ── Analytics Charts ──────────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <MonthlyLineChart />
-          <RecruiterBarChart />
+          <MonthlyLineChart recruiters={recruiters} monthLabels={monthLabels} />
+          <RecruiterBarChart recruiters={recruiters} />
         </div>
 
         {/* ── Main Leaderboard Table ────────────────────────────────────── */}
-        <LeaderboardTable recruiters={MOCK_RECRUITERS} />
+        <LeaderboardTable recruiters={recruiters} />
 
         {/* ── Progress + Activity ───────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
-          <RecruiterProgressSection recruiters={MOCK_RECRUITERS} />
-          <RecentActivityFeed items={RECENT_ACTIVITY} />
+          <RecruiterProgressSection recruiters={recruiters} />
+          <RecentActivityFeed items={activity} />
         </div>
 
         {/* ── Company Hiring + Badges ───────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
-          <CompanyHiringProgress companies={COMPANY_HIRING} />
+          <CompanyHiringProgress companies={companies} />
           <AchievementBadgesSection />
         </div>
       </div>

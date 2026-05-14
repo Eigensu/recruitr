@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { motion, useInView } from "motion/react";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
-import { MOCK_RECRUITERS } from "@/lib/leaderboard-data";
+import { MOCK_RECRUITERS, type LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 const BAR_COLORS = [
   "#F3FF54",
@@ -20,7 +20,11 @@ const BAR_COLORS = [
 ];
 
 /** Custom SVG bar chart comparing recruiter mappings. */
-export function RecruiterBarChart() {
+export function RecruiterBarChart({
+  recruiters = MOCK_RECRUITERS,
+}: {
+  recruiters?: LeaderboardRecruiter[];
+}) {
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.25 });
 
@@ -30,8 +34,8 @@ export function RecruiterBarChart() {
   const iW = W - PAD.l - PAD.r;
   const iH = H - PAD.t - PAD.b;
 
-  const count = Math.max(MOCK_RECRUITERS.length, 1);
-  const maxVal = Math.max(...MOCK_RECRUITERS.map((r) => r.totalMappings), 1);
+  const count = Math.max(recruiters.length, 1);
+  const maxVal = Math.max(...recruiters.map((r) => r.totalMappings), 1);
   const barW = iW / count;
   const barPad = barW * 0.2;
 
@@ -85,7 +89,7 @@ export function RecruiterBarChart() {
           })}
 
           {/* Bars */}
-          {MOCK_RECRUITERS.map((r, i) => {
+          {recruiters.map((r, i) => {
             const barHeight = (r.totalMappings / maxVal) * iH;
             const x = PAD.l + i * barW + barPad / 2;
             const y = PAD.t + iH - barHeight;
