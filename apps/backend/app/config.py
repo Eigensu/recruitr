@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = False
     REDIS_NAMESPACE: str = "dashboard"
     REDIS_CACHE_TTL_SECONDS: PositiveInt = 300
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
     # ── Cloudinary ──
     CLOUDINARY_CLOUD_NAME: str = ""
