@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.modules.leaderboard.enums import ActivityTypeEnum
-from app.modules.leaderboard.models import Badge, EmployeeStat, LeaderboardHistory, RecruiterActivity
+from app.modules.leaderboard.models import EmployeeStat, LeaderboardHistory, RecruiterActivity
 from app.modules.leaderboard.utils.badge_engine import evaluate_badges
 from app.modules.leaderboard.utils.cache_manager import update_rank
 from app.modules.leaderboard.utils.growth_calculator import percent_growth, success_rate
-from app.modules.leaderboard.utils.ranking_calculator import activity_points, calculate_score
+from app.modules.leaderboard.utils.ranking_calculator import activity_points
 
 
 async def record_activity_atomic(
@@ -41,13 +41,13 @@ async def record_activity_atomic(
                 "description": description,
                 "points_earned": points,
                 "activity_reference_id": activity_reference_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
     except DuplicateKeyError:
         return False
 
-    inc: dict[str, int] = {"xp_points": max(points, 0)}
+    inc: dict[str, int] = {"xp_points": points}
     if activity_type == ActivityTypeEnum.MAPPING_COMPLETED:
         inc["mappings.total_mappings"] = 1
     elif activity_type == ActivityTypeEnum.OFFER_RECEIVED:
@@ -61,8 +61,8 @@ async def record_activity_atomic(
         {"employee_id": employee_oid},
         {
             "$inc": inc,
-            "$set": {"updated_at": datetime.utcnow(), "is_active": True},
-            "$setOnInsert": {"created_at": datetime.utcnow(), "employee_id": employee_oid, "level": 1, "streak_days": 0},
+            "$set": {"updated_at": datetime.now(timezone.utc), "is_active": True},
+            "$setOnInsert": {"created_at": datetime.now(timezone.utc), "employee_id": employee_oid, "level": 1, "streak_days": 0},
         },
         upsert=True,
     )
@@ -75,16 +75,24 @@ async def record_activity_atomic(
 
 
 async def recompute_ranks() -> list[dict[str, Any]]:
-    stats = await EmployeeStat.get_motor_collection().find({"is_active": True}).sort("total_score", -1).to_list(length=None)
-    results: list[dict[str, Any]] = []
-    for index, stat in enumerate(stats, start=1):
-        score = int(stat.get("xp_points") or stat.get("total_score", 0))
+    stats = await EmployeeStat.get_motor_collection().find({"is_active": True}).to_list(length=None)
+    refreshed: list[dict[str, Any]] = []
+    for stat in stats:
+        score = int(stat.get("xp_points", stat.get("total_score", 0)))
         await EmployeeStat.get_motor_collection().update_one(
             {"_id": stat["_id"]},
-            {"$set": {"leaderboard_rank": index, "total_score": score, "xp_points": score, "updated_at": datetime.utcnow()}},
+            {"$set": {"total_score": score, "xp_points": score, "updated_at": datetime.now(timezone.utc)}},
         )
         await update_rank(str(stat["employee_id"]), score)
-        results.append({"employee_id": str(stat["employee_id"]), "score": score, "rank": index})
+        refreshed.append({"_id": stat["_id"], "employee_id": str(stat["employee_id"]), "score": score})
+    refreshed.sort(key=lambda item: item["score"], reverse=True)
+    results: list[dict[str, Any]] = []
+    for index, stat in enumerate(refreshed, start=1):
+        await EmployeeStat.get_motor_collection().update_one(
+            {"_id": stat["_id"]},
+            {"$set": {"leaderboard_rank": index, "updated_at": datetime.now(timezone.utc)}},
+        )
+        results.append({"employee_id": stat["employee_id"], "score": stat["score"], "rank": index})
     return results
 
 
@@ -93,14 +101,14 @@ async def unlock_badges(employee_oid: Any, badges: list) -> None:
         return
     await EmployeeStat.get_motor_collection().update_one(
         {"employee_id": employee_oid},
-        {"$addToSet": {"badges": {"$each": [badge.value for badge in badges]}}, "$set": {"updated_at": datetime.utcnow()}},
+        {"$addToSet": {"badges": {"$each": [badge.value for badge in badges]}}, "$set": {"updated_at": datetime.now(timezone.utc)}},
     )
 
 
 async def create_monthly_snapshots(month: str) -> int:
     stats = await EmployeeStat.get_motor_collection().find({"is_active": True}).to_list(length=None)
     for stat in stats:
-        previous_cursor = await LeaderboardHistory.get_motor_collection().find({"employee_id": stat["employee_id"], "month": {"$lt": month}}).sort("month", -1).limit(1)
+        previous_cursor = LeaderboardHistory.get_motor_collection().find({"employee_id": stat["employee_id"], "month": {"$lt": month}}).sort("month", -1).limit(1)
         previous = await previous_cursor.to_list(length=None)
         previous_total = int(previous[0]["total_mappings"]) if previous else 0
         mappings = stat.get("mappings", {})
@@ -119,7 +127,9 @@ async def create_monthly_snapshots(month: str) -> int:
                     "monthly_growth": growth,
                     "leaderboard_rank": int(stat.get("leaderboard_rank", 0)),
                     "total_score": int(stat.get("total_score", 0)),
-                    "created_at": datetime.utcnow(),
+                },
+                "$setOnInsert": {
+                    "created_at": datetime.now(timezone.utc),
                 }
             },
             upsert=True,

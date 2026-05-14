@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 
@@ -18,4 +18,4 @@ class BadgeDefinitionResponse(BaseModel):
 class RecruiterBadgesResponse(BaseModel):
     employee_id: str
     badges: list[BadgeDefinitionResponse]
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

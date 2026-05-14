@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ActivityTypeEnum(str, Enum):
+class ActivityTypeEnum(StrEnum):
     MAPPING_COMPLETED = "mapping_completed"
     OFFER_RECEIVED = "offer_received"
     CANDIDATE_JOINED = "candidate_joined"

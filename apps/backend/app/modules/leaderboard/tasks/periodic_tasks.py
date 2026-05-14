@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.celery_app import celery_app
 from app.database import init_db
@@ -14,7 +14,7 @@ async def _refresh() -> bool:
 
 async def _snapshot(month: str | None = None) -> int:
     await init_db()
-    target = month or datetime.utcnow().strftime("%Y-%m")
+    target = month or datetime.now(timezone.utc).strftime("%Y-%m")
     count = await refresh_monthly_snapshot(target)
     await refresh_rankings()
     return count

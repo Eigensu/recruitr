@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from beanie import Document, PydanticObjectId, Replace, Update, before_event
 from pydantic import BaseModel, Field
@@ -12,7 +12,7 @@ from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeRarityEnum, Bad
 
 
 def _utcnow() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 def _touch(document: Document) -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.common.dtos.pagination import PaginationMeta
-from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeTypeEnum
+from app.modules.leaderboard.enums import ActivityTypeEnum
 from app.modules.leaderboard.repository import (
     create_monthly_snapshots,
     fetch_activity,
@@ -15,7 +15,6 @@ from app.modules.leaderboard.repository import (
     fetch_recruiter,
     record_activity_atomic,
     recompute_ranks,
-    unlock_badges,
 )
 from app.modules.leaderboard.schemas import (
     ActivityItem,
@@ -32,13 +31,21 @@ from app.modules.leaderboard.schemas import (
     MonthlyGrowthSeries,
     RecruiterBadgesResponse,
 )
-from app.modules.leaderboard.utils.badge_engine import evaluate_badges
 from app.modules.leaderboard.utils.cache_manager import (
     get_cached,
     invalidate_leaderboard_cache,
     response_key,
     set_cached,
 )
+
+TONE_MAP = {
+    ActivityTypeEnum.MAPPING_COMPLETED.value: "neutral",
+    ActivityTypeEnum.OFFER_RECEIVED.value: "yellow",
+    ActivityTypeEnum.CANDIDATE_JOINED.value: "green",
+    ActivityTypeEnum.CANDIDATE_REJECTED.value: "red",
+    ActivityTypeEnum.BADGE_UNLOCKED.value: "yellow",
+    ActivityTypeEnum.RANK_INCREASED.value: "green",
+}
 
 
 def _page_meta(total: int, page: int, limit: int) -> PaginationMeta:
@@ -48,6 +55,14 @@ def _page_meta(total: int, page: int, limit: int) -> PaginationMeta:
 
 def _cache_ttl_key(prefix: str, payload: dict | None = None) -> str:
     return response_key(prefix, payload)
+
+
+def _conversion_rate(summary: dict[str, object]) -> float:
+    offers = int(summary.get("offers", 0) or 0)
+    if offers <= 0:
+        return 0
+    joins = int(summary.get("joins", 0) or 0)
+    return round((joins / offers) * 100, 2)
 
 
 async def get_rankings(filters: LeaderboardFilters) -> LeaderboardPage:
@@ -77,7 +92,7 @@ async def get_overview() -> LeaderboardOverviewResponse:
         LeaderboardKpi(id="total_mappings", label="Total Mappings", value=int(summary.get("mappings", 0)), helper="Across all recruiters", tone="neutral"),
         LeaderboardKpi(id="offers_sent", label="Offers Sent", value=int(summary.get("offers", 0)), helper="Profiles sent to clients", tone="navy"),
         LeaderboardKpi(id="successful_joins", label="Successful Joins", value=int(summary.get("joins", 0)), helper="Onboarded this cycle", tone="green"),
-        LeaderboardKpi(id="conversion_rate", label="Conversion Rate", value=round((summary.get("joins", 0) / summary.get("offers", 1)) * 100, 2) if summary.get("offers", 0) else 0, suffix="%", helper="Offers to joins", tone="yellow"),
+        LeaderboardKpi(id="conversion_rate", label="Conversion Rate", value=_conversion_rate(summary), suffix="%", helper="Offers to joins", tone="yellow"),
         LeaderboardKpi(id="monthly_growth", label="Avg Monthly Growth", value=round(float(summary.get("growth") or 0), 2), suffix="%", helper="Team-wide MoM", tone="green"),
         LeaderboardKpi(id="active_companies", label="Active Companies", value=int(summary.get("companies", 0)), helper="Open hiring mandates", tone="neutral"),
         LeaderboardKpi(id="top_score", label="Top XP Score", value=int(summary.get("top_score", 0)), helper=top["name"] if top else "No leader yet", tone="yellow"),
@@ -119,14 +134,6 @@ async def get_company_progress() -> CompanyProgressResponse:
 async def get_activities(page: int, limit: int) -> ActivityPage:
     payload = await fetch_activity(page, limit)
     items = []
-    tone_map = {
-        ActivityTypeEnum.MAPPING_COMPLETED.value: "neutral",
-        ActivityTypeEnum.OFFER_RECEIVED.value: "yellow",
-        ActivityTypeEnum.CANDIDATE_JOINED.value: "green",
-        ActivityTypeEnum.CANDIDATE_REJECTED.value: "red",
-        ActivityTypeEnum.BADGE_UNLOCKED.value: "yellow",
-        ActivityTypeEnum.RANK_INCREASED.value: "green",
-    }
     for row in payload["items"]:
         employee = row["employee"]
         items.append(
@@ -137,7 +144,7 @@ async def get_activities(page: int, limit: int) -> ActivityPage:
                 action=row["title"],
                 target=row["description"],
                 timestamp=row["created_at"],
-                tone=tone_map.get(row["activity_type"], "neutral"),
+                tone=TONE_MAP.get(row["activity_type"], "neutral"),
                 avatarColor=employee.get("avatar_color") or "#F3FF54",
                 activity_type=row["activity_type"],
             )

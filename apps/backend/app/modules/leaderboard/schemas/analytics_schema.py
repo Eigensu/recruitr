@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -11,7 +11,7 @@ from app.modules.leaderboard.schemas.leaderboard_schema import LeaderboardRecrui
 class RecruiterAnalyticsResponse(BaseModel):
     recruiter: LeaderboardRecruiterItem
     rank_percentile: float
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ActivityItem(BaseModel):
@@ -29,4 +29,4 @@ class ActivityItem(BaseModel):
 class ActivityPage(BaseModel):
     items: list[ActivityItem]
     meta: PaginationMeta
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime
+import re
 from typing import Any
 
 from app.common.utils.object_id import to_object_id
@@ -105,7 +106,8 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
             {"$match": {"employee.is_active": True}},
         ]
         if search:
-            pipeline.append({"$match": {"employee.name": {"$regex": search, "$options": "i"}}})
+            escaped_search = re.escape(search)
+            pipeline.append({"$match": {"employee.name": {"$regex": escaped_search, "$options": "i"}}})
         sort = {"leaderboard_rank": 1, "total_score": -1} if sort_by == "rank" else {"total_score": -1}
         pipeline.extend([{"$sort": sort}, {"$facet": {"items": [{"$skip": (page - 1) * limit}, {"$limit": limit}], "total": [{"$count": "count"}]}}])
         cursor = await LeaderboardHistory.get_motor_collection().aggregate(pipeline)
@@ -178,7 +180,8 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
         {"$match": {"employee.is_active": True}},
     ]
     if search:
-        pipeline.append({"$match": {"employee.name": {"$regex": search, "$options": "i"}}})
+        escaped_search = re.escape(search)
+        pipeline.append({"$match": {"employee.name": {"$regex": escaped_search, "$options": "i"}}})
     sort = {"leaderboard_rank": 1, "total_score": -1} if sort_by == "rank" else {"total_score": -1}
     if sort_by == "monthly_growth":
         sort = {"monthly_growth": -1, "total_score": -1}

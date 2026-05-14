@@ -1,13 +1,10 @@
 """Leaderboard API route handlers."""
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Query
 from fastapi import HTTPException, status
 
 from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
-from app.modules.dashboard.enums import PipelineStage
 from app.modules.leaderboard.schemas import (
     ActivityPage,
     CompanyProgressResponse,

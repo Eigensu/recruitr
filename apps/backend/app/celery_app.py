@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import settings
 
 celery_app = Celery(
-    "eigensu",
+    settings.APP_NAME,
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
@@ -22,11 +25,11 @@ celery_app.conf.update(
     beat_schedule={
         "leaderboard-refresh-cache": {
             "task": "leaderboard.refresh_cache",
-            "schedule": 300.0,
+            "schedule": timedelta(seconds=300),
         },
         "leaderboard-monthly-snapshot": {
             "task": "leaderboard.create_monthly_snapshot",
-            "schedule": 86400.0,
+            "schedule": crontab(minute=0, hour=0),
         },
     },
 )

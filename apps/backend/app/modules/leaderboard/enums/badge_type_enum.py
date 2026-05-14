@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class BadgeTypeEnum(str, Enum):
+class BadgeTypeEnum(StrEnum):
     TOP_MAPPER = "top_mapper"
     HIRING_CHAMPION = "hiring_champion"
     OFFER_KING = "offer_king"

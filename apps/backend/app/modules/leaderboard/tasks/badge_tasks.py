@@ -13,10 +13,10 @@ from app.modules.leaderboard.utils.cache_manager import invalidate_leaderboard_c
 async def _evaluate(employee_id: str) -> int:
     await init_db()
     oid = PydanticObjectId(employee_id)
-    stat = await EmployeeStat.get_motor_collection().find_one({"employee_id": oid})
+    stat = await EmployeeStat.find_one(EmployeeStat.employee_id == oid)
     if not stat:
         return 0
-    badges = evaluate_badges(stat)
+    badges = evaluate_badges(stat.model_dump())
     await unlock_badges(oid, badges)
     await invalidate_leaderboard_cache()
     return len(badges)
