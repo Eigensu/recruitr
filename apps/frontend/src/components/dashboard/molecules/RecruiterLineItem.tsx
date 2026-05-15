@@ -30,23 +30,24 @@ export default function RecruiterLineItem({
 
   return (
     <button
-      key={recruiter.name}
       type="button"
       onMouseEnter={onHover}
       onFocus={onFocus}
       onClick={onClick}
       className="block w-full text-left"
+      style={{ color: "var(--color-text-primary)" }}
     >
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className={cn("text-sm font-semibold", isActive ? "text-white" : "text-white")}>
-          {recruiter.name}
-        </span>
-        <span className="text-xs text-white">
+        <span className="text-sm font-semibold">{recruiter.name}</span>
+        <span className="text-xs" style={{ opacity: 0.55 }}>
           <AnimatedNumber value={recruiter.inPipeline} /> pipeline /{" "}
           <AnimatedNumber value={recruiter.joined} /> joined
         </span>
       </div>
-      <div className="h-9 overflow-hidden rounded-lg bg-white/10">
+      <div
+        className="h-9 overflow-hidden rounded-lg"
+        style={{ background: "var(--color-border-val)" }}
+      >
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: isInView ? `${width}%` : "0%" }}

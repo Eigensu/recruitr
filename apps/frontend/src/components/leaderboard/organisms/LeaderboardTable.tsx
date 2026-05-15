@@ -20,11 +20,13 @@ type SortKey =
   | "successRate"
   | "monthlyGrowth";
 
+type ColumnKey = SortKey | "badge";
+
 interface LeaderboardTableProps {
-  recruiters: LeaderboardRecruiter[];
+  readonly recruiters: LeaderboardRecruiter[];
 }
 
-const COLUMNS: { key: SortKey; label: string; className: string }[] = [
+const COLUMNS: { key: ColumnKey; label: string; className: string }[] = [
   { key: "rank", label: "Rank", className: "w-14 px-4 py-3 text-left" },
   { key: "name", label: "Recruiter", className: "px-4 py-3 text-left" },
   {
@@ -49,10 +51,11 @@ const COLUMNS: { key: SortKey; label: string; className: string }[] = [
     label: "Growth",
     className: "px-4 py-3 text-center hidden 2xl:table-cell",
   },
-  { key: "rank", label: "Badge", className: "px-4 py-3 text-center" },
+  { key: "badge", label: "Badge", className: "px-4 py-3 text-center" },
 ];
 
-export function LeaderboardTable({ recruiters }: LeaderboardTableProps) {
+export function LeaderboardTable(props: LeaderboardTableProps) {
+  const { recruiters } = props;
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -79,6 +82,11 @@ export function LeaderboardTable({ recruiters }: LeaderboardTableProps) {
     }
   }
 
+  let sortState: "none" | "ascending" | "descending" = "none";
+  if (sortKey !== "rank") {
+    sortState = sortDir === "asc" ? "ascending" : "descending";
+  }
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 18 }}
@@ -88,45 +96,59 @@ export function LeaderboardTable({ recruiters }: LeaderboardTableProps) {
       className={cn(DASHBOARD_PANEL_CLASS, "overflow-hidden")}
     >
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
         <div>
-          <h2 className="font-heading text-xl text-white">Recruiter Leaderboard</h2>
-          <p className="mt-1 text-sm text-white/50">
+          <h2 className="font-heading text-xl text-(--color-text-primary)">
+            Recruiter Leaderboard
+          </h2>
+          <p className="mt-1 text-sm text-(--color-text-secondary)">
             Click any row to expand stats · Click columns to sort
           </p>
         </div>
-        <span className="rounded-full bg-yellow/15 border border-yellow/30 px-3 py-1 text-xs font-bold text-yellow">
+        <span className="rounded-full bg-yellow/15 px-3 py-1 text-xs font-bold text-yellow">
           {recruiters.length} Active
         </span>
       </div>
 
       <div className="overflow-x-auto dashboard-scrollbar">
         <table className="min-w-full border-collapse">
-          <thead className="sticky top-0 z-10 bg-[#0b1220]/95 backdrop-blur">
+          <thead
+            className="sticky top-0 z-10 backdrop-blur"
+            style={{ background: "var(--color-surface-val)" }}
+          >
             <tr>
-              {COLUMNS.map((col, i) => (
-                <th
-                  key={i}
-                  aria-sort={
-                    sortKey !== col.key ? "none" : sortDir === "asc" ? "ascending" : "descending"
-                  }
-                  className={cn(DASHBOARD_TABLE_HEADER_CLASS, col.className, "select-none")}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSort(col.key)}
-                    className={cn(
-                      "flex items-center gap-1 rounded-sm cursor-pointer hover:text-white/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1220]",
-                      col.className,
-                    )}
+              {COLUMNS.map((col) => {
+                const isSortable = col.key !== "badge";
+
+                return (
+                  <th
+                    key={col.key}
+                    aria-sort={isSortable && sortKey === col.key ? sortState : "none"}
+                    className={cn(DASHBOARD_TABLE_HEADER_CLASS, col.className, "select-none")}
                   >
-                    <span>{col.label}</span>
-                    {sortKey === col.key && (
-                      <span className="text-yellow">{sortDir === "asc" ? "↑" : "↓"}</span>
-                    )}
-                  </button>
-                </th>
-              ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isSortable) {
+                          handleSort(col.key as SortKey);
+                        }
+                      }}
+                      className={cn(
+                        isSortable
+                          ? "flex items-center gap-1 rounded-sm cursor-pointer hover:text-(--color-text-primary) transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2"
+                          : "flex items-center gap-1 rounded-sm transition-colors focus:outline-none",
+                        col.className,
+                      )}
+                      style={{ ["--tw-ring-offset-color" as string]: "var(--color-surface-val)" }}
+                    >
+                      <span>{col.label}</span>
+                      {isSortable && sortKey === col.key && (
+                        <span className="text-yellow">{sortDir === "asc" ? "↑" : "↓"}</span>
+                      )}
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>

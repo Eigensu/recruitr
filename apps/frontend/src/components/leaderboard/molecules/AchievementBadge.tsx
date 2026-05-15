@@ -21,7 +21,7 @@ export function AchievementBadge({
   badgeKey,
   size = "md",
   showTooltip = true,
-}: AchievementBadgeProps) {
+}: Readonly<AchievementBadgeProps>) {
   const [hovered, setHovered] = useState(false);
   const badge = BADGE_DEFINITIONS[badgeKey];
   const rarity = RARITY_STYLES[badge.rarity];
@@ -34,10 +34,9 @@ export function AchievementBadge({
         whileHover={{ scale: 1.12, y: -2 }}
         transition={{ type: "spring", stiffness: 300 }}
         className={cn(
-          "flex items-center justify-center rounded-xl border cursor-pointer select-none",
+          "flex items-center justify-center rounded-xl cursor-pointer select-none",
           "shadow-lg transition-shadow duration-300",
           sizeClasses[size],
-          rarity.border,
           rarity.bg,
           hovered && rarity.glow,
         )}
@@ -51,7 +50,7 @@ export function AchievementBadge({
           initial={{ x: "-100%", opacity: 0 }}
           animate={hovered ? { x: "200%", opacity: 0.3 } : { x: "-100%", opacity: 0 }}
           transition={{ duration: 0.5 }}
-          className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none"
+          className="absolute inset-0 rounded-xl bg-linear-to-r from-transparent via-white/40 to-transparent pointer-events-none"
         />
       </motion.div>
 
@@ -65,16 +64,20 @@ export function AchievementBadge({
               transition={{ duration: 0.18 }}
               className={cn(
                 "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50",
-                "w-48 rounded-lg border p-3 shadow-xl backdrop-blur",
-                "bg-[#0b1220]/95 border-white/10 pointer-events-none",
+                "w-48 rounded-lg p-3 shadow-xl backdrop-blur",
+                "bg-(--color-surface-val) pointer-events-none",
               )}
               role="tooltip"
             >
               <p className={cn("text-xs font-bold uppercase tracking-wider", rarity.label)}>
                 {badge.rarity}
               </p>
-              <p className="mt-0.5 text-sm font-semibold text-white">{badge.label}</p>
-              <p className="mt-1 text-xs text-white/55 leading-snug">{badge.description}</p>
+              <p className="mt-0.5 text-sm font-semibold text-(--color-text-primary)">
+                {badge.label}
+              </p>
+              <p className="mt-1 text-xs text-(--color-text-secondary) leading-snug">
+                {badge.description}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>

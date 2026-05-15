@@ -8,14 +8,14 @@ import { MOCK_RECRUITERS, MONTH_LABELS, type LeaderboardRecruiter } from "@/lib/
 
 const CHART_COLORS = ["#F3FF54", "#3DDC97", "#60A5FA", "#F7C948", "#FB923C"];
 
+interface MonthlyLineChartProps {
+  readonly recruiters?: LeaderboardRecruiter[];
+  readonly monthLabels?: string[];
+}
+
 /** Custom SVG multi-line chart — no external chart lib required. */
-export function MonthlyLineChart({
-  recruiters = MOCK_RECRUITERS,
-  monthLabels = MONTH_LABELS,
-}: {
-  recruiters?: LeaderboardRecruiter[];
-  monthLabels?: string[];
-}) {
+export function MonthlyLineChart(props: MonthlyLineChartProps) {
+  const { recruiters = MOCK_RECRUITERS, monthLabels = MONTH_LABELS } = props;
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.25 });
 
@@ -43,7 +43,7 @@ export function MonthlyLineChart({
       .join(" ");
   }
 
-  const yTicks = [0, Math.round(maxVal * 0.5), maxVal];
+  const yTicks = Array.from(new Set([0, Math.round(maxVal * 0.5), maxVal]));
 
   return (
     <motion.section
@@ -53,11 +53,14 @@ export function MonthlyLineChart({
       viewport={{ once: true, amount: 0.25 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
       className={cn(DASHBOARD_PANEL_CLASS, "p-5")}
+      style={{ color: "var(--color-text-primary)" }}
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="font-heading text-xl text-white">Monthly Growth Trends</h2>
-          <p className="mt-1 text-sm text-white/50">Top 5 recruiters — last 6 months</p>
+          <h2 className="font-heading text-xl">Monthly Growth Trends</h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            Top 5 recruiters — last 6 months
+          </p>
         </div>
       </div>
 
@@ -69,7 +72,9 @@ export function MonthlyLineChart({
               className="size-2 rounded-full inline-block"
               style={{ background: CHART_COLORS[i] }}
             />
-            <span className="text-[10px] text-white/55">{r.name.split(" ")[0]}</span>
+            <span className="text-[10px]" style={{ color: "var(--color-text-secondary)" }}>
+              {r.name.split(" ")[0]}
+            </span>
           </div>
         ))}
       </div>
@@ -77,30 +82,30 @@ export function MonthlyLineChart({
       <div className="overflow-x-auto dashboard-scrollbar">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full min-w-[300px]"
-          role="img"
+          className="w-full"
+          style={{ minWidth: 300 }}
           aria-label="Monthly recruiter growth chart"
         >
           <defs>
-            {top5.map((_, i) => (
-              <linearGradient key={i} id={`lg${i}`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor={CHART_COLORS[i]} stopOpacity="0.15" />
-                <stop offset="100%" stopColor={CHART_COLORS[i]} stopOpacity="0" />
+            {top5.map((r, index) => (
+              <linearGradient key={`gradient-${r.id}`} id={`lg${r.id}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={CHART_COLORS[index]} stopOpacity="0.15" />
+                <stop offset="100%" stopColor={CHART_COLORS[index]} stopOpacity="0" />
               </linearGradient>
             ))}
           </defs>
 
           {/* Grid */}
-          {yTicks.map((v) => {
+          {yTicks.map((v, i) => {
             const y = PAD.t + (1 - v / maxVal) * iH;
             return (
-              <g key={v}>
+              <g key={`ytick-${i}-${v}`}>
                 <line
                   x1={PAD.l}
                   x2={W - PAD.r}
                   y1={y}
                   y2={y}
-                  stroke="rgba(255,255,255,0.06)"
+                  stroke="var(--color-border-val)"
                   strokeWidth="1"
                 />
                 <text
@@ -108,7 +113,7 @@ export function MonthlyLineChart({
                   y={y + 4}
                   textAnchor="end"
                   fontSize="10"
-                  fill="rgba(255,255,255,0.35)"
+                  fill="var(--color-text-secondary)"
                 >
                   {v}
                 </text>
@@ -124,7 +129,7 @@ export function MonthlyLineChart({
               y={H - 6}
               textAnchor="middle"
               fontSize="10"
-              fill="rgba(255,255,255,0.35)"
+              fill="var(--color-text-secondary)"
             >
               {m}
             </text>

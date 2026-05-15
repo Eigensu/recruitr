@@ -64,27 +64,43 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
 
   if (!stages.length) {
     return (
-      <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
+      <section
+        ref={chartRef}
+        className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
+        style={{ color: "var(--color-text-primary)" }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl text-white">Pipeline Pie Chart</h2>
-            <p className="mt-1 text-sm text-white">Interactive share of pipeline stages</p>
+            <h2 className="font-heading text-xl">Pipeline Pie Chart</h2>
+            <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
+              Interactive share of pipeline stages
+            </p>
           </div>
           <IconChartPie className="size-6 text-yellow" />
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-white/50">No pipeline data available.</p>
+          <p className="text-sm" style={{ opacity: 0.5 }}>
+            No pipeline data available.
+          </p>
         </div>
       </section>
     );
   }
 
   return (
-    <section ref={chartRef} className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}>
+    <section
+      ref={chartRef}
+      className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
+      style={{ color: "var(--color-text-primary)" }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl text-white">Pipeline Pie Chart</h2>
-          <p className="mt-1 text-sm text-white">Interactive share of pipeline stages</p>
+          <h2 className="font-heading text-xl" style={{ color: "var(--color-text-primary)" }}>
+            Pipeline Pie Chart
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            Interactive share of pipeline stages
+          </p>
         </div>
         <IconChartPie className="size-6 text-yellow" />
       </div>
@@ -102,7 +118,7 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
               cy="60"
               r="45"
               fill="none"
-              stroke="rgba(255,255,255,0.08)"
+              stroke="var(--color-chart-track)"
               strokeWidth="17"
             />
             {segments.map((segment, index) => {
@@ -138,27 +154,29 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
             })}
           </svg>
 
-          <div className="absolute inset-10 flex flex-col items-center justify-center rounded-full border border-white/10 bg-[#111827] p-5 text-center shadow-inner shadow-black/50">
-            <p className="text-xs font-semibold uppercase tracking-normal text-white">Selected</p>
-            <p className="mt-2 font-heading text-3xl text-white">
+          <div
+            className="absolute inset-10 flex flex-col items-center justify-center rounded-full p-5 text-center shadow-inner shadow-black/30"
+            style={{ background: "var(--color-surface-val)", color: "var(--color-text-primary)" }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-normal" style={{ opacity: 0.6 }}>
+              Selected
+            </p>
+            <p className="mt-2 font-heading text-3xl">
               <AnimatedNumber value={active?.count ?? total} />
             </p>
             <p className="mt-1 text-sm text-yellow">{active?.label ?? "All stages"}</p>
-            <p className="mt-1 text-xs text-white">
+            <p className="mt-1 text-xs" style={{ opacity: 0.6 }}>
               <AnimatedNumber value={active?.percent ?? 100} suffix="%" /> of pipeline
             </p>
           </div>
         </motion.div>
       </div>
 
-      <div className="mt-5 border-t border-white/10 pt-4">
-        <p className="text-xs leading-relaxed text-white">
-          <span className="text-white">Pipeline Overview:</span> Your recruitment pipeline is
-          distributed across {stages.length} stages. The largest concentration is in{" "}
-          {largestSegment?.label ?? "Unknown"}, which represents{" "}
-          <span className="font-semibold text-white">
-            {largestSegment?.percent ?? 0}% of total candidates
-          </span>
+      <div className="mt-5 pt-4">
+        <p className="text-xs leading-relaxed" style={{ opacity: 0.7 }}>
+          Pipeline Overview: Your recruitment pipeline is distributed across {stages.length} stages.
+          The largest concentration is in {largestSegment?.label ?? "Unknown"}, which represents{" "}
+          <span className="font-semibold">{largestSegment?.percent ?? 0}% of total candidates</span>
           . Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.
         </p>
       </div>

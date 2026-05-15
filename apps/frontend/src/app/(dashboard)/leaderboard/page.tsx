@@ -10,6 +10,7 @@ import {
   LeaderboardKpiCard,
 } from "@/components/leaderboard";
 import { getLeaderboardPageData } from "@/lib/api/leaderboard";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export const metadata = {
   title: "Leaderboard — Binge Recruiting Intelligence",
@@ -22,16 +23,33 @@ export default async function LeaderboardPage() {
     await getLeaderboardPageData();
 
   return (
-    <div className="min-h-full bg-black px-4 py-5 text-white sm:px-6 lg:px-8">
+    <div
+      className="min-h-full px-4 py-5 sm:px-6 lg:px-8"
+      style={{ background: "var(--color-canvas)", color: "var(--color-text-primary)" }}
+    >
       <div className="mx-auto flex w-full max-w-400 flex-col gap-5">
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <header className="border-b border-white/10 pb-4">
-          <p className="text-xs font-bold uppercase tracking-normal text-yellow">
-            Gamified Recruiter Rankings
-          </p>
-          <h1 className="mt-2 font-heading text-4xl leading-tight text-white sm:text-5xl">
-            Leaderboard
-          </h1>
+        <header
+          className="pb-4 flex items-start justify-between gap-4"
+          style={{ borderBottom: "1px solid var(--color-border-val)" }}
+        >
+          <div>
+            <p
+              className="text-xs font-bold uppercase tracking-normal"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Gamified Recruiter Rankings
+            </p>
+            <h1
+              className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Leaderboard
+            </h1>
+          </div>
+          <div className="mt-1 shrink-0">
+            <ThemeToggle />
+          </div>
         </header>
 
         {/* ── Hero Spotlight ────────────────────────────────────────────── */}
@@ -40,9 +58,11 @@ export default async function LeaderboardPage() {
         ) : (
           <section
             aria-label="Leaderboard spotlight"
-            className="rounded-lg border border-white/10 bg-white/[0.025] p-5"
+            className="rounded-lg border-border bg-surface-2 p-5"
           >
-            <p className="text-sm text-white/50">No leaderboard data available yet.</p>
+            <p className="text-sm text-(--color-text-secondary)">
+              No leaderboard data available yet.
+            </p>
           </section>
         )}
 

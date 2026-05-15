@@ -11,10 +11,11 @@ import { cn } from "@/lib/utils";
 import type { LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 interface HeroSpotlightProps {
-  recruiter: LeaderboardRecruiter;
+  readonly recruiter: LeaderboardRecruiter;
 }
 
-export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
+export function HeroSpotlight(props: HeroSpotlightProps) {
+  const { recruiter } = props;
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.3 });
 
@@ -26,7 +27,7 @@ export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
       initial={{ opacity: 0, scale: 0.97 }}
       animate={isInView ? { opacity: 1, scale: 1 } : {}}
       transition={{ duration: 0.55, ease: "easeOut" }}
-      className={cn(DASHBOARD_PANEL_CLASS, "relative overflow-hidden p-6", "border-yellow/25")}
+      className={cn(DASHBOARD_PANEL_CLASS, "relative overflow-hidden p-6")}
     >
       {/* Glow background */}
       <div
@@ -35,11 +36,11 @@ export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
         aria-hidden="true"
       />
 
-      {/* Animated border pulse */}
+      {/* Animated glow pulse — replaces border pulse */}
       <motion.div
-        animate={{ opacity: [0.4, 1, 0.4] }}
+        animate={{ opacity: [0.15, 0.4, 0.15] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-        className="pointer-events-none absolute inset-0 rounded-lg border border-yellow/20"
+        className="pointer-events-none absolute inset-0 rounded-lg shadow-[inset_0_0_40px_rgba(243,255,84,0.12)]"
         aria-hidden="true"
       />
 
@@ -61,15 +62,21 @@ export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
             <span className="text-xs font-bold uppercase tracking-widest text-yellow/70">
               🏆 #1 Recruiter
             </span>
-            <span className="rounded-full bg-yellow/15 border border-yellow/30 px-2 py-0.5 text-[10px] font-bold text-yellow">
+            <span className="rounded-full bg-yellow/15 px-2 py-0.5 text-[10px] font-bold text-yellow">
               Level {recruiter.level}
             </span>
           </div>
 
-          <h2 className="font-heading text-3xl text-white leading-tight">{recruiter.name}</h2>
+          <h2 className="font-heading text-3xl text-(--color-text-primary) leading-tight">
+            {recruiter.name}
+          </h2>
 
           <div className="mt-3 flex flex-wrap gap-4">
-            <Stat label="Mappings" value={recruiter.totalMappings} color="text-white" />
+            <Stat
+              label="Mappings"
+              value={recruiter.totalMappings}
+              color="text-(--color-text-primary)"
+            />
             <Stat label="Offers" value={recruiter.offersReceived} color="text-yellow" />
             <Stat label="Joined" value={recruiter.joined} color="text-emerald-400" />
             <Stat
@@ -83,7 +90,7 @@ export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
           {/* XP Bar */}
           <div className="mt-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-(--color-text-secondary)">
                 XP Progress
               </span>
               <span className="text-xs font-bold text-yellow">
@@ -97,7 +104,7 @@ export function HeroSpotlight({ recruiter }: HeroSpotlightProps) {
         {/* Badge */}
         <div className="shrink-0 flex flex-col items-center gap-2">
           <AchievementBadge badgeKey={recruiter.badge} size="lg" />
-          <p className="text-[10px] text-white/40 text-center">Top Badge</p>
+          <p className="text-[10px] text-(--color-text-secondary) text-center">Top Badge</p>
         </div>
       </div>
     </motion.div>
@@ -109,15 +116,15 @@ function Stat({
   value,
   suffix = "",
   color,
-}: {
+}: Readonly<{
   label: string;
   value: number;
   suffix?: string;
   color: string;
-}) {
+}>) {
   return (
     <div>
-      <p className="text-[10px] text-white/40 uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] text-(--color-text-secondary) uppercase tracking-wider">{label}</p>
       <p className={cn("font-heading text-xl", color)}>
         <AnimatedNumber value={value} suffix={suffix} />
       </p>
