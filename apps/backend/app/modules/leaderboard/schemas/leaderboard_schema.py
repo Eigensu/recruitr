@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -38,7 +38,7 @@ class LeaderboardRecruiterItem(BaseModel):
 class LeaderboardPage(BaseModel):
     items: list[LeaderboardRecruiterItem]
     meta: PaginationMeta
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class LeaderboardKpi(BaseModel):
@@ -53,7 +53,7 @@ class LeaderboardKpi(BaseModel):
 class LeaderboardOverviewResponse(BaseModel):
     kpis: list[LeaderboardKpi]
     top_recruiter: LeaderboardRecruiterItem | None = None
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class MonthlyGrowthSeries(BaseModel):
@@ -65,7 +65,7 @@ class MonthlyGrowthSeries(BaseModel):
 class MonthlyGrowthResponse(BaseModel):
     labels: list[str]
     series: list[MonthlyGrowthSeries]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CompanyProgressItem(BaseModel):
@@ -78,4 +78,4 @@ class CompanyProgressItem(BaseModel):
 
 class CompanyProgressResponse(BaseModel):
     items: list[CompanyProgressItem]
-    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

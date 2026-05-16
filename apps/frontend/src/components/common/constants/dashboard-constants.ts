@@ -93,7 +93,7 @@ export const TONE_STYLES: Record<
     mutedOpacity: 0.65,
     chipBg: "#002348",
     chipText: "#f3ff54",
-    shadow: "shadow-yellow/20 shadow-md",
+    shadow: "0 10px 24px rgba(243, 255, 84, 0.2)",
   },
   navy: {
     cardBg: "#002348",
@@ -101,7 +101,7 @@ export const TONE_STYLES: Record<
     mutedOpacity: 0.6,
     chipBg: "rgba(243,255,84,0.15)",
     chipText: "#f3ff54",
-    shadow: "shadow-md shadow-black/30",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.3)",
   },
   green: {
     cardBg: "var(--color-card-positive)",
@@ -109,7 +109,7 @@ export const TONE_STYLES: Record<
     mutedOpacity: 0.7,
     chipBg: "var(--color-card-positive-badge)",
     chipText: "var(--color-card-positive-text)",
-    shadow: "shadow-md shadow-black/20",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.2)",
   },
   red: {
     cardBg: "var(--color-card-negative)",
@@ -117,7 +117,7 @@ export const TONE_STYLES: Record<
     mutedOpacity: 0.7,
     chipBg: "var(--color-card-negative-badge)",
     chipText: "var(--color-card-negative-text)",
-    shadow: "shadow-md shadow-black/20",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.2)",
   },
   neutral: {
     cardBg: "var(--color-surface-val)",
@@ -125,6 +125,6 @@ export const TONE_STYLES: Record<
     mutedOpacity: 0.55,
     chipBg: "rgba(255,255,255,0.1)",
     chipText: "var(--color-text-primary)",
-    shadow: "shadow-md shadow-black/30",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.3)",
   },
 };

@@ -21,8 +21,8 @@ const rankStyles: Record<number, { bg: string; text: string; shadow: string }> =
     shadow: "shadow-yellow/40 shadow-md",
   },
   2: {
-    bg: "bg-[color:var(--color-surface-2-val)]",
-    text: "text-[color:var(--color-text-primary)] font-bold",
+    bg: "bg-[--color-surface-2-val]",
+    text: "text-[--color-text-primary] font-bold",
     shadow: "shadow-sm",
   },
   3: {
@@ -34,8 +34,8 @@ const rankStyles: Record<number, { bg: string; text: string; shadow: string }> =
 
 export function RankBadge({ rank, size = "md" }: Readonly<RankBadgeProps>) {
   const style = rankStyles[rank] ?? {
-    bg: "bg-(--color-surface-2-val)",
-    text: "text-(--color-text-secondary) font-semibold",
+    bg: "bg-[--color-surface-2-val]",
+    text: "text-[--color-text-secondary] font-semibold",
     shadow: "",
   };
 

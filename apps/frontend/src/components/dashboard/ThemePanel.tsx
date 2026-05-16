@@ -12,7 +12,7 @@ export function ThemePanel() {
       initial={{ x: -100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className="fixed left-3 top-1/2 -translate-y-1/2 z-50 md:hidden lg:flex hidden items-center justify-center"
+      className="fixed left-3 top-1/2 -translate-y-1/2 z-50 lg:flex hidden items-center justify-center"
     >
       <div
         className="rounded-full p-2 flex flex-col items-center gap-2 backdrop-blur-sm"

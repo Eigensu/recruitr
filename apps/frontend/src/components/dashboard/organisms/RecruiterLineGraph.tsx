@@ -283,8 +283,25 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
                         visible: true,
                       }));
                     }}
-                    onFocus={() => {
+                    onFocus={(e) => {
                       setActiveRecruiter(point.recruiter.name);
+                      const svg = e.currentTarget.ownerSVGElement as SVGSVGElement | null;
+                      if (svg) {
+                        const box = svg.getBoundingClientRect();
+                        const ctm = svg.getScreenCTM();
+                        if (ctm) {
+                          const svgPoint = svg.createSVGPoint();
+                          svgPoint.x = point.x;
+                          svgPoint.y = point.y;
+                          const screenPoint = svgPoint.matrixTransform(ctm);
+                          setTooltip({
+                            x: screenPoint.x - box.left,
+                            y: screenPoint.y - box.top,
+                            visible: true,
+                          });
+                          return;
+                        }
+                      }
                       setTooltip({ x: point.x, y: point.y, visible: true });
                     }}
                     tabIndex={0}

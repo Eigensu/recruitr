@@ -12,26 +12,45 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function getInitialTheme(): Theme {
-  if (typeof globalThis === "undefined" || !("localStorage" in globalThis)) {
+function resolveTheme(): Theme {
+  try {
+    if (typeof document !== "undefined") {
+      const domTheme = document.documentElement.dataset.theme as Theme | undefined;
+      if (domTheme === "dark" || domTheme === "light") {
+        return domTheme;
+      }
+    }
+
+    if (typeof globalThis !== "undefined" && "localStorage" in globalThis) {
+      const stored = globalThis.localStorage.getItem("binge-theme") as Theme | null;
+      if (stored === "dark" || stored === "light") {
+        return stored;
+      }
+    }
+
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+
+    return "dark";
+  } catch {
     return "dark";
   }
-
-  const stored = globalThis.localStorage.getItem("binge-theme") as Theme | null;
-  if (stored === "dark" || stored === "light") {
-    return stored;
-  }
-
-  return globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [theme, setTheme] = useState<Theme>(() => resolveTheme());
 
   // Apply [data-theme] to <html> whenever theme changes
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    globalThis.localStorage.setItem("binge-theme", theme);
+    try {
+      if (typeof globalThis !== "undefined" && "localStorage" in globalThis) {
+        globalThis.localStorage.setItem("binge-theme", theme);
+      }
+    } catch {
+      return;
+    }
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));

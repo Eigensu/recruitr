@@ -12,7 +12,7 @@ interface DashboardKpiCardProps {
 }
 
 export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProps) {
-  const tone = TONE_STYLES[metric.tone];
+  const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.neutral;
   const Icon = KPI_ICON_MAP[metric.id as keyof typeof KPI_ICON_MAP] ?? IconArrowUpRight;
 
   return (
@@ -22,8 +22,8 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.4, delay: index * 0.035, ease: "easeOut" }}
       whileHover={{ y: -2 }}
-      className={`rounded-lg p-3 h-full ${tone.shadow}`}
-      style={{ background: tone.cardBg, color: tone.cardText }}
+      className="rounded-lg p-3 h-full"
+      style={{ background: tone.cardBg, color: tone.cardText, boxShadow: tone.shadow }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

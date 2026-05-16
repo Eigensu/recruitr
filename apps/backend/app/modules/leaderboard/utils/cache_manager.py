@@ -38,6 +38,14 @@ async def rankings_count() -> int:
 
 
 async def invalidate_leaderboard_cache() -> None:
-    for prefix in ("overview", "rankings", "monthly-growth", "company-progress", "activity", "badges", "recruiter"):
+    for prefix in (
+        "overview",
+        "rankings",
+        "monthly-growth",
+        "company-progress",
+        "activity",
+        "badges",
+        "recruiter",
+    ):
         await leaderboard_cache.delete_pattern(leaderboard_cache.build_key(prefix, "*"))
     await leaderboard_cache.delete(RANKING_ZSET_KEY)

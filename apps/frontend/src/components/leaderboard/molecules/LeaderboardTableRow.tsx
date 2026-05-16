@@ -25,6 +25,12 @@ export function LeaderboardTableRow(props: LeaderboardTableRowProps) {
   const [expanded, setExpanded] = useState(false);
   const isTop3 = recruiter.rank <= 3;
   const rowBg = TOP3_ROW[recruiter.rank] ?? "hover:bg-(--color-surface-2-val)";
+  let growthClass = "bg-(--color-surface-2-val) text-(--color-text-secondary)";
+  if (recruiter.monthlyGrowth >= 30) {
+    growthClass = "bg-emerald-400/15 text-emerald-300";
+  } else if (recruiter.monthlyGrowth >= 15) {
+    growthClass = "bg-yellow/15 text-yellow";
+  }
 
   return (
     <>
@@ -96,20 +102,9 @@ export function LeaderboardTableRow(props: LeaderboardTableRowProps) {
 
         {/* Growth */}
         <td className="px-4 py-3 text-center hidden 2xl:table-cell">
-          {(() => {
-            let growthClass = "bg-(--color-surface-2-val) text-(--color-text-secondary)";
-            if (recruiter.monthlyGrowth >= 30) {
-              growthClass = "bg-emerald-400/15 text-emerald-300";
-            } else if (recruiter.monthlyGrowth >= 15) {
-              growthClass = "bg-yellow/15 text-yellow";
-            }
-
-            return (
-              <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", growthClass)}>
-                +{recruiter.monthlyGrowth}%
-              </span>
-            );
-          })()}
+          <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", growthClass)}>
+            +{recruiter.monthlyGrowth}%
+          </span>
         </td>
 
         {/* Badge */}

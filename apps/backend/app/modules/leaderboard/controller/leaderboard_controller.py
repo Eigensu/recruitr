@@ -1,7 +1,6 @@
 """Leaderboard API route handlers."""
 
-from fastapi import APIRouter, Depends, Query
-from fastapi import HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
@@ -34,11 +33,15 @@ async def get_rankings(
     month: str | None = Query(default=None),
     _: TokenPayload = Depends(get_current_user),
 ) -> LeaderboardPage:
-    return await service.get_rankings(LeaderboardFilters(page=page, limit=limit, search=search, sort_by=sort_by, month=month))
+    return await service.get_rankings(
+        LeaderboardFilters(page=page, limit=limit, search=search, sort_by=sort_by, month=month)
+    )
 
 
 @router.get("/recruiter/{employee_id}", response_model=RecruiterAnalyticsResponse)
-async def get_recruiter(employee_id: str, _: TokenPayload = Depends(get_current_user)) -> RecruiterAnalyticsResponse:
+async def get_recruiter(
+    employee_id: str, _: TokenPayload = Depends(get_current_user)
+) -> RecruiterAnalyticsResponse:
     payload = await service.get_recruiter(employee_id)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recruiter not found")
@@ -51,7 +54,9 @@ async def get_monthly_growth(_: TokenPayload = Depends(get_current_user)) -> Mon
 
 
 @router.get("/company-progress", response_model=CompanyProgressResponse)
-async def get_company_progress(_: TokenPayload = Depends(get_current_user)) -> CompanyProgressResponse:
+async def get_company_progress(
+    _: TokenPayload = Depends(get_current_user),
+) -> CompanyProgressResponse:
     return await service.get_company_progress()
 
 
@@ -65,5 +70,7 @@ async def get_activity(
 
 
 @router.get("/badges/{employee_id}", response_model=RecruiterBadgesResponse)
-async def get_badges(employee_id: str, _: TokenPayload = Depends(get_current_user)) -> RecruiterBadgesResponse:
+async def get_badges(
+    employee_id: str, _: TokenPayload = Depends(get_current_user)
+) -> RecruiterBadgesResponse:
     return await service.get_badges(employee_id)

@@ -2,21 +2,32 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
-from datetime import datetime
 import re
+from datetime import datetime
 from typing import Any
 
 from app.common.utils.object_id import to_object_id
-from app.modules.dashboard.enums import JobStatus
 from app.modules.dashboard.models import CandidateMapping, DashboardEmployee, JobOpening
-from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeTypeEnum, BadgeRarityEnum
-from app.modules.leaderboard.models import Badge, EmployeeStat, LeaderboardHistory, RecruiterActivity
+from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeTypeEnum
+from app.modules.leaderboard.models import (
+    Badge,
+    EmployeeStat,
+    LeaderboardHistory,
+    RecruiterActivity,
+)
 from app.modules.leaderboard.utils.cache_manager import rankings_count, rankings_window
 from app.modules.leaderboard.utils.growth_calculator import success_rate
-from app.modules.leaderboard.utils.ranking_calculator import calculate_score
 
-AVATAR_COLORS = ["#F3FF54", "#3DDC97", "#60A5FA", "#F7C948", "#FB923C", "#C084FC", "#2DD4BF", "#FF8A8A"]
+AVATAR_COLORS = [
+    "#F3FF54",
+    "#3DDC97",
+    "#60A5FA",
+    "#F7C948",
+    "#FB923C",
+    "#C084FC",
+    "#2DD4BF",
+    "#FF8A8A",
+]
 
 
 def _initials(name: str) -> str:
@@ -41,14 +52,22 @@ def _tone(activity_type: str) -> str:
 
 
 def _badge_color(badge: BadgeTypeEnum, rank: int) -> str:
-    if badge in {BadgeTypeEnum.ELITE_RECRUITER, BadgeTypeEnum.HIRING_CHAMPION, BadgeTypeEnum.OFFER_KING}:
+    if badge in {
+        BadgeTypeEnum.ELITE_RECRUITER,
+        BadgeTypeEnum.HIRING_CHAMPION,
+        BadgeTypeEnum.OFFER_KING,
+    }:
         return AVATAR_COLORS[0]
     return AVATAR_COLORS[rank % len(AVATAR_COLORS)]
 
 
 async def _hydrate_employee_stats(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     employee_ids = [item["employee_id"] for item in items]
-    employees = await DashboardEmployee.get_motor_collection().find({"_id": {"$in": employee_ids}}).to_list(length=None)
+    employees = (
+        await DashboardEmployee.get_motor_collection()
+        .find({"_id": {"$in": employee_ids}})
+        .to_list(length=None)
+    )
     employees_by_id = {employee["_id"]: employee for employee in employees}
     monthly = await _monthly_totals_for_employees(employee_ids)
 
@@ -74,7 +93,10 @@ async def _hydrate_employee_stats(items: list[dict[str, Any]]) -> list[dict[str,
                 "joined": int(mappings.get("joined_candidates", 0)),
                 "rejected": int(mappings.get("rejected_candidates", 0)),
                 "monthlyGrowth": float(item.get("monthly_growth", 0)),
-                "successRate": success_rate(int(mappings.get("joined_candidates", 0)), int(mappings.get("offers_received", 0))),
+                "successRate": success_rate(
+                    int(mappings.get("joined_candidates", 0)),
+                    int(mappings.get("offers_received", 0)),
+                ),
                 "badge": badge,
                 "badges": badges,
                 "monthlyData": monthly.get(str(employee["_id"]), [0, 0, 0, 0, 0, 0]),
@@ -87,29 +109,59 @@ async def _hydrate_employee_stats(items: list[dict[str, Any]]) -> list[dict[str,
 async def _monthly_totals_for_employees(employee_ids: list[Any]) -> dict[str, list[int]]:
     if not employee_ids:
         return {}
-    rows = await LeaderboardHistory.get_motor_collection().find({"employee_id": {"$in": employee_ids}}).sort("month").to_list(length=None)
+    rows = (
+        await LeaderboardHistory.get_motor_collection()
+        .find({"employee_id": {"$in": employee_ids}})
+        .sort("month")
+        .to_list(length=None)
+    )
     month_labels = sorted({row["month"] for row in rows})[-6:]
     out: dict[str, list[int]] = {str(employee_id): [0] * 6 for employee_id in employee_ids}
     start = max(0, 6 - len(month_labels))
     for row in rows:
         if row["month"] in month_labels:
-            out[str(row["employee_id"])] [start + month_labels.index(row["month"])] = int(row["total_mappings"])
+            out[str(row["employee_id"])][start + month_labels.index(row["month"])] = int(
+                row["total_mappings"]
+            )
     return out
 
 
-async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: str, month: str | None) -> dict[str, Any]:
+async def fetch_rankings(
+    *, page: int, limit: int, search: str | None, sort_by: str, month: str | None
+) -> dict[str, Any]:
     if month:
         pipeline: list[dict[str, Any]] = [
             {"$match": {"month": month}},
-            {"$lookup": {"from": "employees", "localField": "employee_id", "foreignField": "_id", "as": "employee"}},
+            {
+                "$lookup": {
+                    "from": "employees",
+                    "localField": "employee_id",
+                    "foreignField": "_id",
+                    "as": "employee",
+                }
+            },
             {"$unwind": "$employee"},
             {"$match": {"employee.is_active": True}},
         ]
         if search:
             escaped_search = re.escape(search)
-            pipeline.append({"$match": {"employee.name": {"$regex": escaped_search, "$options": "i"}}})
-        sort = {"leaderboard_rank": 1, "total_score": -1} if sort_by == "rank" else {"total_score": -1}
-        pipeline.extend([{"$sort": sort}, {"$facet": {"items": [{"$skip": (page - 1) * limit}, {"$limit": limit}], "total": [{"$count": "count"}]}}])
+            pipeline.append(
+                {"$match": {"employee.name": {"$regex": escaped_search, "$options": "i"}}}
+            )
+        sort = (
+            {"leaderboard_rank": 1, "total_score": -1} if sort_by == "rank" else {"total_score": -1}
+        )
+        pipeline.extend(
+            [
+                {"$sort": sort},
+                {
+                    "$facet": {
+                        "items": [{"$skip": (page - 1) * limit}, {"$limit": limit}],
+                        "total": [{"$count": "count"}],
+                    }
+                },
+            ]
+        )
         cursor = await LeaderboardHistory.get_motor_collection().aggregate(pipeline)
         result = await cursor.to_list(length=None)
         payload = result[0] if result else {"items": [], "total": []}
@@ -140,7 +192,9 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
                     "joined": mappings["joined_candidates"],
                     "rejected": mappings["rejected_candidates"],
                     "monthlyGrowth": float(item.get("monthly_growth", 0)),
-                    "successRate": success_rate(mappings["joined_candidates"], mappings["offers_received"]),
+                    "successRate": success_rate(
+                        mappings["joined_candidates"], mappings["offers_received"]
+                    ),
                     "badge": badge,
                     "badges": badges,
                     "monthlyData": monthly.get(str(employee["_id"]), [0, 0, 0, 0, 0, 0]),
@@ -149,7 +203,9 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
             )
         return {
             "items": hydrated,
-            "total": int(payload.get("total", [{}])[0].get("count", 0)) if payload.get("total") else 0,
+            "total": int(payload.get("total", [{}])[0].get("count", 0))
+            if payload.get("total")
+            else 0,
             "page": page,
             "limit": limit,
         }
@@ -161,8 +217,14 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
         ids = await rankings_window(page, limit)
         if ids:
             employee_object_ids = [to_object_id(employee_id, "employee_id") for employee_id in ids]
-            employee_object_ids = [employee_id for employee_id in employee_object_ids if employee_id is not None]
-            stats = await EmployeeStat.get_motor_collection().find({"employee_id": {"$in": employee_object_ids}}).to_list(length=None)
+            employee_object_ids = [
+                employee_id for employee_id in employee_object_ids if employee_id is not None
+            ]
+            stats = (
+                await EmployeeStat.get_motor_collection()
+                .find({"employee_id": {"$in": employee_object_ids}})
+                .to_list(length=None)
+            )
             stats_by_employee = {str(stat["employee_id"]): stat for stat in stats}
             ordered = []
             for employee_id in ids:
@@ -175,7 +237,14 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
 
     pipeline = [
         {"$match": base_query},
-        {"$lookup": {"from": "employees", "localField": "employee_id", "foreignField": "_id", "as": "employee"}},
+        {
+            "$lookup": {
+                "from": "employees",
+                "localField": "employee_id",
+                "foreignField": "_id",
+                "as": "employee",
+            }
+        },
         {"$unwind": "$employee"},
         {"$match": {"employee.is_active": True}},
     ]
@@ -185,7 +254,17 @@ async def fetch_rankings(*, page: int, limit: int, search: str | None, sort_by: 
     sort = {"leaderboard_rank": 1, "total_score": -1} if sort_by == "rank" else {"total_score": -1}
     if sort_by == "monthly_growth":
         sort = {"monthly_growth": -1, "total_score": -1}
-    pipeline.extend([{"$sort": sort}, {"$facet": {"items": [{"$skip": (page - 1) * limit}, {"$limit": limit}], "total": [{"$count": "count"}]}}])
+    pipeline.extend(
+        [
+            {"$sort": sort},
+            {
+                "$facet": {
+                    "items": [{"$skip": (page - 1) * limit}, {"$limit": limit}],
+                    "total": [{"$count": "count"}],
+                }
+            },
+        ]
+    )
     cursor = await EmployeeStat.get_motor_collection().aggregate(pipeline)
     result = await cursor.to_list(length=None)
     payload = result[0] if result else {"items": [], "total": []}
@@ -206,12 +285,18 @@ async def fetch_overview() -> dict[str, Any]:
     total_mappings = sum(stat.mappings.total_mappings for stat in stats)
     offers = sum(stat.mappings.offers_received for stat in stats)
     joins = sum(stat.mappings.joined_candidates for stat in stats)
-    growth = round(sum(stat.monthly_growth for stat in stats) / total_recruiters, 2) if total_recruiters else 0.0
+    growth = (
+        round(sum(stat.monthly_growth for stat in stats) / total_recruiters, 2)
+        if total_recruiters
+        else 0.0
+    )
     top_score = max((stat.xp_points or stat.total_score for stat in stats), default=0)
     top_stat = max(stats, key=lambda stat: stat.xp_points or stat.total_score, default=None)
     recruiter = None
     if top_stat is not None:
-        recruiter_data = await _hydrate_employee_stats([top_stat.model_dump() | {"employee_id": top_stat.employee_id}])
+        recruiter_data = await _hydrate_employee_stats(
+            [top_stat.model_dump() | {"employee_id": top_stat.employee_id}]
+        )
         recruiter = recruiter_data[0] if recruiter_data else None
     return {
         "summary": {
@@ -244,27 +329,63 @@ async def fetch_recruiter(employee_id: str) -> dict[str, Any] | None:
 
 
 async def fetch_monthly_growth() -> dict[str, Any]:
-    stats = await EmployeeStat.find(EmployeeStat.is_active == True).sort("-total_score").limit(10).to_list()  # noqa: E712
+    stats = (
+        await EmployeeStat.find(EmployeeStat.is_active)
+        .sort("-total_score")
+        .limit(10)
+        .to_list()
+    )  # noqa: E712
     ids = [stat.employee_id for stat in stats]
     monthly = await _monthly_totals_for_employees(ids)
-    employees = await DashboardEmployee.get_motor_collection().find({"_id": {"$in": ids}}).to_list(length=None)
+    employees = (
+        await DashboardEmployee.get_motor_collection()
+        .find({"_id": {"$in": ids}})
+        .to_list(length=None)
+    )
     employee_by_id = {employee["_id"]: employee for employee in employees}
-    labels_rows = await LeaderboardHistory.get_motor_collection().find({"employee_id": {"$in": ids}}).sort("month").to_list(length=None)
-    labels = [_month_label(month) for month in sorted({row["month"] for row in labels_rows})[-6:]]
+    labels_rows = (
+        await LeaderboardHistory.get_motor_collection()
+        .find({"employee_id": {"$in": ids}})
+        .sort("month")
+        .to_list(length=None)
+    )
+    raw_labels = [
+        _month_label(month) for month in sorted({row["month"] for row in labels_rows})[-6:]
+    ]
+    labels = ([""] * (6 - len(raw_labels)) + raw_labels) if len(raw_labels) < 6 else raw_labels
     series = []
     for stat in stats:
         employee = employee_by_id.get(stat.employee_id)
         if employee is None:
             continue
-        series.append({"employee_id": str(employee["_id"]), "name": employee["name"], "monthlyData": monthly.get(str(employee["_id"]), [0, 0, 0, 0, 0, 0])})
+        series.append(
+            {
+                "employee_id": str(employee["_id"]),
+                "name": employee["name"],
+                "monthlyData": monthly.get(str(employee["_id"]), [0, 0, 0, 0, 0, 0]),
+            }
+        )
     return {"labels": labels, "series": series}
 
 
 async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
-    jobs = await JobOpening.find(JobOpening.is_active == True).sort("-total_seats").limit(limit).to_list()  # noqa: E712
-    cursor = await CandidateMapping.get_motor_collection().aggregate([
-        {"$group": {"_id": "$job_opening_id", "recruiters": {"$addToSet": "$employee_id"}, "candidate_count": {"$sum": 1}}},
-    ])
+    jobs = (
+        await JobOpening.find(JobOpening.is_active)
+        .sort("-total_seats")
+        .limit(limit)
+        .to_list()
+    )  # noqa: E712
+    cursor = await CandidateMapping.get_motor_collection().aggregate(
+        [
+            {
+                "$group": {
+                    "_id": "$job_opening_id",
+                    "recruiters": {"$addToSet": "$employee_id"},
+                    "candidate_count": {"$sum": 1},
+                }
+            },
+        ]
+    )
     mappings = await cursor.to_list(length=None)
     mapping_by_job = {item["_id"]: item for item in mappings}
     return [
@@ -285,7 +406,19 @@ async def fetch_activity(page: int, limit: int) -> dict[str, Any]:
             {"$sort": {"created_at": -1}},
             {
                 "$facet": {
-                    "items": [{"$skip": (page - 1) * limit}, {"$limit": limit}, {"$lookup": {"from": "employees", "localField": "employee_id", "foreignField": "_id", "as": "employee"}}, {"$unwind": "$employee"}],
+                    "items": [
+                        {"$skip": (page - 1) * limit},
+                        {"$limit": limit},
+                        {
+                            "$lookup": {
+                                "from": "employees",
+                                "localField": "employee_id",
+                                "foreignField": "_id",
+                                "as": "employee",
+                            }
+                        },
+                        {"$unwind": "$employee"},
+                    ],
                     "total": [{"$count": "count"}],
                 }
             },
@@ -293,7 +426,12 @@ async def fetch_activity(page: int, limit: int) -> dict[str, Any]:
     )
     result = await cursor.to_list(length=None)
     payload = result[0] if result else {"items": [], "total": []}
-    return {"items": payload.get("items", []), "total": int(payload.get("total", [{}])[0].get("count", 0)) if payload.get("total") else 0, "page": page, "limit": limit}
+    return {
+        "items": payload.get("items", []),
+        "total": int(payload.get("total", [{}])[0].get("count", 0)) if payload.get("total") else 0,
+        "page": page,
+        "limit": limit,
+    }
 
 
 async def fetch_badges(employee_id: str) -> dict[str, Any]:

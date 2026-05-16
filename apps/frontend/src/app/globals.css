@@ -133,9 +133,10 @@
   --color-toggle-icon: #f3ff54;
 }
 
-/* ── Light mode: no shadows — hierarchy via background shading only ── */
-[data-theme="light"] * {
-  box-shadow: none !important;
+/* ── Light mode: soften panel/card shadows ── */
+[data-theme="light"] .bg-surface-panel,
+[data-theme="light"] .bg-surface-card {
+  box-shadow: none;
 }
 
 /* ── Dashboard panel/card base — solid surface colour in both modes ── */
@@ -147,9 +148,10 @@
 }
 
 /* ── Smooth theme transitions ── */
-*,
-*::before,
-*::after {
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
   transition:
     background-color 200ms ease,
     border-color 200ms ease,
@@ -157,9 +159,9 @@
     box-shadow 200ms ease;
 }
 /* Don't animate transforms — causes jank on motion components */
-[class*="translate"],
-[class*="scale"],
-[class*="rotate"] {
+.theme-transition [class*="translate"],
+.theme-transition [class*="scale"],
+.theme-transition [class*="rotate"] {
   transition: transform 200ms ease;
 }
 

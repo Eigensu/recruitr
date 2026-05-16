@@ -10,7 +10,7 @@ The **sidebar stays navy (#002348) in both modes.** It's a branded element, not 
 Only the shell and main content panel flip. This is intentional — it keeps the brand strong in
 light mode and avoids the washed-out "everything goes grey" problem.
 
-```
+```text
 DARK MODE:  shell=#002348  sidebar=#002348  main=dark navy
 LIGHT MODE: shell=#F9F7F8  sidebar=#002348  main=#FFFFFF
 ```

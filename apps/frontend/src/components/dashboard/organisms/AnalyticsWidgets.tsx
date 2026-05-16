@@ -44,7 +44,7 @@ export default function AnalyticsWidgets({ widgets }: Readonly<AnalyticsWidgetsP
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {widgets.map((widget, index) => {
-          const tone = TONE_STYLES[widget.tone];
+          const tone = TONE_STYLES[widget.tone] ?? TONE_STYLES.neutral;
           const Icon =
             ANALYTICS_ICON_MAP[widget.id as keyof typeof ANALYTICS_ICON_MAP] ?? IconChartDots3;
           const animatedValue = parseAnimatedValue(widget.value);

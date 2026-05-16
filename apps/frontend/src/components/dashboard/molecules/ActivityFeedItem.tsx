@@ -14,7 +14,7 @@ interface ActivityFeedItemProps {
 }
 
 export default function ActivityFeedItem({ item, index }: ActivityFeedItemProps) {
-  const tone = TONE_STYLES[item.tone];
+  const tone = TONE_STYLES[item.tone] ?? TONE_STYLES.neutral;
 
   return (
     <motion.div

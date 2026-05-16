@@ -29,7 +29,7 @@ celery_app.conf.update(
         },
         "leaderboard-monthly-snapshot": {
             "task": "leaderboard.create_monthly_snapshot",
-            "schedule": crontab(minute=0, hour=0),
+            "schedule": crontab(minute=0, hour=0, day_of_month=1),
         },
     },
 )

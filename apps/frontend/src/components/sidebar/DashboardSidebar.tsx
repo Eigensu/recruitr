@@ -115,31 +115,29 @@ function ThemeToggleRow() {
   if (!open) {
     // Closed state: single button with current theme icon
     return (
-      <div className="flex items-center justify-center px-3 py-2">
+      <div className="flex items-center justify-center px-3 py-1.5 w-full">
         <motion.button
           type="button"
           onClick={toggleTheme}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
-          className="flex items-center justify-center p-1.5 rounded-full transition-colors cursor-pointer bg-white"
-          style={{
-            color: "var(--color-text-primary)",
-          }}
+          className="size-8 flex shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer bg-white/10 hover:bg-white/20 text-white"
           aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           title={theme === "dark" ? "Light Mode" : "Dark Mode"}
         >
-          {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
+          {theme === "dark" ? <IconSun size={18} stroke={2} /> : <IconMoon size={18} stroke={2} />}
         </motion.button>
       </div>
     );
   }
 
-  // Open state: pill-shaped toggle
+  // Open state: pill-shaped toggle with label
   return (
-    <div className="flex items-center justify-start px-4 py-2">
+    <div className="flex items-center justify-between px-3 py-1.5 w-full">
+      <span className="text-sm font-medium text-white pl-1">Theme</span>
       <button
         type="button"
-        className="relative flex items-center w-17 h-9 p-1 rounded-full cursor-pointer bg-white"
+        className="relative flex items-center w-17 h-9 p-1 shrink-0 rounded-full cursor-pointer bg-white"
         onClick={toggleTheme}
         aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         title={theme === "dark" ? "Light Mode" : "Dark Mode"}
@@ -212,7 +210,7 @@ function UserTrigger({
   return (
     <button
       type="button"
-      className="flex items-center gap-2.5 pt-3 mt-1"
+      className="flex items-center gap-3 py-1.5 w-full rounded-md hover:bg-white/5 transition-colors"
       style={{ justifyContent: open ? "flex-start" : "center" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -289,10 +287,14 @@ export default function DashboardSidebar() {
         </div>
 
         {/* Bottom: onboarding + theme toggle + user */}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col">
           <OnboardingProgressCard progress={76} />
-          <div className="flex flex-col gap-3">
+
+          <div className="mt-4 flex flex-col pt-2">
             <ThemeToggleRow />
+
+            <div className="h-px bg-white/10 my-2 mx-4" />
+
             <UserRow user={user} />
           </div>
         </div>

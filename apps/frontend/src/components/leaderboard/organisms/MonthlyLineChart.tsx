@@ -124,7 +124,7 @@ export function MonthlyLineChart(props: MonthlyLineChartProps) {
           {/* X labels */}
           {monthLabels.map((m, i) => (
             <text
-              key={m}
+              key={`month-${i}-${m}`}
               x={PAD.l + i * stepX}
               y={H - 6}
               textAnchor="middle"

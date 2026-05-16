@@ -43,8 +43,8 @@ export const SidebarProvider = ({
   const [openState, setOpenState] = useState(false);
   const [pinned, setPinned] = useState(false);
 
-  const open = pinned ? true : openProp !== undefined ? openProp : openState;
-  const setOpen = openProp !== undefined ? setOpenProp! : setOpenState;
+  const open = pinned ? true : (openProp ?? openState);
+  const setOpen = setOpenProp ?? setOpenState;
 
   return (
     <SidebarContext.Provider value={{ open, setOpen, animate, pinned, setPinned }}>
@@ -72,16 +72,17 @@ export const Sidebar = ({
 };
 
 export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
-  const { animate, initial, exit, transition, variants, style, layout, layoutId, ...mobileProps } =
-    props;
-  void animate;
-  void initial;
-  void exit;
-  void transition;
-  void variants;
-  void style;
-  void layout;
-  void layoutId;
+  const {
+    animate: _animate,
+    initial: _initial,
+    exit: _exit,
+    transition: _transition,
+    variants: _variants,
+    style: _style,
+    layout: _layout,
+    layoutId: _layoutId,
+    ...mobileProps
+  } = props;
   return (
     <>
       <DesktopSidebar {...props} />

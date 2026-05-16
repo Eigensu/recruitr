@@ -22,8 +22,8 @@ export function LeaderboardKpiCard(props: LeaderboardKpiCardProps) {
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.4, delay: index * 0.04, ease: "easeOut" }}
       whileHover={{ y: -2 }}
-      className={cn("rounded-lg p-4 transition-colors shadow-md", tone.shadow)}
-      style={{ background: tone.cardBg, color: tone.cardText }}
+      className={cn("rounded-lg p-4 transition-colors shadow-md")}
+      style={{ background: tone.cardBg, color: tone.cardText, boxShadow: tone.shadow }}
     >
       <p
         className="text-[10px] font-semibold uppercase tracking-wider"

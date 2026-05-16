@@ -15,22 +15,29 @@ export function OnboardingProgressCard({
   completedSteps = 5,
 }: OnboardingProgressCardProps) {
   const { open } = useSidebar();
+  const safeTotal = Math.max(totalSteps, 0);
+  const safeCompleted = Math.max(completedSteps, 0);
+  const computedProgress =
+    safeTotal > 0 ? Math.round((Math.min(safeCompleted, safeTotal) / safeTotal) * 100) : 0;
+  const displayProgress = safeTotal > 0 ? computedProgress : Math.max(0, Math.min(progress, 100));
+  const remaining = Math.max(0, safeTotal - safeCompleted);
 
   // Closed state: show only percentage badge (compact)
   if (!open) {
     return (
-      <div className="flex items-center justify-center px-3 py-2">
+      <div className="flex items-center justify-center px-3 py-1.5">
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.18 }}
-          className="rounded-md px-3 py-1 font-semibold text-[12px]"
+          className="size-8 flex shrink-0 items-center justify-center rounded-full font-bold text-[10px] tracking-tighter"
           style={{
             background: "var(--color-surface-2-val)",
             color: "var(--color-text-primary)",
+            border: "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          {progress}%
+          {displayProgress}%
         </motion.div>
       </div>
     );
@@ -62,7 +69,7 @@ export function OnboardingProgressCard({
             >
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
+                animate={{ width: `${displayProgress}%` }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
                 className="h-full rounded-full"
                 style={{
@@ -71,7 +78,7 @@ export function OnboardingProgressCard({
               />
             </div>
             <span className="mt-2 text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              {totalSteps - completedSteps} of {totalSteps} steps remaining
+              {remaining} of {totalSteps} steps remaining
             </span>
           </div>
         </div>

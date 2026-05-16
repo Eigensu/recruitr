@@ -9,8 +9,8 @@ from app.modules.leaderboard.repository.queries import (
 )
 from app.modules.leaderboard.repository.writes import (
     create_monthly_snapshots,
-    record_activity_atomic,
     recompute_ranks,
+    record_activity_atomic,
     unlock_badges,
 )
 
