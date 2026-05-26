@@ -3,8 +3,7 @@
 import { motion } from "motion/react";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
-import { TONE_CLASSES, KPI_ICON_MAP } from "@/components/common/constants/dashboard-constants";
-import { cn } from "@/lib/utils";
+import { TONE_STYLES, KPI_ICON_MAP } from "@/components/common/constants/dashboard-constants";
 import type { DashboardKpi } from "@/types/dashboard";
 
 interface DashboardKpiCardProps {
@@ -13,7 +12,7 @@ interface DashboardKpiCardProps {
 }
 
 export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProps) {
-  const tone = TONE_CLASSES[metric.tone];
+  const tone = TONE_STYLES[metric.tone] ?? TONE_STYLES.neutral;
   const Icon = KPI_ICON_MAP[metric.id as keyof typeof KPI_ICON_MAP] ?? IconArrowUpRight;
 
   return (
@@ -23,26 +22,39 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.4, delay: index * 0.035, ease: "easeOut" }}
       whileHover={{ y: -2 }}
-      className={cn("rounded-lg border p-3 shadow-sm transition-colors h-full", tone.card)}
+      className="rounded-lg p-3 h-full"
+      style={{ background: tone.cardBg, color: tone.cardText, boxShadow: tone.shadow }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={cn("text-xs font-semibold uppercase tracking-normal", tone.muted)}>
+          {/* Muted label — inherits card text colour, reduced via opacity */}
+          <p
+            className="text-xs font-semibold uppercase tracking-normal"
+            style={{ opacity: tone.mutedOpacity }}
+          >
             {metric.label}
           </p>
-          <p className={cn("mt-2 font-heading text-4xl leading-none", tone.text)}>
+          {/* Value — inherits card text colour */}
+          <p className="mt-2 font-heading text-4xl leading-none">
             <AnimatedNumber value={metric.value} />
           </p>
         </div>
+        {/* Icon chip */}
         <div
-          className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", tone.chip)}
+          className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+          style={{ background: tone.chipBg, color: tone.chipText }}
         >
           <Icon className="size-5" />
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        <span className={cn("text-sm", tone.muted)}>{metric.helper}</span>
-        <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", tone.chip)}>
+        <span className="text-sm" style={{ opacity: tone.mutedOpacity }}>
+          {metric.helper}
+        </span>
+        <span
+          className="rounded-full px-2 py-1 text-[11px] font-semibold"
+          style={{ background: tone.chipBg, color: tone.chipText }}
+        >
           {metric.trend}
         </span>
       </div>

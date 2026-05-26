@@ -2,7 +2,6 @@
 
 import { motion } from "motion/react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
-import { cn } from "@/lib/utils";
 import type { PipelineStageMetric } from "@/types/dashboard";
 
 interface PipelineStageItemProps {
@@ -17,11 +16,12 @@ export default function PipelineStageItem({ stage, index }: PipelineStageItemPro
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.35 }}
       transition={{ duration: 0.28, delay: index * 0.025 }}
+      style={{ color: "var(--color-text-primary)" }}
     >
       <div className="mb-2 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-white">{stage.label}</p>
-          <p className="text-xs text-white">
+          <p className="truncate text-sm font-medium">{stage.label}</p>
+          <p className="text-xs" style={{ opacity: 0.55 }}>
             <AnimatedNumber value={stage.count} /> candidates
           </p>
         </div>
@@ -29,7 +29,10 @@ export default function PipelineStageItem({ stage, index }: PipelineStageItemPro
           <AnimatedNumber value={stage.percent} suffix="%" />
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-2 overflow-hidden rounded-full"
+        style={{ background: "var(--color-border-val)" }}
+      >
         <motion.div
           initial={{ width: 0 }}
           whileInView={{ width: `${Math.min(stage.percent, 100)}%` }}

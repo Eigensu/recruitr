@@ -2,41 +2,41 @@
   "folders": [
     {
       "name": "🏠 Root",
-      "path": "."
+      "path": ".",
     },
     {
       "name": "⚡ Frontend (Next.js)",
-      "path": "apps/frontend"
+      "path": "apps/frontend",
     },
     {
       "name": "🐍 Backend (FastAPI)",
-      "path": "apps/backend"
+      "path": "apps/backend",
     },
     {
       "name": "📋 Specs",
-      "path": "specs"
-    }
+      "path": "specs",
+    },
   ],
   "settings": {
     // ── Editor ──
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
-      "source.fixAll.eslint": "explicit"
+      "source.fixAll.eslint": "explicit",
     },
     "editor.defaultFormatter": "esbenp.prettier-vscode",
 
     // ── TypeScript / JavaScript ──
     "[typescript]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
     "[typescriptreact]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
     "[javascript]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
     "[json]": {
-      "editor.defaultFormatter": "esbenp.prettier-vscode"
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
     },
 
     // ── Python ──
@@ -45,8 +45,8 @@
       "editor.formatOnSave": true,
       "editor.codeActionsOnSave": {
         "source.fixAll.ruff": "explicit",
-        "source.organizeImports.ruff": "explicit"
-      }
+        "source.organizeImports.ruff": "explicit",
+      },
     },
     "python.defaultInterpreterPath": "${workspaceFolder:🐍 Backend (FastAPI)}/.venv/bin/python",
     "ruff.path": ["${workspaceFolder:🐍 Backend (FastAPI)}/.venv/bin/ruff"],
@@ -58,14 +58,14 @@
       "**/__pycache__": true,
       "**/.ruff_cache": true,
       "**/.pytest_cache": true,
-      "**/.turbo": true
+      "**/.turbo": true,
     },
     "search.exclude": {
       "**/node_modules": true,
       "**/.next": true,
       "**/__pycache__": true,
       "pnpm-lock.yaml": true,
-      "package-lock.json": true
+      "package-lock.json": true,
     },
 
     // ── Environment ──
@@ -75,8 +75,8 @@
 
     // ── ESLint ──
     "eslint.workingDirectories": [
-      { "directory": "apps/frontend", "changeProcessCWD": true }
-    ]
+      { "directory": "apps/frontend", "changeProcessCWD": true },
+    ],
   },
   "extensions": {
     "recommendations": [
@@ -93,8 +93,8 @@
       "EditorConfig.EditorConfig",
       "eamodio.gitlens",
       "ms-azuretools.vscode-docker",
-      "christian-kohler.path-intellisense"
-    ]
+      "christian-kohler.path-intellisense",
+    ],
   },
   "launch": {
     "version": "0.2.0",
@@ -104,15 +104,10 @@
         "type": "debugpy",
         "request": "launch",
         "module": "uvicorn",
-        "args": [
-          "app.main:app",
-          "--reload",
-          "--port",
-          "8000"
-        ],
+        "args": ["app.main:app", "--reload", "--port", "8000"],
         "cwd": "${workspaceFolder:🐍 Backend (FastAPI)}",
         "envFile": "${workspaceFolder:🏠 Root}/.env",
-        "justMyCode": true
+        "justMyCode": true,
       },
       {
         "name": "⚡ Next.js (dev)",
@@ -125,9 +120,9 @@
         "serverReadyAction": {
           "pattern": "Local:.*?http://localhost:([0-9]+)",
           "uriFormat": "http://localhost:%s",
-          "action": "openExternally"
-        }
-      }
-    ]
-  }
+          "action": "openExternally",
+        },
+      },
+    ],
+  },
 }

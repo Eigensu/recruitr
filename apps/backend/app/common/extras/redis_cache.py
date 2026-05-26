@@ -71,6 +71,55 @@ class RedisCache:
         except (RedisError, OSError) as exc:
             logger.warning("Redis delete failed for key %s: %s", key, exc, exc_info=False)
 
+    async def delete_pattern(self, pattern: str) -> None:
+        if not self.enabled or self._client is None:
+            return
+
+        try:
+            keys = [key async for key in self._client.scan_iter(pattern)]
+            if keys:
+                await self._client.delete(*keys)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis delete pattern failed for %s: %s", pattern, exc, exc_info=False)
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
+        if not self.enabled or self._client is None:
+            return
+
+        try:
+            await self._client.zadd(key, mapping)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis zadd failed for key %s: %s", key, exc, exc_info=False)
+
+    async def zrevrange(self, key: str, start: int, end: int) -> list[str]:
+        if not self.enabled or self._client is None:
+            return []
+
+        try:
+            return list(await self._client.zrevrange(key, start, end))
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis zrevrange failed for key %s: %s", key, exc, exc_info=False)
+            return []
+
+    async def zcard(self, key: str) -> int:
+        if not self.enabled or self._client is None:
+            return 0
+
+        try:
+            return int(await self._client.zcard(key))
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis zcard failed for key %s: %s", key, exc, exc_info=False)
+            return 0
+
+    async def expire(self, key: str, ttl_seconds: int) -> None:
+        if not self.enabled or self._client is None:
+            return
+
+        try:
+            await self._client.expire(key, ttl_seconds)
+        except (RedisError, OSError) as exc:
+            logger.warning("Redis expire failed for key %s: %s", key, exc, exc_info=False)
+
     async def close(self) -> None:
         if self._client is not None:
             try:
@@ -83,4 +132,10 @@ dashboard_cache = RedisCache(
     url=settings.REDIS_URL,
     enabled=settings.REDIS_ENABLED,
     namespace=settings.REDIS_NAMESPACE,
+)
+
+leaderboard_cache = RedisCache(
+    url=settings.REDIS_URL,
+    enabled=settings.REDIS_ENABLED,
+    namespace=f"{settings.REDIS_NAMESPACE}:leaderboard",
 )

@@ -15,6 +15,7 @@ import {
   getPipelineDashboardData,
   getRecruiterDashboardData,
 } from "@/lib/dashboard-data";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -57,16 +58,30 @@ async function ClientActivitySection() {
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-full bg-black px-4 py-5 text-white sm:px-6 lg:px-8">
+    <div
+      className="min-h-full px-4 py-5 sm:px-6 lg:px-8"
+      style={{ background: "var(--color-canvas)", color: "var(--color-text-primary)" }}
+    >
       <div className="mx-auto flex w-full max-w-400 flex-col gap-5">
-        <header className="border-b border-white/10 pb-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-normal text-yellow">
-              Recruitment command center
-            </p>
-            <h1 className="mt-2 font-heading text-4xl leading-tight text-white sm:text-5xl">
-              Recruitment Dashboard
-            </h1>
+        <header className="pb-4" style={{ borderBottom: "1px solid var(--color-border-val)" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p
+                className="text-xs font-bold uppercase tracking-normal"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                Recruitment command center
+              </p>
+              <h1
+                className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
+                style={{ color: "var(--color-text-primary)" }}
+              >
+                Recruitment Dashboard
+              </h1>
+            </div>
+            <div className="mt-1 shrink-0">
+              <ThemeToggle />
+            </div>
           </div>
         </header>
 

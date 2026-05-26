@@ -20,11 +20,12 @@ export default function PipelineBreakdown({ stages }: PipelineBreakdownProps) {
       viewport={{ once: true, amount: 0.18 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
       className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
+      style={{ color: "var(--color-text-primary)" }}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl text-white">Pipeline Stage Breakdown</h2>
-          <p className="mt-1 text-sm text-white">
+          <h2 className="font-heading text-xl">Pipeline Stage Breakdown</h2>
+          <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
             <AnimatedNumber value={total} /> active stage records from demo data
           </p>
         </div>
@@ -33,11 +34,19 @@ export default function PipelineBreakdown({ stages }: PipelineBreakdownProps) {
         </span>
       </div>
 
-      <div className="mt-4 flex-1 overflow-hidden rounded-xl border border-white/10 bg-white/3">
+      <div
+        className="mt-4 flex-1 overflow-hidden rounded-xl"
+        style={{ background: "var(--color-border-val)" }}
+      >
         <div className="overflow-x-auto">
           <table className="min-w-full table-fixed border-separate border-spacing-0">
             <thead>
-              <tr className="bg-[#0f2747] text-white">
+              <tr
+                style={{
+                  background: "var(--color-surface-2-val)",
+                  color: "var(--color-text-primary)",
+                }}
+              >
                 <th scope="col" className="w-[52%] px-4 py-3 text-left font-heading text-lg">
                   Stage
                 </th>
@@ -55,15 +64,15 @@ export default function PipelineBreakdown({ stages }: PipelineBreakdownProps) {
                 return (
                   <tr
                     key={stage.stage}
-                    className={cn(isOdd ? "bg-white/5" : "bg-white/3", "border-t border-white/10")}
+                    style={{ background: isOdd ? "var(--color-surface-val)" : "transparent" }}
                   >
-                    <td className="max-w-0 px-4 py-2 text-left text-base font-medium text-white">
+                    <td className="max-w-0 px-4 py-2 text-left text-base font-medium">
                       <span className="block truncate">{stage.label}</span>
                     </td>
-                    <td className="px-4 py-2 text-center font-heading text-xl text-white">
+                    <td className="px-4 py-2 text-center font-heading text-xl">
                       <AnimatedNumber value={stage.count} />
                     </td>
-                    <td className="px-4 py-2 text-center text-base font-medium text-white">
+                    <td className="px-4 py-2 text-center text-base font-medium">
                       <AnimatedNumber value={stage.percent} suffix="%" />
                     </td>
                   </tr>

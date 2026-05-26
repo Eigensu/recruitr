@@ -19,9 +19,9 @@ import KanbanColumn from "./Column";
 import CandidateCardComponent from "./CandidateCard";
 
 const COLUMNS: { id: CandidateStatus; label: string; color: string }[] = [
-  { id: "pending", label: "Pending Review", color: "border-amber-500/40" },
-  { id: "accepted", label: "Accepted", color: "border-emerald-500/40" },
-  { id: "rejected", label: "Rejected", color: "border-red-500/40" },
+  { id: "pending", label: "Pending Review", color: "shadow-amber-500/20" },
+  { id: "accepted", label: "Accepted", color: "shadow-emerald-500/20" },
+  { id: "rejected", label: "Rejected", color: "shadow-red-500/20" },
 ];
 
 export default function KanbanBoard({ positionId }: { positionId: string }) {

@@ -49,6 +49,7 @@
    Usage: bg-navy, text-yellow, font-heading, etc.
    -------------------------------------------------------------------------- */
 @theme inline {
+  /* ── Core brand ── */
   --color-navy: #002348;
   --color-navy-dark: #001a36;
   --color-yellow: #f3ff54;
@@ -57,10 +58,111 @@
   --color-light: #f9f7f8;
   --color-muted: #6b7280;
 
+  /* ── Dashboard surface palette — resolved from CSS vars at runtime ── */
+  --color-shell: var(--color-shell-val);
+  --color-sidebar: var(--color-sidebar-val);
+  --color-canvas: var(--color-canvas-val);
+  --color-surface: var(--color-surface-val);
+  --color-surface-2: var(--color-surface-2-val);
+  --color-border: var(--color-border-val);
+
   --font-heading: "Galderglynn Titling", sans-serif;
   --font-subtitle: "MADE Outer Sans", sans-serif;
   --font-body: sans-serif;
   --font-sans: sans-serif;
+}
+
+/* ==========================================================================
+   THEME VARIABLES
+   ========================================================================== */
+
+/* ── Dark mode (default) ── */
+:root,
+[data-theme="dark"] {
+  --color-shell-val: #002348;
+  --color-sidebar-val: #0d2347;
+  --color-canvas-val: #0a1628;
+  --color-surface-val: #0f1e35;
+  --color-surface-2-val: #1a3058;
+  --color-border-val: rgba(255, 255, 255, 0.07);
+
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  /* Semantic card tokens */
+  --color-card-positive: #052e16;
+  --color-card-positive-text: #ffffff;
+  --color-card-positive-badge: #065f46;
+  --color-card-negative: #2d0a0a;
+  --color-card-negative-text: #ffffff;
+  --color-card-negative-badge: #7f1d1d;
+
+  /* Chart track (donut empty ring) */
+  --color-chart-track: rgba(255, 255, 255, 0.08);
+
+  --color-toggle-bg: rgba(255, 255, 255, 0.1);
+  --color-toggle-icon: #ffffff;
+}
+
+/* ── Light mode ── */
+[data-theme="light"] {
+  --color-shell-val: #c8c8cc; /* outer frame — clearly grey, visible gap */
+  --color-sidebar-val: #0d2347; /* sidebar always stays dark navy */
+  --color-canvas-val: #e4e4e8; /* page background — medium grey, clearly distinct */
+  --color-surface-val: #ffffff; /* panels/cards — pure white, pops off canvas */
+  --color-surface-2-val: #f4f4f6; /* inner sub-surfaces, hover states */
+  --color-border-val: rgba(0, 0, 0, 0.06);
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #4b5563;
+  --color-text-muted: #9ca3af;
+
+  /* Semantic card tokens — light versions */
+  --color-card-positive: #ecfdf5;
+  --color-card-positive-text: #065f46;
+  --color-card-positive-badge: #d1fae5;
+  --color-card-negative: #fff1f2;
+  --color-card-negative-text: #9f1239;
+  --color-card-negative-badge: #ffe4e6;
+
+  /* Chart track */
+  --color-chart-track: #d1d1d6;
+
+  --color-toggle-bg: #002348;
+  --color-toggle-icon: #f3ff54;
+}
+
+/* ── Light mode: soften panel/card shadows ── */
+[data-theme="light"] .bg-surface-panel,
+[data-theme="light"] .bg-surface-card {
+  box-shadow: none;
+}
+
+/* ── Dashboard panel/card base — solid surface colour in both modes ── */
+.bg-surface-panel {
+  background-color: var(--color-surface-val);
+}
+.bg-surface-card {
+  background-color: var(--color-surface-val);
+}
+
+/* ── Smooth theme transitions ── */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
+}
+/* Don't animate transforms — causes jank on motion components */
+.theme-transition [class*="translate"],
+.theme-transition [class*="scale"],
+.theme-transition [class*="rotate"] {
+  transition: transform 200ms ease;
 }
 
 /* --------------------------------------------------------------------------
