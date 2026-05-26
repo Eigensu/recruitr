@@ -185,6 +185,7 @@ export const SidebarLink = ({
   return (
     <Link
       href={link.href}
+      aria-label={!open ? link.label : undefined}
       className={cn(
         "flex w-full items-center group/sidebar rounded-lg transition-all duration-150 sidebar-nav-link",
         !active && "hover:bg-white/5",
@@ -203,13 +204,16 @@ export const SidebarLink = ({
 
       {/* Label — fade + slide in, no width animation to avoid layout lag */}
       <motion.span
+        aria-hidden={!open ? "true" : undefined}
         animate={{
           opacity: animate ? (open ? 1 : 0) : 1,
           x: animate ? (open ? 0 : -4) : 0,
         }}
         transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
-        className="text-sm font-medium whitespace-nowrap overflow-hidden ml-2.5"
-        style={{ display: open ? "block" : "none" }}
+        className={cn(
+          "text-sm font-medium whitespace-nowrap overflow-hidden ml-2.5",
+          !open && "absolute w-0 h-0 opacity-0 overflow-hidden",
+        )}
       >
         {link.label}
       </motion.span>

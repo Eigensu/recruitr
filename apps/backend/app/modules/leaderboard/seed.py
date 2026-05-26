@@ -318,6 +318,11 @@ async def seed_leaderboard() -> None:
                 continue
             candidate_docs.append(candidate)
 
+        if not employees:
+            raise ValueError("employees collection is empty.")
+        if not job_docs:
+            raise ValueError("job_docs collection is empty.")
+
         mapping_docs = []
         for idx, candidate in enumerate(candidate_docs):
             employee = employees[idx % len(employees)]
@@ -348,7 +353,9 @@ async def seed_leaderboard() -> None:
             ][idx % 4]
             await activity_col.update_one(
                 {
-                    "activity_reference_id": f"seed-{employee['_id']}-{candidate['_id']}-{activity_type.value}"
+                    "activity_reference_id": (
+                        f"seed-{employee['_id']}-{candidate['_id']}-{activity_type.value}"
+                    )
                 },
                 {
                     "$set": {
@@ -356,11 +363,15 @@ async def seed_leaderboard() -> None:
                         "candidate_id": candidate["_id"],
                         "activity_type": activity_type.value,
                         "title": activity_type.value.replace("_", " ").title(),
-                        "description": f"{candidate['full_name']} → {job['client_name']} ({job['role']})",
+                        "description": (
+                            f"{candidate['full_name']} → {job['client_name']} ({job['role']})"
+                        ),
                         "points_earned": 15
                         if activity_type == ActivityTypeEnum.CANDIDATE_JOINED
                         else 8,
-                        "activity_reference_id": f"seed-{employee['_id']}-{candidate['_id']}-{activity_type.value}",
+                        "activity_reference_id": (
+                            f"seed-{employee['_id']}-{candidate['_id']}-{activity_type.value}"
+                        ),
                         "created_at": datetime.now(UTC) - timedelta(minutes=idx * 18),
                     }
                 },

@@ -103,7 +103,8 @@ export function LeaderboardTableRow(props: LeaderboardTableRowProps) {
         {/* Growth */}
         <td className="px-4 py-3 text-center hidden 2xl:table-cell">
           <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full", growthClass)}>
-            +{recruiter.monthlyGrowth}%
+            {recruiter.monthlyGrowth >= 0 ? `+${recruiter.monthlyGrowth}` : recruiter.monthlyGrowth}
+            %
           </span>
         </td>
 
@@ -113,6 +114,7 @@ export function LeaderboardTableRow(props: LeaderboardTableRowProps) {
             type="button"
             onClick={() => setExpanded((p) => !p)}
             aria-expanded={expanded}
+            aria-label={expanded ? "Collapse details" : "Expand details"}
             className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow focus-visible:ring-offset-2"
             style={{ ["--tw-ring-offset-color" as string]: "var(--color-surface-val)" }}
           >

@@ -29,6 +29,8 @@ async def record_activity_atomic(
     candidate_oid = to_object_id(candidate_id, "candidate_id") if candidate_id else None
     if employee_oid is None:
         return False
+    if candidate_id and candidate_oid is None:
+        return False
 
     points = activity_points(activity_type)
     inc: dict[str, int] = {"xp_points": points, "total_score": points}
@@ -98,7 +100,7 @@ async def recompute_ranks() -> list[dict[str, Any]]:
         refreshed.append(
             {"_id": stat["_id"], "employee_id": str(stat["employee_id"]), "score": score}
         )
-    refreshed.sort(key=lambda item: item["score"], reverse=True)
+    refreshed.sort(key=lambda item: (-item["score"], item["employee_id"]))
     results: list[dict[str, Any]] = []
     for index, stat in enumerate(refreshed, start=1):
         await EmployeeStat.get_motor_collection().update_one(
