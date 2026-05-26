@@ -55,15 +55,14 @@ export const CHART_COLORS = [
 ];
 
 export const DASHBOARD_CARD_CLASS =
-  "rounded-lg border border-white/10 bg-white/[0.045] shadow-sm shadow-black/20 backdrop-blur";
+  "rounded-lg bg-surface-card shadow-md shadow-black/30 backdrop-blur";
 
-export const DASHBOARD_PANEL_CLASS =
-  "rounded-lg border border-white/10 bg-white/[0.035] shadow-sm shadow-black/20";
+export const DASHBOARD_PANEL_CLASS = "rounded-lg bg-surface-panel shadow-md shadow-black/30";
 
-export const DASHBOARD_WIDGET_CLASS = "rounded-lg border border-white/10 bg-white/[0.035] p-4";
+export const DASHBOARD_WIDGET_CLASS = "rounded-lg bg-surface-panel p-4 shadow-sm shadow-black/20";
 
 export const DASHBOARD_TABLE_HEADER_CLASS =
-  "text-xs font-semibold uppercase tracking-normal text-white/45";
+  "text-xs font-semibold uppercase tracking-normal text-[color:var(--color-text-secondary)]";
 
 export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   added: "Added",
@@ -77,55 +76,55 @@ export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   dropped: "Candidate Dropped",
 };
 
-export const TONE_CLASSES: Record<
+export const TONE_STYLES: Record<
   DashboardTone,
   {
-    card: string;
-    text: string;
-    muted: string;
-    accent: string;
-    chip: string;
-    value: string;
+    cardBg: string;
+    cardText: string;
+    mutedOpacity: number;
+    chipBg: string;
+    chipText: string;
+    shadow: string;
   }
 > = {
   yellow: {
-    card: "border-yellow/70 bg-yellow text-navy shadow-yellow/10",
-    text: "text-navy",
-    muted: "text-navy/70",
-    accent: "bg-navy",
-    chip: "bg-navy text-yellow",
-    value: "text-yellow",
+    cardBg: "#f3ff54",
+    cardText: "#002348",
+    mutedOpacity: 0.65,
+    chipBg: "#002348",
+    chipText: "#f3ff54",
+    shadow: "0 10px 24px rgba(243, 255, 84, 0.2)",
   },
   navy: {
-    card: "border-yellow/20 bg-navy text-white",
-    text: "text-white",
-    muted: "text-white/60",
-    accent: "bg-yellow",
-    chip: "bg-yellow/15 text-yellow",
-    value: "text-white",
+    cardBg: "#002348",
+    cardText: "#ffffff",
+    mutedOpacity: 0.6,
+    chipBg: "rgba(243,255,84,0.15)",
+    chipText: "#f3ff54",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.3)",
   },
   green: {
-    card: "border-emerald-300/20 bg-emerald-400/10 text-white",
-    text: "text-white",
-    muted: "text-emerald-100/70",
-    accent: "bg-emerald-300",
-    chip: "bg-emerald-300/15 text-emerald-200",
-    value: "text-emerald-200",
+    cardBg: "var(--color-card-positive)",
+    cardText: "var(--color-card-positive-text)",
+    mutedOpacity: 0.7,
+    chipBg: "var(--color-card-positive-badge)",
+    chipText: "var(--color-card-positive-text)",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.2)",
   },
   red: {
-    card: "border-red-300/20 bg-red-400/10 text-white",
-    text: "text-white",
-    muted: "text-red-100/70",
-    accent: "bg-red-300",
-    chip: "bg-red-300/15 text-red-200",
-    value: "text-red-200",
+    cardBg: "var(--color-card-negative)",
+    cardText: "var(--color-card-negative-text)",
+    mutedOpacity: 0.7,
+    chipBg: "var(--color-card-negative-badge)",
+    chipText: "var(--color-card-negative-text)",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.2)",
   },
   neutral: {
-    card: "border-white/10 bg-white/[0.045] text-white",
-    text: "text-white",
-    muted: "text-white/55",
-    accent: "bg-white",
-    chip: "bg-white/10 text-white/75",
-    value: "text-white",
+    cardBg: "var(--color-surface-val)",
+    cardText: "var(--color-text-primary)",
+    mutedOpacity: 0.55,
+    chipBg: "rgba(255,255,255,0.1)",
+    chipText: "var(--color-text-primary)",
+    shadow: "0 10px 24px rgba(0, 0, 0, 0.3)",
   },
 };

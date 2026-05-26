@@ -16,6 +16,7 @@ from app.modules.dashboard.models import (
     JobOpening,
 )
 from app.modules.gamification.models import RecruiterProfile
+from app.modules.leaderboard.models import Badge, EmployeeStat, LeaderboardHistory, RecruiterActivity
 from app.modules.positions.models import Position
 
 # Module-level client reference for transaction access
@@ -40,6 +41,10 @@ async def init_db() -> None:
             DashboardCandidate,
             DashboardEmployee,
             JobOpening,
+            EmployeeStat,
+            LeaderboardHistory,
+            Badge,
+            RecruiterActivity,
         ],
         allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
     )

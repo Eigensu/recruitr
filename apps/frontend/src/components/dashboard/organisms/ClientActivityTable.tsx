@@ -23,15 +23,19 @@ export default function ClientActivityTable({ rows }: ClientActivityTableProps) 
       viewport={{ once: true, amount: 0.12 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
       className={cn(DASHBOARD_PANEL_CLASS, "overflow-hidden")}
+      style={{ color: "var(--color-text-primary)" }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 p-5">
         <div>
-          <h2 className="font-heading text-xl text-white">Client Activity</h2>
-          <p className="mt-1 text-sm text-white">
+          <h2 className="font-heading text-xl">Client Activity</h2>
+          <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
             Every client added to open positions appears here automatically.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white">
+        <div
+          className="flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ background: "var(--color-surface-2-val)", color: "var(--color-text-primary)" }}
+        >
           <IconBuildingStore className="size-4 text-yellow" />
           <AnimatedNumber value={rows.length} /> clients
         </div>
@@ -39,7 +43,10 @@ export default function ClientActivityTable({ rows }: ClientActivityTableProps) 
 
       <div className="max-h-130 overflow-auto dashboard-scrollbar">
         <table className="min-w-170 w-full table-fixed border-collapse">
-          <thead className="sticky top-0 z-10 bg-[#111827]/95 backdrop-blur">
+          <thead
+            className="sticky top-0 z-10 backdrop-blur"
+            style={{ background: "var(--color-surface-val)" }}
+          >
             <tr>
               <th
                 className={cn(

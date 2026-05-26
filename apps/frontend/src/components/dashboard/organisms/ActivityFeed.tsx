@@ -19,11 +19,14 @@ export default function ActivityFeed({ items }: ActivityFeedProps) {
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.45, ease: "easeOut" }}
       className={cn(DASHBOARD_PANEL_CLASS, "p-5")}
+      style={{ color: "var(--color-text-primary)" }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl text-white">Activity Feed</h2>
-          <p className="mt-1 text-sm text-white">Latest operational signals</p>
+          <h2 className="font-heading text-xl">Activity Feed</h2>
+          <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
+            Latest operational signals
+          </p>
         </div>
         <IconActivityHeartbeat className="size-6 text-yellow" />
       </div>

@@ -19,17 +19,18 @@ export function AchievementBadgesSection() {
     >
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <h2 className="font-heading text-xl text-white">Achievement Badges</h2>
-          <p className="mt-1 text-sm text-white/50">Gamified recruiter milestones</p>
+          <h2 className="font-heading text-xl text-(--color-text-primary)">Achievement Badges</h2>
+          <p className="mt-1 text-sm text-(--color-text-secondary)">
+            Gamified recruiter milestones
+          </p>
         </div>
         <div className="flex gap-1.5 flex-wrap justify-end">
           {(["legendary", "epic", "rare", "uncommon"] as const).map((r) => (
             <span
               key={r}
               className={cn(
-                "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                "text-[9px] font-bold uppercase px-1.5 py-0.5 rounded",
                 RARITY_STYLES[r].label,
-                RARITY_STYLES[r].border,
                 RARITY_STYLES[r].bg,
               )}
             >
@@ -50,21 +51,21 @@ export function AchievementBadgesSection() {
               viewport={{ once: true, amount: 0.4 }}
               transition={{ duration: 0.35, delay: index * 0.06, type: "spring", stiffness: 180 }}
               className={cn(
-                "flex flex-col items-center gap-2 rounded-xl border p-4 text-center",
+                "flex flex-col items-center gap-2 rounded-xl p-4 text-center shadow-md text-(--color-text-primary)",
                 rarity.bg,
-                rarity.border,
               )}
             >
               <AchievementBadge badgeKey={badge.key} size="md" />
               <div>
                 <p className={cn("text-xs font-bold", rarity.label)}>{badge.label}</p>
-                <p className="mt-0.5 text-[9px] text-white/40 leading-snug">{badge.description}</p>
+                <p className="mt-0.5 text-[9px] text-(--color-text-secondary) leading-snug">
+                  {badge.description}
+                </p>
               </div>
               <span
                 className={cn(
-                  "mt-auto text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border",
+                  "mt-auto text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded",
                   rarity.label,
-                  rarity.border,
                   "opacity-70",
                 )}
               >

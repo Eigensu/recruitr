@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 import type { LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 interface RecruiterProgressSectionProps {
-  recruiters: LeaderboardRecruiter[];
+  readonly recruiters: LeaderboardRecruiter[];
 }
 
-export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectionProps) {
+export function RecruiterProgressSection(props: RecruiterProgressSectionProps) {
+  const { recruiters } = props;
   // Show top 6
   const displayed = recruiters.slice(0, 6);
 
@@ -26,8 +27,8 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
     >
       <div className="flex items-start justify-between gap-3 mb-5">
         <div>
-          <h2 className="font-heading text-xl text-white">Recruiter Progress</h2>
-          <p className="mt-1 text-sm text-white/50">XP and goal completion</p>
+          <h2 className="font-heading text-xl text-(--color-text-primary)">Recruiter Progress</h2>
+          <p className="mt-1 text-sm text-(--color-text-secondary)">XP and goal completion</p>
         </div>
       </div>
 
@@ -53,7 +54,7 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
               viewport={{ once: true, amount: 0.5 }}
               transition={{ duration: 0.35, delay: index * 0.05 }}
               whileHover={{ y: -2 }}
-              className="rounded-lg border border-white/8 bg-white/[0.025] p-4"
+              className="rounded-lg bg-(--color-surface-2-val) p-4 shadow-sm"
             >
               <div className="flex items-center gap-3 mb-3">
                 <RecruiterAvatar
@@ -62,8 +63,12 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
                   size="sm"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-white/80 truncate">{recruiter.name}</p>
-                  <p className="text-[10px] text-white/35">Level {recruiter.level}</p>
+                  <p className="text-sm font-semibold text-(--color-text-primary) truncate">
+                    {recruiter.name}
+                  </p>
+                  <p className="text-[10px] text-(--color-text-secondary)">
+                    Level {recruiter.level}
+                  </p>
                 </div>
                 <span className="text-xs font-bold text-yellow tabular-nums">
                   <AnimatedNumber value={recruiter.xp} /> XP
@@ -72,7 +77,7 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
 
               {/* XP bar */}
               <div className="mb-2">
-                <div className="flex justify-between text-[10px] text-white/35 mb-1">
+                <div className="flex justify-between text-[10px] text-(--color-text-secondary) mb-1">
                   <span>XP Progress</span>
                   <span>{Math.round(xpPct)}%</span>
                 </div>
@@ -86,7 +91,7 @@ export function RecruiterProgressSection({ recruiters }: RecruiterProgressSectio
 
               {/* Join conversion bar */}
               <div>
-                <div className="flex justify-between text-[10px] text-white/35 mb-1">
+                <div className="flex justify-between text-[10px] text-(--color-text-secondary) mb-1">
                   <span>Join Conversion</span>
                   <span>{joinPct}%</span>
                 </div>

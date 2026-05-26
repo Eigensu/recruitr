@@ -9,12 +9,8 @@ import {
   AchievementBadgesSection,
   LeaderboardKpiCard,
 } from "@/components/leaderboard";
-import {
-  MOCK_RECRUITERS,
-  LEADERBOARD_KPIS,
-  COMPANY_HIRING,
-  RECENT_ACTIVITY,
-} from "@/lib/leaderboard-data";
+import { getLeaderboardPageData } from "@/lib/api/leaderboard";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export const metadata = {
   title: "Leaderboard — Binge Recruiting Intelligence",
@@ -22,20 +18,38 @@ export const metadata = {
     "Gamified recruiter performance rankings, XP scores, achievement badges and analytics.",
 };
 
-export default function LeaderboardPage() {
-  const topRecruiter = MOCK_RECRUITERS[0];
+export default async function LeaderboardPage() {
+  const { topRecruiter, recruiters, kpis, companies, activity, monthLabels } =
+    await getLeaderboardPageData();
 
   return (
-    <div className="min-h-full bg-black px-4 py-5 text-white sm:px-6 lg:px-8">
+    <div
+      className="min-h-full px-4 py-5 sm:px-6 lg:px-8"
+      style={{ background: "var(--color-canvas)", color: "var(--color-text-primary)" }}
+    >
       <div className="mx-auto flex w-full max-w-400 flex-col gap-5">
         {/* ── Header ────────────────────────────────────────────────────── */}
-        <header className="border-b border-white/10 pb-4">
-          <p className="text-xs font-bold uppercase tracking-normal text-yellow">
-            Gamified Recruiter Rankings
-          </p>
-          <h1 className="mt-2 font-heading text-4xl leading-tight text-white sm:text-5xl">
-            Leaderboard
-          </h1>
+        <header
+          className="pb-4 flex items-start justify-between gap-4"
+          style={{ borderBottom: "1px solid var(--color-border-val)" }}
+        >
+          <div>
+            <p
+              className="text-xs font-bold uppercase tracking-normal"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Gamified Recruiter Rankings
+            </p>
+            <h1
+              className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              Leaderboard
+            </h1>
+          </div>
+          <div className="mt-1 shrink-0">
+            <ThemeToggle />
+          </div>
         </header>
 
         {/* ── Hero Spotlight ────────────────────────────────────────────── */}
@@ -44,16 +58,18 @@ export default function LeaderboardPage() {
         ) : (
           <section
             aria-label="Leaderboard spotlight"
-            className="rounded-lg border border-white/10 bg-white/[0.025] p-5"
+            className="rounded-lg border-border bg-surface-2 p-5"
           >
-            <p className="text-sm text-white/50">No leaderboard data available yet.</p>
+            <p className="text-sm text-(--color-text-secondary)">
+              No leaderboard data available yet.
+            </p>
           </section>
         )}
 
         {/* ── KPI Cards ─────────────────────────────────────────────────── */}
         <section aria-label="Leaderboard KPIs">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
-            {LEADERBOARD_KPIS.map((kpi, index) => (
+            {kpis.map((kpi, index) => (
               <LeaderboardKpiCard key={kpi.id} kpi={kpi} index={index} />
             ))}
           </div>
@@ -61,22 +77,22 @@ export default function LeaderboardPage() {
 
         {/* ── Analytics Charts ──────────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <MonthlyLineChart />
-          <RecruiterBarChart />
+          <MonthlyLineChart recruiters={recruiters} monthLabels={monthLabels} />
+          <RecruiterBarChart recruiters={recruiters} />
         </div>
 
         {/* ── Main Leaderboard Table ────────────────────────────────────── */}
-        <LeaderboardTable recruiters={MOCK_RECRUITERS} />
+        <LeaderboardTable recruiters={recruiters} />
 
         {/* ── Progress + Activity ───────────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
-          <RecruiterProgressSection recruiters={MOCK_RECRUITERS} />
-          <RecentActivityFeed items={RECENT_ACTIVITY} />
+          <RecruiterProgressSection recruiters={recruiters} />
+          <RecentActivityFeed items={activity} />
         </div>
 
         {/* ── Company Hiring + Badges ───────────────────────────────────── */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
-          <CompanyHiringProgress companies={COMPANY_HIRING} />
+          <CompanyHiringProgress companies={companies} />
           <AchievementBadgesSection />
         </div>
       </div>

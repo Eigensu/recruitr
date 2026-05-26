@@ -31,9 +31,9 @@ export default function CandidateCardComponent({ card, isDragging = false }: Can
       {...attributes}
       {...listeners}
       className={`
-        rounded-lg border bg-gray-800 border-gray-700 p-3 cursor-grab active:cursor-grabbing
-        hover:border-violet-500/50 hover:bg-gray-750 transition-all select-none
-        ${isSortableDragging || isDragging ? "opacity-50 shadow-2xl scale-105 border-violet-500" : ""}
+        rounded-lg bg-gray-800 p-3 cursor-grab active:cursor-grabbing shadow-sm
+        hover:bg-gray-750 transition-all select-none
+        ${isSortableDragging || isDragging ? "opacity-50 shadow-2xl scale-105" : ""}
       `}
     >
       <div className="flex items-start justify-between gap-2">

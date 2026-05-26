@@ -23,7 +23,7 @@ export default function DashboardRealtimeStatus() {
   }, []);
 
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-yellow/30 bg-yellow/10 px-3 py-1.5 text-xs font-semibold text-yellow">
+    <span className="inline-flex items-center gap-2 rounded-full bg-yellow/10 px-3 py-1.5 text-xs font-semibold text-yellow">
       <span className="size-2 animate-pulse rounded-full bg-yellow" />
       Live sync{updatedAt ? ` at ${updatedAt}` : ""}
     </span>

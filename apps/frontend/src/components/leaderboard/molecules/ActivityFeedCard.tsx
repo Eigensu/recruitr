@@ -2,7 +2,6 @@
 
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { AnimatedProgressBar } from "@/components/leaderboard/atoms/AnimatedProgressBar";
 import type { RecentActivityItem } from "@/lib/leaderboard-data";
 
 const toneBar: Record<RecentActivityItem["tone"], string> = {
@@ -16,7 +15,7 @@ const toneText: Record<RecentActivityItem["tone"], string> = {
   yellow: "text-yellow",
   green: "text-emerald-400",
   red: "text-red-400",
-  neutral: "text-white/60",
+  neutral: "text-(--color-text-secondary)",
 };
 
 interface ActivityFeedCardProps {
@@ -24,7 +23,7 @@ interface ActivityFeedCardProps {
   index: number;
 }
 
-export function ActivityFeedCard({ item, index }: ActivityFeedCardProps) {
+export function ActivityFeedCard({ item, index }: Readonly<ActivityFeedCardProps>) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -54,15 +53,17 @@ export function ActivityFeedCard({ item, index }: ActivityFeedCardProps) {
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-white/80 truncate">
-          <span className="text-white">{item.recruiter}</span>
+        <p className="text-xs font-semibold text-(--color-text-primary) truncate">
+          <span>{item.recruiter}</span>
         </p>
         <p className={cn("text-xs mt-0.5", toneText[item.tone])}>{item.action}</p>
-        <p className="text-[10px] text-white/40 mt-0.5 truncate">{item.target}</p>
+        <p className="text-[10px] text-(--color-text-secondary) mt-0.5 truncate">{item.target}</p>
       </div>
 
       {/* Timestamp */}
-      <span className="text-[10px] text-white/30 shrink-0 mt-0.5">{item.timestamp}</span>
+      <span className="text-[10px] text-(--color-text-secondary) shrink-0 mt-0.5">
+        {item.timestamp}
+      </span>
     </motion.div>
   );
 }

@@ -25,7 +25,7 @@ export function RecruiterAvatar({
   size = "md",
   ring = false,
   pulse = false,
-}: RecruiterAvatarProps) {
+}: Readonly<RecruiterAvatarProps>) {
   return (
     <div className="relative shrink-0">
       <motion.div
@@ -34,20 +34,24 @@ export function RecruiterAvatar({
         className={cn(
           "flex items-center justify-center rounded-full font-bold select-none",
           sizeClasses[size],
-          ring && "ring-2 ring-offset-2 ring-offset-[#0f1629]",
+          ring && "ring-2 ring-offset-2",
         )}
         style={{
           background: `${color}22`,
           color,
-          border: `2px solid ${color}55`,
-          ...(ring ? ({ ["--tw-ring-color"]: color } as CSSProperties) : {}),
+          ...(ring
+            ? ({
+                ["--tw-ring-color"]: color,
+                ["--tw-ring-offset-color"]: "var(--color-surface-val)",
+              } as CSSProperties)
+            : {}),
         }}
       >
         {initials}
       </motion.div>
       {pulse && (
         <span
-          className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 border-2 border-[#0f1629] animate-pulse"
+          className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 animate-pulse"
           aria-hidden="true"
         />
       )}
