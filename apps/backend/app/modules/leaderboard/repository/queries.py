@@ -329,12 +329,7 @@ async def fetch_recruiter(employee_id: str) -> dict[str, Any] | None:
 
 
 async def fetch_monthly_growth() -> dict[str, Any]:
-    stats = (
-        await EmployeeStat.find(EmployeeStat.is_active)
-        .sort("-total_score")
-        .limit(10)
-        .to_list()
-    )  # noqa: E712
+    stats = await EmployeeStat.find(EmployeeStat.is_active).sort("-total_score").limit(10).to_list()
     ids = [stat.employee_id for stat in stats]
     monthly = await _monthly_totals_for_employees(ids)
     employees = (
@@ -369,12 +364,7 @@ async def fetch_monthly_growth() -> dict[str, Any]:
 
 
 async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
-    jobs = (
-        await JobOpening.find(JobOpening.is_active)
-        .sort("-total_seats")
-        .limit(limit)
-        .to_list()
-    )  # noqa: E712
+    jobs = await JobOpening.find(JobOpening.is_active).sort("-total_seats").limit(limit).to_list()
     cursor = await CandidateMapping.get_motor_collection().aggregate(
         [
             {
