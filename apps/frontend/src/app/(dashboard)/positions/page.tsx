@@ -1,22 +1,19 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   IconSearch,
   IconPlus,
-  IconBriefcase,
   IconMapPin,
   IconCircleCheck,
-  IconAlertCircle,
-  IconUser,
-  IconChevronRight,
-  IconX,
-  IconSparkles,
-  IconBulb,
   IconGripVertical,
-  IconArrowDown,
+  IconSparkles,
   IconUsers,
+  IconX,
+  IconChevronRight,
+  IconBulb,
+  IconAlertCircle,
 } from "@tabler/icons-react";
 import { usePositionsStore, MockPosition, MockCandidate } from "@/stores/usePositionsStore";
 import { cn } from "@/lib/utils";
@@ -34,152 +31,371 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core";
 
-// --- Sub-components for DND ---
+// ─── Position Card (left panel, droppable) ────────────────────────────────────
 
-function DroppableZone({
-  id,
-  title,
-  children,
-  className,
-  emptyState,
-}: {
-  id: string;
-  title?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-  emptyState?: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+function PositionCard({
+  position,
+  isSelected,
+  mappedCandidates,
+  onClick,
+}: Readonly<{
+  position: MockPosition;
+  isSelected: boolean;
+  mappedCandidates: MockCandidate[];
+  onClick: () => void;
+}>) {
+  const { setNodeRef, isOver } = useDroppable({ id: position.id });
+
+  const filled = mappedCandidates.length;
+  const total = position.openingsCount;
+  const progress = total > 0 ? Math.min((filled / total) * 100, 100) : 0;
+
   return (
-    <div
+    <motion.div
       ref={setNodeRef}
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={onClick}
       className={cn(
-        "transition-all duration-200 min-h-[120px]",
-        isOver && "bg-surface-2/80 outline-dashed outline-2 outline-yellow/50 rounded-xl",
-        className,
+        "relative p-4 rounded-xl border cursor-pointer select-none overflow-hidden transition-all duration-200",
+        isSelected
+          ? "border-yellow bg-surface-panel shadow-md shadow-yellow/5"
+          : "border-border bg-surface-panel hover:border-border hover:shadow-sm",
+        isOver && "border-yellow/70 shadow-lg shadow-yellow/10 scale-[1.01]",
+        position.status === "Closed" && "opacity-40 pointer-events-none",
       )}
     >
-      {title && <div className="mb-3">{title}</div>}
-      {React.Children.count(children) > 0 ? (
-        <div className="space-y-3.5">{children}</div>
-      ) : (
-        emptyState
+      {/* Selected left accent */}
+      {isSelected && (
+        <div className="absolute left-0 top-3 bottom-3 w-0.75 bg-yellow rounded-r-full" />
       )}
-    </div>
+
+      {/* Drop overlay */}
+      <AnimatePresence>
+        {isOver && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 border-2 border-dashed border-yellow/50 rounded-xl pointer-events-none z-10 flex items-center justify-center bg-navy/80"
+          >
+            <span className="text-[11px] font-bold text-yellow flex items-center gap-1.5 bg-navy px-3 py-1.5 rounded-lg border border-yellow/40">
+              <IconCircleCheck className="size-3.5" />
+              Drop to map
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Top row: Role + Status + Openings ── */}
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1 min-w-0">
+          {/* Status badge — small, above role */}
+          <div className="mb-1">
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase",
+                position.status === "Open"
+                  ? "text-emerald-600 bg-emerald-500/10 border border-emerald-500/20"
+                  : "text-red-500 bg-red-500/10 border border-red-500/20",
+              )}
+            >
+              {position.status === "Open" ? (
+                <IconCircleCheck className="size-2.5" />
+              ) : (
+                <IconAlertCircle className="size-2.5" />
+              )}
+              {position.status}
+            </span>
+          </div>
+
+          {/* Role — primary heading, font-heading */}
+          <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
+            {position.role}
+          </h3>
+
+          {/* Client name — secondary */}
+          <p className="text-xs text-text-secondary mt-0.5 truncate font-medium">
+            {position.clientName}
+          </p>
+        </div>
+
+        {/* Openings count */}
+        <div className="shrink-0 text-center min-w-9">
+          <div className="text-2xl font-black text-teal-500 leading-none">{total}</div>
+          <div className="text-[9px] text-text-muted uppercase font-bold tracking-wider mt-0.5">
+            open
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tags row: dept + seniority + city ── */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium">
+          {position.department}
+        </span>
+        <span
+          className={cn(
+            "text-[10px] px-2 py-0.5 rounded-full font-bold",
+            position.seniority === "Junior" &&
+              "bg-blue-500/10 text-blue-500 border border-blue-500/20",
+            position.seniority === "Mid" && "bg-yellow/20 text-navy border border-yellow/40",
+            position.seniority === "Senior" &&
+              "bg-purple-500/10 text-purple-500 border border-purple-500/20",
+          )}
+        >
+          {position.seniority}
+        </span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-muted flex items-center gap-0.5">
+          <IconMapPin className="size-2.5 shrink-0" />
+          {position.city}
+        </span>
+      </div>
+
+      {/* ── Fill progress ── */}
+      <div className="mb-2.5">
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-[10px] text-text-muted font-semibold uppercase tracking-wider">
+            Filled
+          </span>
+          <span className="text-[10px] font-bold text-text-secondary">
+            {filled} / {total}
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
+          <motion.div
+            className={cn("h-full rounded-full", progress === 100 ? "bg-emerald-500" : "bg-yellow")}
+            initial={{ width: 0 }}
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          />
+        </div>
+      </div>
+
+      {/* ── Mapped candidate avatars ── */}
+      {mappedCandidates.length > 0 && (
+        <div className="flex items-center gap-2 pt-2.5 border-t border-border">
+          <div className="flex -space-x-1.5">
+            {mappedCandidates.slice(0, 5).map((c) => (
+              <div
+                key={c.id}
+                title={c.name}
+                className="size-6 rounded-full bg-yellow/20 border-2 border-surface flex items-center justify-center text-[9px] font-black text-navy"
+              >
+                {c.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")
+                  .slice(0, 2)}
+              </div>
+            ))}
+            {mappedCandidates.length > 5 && (
+              <div className="size-6 rounded-full bg-surface-2 border-2 border-surface flex items-center justify-center text-[9px] font-bold text-text-muted">
+                +{mappedCandidates.length - 5}
+              </div>
+            )}
+          </div>
+          <span className="text-[10px] text-text-muted">{mappedCandidates.length} mapped</span>
+        </div>
+      )}
+    </motion.div>
   );
 }
 
+// ─── Candidate Card (right panel, draggable) ──────────────────────────────────
+
 function DraggableCandidateCard({
   cand,
+  rank,
   isMapped,
-  onAction,
-}: {
+  onToggleMap,
+  hasPosition,
+}: Readonly<{
   cand: MockCandidate & { dynamicScore: number };
+  rank?: number;
   isMapped: boolean;
-  onAction: () => void;
-}) {
+  onToggleMap: () => void;
+  hasPosition: boolean;
+}>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: cand.id,
-    data: { cand, isMapped },
+    data: { cand },
   });
 
   const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
+
+  const scoreBadgeClass = cn(
+    "text-xs font-black px-2 py-1 rounded-lg shrink-0 leading-none",
+    cand.dynamicScore >= 90 && "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+    cand.dynamicScore >= 80 &&
+      cand.dynamicScore < 90 &&
+      "bg-yellow/20 text-navy border border-yellow/40",
+    cand.dynamicScore < 80 && "bg-surface-2 text-text-muted border border-border",
+  );
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "p-4 rounded-xl border flex flex-col justify-between bg-surface-panel relative overflow-hidden group transition-all duration-200",
+        "p-3.5 rounded-xl border flex items-start gap-2.5 transition-all duration-200 group relative",
         isMapped
-          ? "border-yellow/30 bg-yellow/[0.02]"
-          : "border-border hover:border-gray-600 hover:shadow-lg",
-        isDragging && "opacity-40 shadow-2xl scale-105 z-50 ring-2 ring-yellow",
+          ? "border-yellow/30 bg-surface-panel"
+          : "border-border bg-surface-panel hover:border-border/80 hover:shadow-sm",
+        isDragging && "opacity-30 scale-95",
       )}
     >
-      {isMapped && <div className="absolute top-0 right-0 w-24 h-[3px] bg-yellow" />}
-
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-start gap-2">
-          {/* Drag Handle */}
-          <div
-            {...attributes}
-            {...listeners}
-            className="mt-0.5 text-gray-500 hover:text-yellow cursor-grab active:cursor-grabbing p-1 -ml-1 rounded hover:bg-white/5"
-          >
-            <IconGripVertical className="size-4" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-white group-hover:text-yellow transition-colors">
-              {cand.name}
-            </h4>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {cand.previousCompany} &bull; {cand.experienceYears} yrs exp
-            </p>
-          </div>
-        </div>
-
-        {/* Match score bubble */}
+      {/* Rank badge */}
+      {rank !== undefined && (
         <div
           className={cn(
-            "text-xs font-bold px-2 py-1 rounded-lg flex items-center justify-center shrink-0",
-            cand.dynamicScore >= 90
-              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-              : cand.dynamicScore >= 80
-                ? "bg-yellow/10 text-yellow border border-yellow/20"
-                : "bg-gray-800 text-gray-400 border border-gray-700",
+            "absolute -left-3 top-1/2 -translate-y-1/2 size-5 rounded-full flex items-center justify-center text-[9px] font-black border",
+            rank <= 3
+              ? "bg-yellow text-navy border-yellow shadow-sm"
+              : "bg-surface-2 text-text-muted border-border",
           )}
         >
-          {cand.dynamicScore}% Match
+          {rank}
         </div>
+      )}
+
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="mt-0.5 text-text-muted hover:text-yellow cursor-grab active:cursor-grabbing p-1 rounded hover:bg-surface-2 shrink-0 touch-none transition-colors"
+      >
+        <IconGripVertical className="size-4" />
       </div>
 
-      {/* Candidate Skills tags */}
-      <div className="flex flex-wrap gap-1.5 mb-4 pl-8">
-        {cand.skills.map((skill) => (
-          <span
-            key={skill}
-            className="text-[10px] px-2 py-0.5 rounded bg-surface-2 text-gray-400 border border-border/50"
-          >
-            {skill}
-          </span>
-        ))}
-      </div>
+      <div className="flex-1 min-w-0">
+        {/* Name + score */}
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="min-w-0">
+            <h4 className="font-semibold text-sm text-text-primary group-hover-accent truncate transition-colors">
+              {cand.name}
+            </h4>
+            <p className="text-[11px] text-text-muted mt-0.5 truncate">
+              {cand.previousCompany} &bull; {cand.experienceYears}y exp
+            </p>
+          </div>
+          <div className={scoreBadgeClass}>{cand.dynamicScore}%</div>
+        </div>
 
-      {/* Map actions button */}
-      <div className="flex items-center justify-between pt-3 border-t border-border/30 mt-auto pl-8">
-        <span className="text-xs text-gray-500 flex items-center gap-1">
-          <IconUser className="size-3 text-gray-500" />
-          {cand.email}
-        </span>
+        {/* Skills */}
+        <div className="flex flex-wrap gap-1 mb-2.5">
+          {cand.skills.slice(0, 3).map((skill) => (
+            <span
+              key={skill}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-secondary border border-border"
+            >
+              {skill}
+            </span>
+          ))}
+          {cand.skills.length > 3 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-2 text-text-muted border border-border">
+              +{cand.skills.length - 3}
+            </span>
+          )}
+        </div>
 
-        {isMapped ? (
-          <button
-            onClick={onAction}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/15 hover:text-red-400 hover:border-red-500/30 transition-colors cursor-pointer"
-          >
-            <IconCircleCheck className="size-4 shrink-0" />
-            <span>Mapped</span>
-          </button>
-        ) : (
-          <button
-            onClick={onAction}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-surface-2 hover:bg-yellow hover:text-navy text-white border border-border hover:border-yellow transition-all cursor-pointer"
-          >
-            <IconChevronRight className="size-3.5" />
-            <span>Map</span>
-          </button>
-        )}
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-text-muted truncate">{cand.email}</span>
+
+          {hasPosition && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMap();
+              }}
+              className={cn(
+                "shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 leading-none",
+                isMapped
+                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20"
+                  : "bg-surface-2 text-text-primary border-border hover:bg-yellow hover:text-navy hover:border-yellow",
+              )}
+            >
+              {isMapped ? (
+                <>
+                  <IconCircleCheck className="size-3" />
+                  Mapped
+                </>
+              ) : (
+                <>
+                  <IconChevronRight className="size-3" />
+                  Map
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// --- Main Page Component ---
+// ─── Drag overlay ghost ───────────────────────────────────────────────────────
+
+function DragGhostCard({ cand }: Readonly<{ cand: MockCandidate & { dynamicScore: number } }>) {
+  return (
+    <div className="p-3.5 rounded-xl border border-yellow/50 bg-surface shadow-2xl shadow-yellow/20 w-64 rotate-1 opacity-95">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <h4 className="font-bold text-text-primary text-sm truncate">{cand.name}</h4>
+        <span className="text-xs font-black text-navy bg-yellow/80 border border-yellow px-2 py-0.5 rounded-lg shrink-0">
+          {cand.dynamicScore}%
+        </span>
+      </div>
+      <p className="text-[11px] text-text-muted mb-2 truncate">{cand.previousCompany}</p>
+      <div className="flex flex-wrap gap-1">
+        {cand.skills.slice(0, 2).map((s) => (
+          <span
+            key={s}
+            className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-text-secondary border border-border"
+          >
+            {s}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Score computation ────────────────────────────────────────────────────────
+
+function computeScore(cand: MockCandidate, position: MockPosition | null): number {
+  let score = cand.matchScore;
+  if (!position) return score;
+
+  const role = position.role.toLowerCase();
+  const dept = position.department.toLowerCase();
+  const candSkills = cand.skills.map((s) => s.toLowerCase());
+
+  if (role.includes("chef") || dept.includes("kitchen")) {
+    const kw = ["chef", "oven", "cuisine", "food safety", "cooking", "tandoor"];
+    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
+    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
+  } else if (role.includes("steward") || role.includes("captain") || role.includes("associate")) {
+    const kw = ["service", "table", "guest", "pos", "billing", "hostess"];
+    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
+    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
+  } else if (role.includes("bartender")) {
+    const kw = ["mixology", "cocktail", "pouring", "bar"];
+    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
+    score = hits.length > 0 ? Math.min(score + 15, 100) : Math.max(score - 25, 30);
+  } else if (role.includes("manager") || role.includes("head") || dept.includes("operations")) {
+    const kw = ["operation", "management", "scheduling", "p&l", "staff", "admin"];
+    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
+    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 15, 45);
+  }
+
+  return Math.round(score);
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PositionsPage() {
   const {
@@ -194,492 +410,309 @@ export default function PositionsPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClient, setSelectedClient] = useState("All");
+  const [activeDragCand, setActiveDragCand] = useState<
+    (MockCandidate & { dynamicScore: number }) | null
+  >(null);
 
-  const clients = useMemo(() => {
-    const list = new Set(positions.map((p) => p.clientName));
-    return ["All", ...Array.from(list)];
-  }, [positions]);
+  const clients = useMemo(
+    () => ["All", ...Array.from(new Set(positions.map((p) => p.clientName)))],
+    [positions],
+  );
 
   const filteredPositions = useMemo(() => {
+    const q = searchTerm.toLowerCase();
     return positions.filter((pos) => {
-      const matchesSearch =
-        pos.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pos.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pos.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        pos.assignedTo.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesClient = selectedClient === "All" || pos.clientName === selectedClient;
-
-      return matchesSearch && matchesClient;
+      const matchSearch =
+        pos.role.toLowerCase().includes(q) ||
+        pos.clientName.toLowerCase().includes(q) ||
+        pos.department.toLowerCase().includes(q) ||
+        pos.city.toLowerCase().includes(q);
+      const matchClient = selectedClient === "All" || pos.clientName === selectedClient;
+      return matchSearch && matchClient;
     });
   }, [positions, searchTerm, selectedClient]);
 
-  const selectedPosition = useMemo(() => {
-    return positions.find((p) => p.id === selectedPositionId) || null;
-  }, [positions, selectedPositionId]);
+  const selectedPosition = useMemo(
+    () => positions.find((p) => p.id === selectedPositionId) ?? null,
+    [positions, selectedPositionId],
+  );
 
-  const suggestedCandidates = useMemo(() => {
-    if (!selectedPosition) return [];
-
-    return candidates
-      .map((cand) => {
-        let score = cand.matchScore;
-        const role = selectedPosition.role.toLowerCase();
-        const dept = selectedPosition.department.toLowerCase();
-        const candSkills = cand.skills.map((s) => s.toLowerCase());
-
-        if (role.includes("chef") || dept.includes("kitchen")) {
-          const kitchenSkills = ["chef", "oven", "cuisine", "food safety", "cooking", "tandoor"];
-          const matches = candSkills.filter((s) => kitchenSkills.some((k) => s.includes(k)));
-          score = matches.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
-        } else if (
-          role.includes("steward") ||
-          role.includes("captain") ||
-          role.includes("associate")
-        ) {
-          const serviceSkills = ["service", "table", "guest", "pos", "billing", "hostess"];
-          const matches = candSkills.filter((s) => serviceSkills.some((k) => s.includes(k)));
-          score = matches.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
-        } else if (role.includes("bartender")) {
-          const barSkills = ["mixology", "cocktail", "pouring", "bar"];
-          const matches = candSkills.filter((s) => barSkills.some((k) => s.includes(k)));
-          score = matches.length > 0 ? Math.min(score + 15, 100) : Math.max(score - 25, 30);
-        } else if (
-          role.includes("manager") ||
-          role.includes("head") ||
-          dept.includes("operations")
-        ) {
-          const mgmtSkills = ["operation", "management", "scheduling", "p&l", "staff", "admin"];
-          const matches = candSkills.filter((s) => mgmtSkills.some((k) => s.includes(k)));
-          score = matches.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 15, 45);
-        }
-
-        return {
-          ...cand,
-          dynamicScore: Math.round(score),
-        };
-      })
+  const displayedCandidates = useMemo(() => {
+    const scored = candidates
+      .map((c) => ({ ...c, dynamicScore: computeScore(c, selectedPosition) }))
       .sort((a, b) => b.dynamicScore - a.dynamicScore);
+    return selectedPosition ? scored.slice(0, 10) : scored;
   }, [candidates, selectedPosition]);
-
-  // Split candidates for DND lists
-  const mappedCandidatesList = useMemo(() => {
-    if (!selectedPosition) return [];
-    const mappedIds = mappings[selectedPosition.id] || [];
-    return suggestedCandidates.filter((c) => mappedIds.includes(c.id));
-  }, [suggestedCandidates, mappings, selectedPosition]);
-
-  const unmappedCandidatesList = useMemo(() => {
-    if (!selectedPosition) return [];
-    const mappedIds = mappings[selectedPosition.id] || [];
-    return suggestedCandidates.filter((c) => !mappedIds.includes(c.id));
-  }, [suggestedCandidates, mappings, selectedPosition]);
-
-  // DND Handlers
-  const [activeDragCandidate, setActiveDragCandidate] = useState<
-    (MockCandidate & { dynamicScore: number }) | null
-  >(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
   );
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    setActiveDragCandidate(active.data.current?.cand || null);
-  };
+  function handleDragStart(event: DragStartEvent) {
+    const cand = event.active.data.current?.cand as MockCandidate | undefined;
+    if (cand) {
+      setActiveDragCand({ ...cand, dynamicScore: computeScore(cand, selectedPosition) });
+    }
+  }
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    setActiveDragCandidate(null);
-
-    if (!over || !selectedPosition) return;
+    setActiveDragCand(null);
+    if (!over) return;
 
     const candId = active.id as string;
-    const isCurrentlyMapped = (mappings[selectedPosition.id] || []).includes(candId);
+    const positionId = over.id as string;
+    const targetPos = positions.find((p) => p.id === positionId);
+    if (!targetPos) return;
 
-    if (over.id === "mapped-zone" && !isCurrentlyMapped) {
-      mapCandidate(selectedPosition.id, candId);
-    } else if (over.id === "suggested-zone" && isCurrentlyMapped) {
-      unmapCandidate(selectedPosition.id, candId);
+    const alreadyMapped = (mappings[positionId] ?? []).includes(candId);
+    if (!alreadyMapped) {
+      mapCandidate(positionId, candId);
+      setSelectedPositionId(positionId);
     }
-  };
+  }
 
   return (
-    <div className="p-6 md:p-8 flex flex-col h-full overflow-hidden bg-[var(--color-canvas)]">
-      {/* Header controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold font-heading text-white flex items-center gap-3 tracking-wide">
-            Open Positions
-          </h1>
-          <p className="text-sm mt-1 text-gray-400">
-            Manage active client positions, review quotas, and map suggested candidates.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <a
-            href="/positions/new"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all duration-200 cursor-pointer shadow-lg shadow-yellow/10"
-          >
-            <IconPlus className="size-4" />
-            New Position
-          </a>
-        </div>
-      </div>
-
-      {/* Search & filters */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 mb-6 bg-surface p-4 rounded-xl border border-border shadow-sm">
-        <div className="relative flex-1 w-full">
-          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search by ID, role, client, or recruiter..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-surface-2 border border-border text-white placeholder-gray-500 focus:outline-none focus:border-yellow transition-all"
-          />
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider shrink-0">
-            Client:
-          </span>
-          <select
-            value={selectedClient}
-            onChange={(e) => setSelectedClient(e.target.value)}
-            className="w-full sm:w-48 px-3 py-2 text-sm rounded-lg bg-surface-2 border border-border text-white focus:outline-none focus:border-yellow"
-          >
-            {clients.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Client warning banner */}
-      <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-lg bg-yellow/5 border border-yellow/20 text-yellow text-xs font-medium">
-        <IconBulb className="size-4 shrink-0" />
-        <span>
-          Select Client Name &rarr; Position ID, Client ID, Filled and Remaining populate
-          automatically. Teal columns are auto — do not edit.
-        </span>
-      </div>
-
-      {/* Spreadsheet container */}
-      <div className="flex-1 overflow-auto rounded-xl border border-border bg-surface shadow-xl dashboard-scrollbar relative">
-        <table className="w-full text-left border-collapse min-w-[1200px]">
-          <thead className="sticky top-0 z-10 bg-surface shadow-sm">
-            {/* Sheet super title */}
-            <tr className="bg-[var(--color-surface)] select-none">
-              <th colSpan={11} className="py-3 px-6">
-                <span className="font-heading text-sm tracking-widest text-white font-bold uppercase flex items-center gap-2">
-                  OPEN POSITIONS REGISTRY
-                </span>
-              </th>
-            </tr>
-            {/* Sheet Column Headers */}
-            <tr className="bg-surface-2 border-b border-border text-xs uppercase font-bold text-gray-400 tracking-wider">
-              <th className="py-3.5 px-4 w-[140px] border-r border-border/50 text-yellow">
-                Position ID
-              </th>
-              <th className="py-3.5 px-4 border-r border-border/50">Client Name</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Role</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Department</th>
-              <th className="py-3.5 px-4 border-r border-border/50">City</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Seniority</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Date Opened</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Target Close</th>
-              <th className="py-3.5 px-4 border-r border-border/50">Assigned To</th>
-              <th className="py-3.5 px-4 border-r border-border/50 text-center w-[120px] bg-teal-950/20 text-teal-400">
-                Openings
-              </th>
-              <th className="py-3.5 px-4 text-center w-[100px]">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40 text-sm text-gray-300">
-            {filteredPositions.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="py-12 text-center text-gray-500">
-                  No positions matching search filters.
-                </td>
-              </tr>
-            ) : (
-              filteredPositions.map((pos) => {
-                const isSelected = selectedPositionId === pos.id;
-
-                return (
-                  <tr
-                    key={pos.id}
-                    onClick={() => setSelectedPositionId(pos.id)}
-                    className={cn(
-                      "hover:bg-surface-2 cursor-pointer transition-colors border-r border-l border-transparent",
-                      isSelected && "bg-surface-2 border-l-yellow border-r-yellow",
-                      pos.status === "Closed" && "opacity-60",
-                    )}
-                  >
-                    <td className="py-3.5 px-4 font-mono font-bold text-teal-400 border-r border-border/30">
-                      {pos.id}
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-white border-r border-border/30">
-                      {pos.clientName}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-white border-r border-border/30">
-                      {pos.role}
-                      {pos.notes && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 font-medium">
-                          {pos.notes}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30">
-                      <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-surface-2 text-gray-300 border border-border shadow-sm">
-                        {pos.department}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30 flex items-center gap-1.5 font-medium">
-                      <IconMapPin className="size-3.5 text-gray-400 shrink-0" />
-                      {pos.city}
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30">
-                      <span
-                        className={cn(
-                          "text-[11px] font-bold px-2.5 py-1 rounded-full",
-                          pos.seniority === "Junior" && "text-blue-400 bg-blue-500/10",
-                          pos.seniority === "Mid" && "text-yellow bg-yellow/10",
-                          pos.seniority === "Senior" && "text-purple-400 bg-purple-500/10",
-                        )}
-                      >
-                        {pos.seniority}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30 text-gray-400 font-medium">
-                      {pos.dateOpened}
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30 text-gray-400 font-medium">
-                      {pos.targetClose}
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30 font-semibold text-gray-200">
-                      {pos.assignedTo}
-                    </td>
-                    <td className="py-3.5 px-4 border-r border-border/30 text-center bg-teal-950/10 font-bold text-teal-400 text-base">
-                      {pos.openingsCount}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {pos.status === "Open" ? (
-                          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
-                            <IconCircleCheck className="size-3.5" />
-                            Open
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 shadow-sm">
-                            <IconAlertCircle className="size-3.5" />
-                            Closed
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Suggested Candidates Side Drawer / Panel */}
-      <AnimatePresence>
-        {selectedPosition && (
-          <>
-            {/* Backdrop Overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedPositionId(null)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
-            />
-
-            {/* Slide-over panel */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="fixed right-0 top-0 bottom-0 w-full sm:w-[480px] bg-[var(--color-surface)] border-l border-border shadow-2xl z-50 flex flex-col"
+    <DndContext
+      id="positions-dnd"
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex flex-col h-full overflow-hidden bg-canvas">
+        {/* ── Page header ── */}
+        <div className="px-6 pt-6 pb-5 border-b border-border shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-heading font-bold text-text-primary tracking-wide">
+                Open Positions
+              </h1>
+              <p className="text-sm mt-1 text-text-muted">
+                Drag candidates onto a position to map them, or click a position to see top matches.
+              </p>
+            </div>
+            <a
+              href="/positions/new"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
             >
-              <DndContext
-                id="positions-mapping-dnd-context"
-                sensors={sensors}
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              >
-                {/* Drawer Header */}
-                <div className="p-6 border-b border-border bg-[var(--color-surface)] flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-mono text-xs text-teal-400 font-bold px-2 py-0.5 bg-teal-500/10 rounded">
-                        {selectedPosition.id}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-yellow/30 text-yellow font-bold uppercase tracking-wider">
-                        {selectedPosition.status}
-                      </span>
-                    </div>
-                    <h2 className="text-2xl font-bold font-heading text-white uppercase tracking-wide">
-                      {selectedPosition.role}
-                    </h2>
-                    <p className="text-xs mt-1 text-gray-400 font-medium">
-                      Quotas: {selectedPosition.clientName} &bull; {selectedPosition.department}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setSelectedPositionId(null)}
-                    className="p-1.5 rounded-lg bg-surface-2 border border-border text-gray-400 hover:text-white hover:bg-surface-3 transition-colors"
-                  >
-                    <IconX className="size-5" />
-                  </button>
+              <IconPlus className="size-4" />
+              New Position
+            </a>
+          </div>
+        </div>
+
+        {/* ── Split pane ── */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* ── LEFT: Positions ── */}
+          <div className="w-[46%] flex flex-col border-r border-border overflow-hidden bg-canvas">
+            {/* Search + filter */}
+            <div className="p-4 border-b border-border shrink-0 space-y-2.5 bg-surface">
+              <div className="relative">
+                <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search by role, client, dept, city..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-surface-2 border border-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-yellow transition-all"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-text-muted font-semibold uppercase tracking-wider shrink-0">
+                  Client
+                </span>
+                <select
+                  value={selectedClient}
+                  onChange={(e) => setSelectedClient(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-surface-2 border border-border text-text-primary focus:outline-none focus:border-yellow"
+                >
+                  {clients.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[11px] text-text-muted shrink-0 font-medium">
+                  {filteredPositions.length}
+                </span>
+              </div>
+            </div>
+
+            {/* Position card list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+              {filteredPositions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
+                  <IconSearch className="size-8 opacity-20" />
+                  <p className="text-sm">No positions match your filters.</p>
                 </div>
+              ) : (
+                filteredPositions.map((pos) => {
+                  const mappedCands = (mappings[pos.id] ?? [])
+                    .map((id) => candidates.find((c) => c.id === id))
+                    .filter(Boolean) as MockCandidate[];
 
-                {/* Position metadata banner */}
-                <div className="px-6 py-4 bg-[var(--color-canvas)] border-b border-border text-xs flex justify-between text-gray-300">
-                  <div>
-                    <span className="text-gray-500 block font-semibold mb-0.5 text-[10px]">
-                      SENIORITY
-                    </span>
-                    <span className="font-bold text-white text-sm">
-                      {selectedPosition.seniority}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block font-semibold mb-0.5 text-[10px]">
-                      CITY
-                    </span>
-                    <span className="font-bold text-white text-sm">{selectedPosition.city}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block font-semibold mb-0.5 text-[10px]">
-                      ASSIGNED TO
-                    </span>
-                    <span className="font-bold text-white text-sm">
-                      {selectedPosition.assignedTo}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block font-semibold mb-0.5 text-[10px]">
-                      OPENINGS
-                    </span>
-                    <span className="font-bold text-teal-400 text-lg text-center block leading-none">
-                      {selectedPosition.openingsCount}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Drawer list area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-8 dashboard-scrollbar bg-[var(--color-canvas)]">
-                  {/* MAPPED CANDIDATES DROP ZONE */}
-                  <div className="relative">
-                    <DroppableZone
-                      id="mapped-zone"
-                      title={
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-xs font-bold uppercase text-emerald-400 flex items-center gap-1.5 tracking-wide">
-                            <IconCircleCheck className="size-4" />
-                            Mapped Candidates ({mappedCandidatesList.length})
-                          </h3>
-                        </div>
+                  return (
+                    <PositionCard
+                      key={pos.id}
+                      position={pos}
+                      isSelected={selectedPositionId === pos.id}
+                      mappedCandidates={mappedCands}
+                      onClick={() =>
+                        setSelectedPositionId(selectedPositionId === pos.id ? null : pos.id)
                       }
-                      emptyState={
-                        <div className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center text-gray-500 bg-surface-panel/30">
-                          <IconArrowDown className="size-6 mb-2 text-gray-600 animate-bounce" />
-                          <p className="text-sm font-medium">Drag candidates here to map them</p>
-                          <p className="text-xs mt-1">
-                            Or click &apos;Map&apos; on a candidate card
-                          </p>
-                        </div>
-                      }
-                    >
-                      {mappedCandidatesList.map((cand) => (
-                        <DraggableCandidateCard
-                          key={cand.id}
-                          cand={cand}
-                          isMapped={true}
-                          onAction={() => unmapCandidate(selectedPosition.id, cand.id)}
-                        />
-                      ))}
-                    </DroppableZone>
-                  </div>
-
-                  <hr className="border-border/60" />
-
-                  {/* SUGGESTED CANDIDATES DROP ZONE */}
-                  <div>
-                    <DroppableZone
-                      id="suggested-zone"
-                      title={
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xs font-bold uppercase text-yellow flex items-center gap-1.5 tracking-wide">
-                            <IconSparkles className="size-4 text-yellow" />
-                            Smart Candidate Matches
-                          </h3>
-                          <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
-                            Drag to re-assign
-                          </span>
-                        </div>
-                      }
-                      emptyState={
-                        <div className="text-center p-8 text-gray-500">
-                          <IconUsers className="size-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">No more matches available.</p>
-                        </div>
-                      }
-                    >
-                      {unmappedCandidatesList.map((cand) => (
-                        <DraggableCandidateCard
-                          key={cand.id}
-                          cand={cand}
-                          isMapped={false}
-                          onAction={() => mapCandidate(selectedPosition.id, cand.id)}
-                        />
-                      ))}
-                    </DroppableZone>
-                  </div>
-                </div>
-
-                {/* Drag Overlay (Visible only while dragging) */}
-                <DragOverlay>
-                  {activeDragCandidate ? (
-                    <DraggableCandidateCard
-                      cand={activeDragCandidate}
-                      isMapped={(mappings[selectedPosition.id] || []).includes(
-                        activeDragCandidate.id,
-                      )}
-                      onAction={() => {}}
                     />
-                  ) : null}
-                </DragOverlay>
+                  );
+                })
+              )}
+            </div>
+          </div>
 
-                {/* Drawer Footer summary */}
-                <div className="p-5 border-t border-border bg-[var(--color-surface)] flex items-center justify-between text-xs text-gray-400">
-                  <span>
-                    Mapped: <strong>{(mappings[selectedPosition.id] || []).length}</strong> /{" "}
-                    {selectedPosition.openingsCount} Openings
-                  </span>
-                  <a
-                    href={`/positions/${selectedPosition.id}/pipeline`}
-                    className="font-bold text-yellow hover:underline flex items-center gap-1 bg-yellow/10 px-3 py-1.5 rounded-lg transition-colors hover:bg-yellow/20"
+          {/* ── RIGHT: Candidates ── */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-surface">
+            {/* Panel header */}
+            <div className="px-5 py-4 border-b border-border shrink-0">
+              <AnimatePresence mode="wait">
+                {selectedPosition ? (
+                  <motion.div
+                    key="selected"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-start justify-between gap-3"
                   >
-                    Go to Kanban Pipeline &rarr;
-                  </a>
-                </div>
-              </DndContext>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <IconSparkles className="size-4 text-yellow shrink-0" />
+                        <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
+                          Top 10 Matches
+                        </h2>
+                        <span className="text-[10px] font-bold text-navy bg-yellow/70 px-1.5 py-0.5 rounded-full border border-yellow/40">
+                          AI Ranked
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-muted pl-6">
+                        for{" "}
+                        <span className="text-text-primary font-semibold">
+                          {selectedPosition.role}
+                        </span>{" "}
+                        &bull; {selectedPosition.clientName}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPositionId(null)}
+                      className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-2 border border-transparent hover:border-border transition-all shrink-0"
+                    >
+                      <IconX className="size-4" />
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="all"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex items-center gap-2"
+                  >
+                    <IconUsers className="size-4 text-text-muted" />
+                    <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
+                      Candidate Pool
+                    </h2>
+                    <span className="text-[11px] text-text-muted ml-1">
+                      {candidates.length} total
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Hint banner */}
+            <AnimatePresence>
+              {!selectedPosition && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden shrink-0"
+                >
+                  <div className="mx-4 mt-3 flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-yellow/5 border border-yellow/20 text-text-primary text-xs font-medium">
+                    <IconBulb className="size-4 shrink-0 mt-0.5" />
+                    <span>
+                      Click a position on the left to see its top 10 matched candidates. You can
+                      also drag any candidate directly onto a position card to map them.
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Candidate list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+              <AnimatePresence mode="popLayout">
+                {displayedCandidates.map((cand, idx) => {
+                  const isMapped = selectedPosition
+                    ? (mappings[selectedPosition.id] ?? []).includes(cand.id)
+                    : false;
+
+                  return (
+                    <motion.div
+                      key={cand.id}
+                      layout
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.15, delay: idx * 0.025 }}
+                      className={selectedPosition ? "pl-5" : ""}
+                    >
+                      <DraggableCandidateCard
+                        cand={cand}
+                        rank={selectedPosition ? idx + 1 : undefined}
+                        isMapped={isMapped}
+                        hasPosition={!!selectedPosition}
+                        onToggleMap={() => {
+                          if (!selectedPosition) return;
+                          if (isMapped) {
+                            unmapCandidate(selectedPosition.id, cand.id);
+                          } else {
+                            mapCandidate(selectedPosition.id, cand.id);
+                          }
+                        }}
+                      />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+
+            {/* Footer summary when position selected */}
+            {selectedPosition && (
+              <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-text-muted shrink-0">
+                <span>
+                  Mapped:{" "}
+                  <strong className="text-text-primary">
+                    {(mappings[selectedPosition.id] ?? []).length}
+                  </strong>{" "}
+                  / {selectedPosition.openingsCount} openings
+                </span>
+                <a
+                  href={`/positions/${selectedPosition.id}/pipeline`}
+                  className="font-bold text-navy bg-yellow/70 hover:bg-yellow px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  Kanban Pipeline &rarr;
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Drag overlay ── */}
+      <DragOverlay dropAnimation={{ duration: 180, easing: "ease-out" }}>
+        {activeDragCand ? <DragGhostCard cand={activeDragCand} /> : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

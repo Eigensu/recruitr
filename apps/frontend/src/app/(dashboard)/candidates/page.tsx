@@ -45,11 +45,11 @@ export default function CandidatesPage() {
       {/* Header controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 shrink-0">
         <div>
-          <h1 className="text-3xl font-bold font-heading text-white flex items-center gap-3 tracking-wide">
-            <IconUsers className="size-8 text-yellow" />
+          <h1 className="text-3xl font-bold font-heading text-text-primary flex items-center gap-3 tracking-wide">
+            <IconUsers className="size-8 text-text-primary" />
             Candidates Directory
           </h1>
-          <p className="text-sm mt-1 text-gray-400">
+          <p className="text-sm mt-1 text-text-secondary">
             Manage your talent pool, review candidate profiles, and track position mappings.
           </p>
         </div>
@@ -67,23 +67,23 @@ export default function CandidatesPage() {
       {/* Search & filters */}
       <div className="flex flex-col sm:flex-row items-center gap-3 mb-6 bg-[var(--color-surface)] p-4 rounded-xl border border-border shadow-sm shrink-0">
         <div className="relative flex-1 w-full">
-          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+          <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
           <input
             type="text"
             placeholder="Search by name, email, company, or skills..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-[var(--color-canvas)] border border-border text-white placeholder-gray-500 focus:outline-none focus:border-yellow transition-all"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-canvas border border-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-yellow transition-all"
           />
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider shrink-0">
+          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider shrink-0">
             Experience:
           </span>
           <select
             value={experienceFilter}
             onChange={(e) => setExperienceFilter(e.target.value)}
-            className="w-full sm:w-40 px-3 py-2 text-sm rounded-lg bg-[var(--color-canvas)] border border-border text-white focus:outline-none focus:border-yellow transition-all"
+            className="w-full sm:w-40 px-3 py-2 text-sm rounded-lg bg-canvas border border-border text-text-primary focus:outline-none focus:border-yellow transition-all"
           >
             <option value="All">All Levels</option>
             <option value="< 2 yrs">&lt; 2 yrs</option>
@@ -96,7 +96,7 @@ export default function CandidatesPage() {
       {/* Candidate Grid */}
       <div className="flex-1 overflow-y-auto dashboard-scrollbar">
         {filteredCandidates.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+          <div className="flex flex-col items-center justify-center h-64 text-text-muted">
             <IconUsers className="size-12 mb-3 opacity-20" />
             <p className="text-sm font-medium">No candidates match your search filters.</p>
           </div>

@@ -34,3 +34,24 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Theme-aware accent hover: yellow in dark, navy in light */
+.group:hover .group-hover-accent {
+  color: var(--color-yellow);
+  transition: color 150ms ease;
+}
+[data-theme="light"] .group:hover .group-hover-accent {
+  color: var(--color-navy);
+}
+
+/* Theme-aware skill tag: yellow tint in dark, navy tint in light */
+.skill-tag {
+  color: var(--color-yellow);
+  background-color: rgba(243, 255, 84, 0.12);
+  border: 1px solid rgba(243, 255, 84, 0.25);
+}
+[data-theme="light"] .skill-tag {
+  color: var(--color-navy);
+  background-color: rgba(0, 35, 72, 0.07);
+  border: 1px solid rgba(0, 35, 72, 0.12);
+}
