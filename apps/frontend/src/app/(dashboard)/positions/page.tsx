@@ -57,8 +57,17 @@ function PositionCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={position.status === "Closed" ? -1 : 0}
+      role="button"
+      aria-pressed={isSelected}
       className={cn(
-        "relative p-4 rounded-xl border cursor-pointer select-none overflow-hidden transition-all duration-200",
+        "relative p-4 rounded-xl border cursor-pointer select-none overflow-hidden transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow",
         isSelected
           ? "border-yellow bg-surface-panel shadow-md shadow-yellow/5"
           : "border-border bg-surface-panel hover:border-border hover:shadow-sm",

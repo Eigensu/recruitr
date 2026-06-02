@@ -23,7 +23,6 @@ Based on project requirements, the following rigid boundaries are set:
 
 > [!WARNING]
 > Local storage of hashed passwords and JWT secrets requires environment variables to be managed manually (`JWT_SECRET`).
-
 > [!WARNING]
 > **MongoDB Atlas**: The cluster must be a Replica Set (not a standalone instance) to support multi-document ACID transactions used by the gamification engine. The free M0 tier **does** support replica sets.
 
@@ -31,7 +30,7 @@ Based on project requirements, the following rigid boundaries are set:
 
 ## 3. Monorepo Structure
 
-```
+```text
 Recuritement/
 ├── frontend/                  # Next.js app (created via create-next-app)
 │   ├── public/
@@ -173,7 +172,7 @@ npm install -D @types/node
 Setup the backend directory structure as defined in the Monorepo Structure.
 
 **`requirements.txt`** (initial):
-```
+```text
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 gunicorn>=23.0.0
@@ -221,16 +220,13 @@ volumes:
 
 #### 2a. Backend Auth Implementation
 
-**`app/main.py`** (CORS & Session Middleware):
+**`app/main.py`** (CORS Middleware):
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
 
 app = FastAPI(title="Eigensu API", version="1.0.0")
-
-app.add_middleware(SessionMiddleware, secret_key=settings.JWT_SECRET)
 
 app.add_middleware(
     CORSMiddleware,
@@ -243,23 +239,20 @@ app.add_middleware(
 
 **`app/auth/router.py`** (Setting HttpOnly Cookies):
 ```python
+from fastapi import Response, Depends
+from app.modules.auth.schemas import UserLogin
+from app.modules.auth.router import _set_auth_cookie
+
 @router.post("/login")
-async def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(user_in: UserLogin, response: Response):
     # ... verify user ...
-    access_token = create_access_token(data={"sub": str(user.id)})
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        samesite="lax",
-        secure=not settings.DEBUG
-    )
-    return {"message": "Successfully logged in"}
+    _set_auth_cookie(response, str(user.id))
+    return {"status": "ok", "message": "Logged in successfully"}
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token")
-    return {"message": "Successfully logged out"}
+    response.delete_cookie(key="access_token", httponly=True, secure=_COOKIE_SECURE, samesite="lax")
+    return {"status": "ok", "message": "Logged out successfully"}
 ```
 
 #### 2b. Frontend Auth Integration
@@ -368,24 +361,58 @@ The match calculation ($Score = \frac{|Keywords_{Candidate} \cap Keywords_{Job}|
 
 ```python
 # app/pipeline/service.py
-async def find_top_candidates(position_id: PydanticObjectId, limit: int = 10):
-    position = await Position.get(position_id)
-    job_keywords = position.requirements
+async def find_top_candidates(position_id: str, limit: int = 10) -> list[dict]:
+    position = await Position.get(PydanticObjectId(position_id))
+    job_keywords = [kw.lower() for kw in position.requirements]
 
     pipeline = [
         {
             "$addFields": {
+                "normalized_skills": {
+                    "$map": {
+                        "input": "$extracted_skills",
+                        "as": "s",
+                        "in": {"$toLower": "$$s"},
+                    }
+                }
+            }
+        },
+        {
+            "$addFields": {
                 "match_score": {
-                    "$divide": [
-                        {"$size": {"$setIntersection": ["$extracted_skills", job_keywords]}},
-                        max(len(job_keywords), 1),
-                    ]
+                    "$cond": {
+                        "if": {"$gt": [len(job_keywords), 0]},
+                        "then": {
+                            "$divide": [
+                                {
+                                    "$size": {
+                                        "$setIntersection": [
+                                            "$normalized_skills",
+                                            job_keywords,
+                                        ]
+                                    }
+                                },
+                                len(job_keywords),
+                            ]
+                        },
+                        "else": 0,
+                    }
                 }
             }
         },
         {"$match": {"match_score": {"$gt": 0}}},
         {"$sort": {"match_score": -1}},
         {"$limit": limit},
+        {
+            "$project": {
+                "id": {"$toString": "$_id"},
+                "name": 1,
+                "email": 1,
+                "resume_url": 1,
+                "extracted_skills": 1,
+                "match_score": 1,
+            }
+        },
     ]
 
     return await Candidate.aggregate(pipeline).to_list()
@@ -405,18 +432,19 @@ Use `boto3.client('s3').generate_presigned_url` to allow the Next.js frontend to
 
 ## 6. API Contract Summary
 
-| Endpoint | Method | Auth | Description |
-|:---|:---|:---|:---|
-| `/api/v1/auth/login` | `POST` | None | Verify credentials, return `access_token` HttpOnly cookie |
-| `/api/v1/auth/logout` | `POST` | Cookie | Clear `access_token` cookie |
-| `/api/v1/auth/me` | `GET` | Cookie | Validate token, return user info |
-| `/api/v1/auth/google/login` | `GET` | None | Redirects to Google Consent Screen |
-| `/api/v1/positions` | `GET` | Cookie | List positions for active brand |
-| `/api/v1/positions/{id}/top-candidates` | `GET` | Cookie | Run aggregation, return top 10 matches |
-| `/api/v1/pipeline/match` | `PATCH` | Cookie | Move candidate → position (transaction) |
-| `/api/v1/candidates` | `POST` | Cookie | Create candidate record |
-| `/api/v1/gamify/leaderboard` | `GET` | Cookie | Recruiter rankings |
-| `/api/v1/storage/presign` | `GET` | Cookie | Generate S3 presigned upload URL |
+| Endpoint | Method | Auth | Description | Status |
+|:---|:---|:---|:---|:---|
+| `/api/v1/auth/login` | `POST` | None | Verify credentials, return `access_token` HttpOnly cookie | ✅ Implemented |
+| `/api/v1/auth/logout` | `POST` | Cookie | Clear `access_token` cookie | ✅ Implemented |
+| `/api/v1/auth/me` | `GET` | Cookie | Validate token, return user info | ✅ Implemented |
+| `/api/v1/auth/google/login` | `GET` | None | Redirects to Google Consent Screen | ✅ Implemented |
+| `/api/v1/auth/google/callback` | `GET` | None | Google OAuth authorization code callback | ✅ Implemented |
+| `/api/v1/positions` | `GET` | Cookie | List positions for active brand | ✅ Implemented |
+| `/api/v1/pipeline/top-candidates` | `GET` | Cookie | Run aggregation, return top matches | ✅ Implemented |
+| `/api/v1/pipeline/match` | `PATCH` | Cookie | Move candidate → position (transaction) | ✅ Implemented |
+| `/api/v1/candidates` | `POST` | Cookie | Create candidate record | ✅ Implemented |
+| `/api/v1/gamify/leaderboard` | `GET` | Cookie | Recruiter rankings | ✅ Implemented |
+| `/api/v1/storage/presign` | `GET` | Cookie | Generate S3 presigned upload URL | ✅ Implemented |
 
 ---
 

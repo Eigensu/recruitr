@@ -38,14 +38,11 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
   const avatarStyle = getAvatarColor(candidate.name);
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onClick();
-      }}
-      className="p-5 rounded-xl border border-border bg-surface-panel hover:border-yellow/50 hover:shadow-lg hover:shadow-yellow/5 transition-all duration-200 cursor-pointer flex flex-col h-full group"
+      aria-label={`View details for ${candidate.name}`}
+      className="p-5 rounded-xl border border-border bg-surface-panel hover:border-yellow/50 hover:shadow-lg hover:shadow-yellow/5 transition-all duration-200 cursor-pointer flex flex-col h-full group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
     >
       <div className="flex items-start gap-4 mb-4">
         {/* Avatar */}
@@ -89,7 +86,7 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
       </div>
 
       {/* Contact Info (Footer) */}
-      <div className="mt-auto pt-4 border-t border-border/50 flex flex-col gap-2">
+      <div className="mt-auto pt-4 border-t border-border/50 flex flex-col gap-2 w-full">
         <div className="flex items-center text-xs text-text-secondary truncate">
           <IconMail className="size-3.5 mr-2 shrink-0 opacity-70" />
           <span className="truncate">{candidate.email}</span>
@@ -99,6 +96,6 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
           <span>{candidate.phone}</span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }

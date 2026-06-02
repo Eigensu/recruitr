@@ -55,6 +55,9 @@ export default function CandidateDrawer({ candidateId, onClose }: CandidateDrawe
 
           {/* Slide-over panel */}
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="candidateDrawerTitle"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -73,7 +76,10 @@ export default function CandidateDrawer({ candidateId, onClose }: CandidateDrawe
                   {getInitials(candidate.name)}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold font-heading text-[var(--color-text-primary)]">
+                  <h2
+                    id="candidateDrawerTitle"
+                    className="text-2xl font-bold font-heading text-[var(--color-text-primary)]"
+                  >
                     {candidate.name}
                   </h2>
                   <p className="text-sm mt-0.5 text-gray-400">
@@ -83,7 +89,9 @@ export default function CandidateDrawer({ candidateId, onClose }: CandidateDrawe
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
+                aria-label="Close candidate details"
                 className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-border text-gray-400 hover:text-white transition-colors"
               >
                 <IconX className="size-5" />

@@ -64,6 +64,9 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
           >
             {/* Modal */}
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-candidate-title"
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -72,12 +75,17 @@ export default function AddCandidateModal({ isOpen, onClose }: AddCandidateModal
             >
               {/* Header */}
               <div className="p-5 border-b border-border flex items-center justify-between bg-[var(--color-surface)]">
-                <h2 className="text-lg font-bold font-heading text-white flex items-center gap-2">
+                <h2
+                  id="add-candidate-title"
+                  className="text-lg font-bold font-heading text-white flex items-center gap-2"
+                >
                   <IconUserPlus className="size-5 text-yellow" />
                   Add New Candidate
                 </h2>
                 <button
+                  type="button"
                   onClick={onClose}
+                  aria-label="Close"
                   className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-border text-gray-400 hover:text-white transition-colors"
                 >
                   <IconX className="size-4" />
