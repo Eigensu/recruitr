@@ -14,7 +14,10 @@ from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Monorepo root = two directories above apps/backend/app/config.py
-_ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+try:
+    _ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+except IndexError:
+    _ROOT_ENV = Path(__file__).resolve().parents[1] / ".env"
 
 
 class Settings(BaseSettings):

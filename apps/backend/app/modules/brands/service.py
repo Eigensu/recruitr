@@ -1,5 +1,8 @@
 """Business logic for Brand management."""
 
+from fastapi import HTTPException, status
+from pymongo.errors import DuplicateKeyError
+
 from app.modules.brands.models import Brand, Branding
 from app.modules.brands.schemas import BrandCreate
 
@@ -14,13 +17,26 @@ async def create_brand_from_org(
     if existing:
         return existing  # idempotent
 
+    existing_domain = await Brand.find_one(Brand.domain == domain)
+    if existing_domain:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A brand with this domain already exists.",
+        )
+
     brand = Brand(
         owner_id=owner_id,
         name=name,
         domain=domain,
         branding=Branding(),
     )
-    await brand.insert()
+    try:
+        await brand.insert()
+    except DuplicateKeyError as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A brand with this domain already exists.",
+        ) from err
     return brand
 
 
@@ -33,11 +49,25 @@ async def get_all_brands() -> list[Brand]:
 
 
 async def create_brand(data: BrandCreate, owner_id: str) -> Brand:
+    # Check if a brand with this domain already exists
+    existing_domain = await Brand.find_one(Brand.domain == data.domain)
+    if existing_domain:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A brand with this domain already exists.",
+        )
+
     brand = Brand(
         owner_id=owner_id,
         name=data.name,
         domain=data.domain,
         branding=Branding(),
     )
-    await brand.insert()
+    try:
+        await brand.insert()
+    except DuplicateKeyError as err:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A brand with this domain already exists.",
+        ) from err
     return brand
