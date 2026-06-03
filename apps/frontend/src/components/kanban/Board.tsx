@@ -65,8 +65,14 @@ export default function KanbanBoard({ positionId }: { positionId: string }) {
 
     // Fire PATCH /api/v1/pipeline/match — optimistic UI already updated via handleDragOver
     try {
-      // mock: backend call goes here
-      console.log(`Mock sync: Moved candidate ${active.id} to ${to}`);
+      await apiFetch("/api/v1/pipeline/match", {
+        method: "PATCH",
+        body: JSON.stringify({
+          position_id: positionId,
+          candidate_id: active.id,
+          target_status: to,
+        }),
+      });
     } catch (err) {
       console.error("Failed to sync match:", err);
       // TODO: rollback optimistic update on error
