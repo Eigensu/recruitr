@@ -89,12 +89,12 @@ export default function SettingsPage() {
         <div className="divide-y divide-border border-y border-border">
           {/* Name Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
-            <div className="text-sm font-medium text-text-primary">
+            <label htmlFor="firstName" className="text-sm font-medium text-text-primary">
               Name{" "}
               <span className="text-red-500 dark:text-yellow-dark" aria-hidden="true">
                 *
               </span>
-            </div>
+            </label>
             <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 max-w-2xl">
               <label htmlFor="firstName" className="sr-only">
                 First name
@@ -141,10 +141,16 @@ export default function SettingsPage() {
           {/* Photo Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6">
             <div>
-              <div className="text-sm font-medium text-text-primary flex items-center gap-1.5">
-                Your photo <span className="text-red-500 dark:text-yellow-dark">*</span>
+              <label
+                htmlFor="photoUpload"
+                className="text-sm font-medium text-text-primary flex items-center gap-1.5"
+              >
+                Your photo{" "}
+                <span className="text-red-500 dark:text-yellow-dark" aria-hidden="true">
+                  *
+                </span>
                 <IconHelp className="w-4 h-4 text-text-muted" />
-              </div>
+              </label>
               <p className="text-sm text-text-secondary mt-1">
                 This will be displayed on your profile.
               </p>
@@ -158,6 +164,7 @@ export default function SettingsPage() {
                 />
               </div>
               <input
+                id="photoUpload"
                 ref={fileInputRef}
                 type="file"
                 accept="image/svg+xml,image/png,image/jpeg,image/gif"
@@ -198,9 +205,12 @@ export default function SettingsPage() {
 
           {/* Role Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
-            <div className="text-sm font-medium text-text-primary">Role</div>
+            <label htmlFor="role" className="text-sm font-medium text-text-primary">
+              Role
+            </label>
             <div className="md:col-span-2 max-w-md">
               <input
+                id="role"
                 type="text"
                 defaultValue="Recruiter"
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
@@ -210,10 +220,13 @@ export default function SettingsPage() {
 
           {/* Country Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
-            <div className="text-sm font-medium text-text-primary">Country</div>
+            <label htmlFor="country" className="text-sm font-medium text-text-primary">
+              Country
+            </label>
             <div className="md:col-span-2 max-w-md">
               <div className="relative">
                 <select
+                  id="country"
                   value={selectedCountry}
                   onChange={(e) => setSelectedCountry(e.target.value)}
                   className="w-full pl-10 pr-10 py-2 rounded-lg border border-border bg-surface text-text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
@@ -236,13 +249,19 @@ export default function SettingsPage() {
 
           {/* Timezone Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
-            <div className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+            <label
+              htmlFor="timezone"
+              className="text-sm font-medium text-text-primary flex items-center gap-1.5"
+            >
               Timezone <IconHelp className="w-4 h-4 text-text-muted" />
-            </div>
+            </label>
             <div className="md:col-span-2 max-w-md">
               <div className="relative">
                 <IconClock className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted w-5 h-5" />
-                <select className="w-full pl-10 pr-10 py-2 rounded-lg border border-border bg-surface text-text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow">
+                <select
+                  id="timezone"
+                  className="w-full pl-10 pr-10 py-2 rounded-lg border border-border bg-surface text-text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
+                >
                   <option>Pacific Standard Time (PST) UTC-08:00</option>
                   <option>Australian Eastern Standard Time (AEST)</option>
                   <option>Coordinated Universal Time (UTC)</option>
@@ -255,9 +274,15 @@ export default function SettingsPage() {
           {/* Bio Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6">
             <div>
-              <div className="text-sm font-medium text-text-primary flex items-center gap-1.5">
-                Bio <span className="text-red-500 dark:text-yellow-dark">*</span>
-              </div>
+              <label
+                htmlFor="bio"
+                className="text-sm font-medium text-text-primary flex items-center gap-1.5"
+              >
+                Bio{" "}
+                <span className="text-red-500 dark:text-yellow-dark" aria-hidden="true">
+                  *
+                </span>
+              </label>
               <p className="text-sm text-text-secondary mt-1">Write a short introduction.</p>
             </div>
             <div className="md:col-span-2 max-w-md">
@@ -302,6 +327,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 <textarea
+                  id="bio"
                   rows={4}
                   className="w-full p-3 bg-transparent text-text-primary focus:outline-none resize-y min-h-[100px]"
                   defaultValue="I'm a Technical Recruiter based in Melbourne, Australia. I specialise in hiring engineering, product, and design talent."
