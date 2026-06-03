@@ -1,4 +1,5 @@
-import React from "react";
+"use client";
+import React, { useState, useRef } from "react";
 import {
   IconSearch,
   IconMail,
@@ -15,6 +16,23 @@ import {
 } from "@tabler/icons-react";
 
 export default function SettingsPage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const COUNTRY_CODES: Record<string, string> = {
+    Australia: "au",
+    "United States": "us",
+    "United Kingdom": "gb",
+    India: "in",
+  };
+  const [selectedCountry, setSelectedCountry] = useState("Australia");
+  const countryCode = COUNTRY_CODES[selectedCountry] ?? "au";
+
+  function handleFileChange(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    // TODO: upload files[0] to Cloudinary / backend
+    console.log("File selected:", files[0].name);
+  }
+
   return (
     <div className="p-6 md:p-10 max-w-6xl mx-auto w-full animate-in fade-in duration-300">
       {/* Header */}
@@ -72,15 +90,26 @@ export default function SettingsPage() {
           {/* Name Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
             <div className="text-sm font-medium text-text-primary">
-              Name <span className="text-red-500 dark:text-yellow-dark">*</span>
+              Name{" "}
+              <span className="text-red-500 dark:text-yellow-dark" aria-hidden="true">
+                *
+              </span>
             </div>
             <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 max-w-2xl">
+              <label htmlFor="firstName" className="sr-only">
+                First name
+              </label>
               <input
+                id="firstName"
                 type="text"
                 defaultValue="Olivia"
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
               />
+              <label htmlFor="lastName" className="sr-only">
+                Last name
+              </label>
               <input
+                id="lastName"
                 type="text"
                 defaultValue="Rhye"
                 className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
@@ -90,13 +119,17 @@ export default function SettingsPage() {
 
           {/* Email Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
-            <div className="text-sm font-medium text-text-primary">
-              Email address <span className="text-red-500 dark:text-yellow-dark">*</span>
-            </div>
+            <label htmlFor="email" className="text-sm font-medium text-text-primary">
+              Email address{" "}
+              <span className="text-red-500 dark:text-yellow-dark" aria-hidden="true">
+                *
+              </span>
+            </label>
             <div className="md:col-span-2">
               <div className="relative max-w-md">
                 <IconMail className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted w-5 h-5" />
                 <input
+                  id="email"
                   type="email"
                   defaultValue="olivia@untitledui.com"
                   className="w-full pl-10 pr-3 py-2 rounded-lg border border-border bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
@@ -124,7 +157,31 @@ export default function SettingsPage() {
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="flex-1 w-full max-w-md border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-surface-2 transition-colors cursor-pointer group">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/svg+xml,image/png,image/jpeg,image/gif"
+                className="hidden"
+                onChange={(e) => handleFileChange(e.target.files)}
+              />
+              <div
+                className="flex-1 w-full max-w-md border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-surface-2 transition-colors cursor-pointer group"
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleFileChange(e.dataTransfer.files);
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Upload photo — click or drag and drop"
+              >
                 <div className="w-10 h-10 rounded-full bg-surface shadow-sm border border-border flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                   <IconUpload className="w-5 h-5 text-text-secondary" />
                 </div>
@@ -156,16 +213,19 @@ export default function SettingsPage() {
             <div className="text-sm font-medium text-text-primary">Country</div>
             <div className="md:col-span-2 max-w-md">
               <div className="relative">
-                <select className="w-full pl-10 pr-10 py-2 rounded-lg border border-border bg-surface text-text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow">
-                  <option>Australia</option>
-                  <option>United States</option>
-                  <option>United Kingdom</option>
-                  <option>India</option>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2 rounded-lg border border-border bg-surface text-text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-yellow transition-shadow"
+                >
+                  {Object.keys(COUNTRY_CODES).map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
                 </select>
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full overflow-hidden border border-border">
                   <img
-                    src="https://flagcdn.com/w20/au.png"
-                    alt="Australia"
+                    src={`https://flagcdn.com/w20/${countryCode}.png`}
+                    alt={selectedCountry}
                     className="w-full h-full object-cover"
                   />
                 </div>

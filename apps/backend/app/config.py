@@ -1,6 +1,6 @@
 """Application configuration via environment variables with Pydantic validation.
 
-The .env file lives at the monorepo root (two levels up from this file).
+The .env file lives at the monorepo root (three levels up from this file).
 Pydantic-settings resolves the path relative to the process working directory,
 so we compute the absolute path here to be safe regardless of where the
 server is started from.
@@ -13,11 +13,11 @@ from pydantic import ValidationInfo, field_validator
 from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Monorepo root = two directories above apps/backend/app/config.py
+# Monorepo root = three directories above apps/backend/app/config.py
 try:
     _ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 except IndexError:
-    _ROOT_ENV = Path(__file__).resolve().parents[1] / ".env"
+    _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):

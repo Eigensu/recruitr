@@ -288,7 +288,7 @@ function DraggableCandidateCard({
               {cand.name}
             </h4>
             <p className="text-[11px] text-text-muted mt-0.5 truncate">
-              {cand.previousCompany} &bull; {cand.experienceYears}y exp
+              {cand.previousCompany || "Freelance"} &bull; {cand.experienceYears}y exp
             </p>
           </div>
           <div className={scoreBadgeClass}>{cand.dynamicScore}%</div>
@@ -358,7 +358,9 @@ function DragGhostCard({ cand }: Readonly<{ cand: MockCandidate & { dynamicScore
           {cand.dynamicScore}%
         </span>
       </div>
-      <p className="text-[11px] text-text-muted mb-2 truncate">{cand.previousCompany}</p>
+      <p className="text-[11px] text-text-muted mb-2 truncate">
+        {cand.previousCompany || "Freelance"}
+      </p>
       <div className="flex flex-wrap gap-1">
         {cand.skills.slice(0, 2).map((s) => (
           <span
