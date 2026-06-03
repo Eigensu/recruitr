@@ -9,14 +9,53 @@ interface PipelineState {
   setActiveCardId: (id: string | null) => void;
 }
 
-const EMPTY_COLUMNS: Record<CandidateStatus, CandidateCard[]> = {
-  pending: [],
-  accepted: [],
-  rejected: [],
+const MOCK_COLUMNS: Record<CandidateStatus, CandidateCard[]> = {
+  pending: [
+    {
+      id: "c1",
+      name: "Alice Smith",
+      email: "alice@example.com",
+      extracted_skills: ["React", "TypeScript", "Next.js"],
+      resume_url: null,
+      match_score: 0.95,
+      status: "pending",
+    },
+    {
+      id: "c2",
+      name: "Bob Jones",
+      email: "bob@example.com",
+      extracted_skills: ["Node.js", "Express", "MongoDB"],
+      resume_url: null,
+      match_score: 0.82,
+      status: "pending",
+    },
+  ],
+  accepted: [
+    {
+      id: "c3",
+      name: "Charlie Davis",
+      email: "charlie@example.com",
+      extracted_skills: ["Figma", "UI/UX", "Tailwind"],
+      resume_url: null,
+      match_score: 0.98,
+      status: "accepted",
+    },
+  ],
+  rejected: [
+    {
+      id: "c4",
+      name: "Diana Prince",
+      email: "diana@example.com",
+      extracted_skills: ["Java", "Spring Boot"],
+      resume_url: null,
+      match_score: 0.45,
+      status: "rejected",
+    },
+  ],
 };
 
 export const usePipelineStore = create<PipelineState>((set) => ({
-  columns: EMPTY_COLUMNS,
+  columns: MOCK_COLUMNS,
 
   setColumns: (columns) => set({ columns }),
 

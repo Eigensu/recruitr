@@ -39,7 +39,15 @@ function resolveTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const [theme, setTheme] = useState<Theme>(() => resolveTheme());
+  // Always start with "dark" so server and client agree during hydration.
+  // After mount, sync to the user's stored preference.
+  const [theme, setTheme] = useState<Theme>("dark");
+
+  useEffect(() => {
+    const actual = resolveTheme();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme(actual);
+  }, []);
 
   // Apply [data-theme] to <html> whenever theme changes
   useEffect(() => {

@@ -107,13 +107,21 @@ function LogoRow() {
   );
 }
 
+function useThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
+  const isLight = mounted && theme === "light";
+  return { theme, toggleTheme, mounted, isLight };
+}
+
 /** Theme toggle row — compact when closed, expanded when open */
 function ThemeToggleRow() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, isLight } = useThemeToggle();
   const { open } = useSidebar();
 
   if (!open) {
-    // Closed state: single button with current theme icon
     return (
       <div className="flex items-center justify-center px-3 py-1.5 w-full">
         <motion.button
@@ -122,16 +130,15 @@ function ThemeToggleRow() {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           className="size-8 flex shrink-0 items-center justify-center rounded-full transition-colors cursor-pointer bg-white/10 hover:bg-white/20 text-white"
-          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          title={theme === "dark" ? "Light Mode" : "Dark Mode"}
+          aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+          title={isLight ? "Dark Mode" : "Light Mode"}
         >
-          {theme === "dark" ? <IconSun size={18} stroke={2} /> : <IconMoon size={18} stroke={2} />}
+          {isLight ? <IconMoon size={18} stroke={2} /> : <IconSun size={18} stroke={2} />}
         </motion.button>
       </div>
     );
   }
 
-  // Open state: pill-shaped toggle with label
   return (
     <div className="flex items-center justify-between px-3 py-1.5 w-full">
       <span className="text-sm font-medium text-white pl-1">Theme</span>
@@ -139,25 +146,23 @@ function ThemeToggleRow() {
         type="button"
         className="relative flex items-center w-17 h-9 p-1 shrink-0 rounded-full cursor-pointer bg-white"
         onClick={toggleTheme}
-        aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        title={theme === "dark" ? "Light Mode" : "Dark Mode"}
+        aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+        title={isLight ? "Dark Mode" : "Light Mode"}
       >
-        {/* Sliding indicator */}
         <motion.div
           className="absolute top-1 left-1 w-7 h-7 rounded-full bg-gray-800"
           layout
           transition={{ type: "spring", stiffness: 700, damping: 30 }}
           animate={{ x: theme === "dark" ? 32 : 0 }}
         />
-        {/* Icons */}
         <div className="relative flex flex-1 justify-around items-center">
           <IconMoon
             size={16}
-            className={`z-10 transition-colors ${theme === "light" ? "text-white" : "text-gray-400"}`}
+            className={`z-10 transition-colors ${isLight ? "text-white" : "text-gray-400"}`}
           />
           <IconSun
             size={16}
-            className={`z-10 transition-colors ${theme === "dark" ? "text-white" : "text-gray-400"}`}
+            className={`z-10 transition-colors ${isLight ? "text-gray-400" : "text-white"}`}
           />
         </div>
       </button>

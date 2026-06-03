@@ -3,7 +3,6 @@
 import secrets
 import urllib.parse
 from datetime import timedelta
-from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -39,6 +38,7 @@ def _set_auth_cookie(response: Response, user_id: str) -> None:
     response.set_cookie(
         key="access_token",
         value=token,
+        domain=settings.COOKIE_DOMAIN,
         httponly=True,
         secure=_COOKIE_SECURE,
         samesite="lax",
@@ -95,7 +95,13 @@ async def login(user_in: UserLogin, response: Response) -> dict:
 @router.post("/logout")
 async def logout(response: Response) -> dict:
     """Clear the access token cookie."""
-    response.delete_cookie(key="access_token", httponly=True, secure=_COOKIE_SECURE, samesite="lax")
+    response.delete_cookie(
+        key="access_token",
+        domain=settings.COOKIE_DOMAIN,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+    )
     return {"status": "ok", "message": "Logged out successfully"}
 
 
@@ -194,7 +200,7 @@ async def google_callback(
     profile = userinfo_resp.json()
     if profile.get("email_verified") is not True:
         return RedirectResponse(f"{frontend}/sign-in?error=email_unverified")
-        
+
     google_id = profile.get("sub")
     email = profile.get("email")
     if not google_id or not email:

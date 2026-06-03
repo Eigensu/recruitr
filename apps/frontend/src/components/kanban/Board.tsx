@@ -87,6 +87,7 @@ export default function KanbanBoard({ positionId }: { positionId: string }) {
 
   return (
     <DndContext
+      id="kanban-board-dnd-context"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}

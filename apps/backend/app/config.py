@@ -1,6 +1,6 @@
 """Application configuration via environment variables with Pydantic validation.
 
-The .env file lives at the monorepo root (two levels up from this file).
+The .env file lives at the monorepo root (three levels up from this file).
 Pydantic-settings resolves the path relative to the process working directory,
 so we compute the absolute path here to be safe regardless of where the
 server is started from.
@@ -13,8 +13,11 @@ from pydantic import ValidationInfo, field_validator
 from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Monorepo root = two directories above apps/backend/app/config.py
-_ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+# Monorepo root = three directories above apps/backend/app/config.py
+try:
+    _ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+except IndexError:
+    _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -68,6 +71,13 @@ class Settings(BaseSettings):
 
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # ── Cookie ──
+    # Set to ".eigensu.in" in production so the HttpOnly session cookie is sent
+    # to all *.eigensu.in subdomains (frontend + backend share the same parent
+    # domain). Without this, a host-only cookie on api.recruitr.eigensu.in is
+    # never transmitted to binge.eigensu.in, breaking Next.js middleware auth.
+    COOKIE_DOMAIN: str | None = None
 
     @field_validator("SESSION_SECRET", mode="before")
     @classmethod

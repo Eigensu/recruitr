@@ -162,7 +162,7 @@ async def fetch_rankings(
                 },
             ]
         )
-        cursor = await LeaderboardHistory.get_motor_collection().aggregate(pipeline)
+        cursor = await LeaderboardHistory.get_motor_collection().aggregate(pipeline)  # type: ignore
         result = await cursor.to_list(length=None)
         payload = result[0] if result else {"items": [], "total": []}
         items = payload.get("items", [])
@@ -265,7 +265,7 @@ async def fetch_rankings(
             },
         ]
     )
-    cursor = await EmployeeStat.get_motor_collection().aggregate(pipeline)
+    cursor = await EmployeeStat.get_motor_collection().aggregate(pipeline)  # type: ignore
     result = await cursor.to_list(length=None)
     payload = result[0] if result else {"items": [], "total": []}
     items = payload.get("items", [])
@@ -330,11 +330,11 @@ async def fetch_recruiter(employee_id: str) -> dict[str, Any] | None:
 
 async def fetch_monthly_growth() -> dict[str, Any]:
     stats = (
-        await EmployeeStat.find(EmployeeStat.is_active)
+        await EmployeeStat.find(EmployeeStat.is_active == True)  # noqa: E712
         .sort("-total_score")
         .limit(10)
         .to_list()
-    )  # noqa: E712
+    )
     ids = [stat.employee_id for stat in stats]
     monthly = await _monthly_totals_for_employees(ids)
     employees = (
@@ -370,12 +370,12 @@ async def fetch_monthly_growth() -> dict[str, Any]:
 
 async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
     jobs = (
-        await JobOpening.find(JobOpening.is_active)
+        await JobOpening.find(JobOpening.is_active == True)  # noqa: E712
         .sort("-total_seats")
         .limit(limit)
         .to_list()
-    )  # noqa: E712
-    cursor = await CandidateMapping.get_motor_collection().aggregate(
+    )
+    cursor = await CandidateMapping.get_motor_collection().aggregate(  # type: ignore
         [
             {
                 "$group": {
@@ -401,7 +401,7 @@ async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
 
 
 async def fetch_activity(page: int, limit: int) -> dict[str, Any]:
-    cursor = await RecruiterActivity.get_motor_collection().aggregate(
+    cursor = await RecruiterActivity.get_motor_collection().aggregate(  # type: ignore
         [
             {"$sort": {"created_at": -1}},
             {
