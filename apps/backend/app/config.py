@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # ── Cookie ──
+    # Set to ".eigensu.in" in production so the HttpOnly session cookie is sent
+    # to all *.eigensu.in subdomains (frontend + backend share the same parent
+    # domain). Without this, a host-only cookie on api.recruitr.eigensu.in is
+    # never transmitted to binge.eigensu.in, breaking Next.js middleware auth.
+    COOKIE_DOMAIN: str | None = None
+
     @field_validator("SESSION_SECRET", mode="before")
     @classmethod
     def set_session_secret(cls, v: str | None, info: ValidationInfo) -> str:
