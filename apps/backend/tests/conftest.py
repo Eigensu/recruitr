@@ -9,15 +9,6 @@ from pymongo import AsyncMongoClient
 from app.config import settings
 from app.modules.auth.models import User
 from app.modules.brands.models import Brand
-from app.modules.candidates.models import Candidate
-from app.modules.dashboard.models import (
-    ActivityLog,
-    CandidateDocument,
-    CandidateMapping,
-    DashboardCandidate,
-    DashboardEmployee,
-    JobOpening,
-)
 from app.modules.gamification.models import RecruiterProfile
 from app.modules.leaderboard.models import (
     Badge,
@@ -25,28 +16,43 @@ from app.modules.leaderboard.models import (
     LeaderboardHistory,
     RecruiterActivity,
 )
-from app.modules.positions.models import Position
+
+# Unified recruitment domain models (replaces old positions/candidates/pipeline/dashboard models)
+from app.modules.recruitment.models import (
+    ActivityLog,
+    Candidate,
+    CandidateDocument,
+    Client,
+    Counter,
+    Employee,
+    Mapping,
+    Position,
+)
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def init_test_db() -> AsyncGenerator[None, None]:
-    """Initialize database connection for each test using a separate test database."""
+    """Initialize an isolated test database for each test, then drop it."""
     test_db_name = f"{settings.MONGODB_DB_NAME}_test"
     client = AsyncMongoClient(settings.MONGODB_URI)
     await init_beanie(
         database=client[test_db_name],
         document_models=[
+            # Auth
             User,
             Brand,
+            # Recruitment domain
+            Counter,
+            Client,
             Position,
             Candidate,
-            RecruiterProfile,
+            Mapping,
+            Employee,
             ActivityLog,
             CandidateDocument,
-            CandidateMapping,
-            DashboardCandidate,
-            DashboardEmployee,
-            JobOpening,
+            # Gamification
+            RecruiterProfile,
+            # Leaderboard
             EmployeeStat,
             LeaderboardHistory,
             Badge,
@@ -55,6 +61,5 @@ async def init_test_db() -> AsyncGenerator[None, None]:
         allow_index_dropping=True,
     )
     yield
-    # Clean up test database after the test
     await client.drop_database(test_db_name)
     await client.close()

@@ -1,6 +1,5 @@
 """Storage API router — Cloudinary signed upload and webhook."""
 
-
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 
 from app.dependencies import get_current_user
@@ -13,7 +12,7 @@ router = APIRouter()
 
 @router.get("/sign", response_model=CloudinarySignatureResponse)
 async def get_upload_signature(
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> CloudinarySignatureResponse:
     """Generate a signed payload so the frontend can upload directly to Cloudinary.
 

@@ -47,6 +47,7 @@ export interface Position {
 
 // ── Candidates ───────────────────────────────────────────────────────────────
 
+/** Legacy type used by old /api/v1/candidates (old module). Phase C will remove it. */
 export interface Candidate {
   id: string;
   name: string;
@@ -58,6 +59,62 @@ export interface Candidate {
 
 export interface CandidateMatchScore extends Candidate {
   match_score: number;
+}
+
+// ── Recruitment API types (Phase B+) ─────────────────────────────────────────
+
+export type PipelineStage =
+  | "sourced"
+  | "sent_to_client"
+  | "interview"
+  | "decision_pending"
+  | "offer"
+  | "offer_accepted"
+  | "position_close"
+  | "rejected"
+  | "on_hold";
+
+/** Canonical candidate returned by GET /api/v1/candidates */
+export interface ApiCandidate {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  previous_company: string | null;
+  experience_years: number;
+  skills: string[];
+  resume_url: string | null;
+  current_stage: PipelineStage;
+  mappings_count: number;
+  created_at: string;
+}
+
+/** One position mapping returned by GET /api/v1/candidates/{id}/mappings */
+export interface ApiCandidateMappingItem {
+  mapping_id: string;
+  position_id: string;
+  position_code: string;
+  role: string;
+  client_name: string;
+  city: string | null;
+  stage: PipelineStage;
+  match_score: number | null;
+  mapped_at: string;
+}
+
+/** Shared pagination meta (mirrors ApiPaginationMeta in lib/api/dashboard.ts) */
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  meta: PaginationMeta;
 }
 
 // ── Gamification ─────────────────────────────────────────────────────────────

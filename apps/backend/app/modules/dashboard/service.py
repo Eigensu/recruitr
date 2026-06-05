@@ -10,11 +10,7 @@ from typing import Any
 from app.common.dtos.pagination import PaginationMeta
 from app.common.extras.redis_cache import dashboard_cache
 from app.config import settings
-from app.modules.dashboard.enums import ActivityType, PipelineStage, TargetEntityType
-from app.modules.dashboard.models import ActivityLog, CandidateMapping
 from app.modules.dashboard.repository import (
-    create_activity_log,
-    create_candidate_mapping,
     fetch_activities,
     fetch_candidates,
     fetch_clients,
@@ -41,11 +37,22 @@ from app.modules.dashboard.schemas import (
 )
 
 
-def _cache_key(prefix: str, filters: DashboardFilters, page: int | None = None, limit: int | None = None) -> str:
+def _cache_key(
+    prefix: str,
+    filters: DashboardFilters,
+    page: int | None = None,
+    limit: int | None = None,
+) -> str:
+    """Build a brand-scoped cache key so one tenant's write never flushes another's cache."""
     payload = filters.model_dump(mode="json", exclude_none=True)
-    raw = json.dumps({"filters": payload, "page": page, "limit": limit}, sort_keys=True, default=str)
+    raw = json.dumps(
+        {"filters": payload, "page": page, "limit": limit}, sort_keys=True, default=str
+    )
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    return dashboard_cache.build_key(prefix, digest)
+    # brand_id is already inside `payload` (via filters.brand_id), so the digest
+    # is implicitly brand-scoped. The namespace prefix makes pattern-delete easy.
+    brand_prefix = filters.brand_id or "unknown"
+    return dashboard_cache.build_key(brand_prefix, prefix, digest)
 
 
 def _make_paginated_response(payload: dict[str, Any], items: list[Any], page_cls: type) -> Any:
@@ -76,7 +83,9 @@ async def get_overview(filters: DashboardFilters) -> DashboardOverviewResponse:
     )
     response = DashboardOverviewResponse(
         summary=payload["summary"],
-        pipeline=[PipelineStageMetric.model_validate(stage) for stage in pipeline_payload["stages"]],
+        pipeline=[
+            PipelineStageMetric.model_validate(stage) for stage in pipeline_payload["stages"]
+        ],
     )
     await dashboard_cache.set_json(
         cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
@@ -131,7 +140,9 @@ async def get_clients(filters: DashboardFilters, page: int, limit: int) -> Dashb
     return response
 
 
-async def get_candidates(filters: DashboardFilters, page: int, limit: int) -> DashboardCandidatePage:
+async def get_candidates(
+    filters: DashboardFilters, page: int, limit: int
+) -> DashboardCandidatePage:
     cache_key = _cache_key("candidates", filters, page, limit)
     cached = await dashboard_cache.get_json(cache_key)
     if cached is not None:
@@ -176,33 +187,5 @@ async def get_activities(filters: DashboardFilters, page: int, limit: int) -> Da
     return response
 
 
-async def log_dashboard_activity(
-    *,
-    employee_id: str | None,
-    activity_type: ActivityType,
-    target_entity_type: TargetEntityType,
-    target_entity_id: str,
-    description: str,
-) -> ActivityLog:
-    return await create_activity_log(
-        employee_id=employee_id,
-        activity_type=activity_type,
-        target_entity_type=target_entity_type,
-        target_entity_id=target_entity_id,
-        description=description,
-    )
-
-
-async def create_mapping(
-    *,
-    employee_id: str,
-    candidate_id: str,
-    job_opening_id: str,
-    pipeline_stage: PipelineStage,
-) -> CandidateMapping:
-    return await create_candidate_mapping(
-        employee_id=employee_id,
-        candidate_id=candidate_id,
-        job_opening_id=job_opening_id,
-        pipeline_stage=pipeline_stage,
-    )
+# Activity logging and mapping writes are now owned by app.modules.recruitment.service.
+# Those helpers have been removed from this module to keep dashboard read-only.

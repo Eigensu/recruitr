@@ -5,13 +5,13 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 # Gamification
-MATCH_POINTS = 10          # Points awarded per candidate match
-BADGE_SPEED_DEMON = "speed_demon"        # 5+ matches in a day
+MATCH_POINTS = 10  # Points awarded per candidate match
+BADGE_SPEED_DEMON = "speed_demon"  # 5+ matches in a day
 BADGE_QUALITY_SOURCER = "quality_sourcer"  # 3+ accepted candidates in a week
 
 BADGE_THRESHOLDS = {
-    BADGE_SPEED_DEMON: 5,     # daily matches
-    BADGE_QUALITY_SOURCER: 3, # weekly accepted
+    BADGE_SPEED_DEMON: 5,  # daily matches
+    BADGE_QUALITY_SOURCER: 3,  # weekly accepted
 }
 
 # Pipeline

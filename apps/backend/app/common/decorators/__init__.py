@@ -16,6 +16,7 @@ def require_org(func: Callable) -> Callable:
         async def list_brands(current_user: TokenPayload = Depends(get_current_user)):
             ...
     """
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         current_user = kwargs.get("current_user")
@@ -25,11 +26,13 @@ def require_org(func: Callable) -> Callable:
                 detail="This action requires an organisation (brand) account.",
             )
         return await func(*args, **kwargs)
+
     return wrapper
 
 
 def timed(func: Callable) -> Callable:
     """Log execution time of an async handler (dev/debug use)."""
+
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         start = time.perf_counter()
@@ -37,4 +40,5 @@ def timed(func: Callable) -> Callable:
         elapsed = (time.perf_counter() - start) * 1000
         print(f"[timed] {func.__name__} took {elapsed:.1f}ms")
         return result
+
     return wrapper

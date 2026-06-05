@@ -15,7 +15,7 @@ router = APIRouter()
 async def get_top_candidates(
     position_id: str = Query(...),
     limit: int = Query(10, ge=1, le=50),
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> list[CandidateMatchScore]:
     """Return the top N candidates ranked by keyword match score for a position."""
     results = await service.find_top_candidates(position_id, limit)
@@ -25,7 +25,7 @@ async def get_top_candidates(
 @router.patch("/match", response_model=MatchResponse)
 async def match_candidate(
     data: MatchRequest,
-    current_user: TokenPayload = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> MatchResponse:
     """Atomically move a candidate onto a position and credit recruiter score."""
     recruiter = await service.match_candidate_to_position(

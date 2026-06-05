@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useRef } from "react";
+import Image from "next/image";
 import {
   IconSearch,
   IconMail,
@@ -157,9 +158,11 @@ export default function SettingsPage() {
             </div>
             <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="w-16 h-16 rounded-full overflow-hidden shrink-0 border border-border shadow-sm">
-                <img
+                <Image
                   src="https://i.pravatar.cc/150?u=olivia"
                   alt="Avatar"
+                  width={64}
+                  height={64}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -236,9 +239,11 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full overflow-hidden border border-border">
-                  <img
+                  <Image
                     src={`https://flagcdn.com/w20/${countryCode}.png`}
                     alt={selectedCountry}
+                    width={20}
+                    height={20}
                     className="w-full h-full object-cover"
                   />
                 </div>

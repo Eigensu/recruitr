@@ -3,26 +3,36 @@
 import pytest
 from beanie import PydanticObjectId
 
-from app.modules.dashboard.models import JobOpening
 from app.modules.leaderboard.models import EmployeeStat
 from app.modules.leaderboard.repository import queries
+from app.modules.recruitment.models import Position
 
 
 @pytest.mark.asyncio
 async def test_fetch_company_progress_success() -> None:
-    # Set up some test JobOpenings (one active, one inactive)
-    active_job = JobOpening(
+    brand_id = PydanticObjectId()
+    client_id = PydanticObjectId()
+
+    active_job = Position(
+        brand_id=brand_id,
+        code="CLI-001-POS-001",
+        client_id=client_id,
         client_name="Eigensu Corp",
         role="Software Engineer",
         total_seats=5,
         filled_seats=2,
+        remaining_seats=3,
         is_active=True,
     )
-    inactive_job = JobOpening(
+    inactive_job = Position(
+        brand_id=brand_id,
+        code="CLI-001-POS-002",
+        client_id=client_id,
         client_name="Old Corp",
         role="Product Manager",
         total_seats=3,
         filled_seats=1,
+        remaining_seats=2,
         is_active=False,
     )
     await active_job.insert()
@@ -38,7 +48,6 @@ async def test_fetch_company_progress_success() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_monthly_growth_success() -> None:
-    # Set up some EmployeeStats
     employee_id1 = PydanticObjectId()
     stat1 = EmployeeStat(
         employee_id=employee_id1,
@@ -55,11 +64,6 @@ async def test_fetch_monthly_growth_success() -> None:
     await stat2.insert()
 
     growth = await queries.fetch_monthly_growth()
-    # It queries EmployeeStat.find(EmployeeStat.is_active == True)
-    # The active stat has id1. The inactive one has id2.
-    # Growth series should only contain employee_id1 if that employee profile exists,
-    # or series could be empty if they don't have dashboard employee profiles,
-    # but the query should execute successfully without TypeError.
     assert isinstance(growth, dict)
     assert "labels" in growth
     assert "series" in growth

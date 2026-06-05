@@ -14,7 +14,7 @@ router = APIRouter()
 async def get_leaderboard(
     brand_id: str = Query(..., description="Brand (org) ObjectId"),
     period: str = Query("daily", pattern="^(daily|weekly)$"),
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> list[LeaderboardEntry]:
     """Return ranked recruiter list for a brand, sorted by daily or weekly score."""
     return await service.get_leaderboard(brand_id, period)
@@ -22,7 +22,7 @@ async def get_leaderboard(
 
 @router.get("/me", response_model=RecruiterStatsResponse)
 async def get_my_stats(
-    current_user: TokenPayload = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> RecruiterStatsResponse:
     """Return the current recruiter's personal gamification stats."""
     recruiter = await service.get_recruiter_with_lazy_reset(current_user.sub)

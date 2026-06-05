@@ -8,8 +8,9 @@ from pymongo import IndexModel
 
 
 class Branding(BaseModel):
-    logo_public_id: str | None = None   # Cloudinary public_id
-    logo_url: str | None = None         # Cloudinary secure_url
+    logo_public_id: str | None = None  # Cloudinary public_id
+    logo_url: str | None = None  # Cloudinary secure_url
+
 
 class Brand(Document):
     owner_id: str

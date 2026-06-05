@@ -50,7 +50,9 @@ class RedisCache:
             return json.loads(payload)
         except json.JSONDecodeError as exc:
             snippet = payload if len(payload) <= 200 else f"{payload[:200]}…"
-            logger.warning("Redis cache JSON decode failed for key %s: %s; payload=%r", key, exc, snippet)
+            logger.warning(
+                "Redis cache JSON decode failed for key %s: %s; payload=%r", key, exc, snippet
+            )
             return None
 
     async def set_json(self, key: str, payload: Any, ttl_seconds: int) -> None:

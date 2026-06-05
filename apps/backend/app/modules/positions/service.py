@@ -18,9 +18,7 @@ async def create_position(data: PositionCreate, brand_id: str) -> Position:
 
 
 async def list_positions(brand_id: str) -> list[Position]:
-    return await Position.find(
-        Position.brand_id == PydanticObjectId(brand_id)
-    ).to_list()
+    return await Position.find(Position.brand_id == PydanticObjectId(brand_id)).to_list()
 
 
 async def get_position(position_id: str) -> Position:

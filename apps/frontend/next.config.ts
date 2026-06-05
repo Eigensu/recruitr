@@ -8,6 +8,12 @@ loadEnvConfig(path.resolve(__dirname, "../../"));
 
 const nextConfig: NextConfig = {
   env: {},
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "i.pravatar.cc" },
+      { protocol: "https", hostname: "flagcdn.com" },
+    ],
+  },
 };
 
 export default nextConfig;

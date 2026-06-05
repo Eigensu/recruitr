@@ -31,7 +31,11 @@ def generate_upload_signature() -> dict:
         Dict with signature, timestamp, cloud_name, api_key, upload_preset, folder.
     """
     timestamp = int(time.time())
-    params_to_sign = f"folder={RESUME_FOLDER}&timestamp={timestamp}&upload_preset={settings.CLOUDINARY_UPLOAD_PRESET}"
+    params_to_sign = (
+        f"folder={RESUME_FOLDER}"
+        f"&timestamp={timestamp}"
+        f"&upload_preset={settings.CLOUDINARY_UPLOAD_PRESET}"
+    )
 
     signature = hmac.new(
         settings.CLOUDINARY_API_SECRET.encode(),

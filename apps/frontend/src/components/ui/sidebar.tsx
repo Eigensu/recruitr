@@ -72,6 +72,7 @@ export const Sidebar = ({
 };
 
 export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   const {
     animate: _animate,
     initial: _initial,
@@ -83,6 +84,7 @@ export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
     layoutId: _layoutId,
     ...mobileProps
   } = props;
+  /* eslint-enable @typescript-eslint/no-unused-vars */
   return (
     <>
       <DesktopSidebar {...props} />

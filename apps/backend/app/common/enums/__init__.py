@@ -22,6 +22,7 @@ class GamificationPeriod(StrEnum):
 
 class ResourceType(StrEnum):
     """Cloudinary resource types."""
-    RAW = "raw"       # PDFs / documents
+
+    RAW = "raw"  # PDFs / documents
     IMAGE = "image"
     VIDEO = "video"

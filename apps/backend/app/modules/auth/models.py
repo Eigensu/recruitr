@@ -24,5 +24,7 @@ class User(Document):
         name = "users"
         indexes = [
             IndexModel("email", unique=True),
-            IndexModel("google_id", unique=True, sparse=True),  # sparse: allows multiple null values
+            IndexModel(
+                "google_id", unique=True, sparse=True
+            ),  # sparse: allows multiple null values
         ]

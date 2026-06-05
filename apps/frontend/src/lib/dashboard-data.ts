@@ -1,11 +1,11 @@
 import { PIPELINE_STAGE_LABELS } from "@/lib/dashboard-constants";
 import {
   getAllDashboardActivities,
+  getAllDashboardMappings,
   getDashboardClients,
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
 } from "@/lib/api/dashboard";
-import { getCandidateMappingsForDashboard } from "@/lib/api/candidates";
 import { getEmployeesForDashboard } from "@/lib/api/employees";
 import type {
   ClientActivityRow,
@@ -311,7 +311,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     getDashboardPipeline(),
     getDashboardClients({ page: 1, limit: 100 }),
     getEmployeesForDashboard(100),
-    getCandidateMappingsForDashboard(),
+    getAllDashboardMappings(),
     getAllDashboardActivities(60),
   ]);
 

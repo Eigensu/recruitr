@@ -1,35 +1,25 @@
-"""Dashboard module enums."""
+"""Dashboard module enums — re-exported from the canonical recruitment enums."""
 
-from enum import Enum
+# Import from the unified recruitment module so the entire codebase uses
+# one enum definition.  Code that still imports from here continues to work.
+from app.modules.recruitment.enums import (  # noqa: F401
+    INACTIVE_STAGES,
+    KANBAN_STAGES,
+    PIPELINE_ORDER,
+    TERMINAL_STAGES,
+    ActivityType,
+    PipelineStage,
+)
+from app.modules.recruitment.enums import (
+    PositionStatus as JobStatus,
+)
 
-
-class PipelineStage(str, Enum):
-    added = "added"
-    shortlisted = "shortlisted"
-    sent_to_client = "sent_to_client"
-    rejected = "rejected"
-    hold = "hold"
-    offer_sent = "offer_sent"
-    offer_accepted = "offer_accepted"
-    joined = "joined"
-    dropped = "dropped"
-
-
-class JobStatus(str, Enum):
-    open = "open"
-    closed = "closed"
-    on_hold = "on_hold"
-
-
-class ActivityType(str, Enum):
-    mapped = "mapped"
-    offer_sent = "offer_sent"
-    offer_accepted = "offer_accepted"
-    joined = "joined"
-    rejected = "rejected"
-
-
-class TargetEntityType(str, Enum):
-    candidate = "candidate"
-    job_opening = "job_opening"
-    client = "client"
+__all__ = [
+    "ActivityType",
+    "INACTIVE_STAGES",
+    "JobStatus",
+    "KANBAN_STAGES",
+    "PIPELINE_ORDER",
+    "PipelineStage",
+    "TERMINAL_STAGES",
+]

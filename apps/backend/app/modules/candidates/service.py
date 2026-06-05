@@ -22,10 +22,12 @@ async def create_candidate(data: CandidateCreate) -> Candidate:
 async def confirm_resume_upload(data: CandidateUploadConfirm) -> Candidate:
     """Attach Cloudinary public_id and URL to a candidate after upload."""
     candidate = await get_candidate(data.candidate_id)
-    await candidate.set({
-        "resume_public_id": data.resume_public_id,
-        "resume_url": data.resume_url,
-    })
+    await candidate.set(
+        {
+            "resume_public_id": data.resume_public_id,
+            "resume_url": data.resume_url,
+        }
+    )
     return candidate
 
 
@@ -39,10 +41,12 @@ async def get_candidate(candidate_id: str) -> Candidate:
 async def list_candidates(search: str | None = None) -> list[Candidate]:
     if search:
         return await Candidate.find(
-            {"$or": [
-                {"name": {"$regex": search, "$options": "i"}},
-                {"email": {"$regex": search, "$options": "i"}},
-                {"extracted_skills": {"$in": [search.lower()]}},
-            ]}
+            {
+                "$or": [
+                    {"name": {"$regex": search, "$options": "i"}},
+                    {"email": {"$regex": search, "$options": "i"}},
+                    {"extracted_skills": {"$in": [search.lower()]}},
+                ]
+            }
         ).to_list()
     return await Candidate.find_all().to_list()

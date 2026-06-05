@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/overview", response_model=LeaderboardOverviewResponse)
-async def get_overview(_: TokenPayload = Depends(get_current_user)) -> LeaderboardOverviewResponse:
+async def get_overview(_: TokenPayload = Depends(get_current_user)) -> LeaderboardOverviewResponse:  # noqa: B008
     return await service.get_overview()
 
 
@@ -31,7 +31,7 @@ async def get_rankings(
     search: str | None = Query(default=None),
     sort_by: str = Query(default="rank"),
     month: str | None = Query(default=None),
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> LeaderboardPage:
     return await service.get_rankings(
         LeaderboardFilters(page=page, limit=limit, search=search, sort_by=sort_by, month=month)
@@ -40,7 +40,8 @@ async def get_rankings(
 
 @router.get("/recruiter/{employee_id}", response_model=RecruiterAnalyticsResponse)
 async def get_recruiter(
-    employee_id: str, _: TokenPayload = Depends(get_current_user)
+    employee_id: str,
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> RecruiterAnalyticsResponse:
     payload = await service.get_recruiter(employee_id)
     if payload is None:
@@ -49,13 +50,13 @@ async def get_recruiter(
 
 
 @router.get("/monthly-growth", response_model=MonthlyGrowthResponse)
-async def get_monthly_growth(_: TokenPayload = Depends(get_current_user)) -> MonthlyGrowthResponse:
+async def get_monthly_growth(_: TokenPayload = Depends(get_current_user)) -> MonthlyGrowthResponse:  # noqa: B008
     return await service.get_monthly_growth()
 
 
 @router.get("/company-progress", response_model=CompanyProgressResponse)
 async def get_company_progress(
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> CompanyProgressResponse:
     return await service.get_company_progress()
 
@@ -64,13 +65,14 @@ async def get_company_progress(
 async def get_activity(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
-    _: TokenPayload = Depends(get_current_user),
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> ActivityPage:
     return await service.get_activities(page, limit)
 
 
 @router.get("/badges/{employee_id}", response_model=RecruiterBadgesResponse)
 async def get_badges(
-    employee_id: str, _: TokenPayload = Depends(get_current_user)
+    employee_id: str,
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> RecruiterBadgesResponse:
     return await service.get_badges(employee_id)

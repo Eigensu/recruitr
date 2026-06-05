@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 class EigensuError(Exception):
     """Base application error."""
+
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
     detail: str = "An unexpected error occurred."
 

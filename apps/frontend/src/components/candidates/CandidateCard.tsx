@@ -1,10 +1,10 @@
 import React from "react";
 import { IconMail, IconPhone, IconBriefcase } from "@tabler/icons-react";
-import { MockCandidate } from "@/stores/usePositionsStore";
+import type { ApiCandidate } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface CandidateCardProps {
-  candidate: MockCandidate;
+  candidate: ApiCandidate;
   onClick: () => void;
 }
 
@@ -21,8 +21,7 @@ export function getAvatarColor(name: string) {
   for (let i = 0; i < name.length; i++) {
     hash = (name.codePointAt(i) ?? 0) + ((hash << 5) - hash);
   }
-  const index = Math.abs(hash) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[index];
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 export function getInitials(name: string) {
@@ -35,34 +34,31 @@ export function getInitials(name: string) {
 }
 
 export default function CandidateCard({ candidate, onClick }: Readonly<CandidateCardProps>) {
-  const avatarStyle = getAvatarColor(candidate.name);
-
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`View details for ${candidate.name}`}
+      aria-label={`View details for ${candidate.full_name}`}
       className="p-5 rounded-xl border border-border bg-surface-panel hover:border-yellow/50 hover:shadow-lg hover:shadow-yellow/5 transition-all duration-200 cursor-pointer flex flex-col h-full group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
     >
       <div className="flex items-start gap-4 mb-4">
-        {/* Avatar */}
         <div
           className={cn(
             "flex items-center justify-center size-12 rounded-full border shrink-0 font-bold text-lg",
-            avatarStyle,
+            getAvatarColor(candidate.full_name),
           )}
         >
-          {getInitials(candidate.name)}
+          {getInitials(candidate.full_name)}
         </div>
 
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-text-primary text-lg truncate group-hover-accent transition-colors">
-            {candidate.name}
+            {candidate.full_name}
           </h3>
           <p className="text-sm text-text-secondary flex items-center gap-1.5 truncate mt-0.5">
             <IconBriefcase className="size-3.5 shrink-0" />
             <span className="truncate">
-              {candidate.previousCompany || "Freelance"} &bull; {candidate.experienceYears} yrs
+              {candidate.previous_company ?? "Freelance"} &bull; {candidate.experience_years} yrs
             </span>
           </p>
         </div>
@@ -85,16 +81,18 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
         )}
       </div>
 
-      {/* Contact Info (Footer) */}
+      {/* Contact footer */}
       <div className="mt-auto pt-4 border-t border-border/50 flex flex-col gap-2 w-full">
         <div className="flex items-center text-xs text-text-secondary truncate">
           <IconMail className="size-3.5 mr-2 shrink-0 opacity-70" />
           <span className="truncate">{candidate.email}</span>
         </div>
-        <div className="flex items-center text-xs text-text-secondary">
-          <IconPhone className="size-3.5 mr-2 shrink-0 opacity-70" />
-          <span>{candidate.phone}</span>
-        </div>
+        {candidate.phone && (
+          <div className="flex items-center text-xs text-text-secondary">
+            <IconPhone className="size-3.5 mr-2 shrink-0 opacity-70" />
+            <span>{candidate.phone}</span>
+          </div>
+        )}
       </div>
     </button>
   );

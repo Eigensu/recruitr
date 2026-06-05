@@ -12,6 +12,7 @@ class CandidateCreate(BaseModel):
 
 class CandidateUploadConfirm(BaseModel):
     """Sent after a successful Cloudinary upload to register the asset."""
+
     candidate_id: str
     resume_public_id: str
     resume_url: str
@@ -30,4 +31,5 @@ class CandidateResponse(BaseModel):
 
 class CandidateMatchScore(CandidateResponse):
     """Candidate with a computed keyword match score (from aggregation)."""
+
     match_score: float

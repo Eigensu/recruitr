@@ -21,14 +21,17 @@ class UserLogin(BaseModel):
 class TokenPayload(BaseModel):
     """Decoded custom JWT payload."""
 
-    sub: str  # User structure ID
+    sub: str  # User._id as string
     exp: int | None = None
     iat: int | None = None
 
 
 class UserInfoResponse(BaseModel):
-    """Response model for /auth/verify or /auth/me."""
+    """Response model for /auth/me."""
 
     user_id: str
     email: str
     full_name: str | None = None
+    # Employee / tenant context — null until ensure_employee_for_user runs
+    employee_id: str | None = None
+    brand_id: str | None = None

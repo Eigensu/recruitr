@@ -11,12 +11,13 @@ from app.config import settings
 from app.database import init_db
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
-from app.modules.candidates.router import router as candidates_router
 from app.modules.dashboard.router import router as dashboard_router
-from app.modules.gamification.router import router as gamification_router
 from app.modules.leaderboard.routes import router as leaderboard_router
-from app.modules.pipeline.router import router as pipeline_router
-from app.modules.positions.router import router as positions_router
+from app.modules.recruitment.controller import (
+    candidates_router,
+    pipeline_router,
+    positions_router,
+)
 from app.modules.storage.router import router as storage_router
 
 _COOKIE_SECURE = not settings.DEBUG  # True in prod (HTTPS), False in local dev
@@ -42,8 +43,6 @@ app = FastAPI(
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────────
-# SessionMiddleware must come before CORS so the session is available in routes.
-# It stores the OAuth `state` token between /google/login and /google/callback.
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SESSION_SECRET,
@@ -61,10 +60,9 @@ app.add_middleware(
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(brands_router, prefix="/api/v1/brands", tags=["Brands"])
-app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candidates"])
+app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
-app.include_router(gamification_router, prefix="/api/v1/gamify", tags=["Gamification"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(leaderboard_router, prefix="/api/v1/leaderboard", tags=["Leaderboard"])

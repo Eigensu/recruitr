@@ -340,7 +340,9 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         }.get(stage, ActivityType.mapped)
 
         job = next((entry for entry in job_docs if entry["_id"] == mapping["job_opening_id"]), None)
-        candidate = next((entry for entry in candidate_docs if entry["_id"] == mapping["candidate_id"]), None)
+        candidate = next(
+            (entry for entry in candidate_docs if entry["_id"] == mapping["candidate_id"]), None
+        )
         activity_docs.append(
             {
                 "_id": ObjectId(),

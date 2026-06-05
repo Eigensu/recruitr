@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class CloudinarySignatureResponse(BaseModel):
     """Returned to frontend so it can upload directly to Cloudinary."""
+
     signature: str
     timestamp: int
     cloud_name: str
@@ -15,6 +16,7 @@ class CloudinarySignatureResponse(BaseModel):
 
 class CloudinaryWebhookPayload(BaseModel):
     """Cloudinary upload notification webhook payload (simplified)."""
+
     notification_type: str
     public_id: str
     secure_url: str

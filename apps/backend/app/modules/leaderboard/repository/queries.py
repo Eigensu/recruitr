@@ -379,7 +379,7 @@ async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
         [
             {
                 "$group": {
-                    "_id": "$job_opening_id",
+                    "_id": "$position_id",
                     "recruiters": {"$addToSet": "$employee_id"},
                     "candidate_count": {"$sum": 1},
                 }

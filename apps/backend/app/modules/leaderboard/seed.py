@@ -329,13 +329,13 @@ async def seed_leaderboard() -> None:
             job = job_docs[idx % len(job_docs)]
             stage = PipelineStage.joined.value if idx % 4 == 0 else PipelineStage.offer_sent.value
             await mappings_col.update_one(
-                {"candidate_id": candidate["_id"], "job_opening_id": job["_id"]},
+                {"candidate_id": candidate["_id"], "position_id": job["_id"]},
                 {
                     "$set": {
                         "employee_id": employee["_id"],
                         "candidate_id": candidate["_id"],
-                        "job_opening_id": job["_id"],
-                        "pipeline_stage": stage,
+                        "position_id": job["_id"],
+                        "stage": stage,
                         "mapped_at": datetime.now(UTC) - timedelta(days=idx),
                         "updated_at": datetime.now(UTC),
                     }

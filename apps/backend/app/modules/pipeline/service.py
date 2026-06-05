@@ -9,9 +9,7 @@ from app.modules.gamification.models import RecruiterProfile
 from app.modules.positions.models import Position
 
 
-async def find_top_candidates(
-    position_id: str, limit: int = 10
-) -> list[dict]:
+async def find_top_candidates(position_id: str, limit: int = 10) -> list[dict]:
     """Run a MongoDB aggregation to score and rank candidates by keyword overlap.
 
     The score is computed entirely at the database layer using $setIntersection,
@@ -92,19 +90,18 @@ async def match_candidate_to_position(
     cand_oid = PydanticObjectId(candidate_id)
 
     # Verify both documents exist before opening a transaction
-    if not await Position.get(pos_oid):
+    position = await Position.get(pos_oid)
+    if not position:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found")
     if not await Candidate.get(cand_oid):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
     client = get_client()
 
-    async with await client.start_session() as session:
-        async with session.start_transaction():
+    async with await client.start_session() as session:  # noqa: SIM117
+        with session.start_transaction():
             # 1. Push candidate into position's matched list
-            await Position.find_one(
-                Position.id == pos_oid, session=session
-            ).update(
+            await Position.find_one(Position.id == pos_oid, session=session).update(
                 {
                     "$push": {
                         "matched_candidates": {

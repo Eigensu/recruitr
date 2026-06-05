@@ -20,6 +20,6 @@ class RecruiterProfile(Document):
         indexes = [
             IndexModel("user_id", unique=True),
             IndexModel("brand_id"),
-            IndexModel([("brand_id", 1), ("daily_score", -1)]),   # leaderboard sort
+            IndexModel([("brand_id", 1), ("daily_score", -1)]),  # leaderboard sort
             IndexModel([("brand_id", 1), ("weekly_score", -1)]),
         ]
