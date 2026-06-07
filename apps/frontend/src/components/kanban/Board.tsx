@@ -1,9 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
-  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -11,103 +11,141 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useCallback } from "react";
-import type { CandidateStatus } from "@/types";
-import { usePipelineStore } from "@/stores/usePipelineStore";
+import { IconLoader2, IconAlertCircle, IconRefresh } from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
+import { getPipelineBoard, moveMappingStage } from "@/lib/api/pipeline";
+import type { KanbanStage, PipelineCard, PipelineColumn } from "@/types";
 import KanbanColumn from "./Column";
-import CandidateCardComponent from "./CandidateCard";
+import KanbanCard from "./CandidateCard";
 
-const COLUMNS: { id: CandidateStatus; label: string; color: string }[] = [
-  { id: "pending", label: "Pending Review", color: "shadow-amber-500/20" },
-  { id: "accepted", label: "Accepted", color: "shadow-emerald-500/20" },
-  { id: "rejected", label: "Rejected", color: "shadow-red-500/20" },
-];
-
-export default function KanbanBoard({ positionId }: { positionId: string }) {
-  const { columns, moveCard, activeCardId, setActiveCardId } = usePipelineStore();
+export default function KanbanBoard() {
   const apiFetch = useApiFetch();
+  const [columns, setColumns] = useState<PipelineColumn[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeCard, setActiveCard] = useState<PipelineCard | null>(null);
 
-  // Require 8px movement to activate drag — prevents accidental drags on click
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const findCardColumn = useCallback(
-    (cardId: string): CandidateStatus | null => {
-      for (const [colId, cards] of Object.entries(columns)) {
-        if (cards.some((c) => c.id === cardId)) return colId as CandidateStatus;
-      }
-      return null;
-    },
-    [columns],
-  );
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveCardId(event.active.id as string);
+  async function loadBoard() {
+    setLoading(true);
+    setError(null);
+    try {
+      const board = await getPipelineBoard(apiFetch);
+      setColumns(board.stages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load pipeline");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
-    const from = findCardColumn(active.id as string);
-    const to = over.id as CandidateStatus;
-    if (from && to && from !== to && COLUMNS.some((c) => c.id === to)) {
-      moveCard(active.id as string, from, to);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadBoard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function findCardColumn(mappingId: string): KanbanStage | null {
+    for (const col of columns) {
+      if (col.mappings.some((c) => c.mapping_id === mappingId)) return col.stage;
     }
+    return null;
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const card = event.active.data.current?.card as PipelineCard | undefined;
+    if (card) setActiveCard(card);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    setActiveCardId(null);
+    setActiveCard(null);
     if (!over) return;
 
-    const to = over.id as CandidateStatus;
-    if (!COLUMNS.some((c) => c.id === to)) return;
+    const mappingId = active.id as string;
+    const toStage = over.id as KanbanStage;
+    const fromStage = findCardColumn(mappingId);
 
-    // Fire PATCH /api/v1/pipeline/match — optimistic UI already updated via handleDragOver
+    if (!fromStage || fromStage === toStage) return;
+    if (!columns.some((c) => c.stage === toStage)) return;
+
+    // Optimistic update
+    const movingCard = columns
+      .find((c) => c.stage === fromStage)
+      ?.mappings.find((c) => c.mapping_id === mappingId);
+    if (!movingCard) return;
+
+    const snapshot = columns;
+    setColumns((prev) =>
+      prev.map((col) => {
+        if (col.stage === fromStage) {
+          return {
+            ...col,
+            count: col.count - 1,
+            mappings: col.mappings.filter((c) => c.mapping_id !== mappingId),
+          };
+        }
+        if (col.stage === toStage) {
+          return {
+            ...col,
+            count: col.count + 1,
+            mappings: [...col.mappings, { ...movingCard, stage: toStage }],
+          };
+        }
+        return col;
+      }),
+    );
+
     try {
-      await apiFetch("/api/v1/pipeline/match", {
-        method: "PATCH",
-        body: JSON.stringify({
-          position_id: positionId,
-          candidate_id: active.id,
-          target_status: to,
-        }),
-      });
-    } catch (err) {
-      console.error("Failed to sync match:", err);
-      // TODO: rollback optimistic update on error
+      await moveMappingStage(apiFetch, mappingId, toStage);
+    } catch {
+      setColumns(snapshot);
     }
   }
 
-  const activeCard = activeCardId
-    ? Object.values(columns)
-        .flat()
-        .find((c) => c.id === activeCardId)
-    : null;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-text-muted">
+        <IconLoader2 className="size-8 animate-spin opacity-40" />
+        <p className="text-sm">Loading pipeline…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <IconAlertCircle className="size-8 text-red-400 opacity-60" />
+        <p className="text-sm text-text-muted">{error}</p>
+        <button
+          type="button"
+          onClick={() => void loadBoard()}
+          className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-yellow/40 transition-all"
+        >
+          <IconRefresh className="size-3.5" />
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <DndContext
-      id="kanban-board-dnd-context"
+      id="pipeline-kanban"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-3 gap-4 h-full">
-        {COLUMNS.map((col) => (
-          <KanbanColumn
-            key={col.id}
-            id={col.id}
-            label={col.label}
-            color={col.color}
-            cards={columns[col.id]}
-          />
+      <div className="flex gap-3 h-full overflow-x-auto pb-2 px-1 dashboard-scrollbar">
+        {columns.map((col) => (
+          <KanbanColumn key={col.stage} stage={col.stage} label={col.label} cards={col.mappings} />
         ))}
       </div>
 
-      <DragOverlay>
-        {activeCard && <CandidateCardComponent card={activeCard} isDragging />}
+      <DragOverlay dropAnimation={{ duration: 160, easing: "ease-out" }}>
+        {activeCard ? <KanbanCard card={activeCard} isDragOverlay /> : null}
       </DragOverlay>
     </DndContext>
   );

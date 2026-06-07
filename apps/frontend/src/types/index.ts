@@ -214,7 +214,7 @@ export interface CloudinarySignature {
   folder: string;
 }
 
-// ── Kanban ───────────────────────────────────────────────────────────────────
+// ── Kanban (legacy — kept for backward compat with old components) ────────────
 
 export interface KanbanColumn {
   id: CandidateStatus;
@@ -230,4 +230,40 @@ export interface CandidateCard {
   resume_url: string | null;
   match_score?: number;
   status: CandidateStatus;
+}
+
+// ── Pipeline Kanban (Phase D — real API types) ────────────────────────────────
+
+export type KanbanStage =
+  | "sent_to_client"
+  | "interview"
+  | "decision_pending"
+  | "offer"
+  | "offer_accepted"
+  | "position_close";
+
+export interface PipelineCard {
+  mapping_id: string;
+  candidate_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  position_id: string;
+  position_code: string;
+  position_role: string;
+  position_client: string;
+  stage: KanbanStage;
+  match_score: number | null;
+  decision: string;
+  mapped_at: string;
+}
+
+export interface PipelineColumn {
+  stage: KanbanStage;
+  label: string;
+  count: number;
+  mappings: PipelineCard[];
+}
+
+export interface PipelineBoardData {
+  stages: PipelineColumn[];
 }

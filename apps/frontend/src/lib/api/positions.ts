@@ -2,6 +2,17 @@ import type { ApiPosition, ApiTopCandidate, ApiPositionFilters, PaginatedRespons
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
 
+export interface PositionCreatePayload {
+  client_id: string;
+  role: string;
+  department?: string;
+  city?: string;
+  seniority?: string;
+  requirements?: string[];
+  total_seats?: number;
+  notes?: string;
+}
+
 export interface PositionListParams {
   search?: string;
   client_id?: string;
@@ -48,6 +59,16 @@ export function mapCandidateToPosition(
   return apiFetch(`/api/v1/positions/${positionId}/candidates`, {
     method: "POST",
     body: JSON.stringify({ candidate_id: candidateId }),
+  });
+}
+
+export function createPosition(
+  apiFetch: ApiFetch,
+  payload: PositionCreatePayload,
+): Promise<ApiPosition> {
+  return apiFetch("/api/v1/positions", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

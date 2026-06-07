@@ -13,7 +13,7 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from app.config import settings
-from app.modules.dashboard.enums import ActivityType, JobStatus, PipelineStage, TargetEntityType
+from app.modules.dashboard.enums import ActivityType, JobStatus, PipelineStage
 
 _EMPLOYEE_NAMES = [
     "Edwin D'Souza",
@@ -96,15 +96,15 @@ _COMPANIES = [
 ]
 
 _STAGE_WEIGHTS: list[tuple[PipelineStage, int]] = [
-    (PipelineStage.added, 18),
-    (PipelineStage.shortlisted, 16),
+    (PipelineStage.sourced, 18),
+    (PipelineStage.interview, 16),
     (PipelineStage.sent_to_client, 18),
     (PipelineStage.rejected, 9),
-    (PipelineStage.hold, 7),
-    (PipelineStage.offer_sent, 10),
+    (PipelineStage.on_hold, 7),
+    (PipelineStage.offer, 10),
     (PipelineStage.offer_accepted, 8),
-    (PipelineStage.joined, 8),
-    (PipelineStage.dropped, 6),
+    (PipelineStage.position_close, 8),
+    (PipelineStage.decision_pending, 6),
 ]
 
 
@@ -128,7 +128,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
 
     employees_col = db["employees"]
     candidates_col = db["candidates"]
-    job_openings_col = db["job_openings"]
+    job_openings_col = db["positions"]
     mappings_col = db["candidate_mappings"]
     activities_col = db["activities"]
     documents_col = db["documents"]
@@ -141,6 +141,9 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         await activities_col.delete_many({})
         await documents_col.delete_many({})
 
+    seed_brand_id = ObjectId("000000000000000000000001")
+    seed_client_id = ObjectId("000000000000000000000002")
+
     employee_docs: list[dict[str, Any]] = []
     for name in _EMPLOYEE_NAMES:
         created = _rand_time(rng, min_days=60, max_days=360)
@@ -148,6 +151,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         employee_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
                 "name": name,
                 "email": f"{email_local}@recruitr.demo",
                 "mappings": {
@@ -187,6 +191,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         candidate_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
                 "full_name": f"{first} {last}",
                 "email": f"{first.lower()}.{last.lower()}.{idx + 1}@mail.demo",
                 "phone": f"+91-98{rng.randint(10000000, 99999999)}",
@@ -216,6 +221,9 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         job_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
+                "client_id": seed_client_id,
+                "code": f"DASH-POS-{len(job_docs) + 1:03d}",
                 "client_name": client_name,
                 "role": rng.choice(_ROLE_NAMES),
                 "total_seats": total_seats,
@@ -257,10 +265,12 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         mapping_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
+                "client_id": seed_client_id,
                 "employee_id": employee["_id"],
                 "candidate_id": candidate["_id"],
-                "job_opening_id": job["_id"],
-                "pipeline_stage": stage.value,
+                "position_id": job["_id"],
+                "stage": stage.value,
                 "mapped_at": mapped_at,
                 "updated_at": mapped_at,
             }
@@ -280,8 +290,8 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
 
     joined_per_job: dict[ObjectId, int] = defaultdict(int)
     for mapping in mapping_docs:
-        if mapping["pipeline_stage"] == PipelineStage.joined.value:
-            joined_per_job[mapping["job_opening_id"]] += 1
+        if mapping["stage"] == PipelineStage.position_close.value:
+            joined_per_job[mapping["position_id"]] += 1
 
     for job in job_docs:
         joined = min(joined_per_job.get(job["_id"], 0), int(job["total_seats"]))
@@ -305,11 +315,11 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
     for mapping in mapping_docs:
         employee_id: ObjectId = mapping["employee_id"]
         total_per_employee[employee_id] += 1
-        if mapping["pipeline_stage"] == PipelineStage.offer_sent.value:
+        if mapping["stage"] == PipelineStage.offer.value:
             offer_sent_per_employee[employee_id] += 1
-        if mapping["pipeline_stage"] == PipelineStage.joined.value:
+        if mapping["stage"] == PipelineStage.position_close.value:
             joined_per_employee[employee_id] += 1
-        if mapping["pipeline_stage"] == PipelineStage.rejected.value:
+        if mapping["stage"] == PipelineStage.rejected.value:
             rejected_per_employee[employee_id] += 1
 
     for employee in employee_docs:
@@ -331,24 +341,25 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
 
     activity_docs: list[dict[str, Any]] = []
     for mapping in sorted(mapping_docs, key=lambda item: item["mapped_at"], reverse=True)[:180]:
-        stage = PipelineStage(mapping["pipeline_stage"])
+        stage = PipelineStage(mapping["stage"])
         activity_type = {
-            PipelineStage.offer_sent: ActivityType.offer_sent,
+            PipelineStage.offer: ActivityType.offer_sent,
             PipelineStage.offer_accepted: ActivityType.offer_accepted,
-            PipelineStage.joined: ActivityType.joined,
+            PipelineStage.position_close: ActivityType.joined,
             PipelineStage.rejected: ActivityType.rejected,
         }.get(stage, ActivityType.mapped)
 
-        job = next((entry for entry in job_docs if entry["_id"] == mapping["job_opening_id"]), None)
+        job = next((entry for entry in job_docs if entry["_id"] == mapping["position_id"]), None)
         candidate = next(
             (entry for entry in candidate_docs if entry["_id"] == mapping["candidate_id"]), None
         )
         activity_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
                 "employee_id": mapping["employee_id"],
                 "activity_type": activity_type.value,
-                "target_entity_type": TargetEntityType.candidate.value,
+                "target_entity_type": "candidate",
                 "target_entity_id": str(mapping["candidate_id"]),
                 "description": (
                     f"{candidate['full_name']} for {job['client_name']} ({job['role']}) moved to "
@@ -368,6 +379,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
         document_docs.append(
             {
                 "_id": ObjectId(),
+                "brand_id": seed_brand_id,
                 "candidate_id": candidate["_id"],
                 "file_name": f"{candidate['full_name'].replace(' ', '_').lower()}_resume.pdf",
                 "file_type": "resume",

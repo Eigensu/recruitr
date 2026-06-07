@@ -1,77 +1,88 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import type { CandidateCard } from "@/types";
+import { IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { cn } from "@/lib/utils";
+import type { PipelineCard } from "@/types";
 
-interface CandidateCardProps {
-  card: CandidateCard;
-  isDragging?: boolean;
+interface Props {
+  card: PipelineCard;
+  isDragOverlay?: boolean;
 }
 
-export default function CandidateCardComponent({ card, isDragging = false }: CandidateCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: isSortableDragging,
-  } = useSortable({ id: card.id });
+function scoreColor(score: number | null): string {
+  if (score === null) return "text-text-muted bg-surface-2 border-border";
+  if (score >= 0.75) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/20";
+  if (score >= 0.5) return "text-yellow bg-yellow/10 border-yellow/20";
+  return "text-red-400 bg-red-500/10 border-red-500/20";
+}
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+export default function KanbanCard({ card, isDragOverlay = false }: Readonly<Props>) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: card.mapping_id,
+    data: { card },
+  });
+
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
-      className={`
-        rounded-lg bg-gray-800 p-3 cursor-grab active:cursor-grabbing shadow-sm
-        hover:bg-gray-750 transition-all select-none
-        ${isSortableDragging || isDragging ? "opacity-50 shadow-2xl scale-105" : ""}
-      `}
+      className={cn(
+        "group relative rounded-xl border bg-surface-panel p-3 select-none",
+        "transition-all duration-150",
+        isDragging && !isDragOverlay && "opacity-40 scale-95",
+        isDragOverlay &&
+          "shadow-2xl shadow-black/50 rotate-1 cursor-grabbing ring-1 ring-yellow/30",
+        !isDragging && !isDragOverlay && "hover:border-border hover:shadow-sm cursor-grab",
+        "border-border",
+      )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-white truncate">{card.name}</p>
-          <p className="text-xs text-white truncate">{card.email}</p>
-        </div>
-        {card.match_score !== undefined && (
-          <span className="shrink-0 text-xs font-bold text-violet-400 bg-violet-500/10 rounded px-1.5 py-0.5">
+      {/* Drag handle */}
+      <div
+        {...listeners}
+        className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
+      >
+        <IconGripVertical className="size-3.5 text-text-muted" />
+      </div>
+
+      {/* Candidate */}
+      <div className="pr-4 mb-2">
+        <p className="text-sm font-semibold text-text-primary truncate leading-tight">
+          {card.candidate_name}
+        </p>
+        <p className="text-[11px] text-text-muted truncate mt-0.5">{card.candidate_email}</p>
+      </div>
+
+      {/* Position */}
+      <div className="flex items-center gap-1.5 mb-2.5">
+        <span className="text-[10px] font-medium text-text-secondary truncate">
+          {card.position_role}
+        </span>
+        <span className="text-text-muted/40">·</span>
+        <span className="text-[10px] text-text-muted truncate">{card.position_client}</span>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
+          {card.position_code}
+        </span>
+        {card.match_score !== null && (
+          <span
+            className={cn(
+              "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border",
+              scoreColor(card.match_score),
+            )}
+          >
+            <IconSparkles className="size-2.5" />
             {Math.round(card.match_score * 100)}%
           </span>
         )}
       </div>
-
-      {card.extracted_skills.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {card.extracted_skills.slice(0, 3).map((skill) => (
-            <span key={skill} className="text-[10px] bg-gray-700 text-white rounded px-1.5 py-0.5">
-              {skill}
-            </span>
-          ))}
-          {card.extracted_skills.length > 3 && (
-            <span className="text-[10px] text-white">+{card.extracted_skills.length - 3}</span>
-          )}
-        </div>
-      )}
-
-      {card.resume_url && (
-        <a
-          href={card.resume_url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-2 block text-[10px] text-violet-400 hover:text-violet-300 transition-colors"
-        >
-          View Resume ↗
-        </a>
-      )}
     </div>
   );
 }

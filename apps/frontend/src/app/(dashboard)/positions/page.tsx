@@ -26,6 +26,8 @@ import {
   unmapCandidateFromPosition,
 } from "@/lib/api/positions";
 import type { ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
+import AddPositionModal from "@/components/positions/AddPositionModal";
+import { useToast } from "@/components/ui/Toast";
 import {
   DndContext,
   DragOverlay,
@@ -442,6 +444,9 @@ export default function PositionsPage() {
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
   const [activeDragCand, setActiveDragCand] = useState<ApiTopCandidate | null>(null);
+  const [addPositionOpen, setAddPositionOpen] = useState(false);
+
+  const toast = useToast();
 
   // Debounce search input
   useEffect(() => {
@@ -495,6 +500,14 @@ export default function PositionsPage() {
   }, [apiFetch, selectedPositionId]);
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? null;
+
+  function applyPositionMappingDelta(
+    positionId: string,
+    delta: 1 | -1,
+    cand: Pick<ApiTopCandidate, "id" | "full_name">,
+  ) {
+    setPositions((prev) => applyMappingDelta(prev, positionId, delta, cand));
+  }
 
   async function doMap(positionId: string, candidateId: string) {
     const cand = candidates.find((c) => c.id === candidateId);
@@ -604,13 +617,14 @@ export default function PositionsPage() {
                 map them.
               </p>
             </div>
-            <a
-              href="/positions/new"
+            <button
+              type="button"
+              onClick={() => setAddPositionOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
             >
               <IconPlus className="size-4" />
               New Position
-            </a>
+            </button>
           </div>
         </div>
 
@@ -839,6 +853,16 @@ export default function PositionsPage() {
       <DragOverlay dropAnimation={{ duration: 180, easing: "ease-out" }}>
         {activeDragCand ? <DragGhostCard cand={activeDragCand} /> : null}
       </DragOverlay>
+
+      <AddPositionModal
+        isOpen={addPositionOpen}
+        onClose={() => setAddPositionOpen(false)}
+        filters={filters}
+        onCreated={(pos) => {
+          setPositions((prev) => [pos, ...prev]);
+          toast(`Position "${pos.role}" created`, "success");
+        }}
+      />
     </DndContext>
   );
 }
