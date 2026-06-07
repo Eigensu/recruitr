@@ -348,6 +348,8 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
 
     code = await generate_position_code(tenant.brand_id, client_doc.code)
 
+    reqs = _get_effective_requirements(data)
+
     doc = Position(
         brand_id=tenant.brand_id,
         code=code,
@@ -358,7 +360,7 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         city=data.city,
         train_line=data.train_line,
         seniority=data.seniority,
-        requirements=data.requirements,
+        requirements=reqs,
         total_seats=data.total_seats,
         filled_seats=0,
         remaining_seats=data.total_seats,
