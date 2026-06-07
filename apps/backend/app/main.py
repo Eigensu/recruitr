@@ -17,6 +17,8 @@ from app.modules.recruitment.controller import (
     candidates_router,
     pipeline_router,
     positions_router,
+    tags_router,
+    teams_router,
 )
 from app.modules.storage.router import router as storage_router
 
@@ -63,6 +65,8 @@ app.include_router(brands_router, prefix="/api/v1/brands", tags=["Brands"])
 app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candidates"])
 app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
+app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])
+app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(leaderboard_router, prefix="/api/v1/leaderboard", tags=["Leaderboard"])

@@ -15,6 +15,7 @@ from pymongo import IndexModel
 from app.modules.recruitment.enums import (
     ActivityType,
     Decision,
+    EducationLevel,
     PipelineStage,
     PositionStatus,
     Seniority,
@@ -46,6 +47,45 @@ class Counter(Document):
         name = "counters"
         indexes = [
             IndexModel([("brand_id", 1), ("key", 1)], unique=True),
+        ]
+
+
+# ── Team & RecruiterTag ─────────────────────────────────────────────────────────
+
+
+class Team(Document):
+    brand_id: PydanticObjectId
+    name: str
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "teams"
+        indexes = [
+            IndexModel([("brand_id", 1), ("name", 1)], unique=True),
+        ]
+
+
+class RecruiterTag(Document):
+    brand_id: PydanticObjectId
+    name: str
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "recruiter_tags"
+        indexes = [
+            IndexModel([("brand_id", 1), ("name", 1)], unique=True),
         ]
 
 
@@ -87,6 +127,7 @@ class Position(Document):
     role: str
     department: str | None = None
     city: str | None = None
+    train_line: str | None = None
     seniority: Seniority = Seniority.mid
     requirements: list[str] = Field(default_factory=list)  # lowercased keywords
     total_seats: int = 0
@@ -134,8 +175,12 @@ class Candidate(Document):
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float = 0
+    education_level: EducationLevel | None = None
     skills: list[str] = Field(default_factory=list)
     skills_normalized: list[str] = Field(default_factory=list)  # lowercased, for $setIntersection
+    ai_tags: list[str] = Field(default_factory=list)
+    recruiter_tags: list[str] = Field(default_factory=list)
+    preferred_train_line: str | None = None
     resume_url: str | None = None
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
@@ -154,6 +199,7 @@ class Candidate(Document):
             IndexModel([("brand_id", 1), ("email", 1)], unique=True),
             IndexModel("brand_id"),
             IndexModel("skills_normalized"),
+            IndexModel("recruiter_tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
             IndexModel("is_active"),
             IndexModel("created_at"),
@@ -223,6 +269,7 @@ class Employee(Document):
 
     brand_id: PydanticObjectId | None = None  # set at onboarding
     user_id: PydanticObjectId | None = None  # FK → users._id
+    team_id: PydanticObjectId | None = None  # FK → teams._id
     name: str
     email: str  # globally unique — join key with User
     avatar_url: str | None = None

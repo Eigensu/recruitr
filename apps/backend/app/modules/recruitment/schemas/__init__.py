@@ -29,6 +29,8 @@ from app.modules.recruitment.schemas.position import (
     TopCandidateItem,
 )
 from app.modules.recruitment.schemas.shared import ResumeConfirm, TenantScope
+from app.modules.recruitment.schemas.tag import RecruiterTagCreate, RecruiterTagResponse
+from app.modules.recruitment.schemas.team import TeamCreate, TeamResponse
 
 __all__ = [
     # Candidate DTOs
@@ -56,6 +58,11 @@ __all__ = [
     "StageMappingItem",
     "StageMoveRequest",
     "StageMoveResponse",
+    # Team & Tag DTOs
+    "TeamCreate",
+    "TeamResponse",
+    "RecruiterTagCreate",
+    "RecruiterTagResponse",
     # Shared
     "TenantScope",
     "ResumeConfirm",

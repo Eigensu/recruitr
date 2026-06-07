@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
   IconSearch,
@@ -16,12 +17,27 @@ import {
   IconListNumbers,
   IconLogout,
 } from "@tabler/icons-react";
+import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const TABS = ["General", "Domain", "SEO", "Team", "Account"];
   const [activeTab, setActiveTab] = useState("General");
+
+  async function handleLogout() {
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/logout`,
+        { method: "POST", credentials: "include" },
+      );
+    } catch (err) {
+      console.error("Logout failed:", err);
+    } finally {
+      router.push("/sign-in");
+    }
+  }
 
   const COUNTRY_CODES: Record<string, string> = {
     "Select Country": "",
@@ -379,7 +395,10 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 py-6 items-start md:items-center">
                 <label className="text-sm font-medium text-text-primary">Session</label>
                 <div className="md:col-span-2 max-w-md">
-                  <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors cursor-pointer">
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
+                  >
                     <IconLogout className="w-4 h-4" />
                     Log out of all devices
                   </button>
@@ -389,8 +408,10 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {activeTab === "Team" && <TeamSettingsTab />}
+
         {/* Other Tabs Placeholder */}
-        {["Domain", "SEO", "Team"].includes(activeTab) && (
+        {["Domain", "SEO"].includes(activeTab) && (
           <div className="py-12 flex flex-col items-center justify-center text-center border border-dashed border-border rounded-xl bg-surface-2">
             <h3 className="text-lg font-medium text-text-primary mb-2">{activeTab} Settings</h3>
             <p className="text-sm text-text-secondary max-w-sm">

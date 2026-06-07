@@ -77,3 +77,10 @@ class ActivityType(StrEnum):
     joined = "joined"
     rejected = "rejected"
     unmapped = "unmapped"
+
+
+class EducationLevel(StrEnum):
+    high_school = "High School"
+    bachelors = "Bachelors"
+    masters = "Masters"
+    phd = "PhD"

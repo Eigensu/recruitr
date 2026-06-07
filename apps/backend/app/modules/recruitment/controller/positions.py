@@ -107,6 +107,18 @@ _AVAIL_SCORE_EXPR: dict = {
 }
 
 
+def _edu_score(edu: str | None) -> float:
+    if edu == "PhD":
+        return 1.0
+    if edu == "Masters":
+        return 0.8
+    if edu == "Bachelors":
+        return 0.6
+    if edu == "High School":
+        return 0.4
+    return 0.0
+
+
 def _py_exp_score(seniority: str, years: float) -> float:
     """Python mirror of _exp_score_expr — used at map-time score snapshot."""
     s = seniority.lower()
@@ -121,8 +133,11 @@ def _py_exp_score(seniority: str, years: float) -> float:
 def _py_composite_score(
     pos_requirements: list[str],
     seniority: str,
+    pos_train_line: str | None,
     skills_normalized: list[str],
     experience_years: float,
+    edu_level: str | None,
+    preferred_train_line: str | None,
 ) -> float:
     """Composite match score — mirrors the MongoDB aggregation in get_top_candidates."""
     has_reqs = bool(pos_requirements)
@@ -132,10 +147,21 @@ def _py_composite_score(
     skill_score = sum(1 for s in skills_normalized if s in req_lower) / n_req if has_reqs else 0.0
     exp_score = _py_exp_score(seniority, experience_years)
     avail_score = 1.0  # new mappings always start at sourced
+    if pos_train_line and pos_train_line == preferred_train_line or not pos_train_line:
+        train_score = 1.0
+    else:
+        train_score = 0.0
+    edu_score_val = _edu_score(edu_level)
 
     if has_reqs:
-        return 0.5 * skill_score + 0.3 * exp_score + 0.2 * avail_score
-    return 0.6 * exp_score + 0.4 * avail_score
+        return (
+            0.4 * skill_score
+            + 0.2 * exp_score
+            + 0.2 * avail_score
+            + 0.1 * train_score
+            + 0.1 * edu_score_val
+        )
+    return 0.4 * exp_score + 0.4 * avail_score + 0.1 * train_score + 0.1 * edu_score_val
 
 
 def _exp_score_expr(seniority: str) -> dict:
@@ -299,7 +325,7 @@ async def list_positions(
         _paginate(page, limit),
     ]
 
-    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(None)
+    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     items, total = _unpack(result)
     return _make_page(items, total, page, limit, PositionListItem)
 
@@ -323,6 +349,7 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         role=data.role,
         department=data.department,
         city=data.city,
+        train_line=data.train_line,
         seniority=data.seniority,
         requirements=data.requirements,
         total_seats=data.total_seats,
@@ -346,6 +373,7 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         role=doc.role,
         department=doc.department,
         city=doc.city,
+        train_line=doc.train_line,
         seniority=doc.seniority,
         status=doc.status,
         total_seats=doc.total_seats,
@@ -378,6 +406,7 @@ async def get_position(tenant: _Tenant, position_id: str) -> PositionListItem:
         role=doc.role,
         department=doc.department,
         city=doc.city,
+        train_line=doc.train_line,
         seniority=doc.seniority,
         status=doc.status,
         total_seats=doc.total_seats,
@@ -409,6 +438,8 @@ async def update_position(
         update["department"] = data.department
     if data.city is not None:
         update["city"] = data.city
+    if data.train_line is not None:
+        update["train_line"] = data.train_line
     if data.seniority is not None:
         update["seniority"] = data.seniority
     if data.requirements is not None:
@@ -442,6 +473,7 @@ async def update_position(
         role=doc.role,
         department=doc.department,
         city=doc.city,
+        train_line=doc.train_line,
         seniority=doc.seniority,
         status=doc.status,
         total_seats=doc.total_seats,
@@ -490,7 +522,7 @@ async def get_top_candidates(
     n_req = len(req_lower) or 1
 
     if has_reqs:
-        w_skill, w_exp, w_avail = 0.5, 0.3, 0.2
+        w_skill, w_exp, w_avail, w_train, w_edu = 0.4, 0.2, 0.2, 0.1, 0.1
         skill_score_expr: dict = {
             _DIVIDE: [
                 {_SIZE: {_SET_INTERSECTION: [{"$ifNull": ["$skills_normalized", []]}, req_lower]}},
@@ -498,8 +530,26 @@ async def get_top_candidates(
             ]
         }
     else:
-        w_skill, w_exp, w_avail = 0.0, 0.6, 0.4
+        w_skill, w_exp, w_avail, w_train, w_edu = 0.0, 0.4, 0.4, 0.1, 0.1
         skill_score_expr = {"$literal": 0.0}
+
+    edu_score_expr: dict = {
+        _SWITCH: {
+            "branches": [
+                {"case": {"$eq": ["$education_level", "PhD"]}, "then": 1.0},
+                {"case": {"$eq": ["$education_level", "Masters"]}, "then": 0.8},
+                {"case": {"$eq": ["$education_level", "Bachelors"]}, "then": 0.6},
+                {"case": {"$eq": ["$education_level", "High School"]}, "then": 0.4},
+            ],
+            "default": 0.0,
+        }
+    }
+
+    train_score_expr: dict = (
+        {"$cond": [{"$eq": ["$preferred_train_line", pos.train_line]}, 1.0, 0.0]}
+        if pos.train_line
+        else {"$literal": 1.0}
+    )
 
     pipeline = [
         {_MATCH: {"brand_id": tenant.brand_id, "is_active": True}},
@@ -509,6 +559,8 @@ async def get_top_candidates(
                 "skill_score": skill_score_expr,
                 "exp_score": _exp_score_expr(pos.seniority.value),
                 "avail_score": _AVAIL_SCORE_EXPR,
+                "edu_score": edu_score_expr,
+                "train_score": train_score_expr,
             }
         },
         {
@@ -518,6 +570,8 @@ async def get_top_candidates(
                         {_MULTIPLY: ["$skill_score", w_skill]},
                         {_MULTIPLY: ["$exp_score", w_exp]},
                         {_MULTIPLY: ["$avail_score", w_avail]},
+                        {_MULTIPLY: ["$edu_score", w_edu]},
+                        {_MULTIPLY: ["$train_score", w_train]},
                     ]
                 }
             }
@@ -542,12 +596,24 @@ async def get_top_candidates(
             }
         },
         {_ADD_FIELDS: {"is_mapped": {_SIZE: "$mapping"}}},
-        {_UNSET: ["mapping", "skills_normalized", "skill_score", "exp_score", "avail_score"]},
+        {
+            _UNSET: [
+                "mapping",
+                "skills_normalized",
+                "skill_score",
+                "exp_score",
+                "avail_score",
+                "edu_score",
+                "train_score",
+            ]
+        },
         {_SORT: {"match_score": -1, "experience_years": -1}},
         {_LIMIT_OP: limit},
     ]
 
-    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(None)
+    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(
+        length=None
+    )
     return [TopCandidateItem.model_validate(r) for r in results]
 
 
@@ -592,7 +658,7 @@ async def get_position_candidates(
         {_SORT: {"stage": 1, "mapped_at": -1}},
     ]
 
-    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(None)
+    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     return [PositionMappedCandidate.model_validate(r) for r in rows]
 
 
@@ -631,8 +697,11 @@ async def map_candidate_to_position(
     match_score: float = _py_composite_score(
         pos.requirements,
         pos.seniority.value,
+        pos.train_line,
         cand.skills_normalized or [],
         cand.experience_years,
+        cand.education_level.value if cand.education_level else None,
+        cand.preferred_train_line,
     )
 
     # Create mapping

@@ -24,6 +24,7 @@ class PositionListItem(BaseModel):
     role: str
     department: str | None = None
     city: str | None = None
+    train_line: str | None = None
     seniority: str
     status: str
     total_seats: int
@@ -45,6 +46,7 @@ class PositionCreate(BaseModel):
     role: str
     department: str | None = None
     city: str | None = None
+    train_line: str | None = None
     seniority: str = "Mid"
     requirements: list[str] = Field(default_factory=list)
     total_seats: int = Field(default=0, ge=0)
@@ -57,6 +59,7 @@ class PositionUpdate(BaseModel):
     role: str | None = None
     department: str | None = None
     city: str | None = None
+    train_line: str | None = None
     seniority: str | None = None
     requirements: list[str] | None = None
     total_seats: int | None = Field(default=None, ge=0)
@@ -75,7 +78,11 @@ class TopCandidateItem(BaseModel):
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float
+    education_level: str | None = None
     skills: list[str]
+    ai_tags: list[str] = Field(default_factory=list)
+    recruiter_tags: list[str] = Field(default_factory=list)
+    preferred_train_line: str | None = None
     resume_url: str | None = None
     match_score: float | None = None  # null when position has no requirements
     is_mapped: bool = False

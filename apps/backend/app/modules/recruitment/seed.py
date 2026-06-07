@@ -25,6 +25,7 @@ from app.config import settings
 from app.modules.recruitment.enums import (
     ActivityType,
     Decision,
+    EducationLevel,
     PipelineStage,
     PositionStatus,
     Seniority,
@@ -42,12 +43,29 @@ _EMAIL_SNEHA = "sneha.g@example.com"
 _BRAND = {"name": "Binge Consulting", "domain": "binge.consulting"}
 
 _EMPLOYEES = [
-    {"name": "Edwin D'Souza", "email": "edwin.dsouza@binge.consulting"},
-    {"name": "Mohit Sharma", "email": "mohit.sharma@binge.consulting"},
-    {"name": "Aakash Menon", "email": "aakash.menon@binge.consulting"},
-    {"name": "Manokamna Rao", "email": "manokamna.rao@binge.consulting"},
-    {"name": "Hardik Patel", "email": "hardik.patel@binge.consulting"},
-    {"name": "Sana Khan", "email": "sana.khan@binge.consulting"},
+    {
+        "name": "Edwin D'Souza",
+        "email": "edwin.dsouza@binge.consulting",
+        "team": "Kitchen & Operations",
+    },
+    {"name": "Mohit Sharma", "email": "mohit.sharma@binge.consulting", "team": "F&B Service"},
+    {"name": "Aakash Menon", "email": "aakash.menon@binge.consulting", "team": "F&B Service"},
+    {
+        "name": "Manokamna Rao",
+        "email": "manokamna.rao@binge.consulting",
+        "team": "Kitchen & Operations",
+    },
+    {"name": "Hardik Patel", "email": "hardik.patel@binge.consulting", "team": "Marketing"},
+    {"name": "Sana Khan", "email": "sana.khan@binge.consulting", "team": "Management"},
+]
+
+_TEAMS = ["Kitchen & Operations", "F&B Service", "Marketing", "Management"]
+_TAGS = [
+    "Immediate Joiner",
+    "Good Communicator",
+    "High Potential",
+    "Relocation Willing",
+    "Premium Background",
 ]
 
 # (client_seq, client_name, city)
@@ -342,14 +360,52 @@ async def _seed_brand(db: AsyncDatabase, now: datetime) -> ObjectId:
     return brand_id
 
 
+async def _seed_teams(db: AsyncDatabase, brand_id: ObjectId, now: datetime) -> dict[str, ObjectId]:
+    team_docs = []
+    team_map = {}
+    for name in _TEAMS:
+        tid = ObjectId()
+        team_docs.append(
+            {
+                "_id": tid,
+                "brand_id": brand_id,
+                "name": name,
+                "is_active": True,
+                "created_at": now - timedelta(days=60),
+                "updated_at": now - timedelta(days=60),
+            }
+        )
+        team_map[name] = tid
+    await db["teams"].insert_many(team_docs)
+    print(f"Teams: {len(team_docs)}")
+    return team_map
+
+
+async def _seed_tags(db: AsyncDatabase, brand_id: ObjectId, now: datetime) -> None:
+    tag_docs = [
+        {
+            "_id": ObjectId(),
+            "brand_id": brand_id,
+            "name": name,
+            "is_active": True,
+            "created_at": now - timedelta(days=60),
+            "updated_at": now - timedelta(days=60),
+        }
+        for name in _TAGS
+    ]
+    await db["recruiter_tags"].insert_many(tag_docs)
+    print(f"Recruiter Tags: {len(tag_docs)}")
+
+
 async def _seed_employees(
-    db: AsyncDatabase, brand_id: ObjectId, now: datetime
+    db: AsyncDatabase, brand_id: ObjectId, team_map: dict[str, ObjectId], now: datetime
 ) -> list[dict[str, Any]]:
     emp_docs = [
         {
             "_id": ObjectId(),
             "brand_id": brand_id,
             "user_id": None,
+            "team_id": team_map.get(emp.get("team", "")),
             "name": emp["name"],
             "email": emp["email"],
             "avatar_url": None,
@@ -405,8 +461,19 @@ async def _seed_positions(
     position_docs: list[dict[str, Any]] = []
     position_code_to_id: dict[str, ObjectId] = {}
     max_pos_seq: dict[str, int] = {}
-    for c_code, role, dept, seniority, seats, pos_status, emp_idx, notes, pos_seq in _POSITIONS:
+    for idx, (
+        c_code,
+        role,
+        dept,
+        seniority,
+        seats,
+        pos_status,
+        emp_idx,
+        notes,
+        pos_seq,
+    ) in enumerate(_POSITIONS):
         code = f"{c_code}-POS-{pos_seq:03d}"
+        train_line = ["Western", "Central", "Harbor"][idx % 3]
         pid = ObjectId()
         position_docs.append(
             {
@@ -418,6 +485,7 @@ async def _seed_positions(
                 "role": role,
                 "department": dept,
                 "city": "Mumbai",
+                "train_line": train_line,
                 "seniority": seniority.value,
                 "requirements": _reqs(role),
                 "total_seats": seats,
@@ -445,8 +513,15 @@ async def _seed_candidates(
 ) -> tuple[list[dict[str, Any]], dict[str, ObjectId]]:
     candidate_docs: list[dict[str, Any]] = []
     cand_email_to_id: dict[str, ObjectId] = {}
-    for full_name, email, phone, company, exp_years, skills in _CANDIDATES:
+    for idx, (full_name, email, phone, company, exp_years, skills) in enumerate(_CANDIDATES):
         cid = ObjectId()
+        ed_level = [
+            EducationLevel.bachelors.value,
+            EducationLevel.high_school.value,
+            EducationLevel.masters.value,
+        ][idx % 3]
+        train_line = ["Western", "Central", "Harbor"][(idx + 1) % 3]
+        tags = ["Immediate Joiner"] if idx % 2 == 0 else ["Good Communicator"]
         candidate_docs.append(
             {
                 "_id": cid,
@@ -456,8 +531,12 @@ async def _seed_candidates(
                 "phone": phone,
                 "previous_company": company,
                 "experience_years": exp_years,
+                "education_level": ed_level,
                 "skills": skills,
                 "skills_normalized": [s.lower() for s in skills],
+                "ai_tags": [],
+                "recruiter_tags": tags,
+                "preferred_train_line": train_line,
                 "resume_url": None,
                 "resume_public_id": None,
                 "resume_raw_text": None,
@@ -592,6 +671,8 @@ async def seed(*, reset: bool = True) -> None:
             "positions",
             "clients",
             "employees",
+            "teams",
+            "recruiter_tags",
             "activities",
             "documents",
             "counters",
@@ -603,7 +684,9 @@ async def seed(*, reset: bool = True) -> None:
 
     now = datetime.now(UTC)
     brand_id = await _seed_brand(db, now)
-    emp_docs = await _seed_employees(db, brand_id, now)
+    team_map = await _seed_teams(db, brand_id, now)
+    await _seed_tags(db, brand_id, now)
+    emp_docs = await _seed_employees(db, brand_id, team_map, now)
     _, client_map, max_client_seq, client_name_map = await _seed_clients(db, brand_id, now)
     position_docs, pos_code_to_id, max_pos_seq = await _seed_positions(
         db, brand_id, emp_docs, client_map, client_name_map, now

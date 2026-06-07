@@ -60,6 +60,7 @@ export interface ApiPosition {
   role: string;
   department: string | null;
   city: string | null;
+  train_line: string | null;
   seniority: string;
   status: string; // "open" | "on_hold" | "closed"
   total_seats: number;
@@ -82,7 +83,11 @@ export interface ApiTopCandidate {
   phone: string | null;
   previous_company: string | null;
   experience_years: number;
+  education_level: string | null;
   skills: string[];
+  ai_tags: string[];
+  recruiter_tags: string[];
+  preferred_train_line: string | null;
   resume_url: string | null;
   match_score: number | null; // 0..1, null when position has no requirements
   is_mapped: boolean;
@@ -136,7 +141,11 @@ export interface ApiCandidate {
   phone: string | null;
   previous_company: string | null;
   experience_years: number;
+  education_level: string | null;
   skills: string[];
+  ai_tags: string[];
+  recruiter_tags: string[];
+  preferred_train_line: string | null;
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;

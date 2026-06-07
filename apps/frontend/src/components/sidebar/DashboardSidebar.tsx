@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   IconLayoutDashboard,
   IconBriefcase,
@@ -18,7 +18,6 @@ import {
 } from "@tabler/icons-react";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
-import SignOutButton from "@/components/sidebar/SignOutButton";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -170,83 +169,29 @@ function ThemeToggleRow() {
   );
 }
 
-function UserPopover({ user }: { readonly user: { full_name: string; email: string } | null }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 6 }}
-      transition={{ type: "tween", duration: 0.15, ease: "easeOut" }}
-      className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-surface-2 border border-white/10 shadow-xl p-3 z-50"
-    >
-      <div className="flex items-center gap-3">
-        <div className="size-9 shrink-0 rounded-full bg-yellow flex items-center justify-center text-sm font-bold text-navy uppercase select-none shadow-sm">
-          {user?.full_name?.[0] ?? "?"}
-        </div>
-        <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-sm font-semibold text-white truncate leading-tight">
-            {user?.full_name ?? "Loading…"}
-          </span>
-          <span className="text-xs text-white/45 truncate leading-tight mt-0.5">
-            {user?.email ?? ""}
-          </span>
-        </div>
-        <div className="shrink-0">
-          <SignOutButton />
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function UserTrigger({
-  user,
-  open,
-  animate,
-  setHovered,
-}: Readonly<{
-  user: { full_name: string; email: string } | null;
-  open: boolean;
-  animate: boolean;
-  setHovered: React.Dispatch<React.SetStateAction<boolean>>;
-}>) {
+/** Bottom user row — avatar + name, no hover popover */
+function UserRow({ user }: { readonly user: { full_name: string; email: string } | null }) {
+  const { open, animate } = useSidebar();
   const labelAnimation = animate ? { opacity: open ? 1 : 0, x: open ? 0 : -4 } : undefined;
 
   return (
-    <button
-      type="button"
-      className="flex items-center gap-3 py-1.5 w-full rounded-md hover:bg-white/5 transition-colors"
-      style={{ justifyContent: open ? "flex-start" : "center" }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => setHovered(true)}
-      onBlur={() => setHovered(false)}
-      aria-label={user ? `${user.full_name} account menu` : "Account menu"}
-    >
-      <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
-        {user?.full_name?.[0] ?? "?"}
-      </div>
-      <motion.span
-        animate={labelAnimation}
-        transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
-        className="text-sm font-medium text-white truncate whitespace-nowrap"
-        style={{ display: open ? "block" : "none" }}
-      >
-        {user?.full_name ?? "Loading…"}
-      </motion.span>
-    </button>
-  );
-}
-
-/** Bottom user row — avatar + name only, hover reveals popover with email + sign out */
-function UserRow({ user }: { readonly user: { full_name: string; email: string } | null }) {
-  const { open, animate } = useSidebar();
-  const [hovered, setHovered] = useState(false);
-
-  return (
     <div className="relative px-3">
-      <AnimatePresence>{hovered && <UserPopover user={user} />}</AnimatePresence>
-      <UserTrigger user={user} open={open} animate={animate} setHovered={setHovered} />
+      <div
+        className="flex items-center gap-3 py-1.5 w-full"
+        style={{ justifyContent: open ? "flex-start" : "center" }}
+      >
+        <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
+          {user?.full_name?.[0] ?? "?"}
+        </div>
+        <motion.span
+          animate={labelAnimation}
+          transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
+          className="text-sm font-medium text-white truncate whitespace-nowrap"
+          style={{ display: open ? "block" : "none" }}
+        >
+          {user?.full_name ?? "Loading…"}
+        </motion.span>
+      </div>
     </div>
   );
 }

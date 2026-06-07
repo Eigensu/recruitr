@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
+from app.modules.recruitment.enums import EducationLevel
+
 # ── Regex ──────────────────────────────────────────────────────────────────────
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", re.IGNORECASE)
@@ -52,6 +54,15 @@ _SECTION_BOUNDARY_RE = re.compile(
     r"hobbies|interests)\s*[:\n]",
     re.IGNORECASE,
 )
+
+# Education Level Extractors
+_EDU_PHD_RE = re.compile(r"\b(ph\.?d|doctorate)\b", re.IGNORECASE)
+_EDU_MASTERS_RE = re.compile(r"\b(master'?s|m\.?a\.|m\.?s\.|mba|msc)\b", re.IGNORECASE)
+_EDU_BACHELORS_RE = re.compile(
+    r"\b(bachelor'?s|b\.?a\.|b\.?s\.|bsc|btech|b\.?e\.|undergrad(?:uate)?)\b",
+    re.IGNORECASE,
+)
+_EDU_HS_RE = re.compile(r"\b(high school|diploma|hsc|ssc|12th|10th)\b", re.IGNORECASE)
 
 # ── Domain skill vocabulary ────────────────────────────────────────────────────
 # Matched against full resume text when no explicit Skills section is found,
@@ -146,7 +157,9 @@ class ParsedResume:
     phone: str | None = None
     experience_years: float | None = None
     previous_company: str | None = None
+    education_level: EducationLevel | None = None
     skills: list[str] = field(default_factory=list)
+    ai_tags: list[str] = field(default_factory=list)
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -245,15 +258,31 @@ def _extract_skills(text: str) -> list[str]:
     return unique[:60]
 
 
+def _extract_education_level(text: str) -> EducationLevel | None:
+    # Match highest degree first
+    if _EDU_PHD_RE.search(text):
+        return EducationLevel.phd
+    if _EDU_MASTERS_RE.search(text):
+        return EducationLevel.masters
+    if _EDU_BACHELORS_RE.search(text):
+        return EducationLevel.bachelors
+    if _EDU_HS_RE.search(text):
+        return EducationLevel.high_school
+    return None
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 
 def parse_resume(text: str) -> ParsedResume:
     """Extract structured fields from raw PDF text."""
+    skills = _extract_skills(text)
     return ParsedResume(
         email=_extract_email(text),
         phone=_extract_phone(text),
         experience_years=_extract_experience_years(text),
         previous_company=_extract_previous_company(text),
-        skills=_extract_skills(text),
+        education_level=_extract_education_level(text),
+        skills=skills,
+        ai_tags=skills[:5],  # Take top 5 extracted skills as AI tags
     )

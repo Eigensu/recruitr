@@ -103,6 +103,10 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             update["phone"] = parsed.phone
         if parsed.experience_years is not None and doc.experience_years == 0:
             update["experience_years"] = parsed.experience_years
+        if parsed.education_level is not None and doc.education_level is None:
+            update["education_level"] = parsed.education_level
+        if parsed.ai_tags:
+            update["ai_tags"] = parsed.ai_tags
         if parsed.previous_company and not doc.previous_company:
             update["previous_company"] = parsed.previous_company
 
@@ -216,8 +220,12 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         phone=data.phone,
         previous_company=data.previous_company,
         experience_years=data.experience_years,
+        education_level=data.education_level,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
+        ai_tags=data.ai_tags,
+        recruiter_tags=data.recruiter_tags,
+        preferred_train_line=data.preferred_train_line,
     )
     try:
         await doc.insert()
@@ -233,7 +241,11 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
         skills=doc.skills,
+        ai_tags=doc.ai_tags,
+        recruiter_tags=doc.recruiter_tags,
+        preferred_train_line=doc.preferred_train_line,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=0,
@@ -256,7 +268,11 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
         skills=doc.skills,
+        ai_tags=doc.ai_tags,
+        recruiter_tags=doc.recruiter_tags,
+        preferred_train_line=doc.preferred_train_line,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -284,6 +300,14 @@ async def update_candidate(
     if data.skills is not None:
         update["skills"] = data.skills
         update["skills_normalized"] = [s.lower() for s in data.skills]
+    if data.education_level is not None:
+        update["education_level"] = data.education_level
+    if data.ai_tags is not None:
+        update["ai_tags"] = data.ai_tags
+    if data.recruiter_tags is not None:
+        update["recruiter_tags"] = data.recruiter_tags
+    if data.preferred_train_line is not None:
+        update["preferred_train_line"] = data.preferred_train_line
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -295,7 +319,11 @@ async def update_candidate(
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
         skills=doc.skills,
+        ai_tags=doc.ai_tags,
+        recruiter_tags=doc.recruiter_tags,
+        preferred_train_line=doc.preferred_train_line,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -379,7 +407,11 @@ async def confirm_resume(
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
         skills=doc.skills,
+        ai_tags=doc.ai_tags,
+        recruiter_tags=doc.recruiter_tags,
+        preferred_train_line=doc.preferred_train_line,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
