@@ -163,18 +163,24 @@ async def main(mongo_uri: str) -> None:
     mode = "[DRY RUN] " if DRY_RUN else ""
     print(f"{mode}Found {len(candidates)} candidate(s).  Local PDF dir: {PDF_DIR} ({len(local_index)} files)\n")
 
-    ok = skipped = 0
+    ok_local = ok_http = failed = skipped = 0
     async with httpx.AsyncClient() as http:
         for i, doc in enumerate(candidates, 1):
             print(f"[{i}/{len(candidates)}] {doc.full_name} ({doc.id})")
             result = await process_candidate(doc, local_index, http)
             print(result)
             if result.startswith("  SKIP"):
-                skipped += 1
+                if "parse failed" in result or "no local file and invalid URL" in result:
+                    failed += 1
+                else:
+                    skipped += 1
             else:
-                ok += 1
+                if "local:" in result:
+                    ok_local += 1
+                elif "http" in result:
+                    ok_http += 1
 
-    print(f"\nDone.  Parsed: {ok}  Skipped: {skipped}")
+    print(f"\nDone.  Parsed Local: {ok_local}  Parsed HTTP: {ok_http}  Failed: {failed}  Skipped: {skipped}")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@ frontend must hide the score ring entirely, never render 0%.
 
 from __future__ import annotations
 
+import re
+
 from app.modules.recruitment.models import Candidate, Position
 from app.modules.recruitment.schemas import TenantScope
 
@@ -20,18 +22,52 @@ _ADD_FIELDS = "$addFields"
 _PROJECT = "$project"
 _TO_STR = "$toString"
 
+_STOPWORDS = {
+    "senior",
+    "junior",
+    "head",
+    "manager",
+    "executive",
+    "lead",
+    "chief",
+    "assistant",
+    "associate",
+    "specialist",
+    "coordinator",
+    "director",
+}
 
-def compute_single_score(skills_normalized: list[str], requirements: list[str]) -> float | None:
+
+def _get_effective_requirements(position: Position) -> list[str]:
+    """Returns explicit requirements if any, else tokenized role requirements, else empty."""
+    if position.requirements:
+        return [r.lower().strip() for r in position.requirements if r.strip()]
+
+    # Tier 2 fallback: Tokenized role
+    if position.role:
+        tokens = re.split(r"\W+", position.role.lower())
+        tokens = [t for t in tokens if t and t not in _STOPWORDS]
+        if tokens:
+            # Returning unique tokens as requirements
+            return list(set(tokens))
+
+    return []
+
+
+def compute_single_score(skills_normalized: list[str], position: Position) -> float | None:
     """Pure-Python intersection score for a single candidate.
 
     Used at map-time to snapshot the score without an extra DB round-trip.
-    Returns None (not 0) when the position has no requirements.
+    Returns None when the position has no explicit requirements and no valid role tokens.
     """
-    if not requirements:
+    reqs = _get_effective_requirements(position)
+    if not reqs:
         return None
-    reqs = {r.lower() for r in requirements}
-    matched = len(reqs & set(skills_normalized))
-    return matched / len(reqs)
+
+    reqs_set = set(reqs)
+    skills_set = set(skills_normalized or [])
+    matched = len(reqs_set & skills_set)
+    return matched / len(reqs_set)
 
 
 async def top_candidates(
@@ -47,7 +83,7 @@ async def top_candidates(
     Returns list of dicts with keys: id, full_name, email, phone, previous_company,
     experience_years, skills, resume_url, match_score (float | None).
     """
-    reqs = [r.lower() for r in (position.requirements or [])]
+    reqs = _get_effective_requirements(position)
 
     match_stage: dict = {"brand_id": scope.brand_id, "is_active": True}
     if exclude_candidate_ids:
@@ -56,7 +92,7 @@ async def top_candidates(
     if reqs:
         score_field: dict = {
             "$divide": [
-                {"$size": {"$setIntersection": ["$skills_normalized", reqs]}},
+                {"$size": {"$setIntersection": [{"$ifNull": ["$skills_normalized", []]}, reqs]}},
                 len(reqs),
             ]
         }
@@ -98,4 +134,5 @@ async def top_candidates(
         },
     ]
 
-    return await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(None)
+    cursor = Candidate.get_motor_collection().aggregate(pipeline)
+    return await cursor.to_list(None)
