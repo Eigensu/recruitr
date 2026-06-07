@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── MongoDB ──
-    MONGODB_URI: str = "mongodb://localhost:27017/eigensu?replicaSet=rs0"
+    MONGODB_URI: str = "mongodb://localhost:27017/eigensu"
     MONGODB_DB_NAME: str = "eigensu"
     ALLOW_INDEX_DROPPING: bool = False
 

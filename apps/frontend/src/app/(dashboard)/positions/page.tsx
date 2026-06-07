@@ -720,9 +720,6 @@ export default function PositionsPage() {
                         <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
                           Top 10 Matches
                         </h2>
-                        <span className="text-[10px] font-bold text-navy bg-yellow/70 px-1.5 py-0.5 rounded-full border border-yellow/40">
-                          AI Ranked
-                        </span>
                       </div>
                       <p className="text-xs text-text-muted pl-6">
                         for{" "}

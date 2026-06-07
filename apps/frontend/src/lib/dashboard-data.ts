@@ -121,7 +121,7 @@ function buildKpis(totals: DashboardTotals, pipelineStages: PipelineStageMetric[
   const sentToClient = pipelineStages.find((stage) => stage.stage === "sent_to_client")?.count ?? 0;
   const offersAccepted =
     pipelineStages.find((stage) => stage.stage === "offer_accepted")?.count ?? 0;
-  const dropped = pipelineStages.find((stage) => stage.stage === "dropped")?.count ?? 0;
+  const dropped = pipelineStages.find((stage) => stage.stage === "rejected")?.count ?? 0;
 
   return [
     {
