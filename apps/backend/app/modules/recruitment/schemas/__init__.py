@@ -30,7 +30,12 @@ from app.modules.recruitment.schemas.position import (
 )
 from app.modules.recruitment.schemas.shared import ResumeConfirm, TenantScope
 from app.modules.recruitment.schemas.tag import RecruiterTagCreate, RecruiterTagResponse
-from app.modules.recruitment.schemas.team import TeamCreate, TeamResponse
+from app.modules.recruitment.schemas.team import (
+    BulkAssignEmployees,
+    EmployeeTeamResponse,
+    TeamCreate,
+    TeamResponse,
+)
 
 __all__ = [
     # Candidate DTOs
@@ -61,6 +66,8 @@ __all__ = [
     # Team & Tag DTOs
     "TeamCreate",
     "TeamResponse",
+    "BulkAssignEmployees",
+    "EmployeeTeamResponse",
     "RecruiterTagCreate",
     "RecruiterTagResponse",
     # Shared

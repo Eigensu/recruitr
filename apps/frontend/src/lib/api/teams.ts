@@ -15,3 +15,25 @@ export async function createTeam(apiFetch: ApiFetch, name: string): Promise<Team
     body: JSON.stringify({ name }),
   });
 }
+
+export interface EmployeeTeamInfo {
+  id: string;
+  name: string;
+  email: string;
+  team_id: string | null;
+}
+
+export async function listTeamEmployees(apiFetch: ApiFetch): Promise<EmployeeTeamInfo[]> {
+  return apiFetch("/api/v1/teams/employees");
+}
+
+export async function assignEmployeesToTeam(
+  apiFetch: ApiFetch,
+  employeeIds: string[],
+  teamId: string | null,
+): Promise<{ status: string }> {
+  return apiFetch("/api/v1/teams/employees/assign", {
+    method: "PUT",
+    body: JSON.stringify({ employee_ids: employeeIds, team_id: teamId }),
+  });
+}

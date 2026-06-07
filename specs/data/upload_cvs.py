@@ -29,8 +29,8 @@ sys.path.insert(0, str(ROOT / "apps" / "backend"))
 PDF_DIR = Path(__file__).parent / "pdfs" / "Database CV_s FY26-27"
 MANPOWER_FILE = Path(__file__).parent / "Binge - Manpower Database - Combined.xlsx"
 
-MONGO_URI = "mongodb://localhost:27017/eigensu"
-DB_NAME = "eigensu"
+from app.config import settings
+
 BRAND_NAME = "Binge Consulting"
 CLOUDINARY_FOLDER = "eigensu/resumes"
 
@@ -101,12 +101,12 @@ SKIP_CANDIDATES = {
 }
 
 
-async def run() -> None:
+async def run(mongo_uri: str, db_name: str) -> None:
     from app.modules.brands.models import Brand
     from app.modules.recruitment.models import Candidate
 
-    motor_client = AsyncIOMotorClient(MONGO_URI)
-    db = motor_client[DB_NAME]
+    motor_client = AsyncIOMotorClient(mongo_uri)
+    db = motor_client[db_name]
     await init_beanie(database=db, document_models=[Brand, Candidate])
 
     brand = await Brand.find_one(Brand.name == BRAND_NAME)
@@ -228,4 +228,13 @@ async def run() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    import argparse
+    parser = argparse.ArgumentParser(description="Upload candidate CVs to Cloudinary")
+    parser.add_argument("--uri", help="MongoDB connection URI (overrides .env)")
+    parser.add_argument("--db", help="MongoDB database name (overrides .env)")
+    args = parser.parse_args()
+
+    uri = args.uri or settings.MONGODB_URI
+    db = args.db or settings.MONGODB_DB_NAME
+
+    asyncio.run(run(mongo_uri=uri, db_name=db))

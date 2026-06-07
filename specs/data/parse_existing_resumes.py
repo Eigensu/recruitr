@@ -32,7 +32,8 @@ from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import extract_text_from_pdf
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/eigensu")
+from app.config import settings
+
 DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
 PDF_DIR = Path(os.getenv("PDF_DIR", str(Path(__file__).parent / "Database CV_s FY26-27")))
 
@@ -147,8 +148,8 @@ async def process_candidate(
     return summary
 
 
-async def main() -> None:
-    motor = AsyncIOMotorClient(MONGO_URI)
+async def main(mongo_uri: str) -> None:
+    motor = AsyncIOMotorClient(mongo_uri)
     await init_beanie(motor.get_default_database(), document_models=[Candidate])
 
     query = {"resume_url": {"$ne": None}, "resume_raw_text": None}
@@ -177,4 +178,10 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import argparse
+    parser = argparse.ArgumentParser(description="Backfill parsed resume text")
+    parser.add_argument("--uri", help="MongoDB connection URI (overrides .env)")
+    args = parser.parse_args()
+
+    uri = args.uri or settings.MONGODB_URI
+    asyncio.run(main(mongo_uri=uri))

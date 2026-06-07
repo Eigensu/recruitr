@@ -10,3 +10,17 @@ class TeamResponse(BaseModel):
 
 class TeamCreate(BaseModel):
     name: str
+
+
+class EmployeeTeamResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    team_id: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class BulkAssignEmployees(BaseModel):
+    employee_ids: list[str]
+    team_id: str | None = None
