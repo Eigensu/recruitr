@@ -40,3 +40,8 @@ Thumbs.db
 
 # ── Docker ───────────────────────────────────────────────────────────────────
 docker-compose.override.yml
+
+# ── Data & Backups ───────────────────────────────────────────────────────────
+specs/data/Database CV_s FY26-27/
+specs/data/pdfs/
+apps/backend/backup_*/
