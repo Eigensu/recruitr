@@ -45,6 +45,60 @@ export interface Position {
   matched_candidates: MatchedCandidate[];
 }
 
+// ── Positions (Recruitment API — mirrors PositionListItem schema) ─────────────
+
+export interface ApiMappedPreview {
+  id: string;
+  full_name: string;
+}
+
+export interface ApiPosition {
+  id: string;
+  code: string;
+  client_id: string;
+  client_name: string;
+  role: string;
+  department: string | null;
+  city: string | null;
+  seniority: string;
+  status: string; // "open" | "on_hold" | "closed"
+  total_seats: number;
+  filled_seats: number;
+  remaining_seats: number;
+  mapped_count: number;
+  mapped_preview: ApiMappedPreview[];
+  assigned_employee_id: string | null;
+  assigned_employee_name: string | null;
+  date_opened: string;
+  target_close: string | null;
+  notes: string | null;
+}
+
+/** Ranked candidate from GET /positions/{id}/top-candidates. match_score is 0..1. */
+export interface ApiTopCandidate {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string | null;
+  previous_company: string | null;
+  experience_years: number;
+  skills: string[];
+  resume_url: string | null;
+  match_score: number | null; // 0..1, null when position has no requirements
+  is_mapped: boolean;
+}
+
+export interface ApiClientOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface ApiPositionFilters {
+  clients: ApiClientOption[];
+  statuses: string[];
+}
+
 // ── Candidates ───────────────────────────────────────────────────────────────
 
 /** Legacy type used by old /api/v1/candidates (old module). Phase C will remove it. */

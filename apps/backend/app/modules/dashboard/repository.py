@@ -52,6 +52,7 @@ _IF_NULL = "$ifNull"
 # Field path constants (frequently referenced across pipelines)
 _F_STAGE = "$stage"
 _F_EMPLOYEE_ID = "$employee_id"
+_F_POSITION_ID = "$position_id"
 _F_EMP_MAPPINGS = "$emp_mappings"
 _F_MAPPINGS = "$mappings"
 _VAR_M_STAGE = "$$m.stage"
@@ -337,7 +338,7 @@ async def fetch_clients(filters: DashboardFilters, page: int, limit: int) -> dic
         pos_match.update(date_match)
 
     mapping_lookup: list[dict[str, Any]] = [
-        {_MATCH: {_EXPR: {"$eq": ["$position_id", "$$pos_oid"]}}},
+        {_MATCH: {_EXPR: {"$eq": [_F_POSITION_ID, "$$pos_oid"]}}},
     ]
     employee_oid = to_object_id(filters.employee_id, "employee_id")
     if employee_oid is not None:
@@ -439,8 +440,8 @@ async def fetch_mappings(filters: DashboardFilters, page: int, limit: int) -> di
                 "id": {_TO_STR: "$_id"},
                 "employee_id": {_TO_STR: _F_EMPLOYEE_ID},
                 "candidate_id": {_TO_STR: "$candidate_id"},
-                "position_id": {_TO_STR: "$position_id"},
-                # Expose as pipeline_stage for backward compat with frontend
+                "position_id": {_TO_STR: _F_POSITION_ID},
+                "job_opening_id": {_TO_STR: _F_POSITION_ID},
                 "pipeline_stage": _F_STAGE,
             }
         },

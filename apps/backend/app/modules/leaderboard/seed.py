@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
+from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from app.config import settings
@@ -143,7 +144,7 @@ async def seed_leaderboard() -> None:
         activity_col = db["recruiter_activity"]
         candidates_col = db["candidates"]
         mappings_col = db["candidate_mappings"]
-        jobs_col = db["job_openings"]
+        jobs_col = db["positions"]
 
         for badge in BADGES:
             name, label, description, icon, rarity, xp_reward, condition_type, condition_value = (
@@ -273,12 +274,17 @@ async def seed_leaderboard() -> None:
                     upsert=True,
                 )
 
+        seed_brand_id = ObjectId("000000000000000000000001")
+        seed_client_id = ObjectId("000000000000000000000002")
         job_docs = []
-        for company, role, seats, filled in COMPANIES:
+        for pos_idx, (company, role, seats, filled) in enumerate(COMPANIES):
             await jobs_col.update_one(
                 {"client_name": company, "role": role},
                 {
                     "$setOnInsert": {
+                        "brand_id": seed_brand_id,
+                        "code": f"SEED-POS-{pos_idx + 1:03d}",
+                        "client_id": seed_client_id,
                         "client_name": company,
                         "role": role,
                         "total_seats": seats,
@@ -305,7 +311,7 @@ async def seed_leaderboard() -> None:
                     "$setOnInsert": {
                         "full_name": f"Candidate {idx + 1}",
                         "email": f"candidate{idx + 1}@example.com",
-                        "current_stage": PipelineStage.added.value,
+                        "current_stage": PipelineStage.sourced.value,
                         "created_at": datetime.now(UTC),
                         "updated_at": datetime.now(UTC),
                         "is_active": True,
@@ -327,7 +333,9 @@ async def seed_leaderboard() -> None:
         for idx, candidate in enumerate(candidate_docs):
             employee = employees[idx % len(employees)]
             job = job_docs[idx % len(job_docs)]
-            stage = PipelineStage.joined.value if idx % 4 == 0 else PipelineStage.offer_sent.value
+            stage = (
+                PipelineStage.position_close.value if idx % 4 == 0 else PipelineStage.offer.value
+            )
             await mappings_col.update_one(
                 {"candidate_id": candidate["_id"], "position_id": job["_id"]},
                 {

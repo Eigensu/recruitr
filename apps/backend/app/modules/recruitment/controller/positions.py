@@ -22,11 +22,13 @@ from pymongo.errors import DuplicateKeyError
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
-from app.modules.recruitment.models import Candidate, Mapping, Position
+from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.schemas import (
+    ClientOption,
     MapCandidateRequest,
     MapCandidateResponse,
     PositionCreate,
+    PositionFiltersResponse,
     PositionListItem,
     PositionMappedCandidate,
     PositionPage,
@@ -44,6 +46,7 @@ _Page = Annotated[int, Query(ge=1)]
 _Limit = Annotated[int, Query(ge=1, le=100)]
 _ClientId = Annotated[str | None, Query()]
 _Status = Annotated[str | None, Query(alias="status")]
+_Search = Annotated[str | None, Query()]
 _PositionLimit = Annotated[int, Query(ge=1, le=50)]
 _CandidateId = Annotated[str, Query()]
 
@@ -73,11 +76,96 @@ _EXPR = "$expr"
 _GROUP = "$group"
 _SET_INTERSECTION = "$setIntersection"
 _DIVIDE = "$divide"
+_MULTIPLY = "$multiply"
+_ADD_OP = "$add"
+_SWITCH = "$switch"
+_ABS = "$abs"
+_F_CURRENT_STAGE = "$current_stage"
+_F_EXP_YEARS = "$experience_years"
 
 # ── Field references ───────────────────────────────────────────────────────────
 
 _F_CANDIDATE_ID = "$candidate_id"
 _F_POSITION_ID = "$position_id"
+_VAR_CAND_ID = "$$cand_id"
+
+
+# ── Scoring helpers ────────────────────────────────────────────────────────────
+
+# Availability score: candidates deep in another pipeline are down-ranked.
+_AVAIL_SCORE_EXPR: dict = {
+    _SWITCH: {
+        "branches": [
+            {"case": {"$eq": [_F_CURRENT_STAGE, "sourced"]}, "then": 1.0},
+            {"case": {"$eq": [_F_CURRENT_STAGE, "sent_to_client"]}, "then": 0.85},
+            {"case": {"$eq": [_F_CURRENT_STAGE, "interview"]}, "then": 0.7},
+            {"case": {"$eq": [_F_CURRENT_STAGE, "decision_pending"]}, "then": 0.5},
+            {"case": {"$eq": [_F_CURRENT_STAGE, "offer"]}, "then": 0.3},
+        ],
+        "default": 0.0,
+    }
+}
+
+
+def _py_exp_score(seniority: str, years: float) -> float:
+    """Python mirror of _exp_score_expr — used at map-time score snapshot."""
+    s = seniority.lower()
+    if s == "junior":
+        return max(0.0, 1.0 - abs(years - 1.0) / 3.0)
+    if s == "senior":
+        return min(1.0, max(0.2, years / 8.0))
+    # Mid: peak at 4y
+    return max(0.0, 1.0 - abs(years - 4.0) / 4.0)
+
+
+def _py_composite_score(
+    pos_requirements: list[str],
+    seniority: str,
+    skills_normalized: list[str],
+    experience_years: float,
+) -> float:
+    """Composite match score — mirrors the MongoDB aggregation in get_top_candidates."""
+    has_reqs = bool(pos_requirements)
+    req_lower = [s.lower() for s in pos_requirements]
+    n_req = len(req_lower) or 1
+
+    skill_score = sum(1 for s in skills_normalized if s in req_lower) / n_req if has_reqs else 0.0
+    exp_score = _py_exp_score(seniority, experience_years)
+    avail_score = 1.0  # new mappings always start at sourced
+
+    if has_reqs:
+        return 0.5 * skill_score + 0.3 * exp_score + 0.2 * avail_score
+    return 0.6 * exp_score + 0.4 * avail_score
+
+
+def _exp_score_expr(seniority: str) -> dict:
+    """
+    Continuous experience score — linear decay from the optimal point.
+    Junior: peak 1.0 at 1y, zero at 4y+
+    Mid:    peak 1.0 at 4y, zero at 0y and 8y
+    Senior: linear 0.2 at 0y → 1.0 at 8y (capped)
+    """
+    s = seniority.lower()
+
+    def _decay(optimal: float, spread: float) -> dict:
+        return {
+            "$max": [
+                0.0,
+                {
+                    "$subtract": [
+                        1.0,
+                        {_DIVIDE: [{_ABS: {"$subtract": [_F_EXP_YEARS, optimal]}}, spread]},
+                    ]
+                },
+            ]
+        }
+
+    if s == "junior":
+        return _decay(1.0, 3.0)
+    if s == "senior":
+        return {"$min": [1.0, {"$max": [0.2, {_DIVIDE: [_F_EXP_YEARS, 8.0]}]}]}
+    # Mid: peak at 4y
+    return _decay(4.0, 4.0)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -120,18 +208,35 @@ async def _get_or_404(scope: TenantScope, position_id: str) -> Position:
     return doc
 
 
+# ── Filters (static — must be registered before /{position_id}) ───────────────
+
+
+@router.get("/filters")
+async def get_position_filters(tenant: _Tenant) -> PositionFiltersResponse:
+    clients = (
+        await Client.find({"brand_id": tenant.brand_id, "is_active": True}).sort("name").to_list()
+    )
+    client_options = [ClientOption(id=str(c.id), code=c.code, name=c.name) for c in clients]
+    return PositionFiltersResponse(clients=client_options, statuses=["open", "on_hold", "closed"])
+
+
 # ── List ───────────────────────────────────────────────────────────────────────
 
 
 @router.get("")
 async def list_positions(
     tenant: _Tenant,
+    search: _Search = None,
     client_id: _ClientId = None,
     status_filter: _Status = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> PositionPage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+
+    if search:
+        rx = {"$regex": search, "$options": "i"}
+        match["$or"] = [{"role": rx}, {"client_name": rx}, {"department": rx}, {"city": rx}]
 
     if client_id:
         client_oid = to_object_id(client_id, "client_id")
@@ -147,28 +252,43 @@ async def list_positions(
             _LOOKUP: {
                 "from": "candidate_mappings",
                 "let": {"pos_id": "$_id"},
-                "pipeline": [{_MATCH: {_EXPR: {"$eq": [_F_POSITION_ID, "$$pos_id"]}}}],
+                "pipeline": [
+                    {_MATCH: {_EXPR: {"$eq": [_F_POSITION_ID, "$$pos_id"]}}},
+                    {
+                        _LOOKUP: {
+                            "from": "candidates",
+                            "let": {"cand_id": "$candidate_id"},
+                            "pipeline": [
+                                {_MATCH: {_EXPR: {"$eq": ["$_id", _VAR_CAND_ID]}}},
+                                {"$project": {"full_name": 1}},
+                            ],
+                            "as": "cand",
+                        }
+                    },
+                    {"$unwind": {"path": "$cand", "preserveNullAndEmptyArrays": True}},
+                ],
                 "as": "pos_maps",
             }
         },
         {
             _ADD_FIELDS: {
                 "id": {_TO_STR: "$_id"},
+                "client_id": {_TO_STR: "$client_id"},
+                "assigned_employee_id": {
+                    "$cond": {
+                        "if": {"$gt": ["$assigned_employee_id", None]},
+                        "then": {_TO_STR: "$assigned_employee_id"},
+                        "else": None,
+                    }
+                },
                 "mapped_count": {_SIZE: "$pos_maps"},
                 "mapped_preview": {
                     "$map": {
-                        "input": {
-                            "$slice": ["$pos_maps", 3]  # First 3 mappings for preview
-                        },
+                        "input": {"$slice": ["$pos_maps", 3]},
                         "as": "m",
                         "in": {
-                            "$mergeObjects": [
-                                {"$literal": {"id": "", "full_name": ""}},
-                                {
-                                    "id": {_TO_STR: "$$m.candidate_id"},
-                                    "full_name": "$$m.candidate_id",  # Will be populated via join
-                                },
-                            ]
+                            "id": {_TO_STR: "$$m.candidate_id"},
+                            "full_name": {"$ifNull": ["$$m.cand.full_name", ""]},
                         },
                     }
                 },
@@ -179,7 +299,7 @@ async def list_positions(
         _paginate(page, limit),
     ]
 
-    result = await Position.get_motor_collection().aggregate(pipeline).to_list(None)
+    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(None)
     items, total = _unpack(result)
     return _make_page(items, total, page, limit, PositionListItem)
 
@@ -354,65 +474,52 @@ async def get_top_candidates(
     tenant: _Tenant, position_id: str, limit: _PositionLimit = 10
 ) -> list[TopCandidateItem]:
     """
-    Return top matching candidates for this position using $setIntersection scoring.
-    Score is (matched_skills / total_position_requirements).
-    Returns null score if position has no requirements.
+    Rank candidates by a composite score:
+      50% skill match (requirements ∩ skills / |requirements|)
+      30% experience fit (years vs seniority bracket)
+      20% pipeline availability (sourced=1.0 … offer=0.3 … closed=0.0)
+    When no requirements are set, weights shift to 60% exp / 40% availability.
     """
     pos_oid = to_object_id(position_id, "position_id")
     pos = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
     if not pos:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
 
-    # If no requirements, return candidates without scores
-    if not pos.requirements:
-        candidates = (
-            await Candidate.find({"brand_id": tenant.brand_id, "is_active": True})
-            .sort("-experience_years")
-            .limit(limit)
-            .to_list(None)
-        )
-        return [
-            TopCandidateItem(
-                id=str(c.id),
-                full_name=c.full_name,
-                email=c.email,
-                phone=c.phone,
-                previous_company=c.previous_company,
-                experience_years=c.experience_years,
-                skills=c.skills,
-                resume_url=c.resume_url,
-                match_score=None,
-                is_mapped=False,
-            )
-            for c in candidates
-        ]
+    has_reqs = bool(pos.requirements)
+    req_lower = [s.lower() for s in pos.requirements]
+    n_req = len(req_lower) or 1
 
-    # Aggregation with $setIntersection scoring
+    if has_reqs:
+        w_skill, w_exp, w_avail = 0.5, 0.3, 0.2
+        skill_score_expr: dict = {
+            _DIVIDE: [
+                {_SIZE: {_SET_INTERSECTION: [{"$ifNull": ["$skills_normalized", []]}, req_lower]}},
+                n_req,
+            ]
+        }
+    else:
+        w_skill, w_exp, w_avail = 0.0, 0.6, 0.4
+        skill_score_expr = {"$literal": 0.0}
+
     pipeline = [
         {_MATCH: {"brand_id": tenant.brand_id, "is_active": True}},
         {
             _ADD_FIELDS: {
-                "matched_skills_count": {
-                    _SIZE: {
-                        _SET_INTERSECTION: [
-                            "$skills_normalized",
-                            [s.lower() for s in pos.requirements],
-                        ]
-                    }
-                },
+                "id": {_TO_STR: "$_id"},
+                "skill_score": skill_score_expr,
+                "exp_score": _exp_score_expr(pos.seniority.value),
+                "avail_score": _AVAIL_SCORE_EXPR,
+            }
+        },
+        {
+            _ADD_FIELDS: {
                 "match_score": {
-                    _DIVIDE: [
-                        {
-                            _SIZE: {
-                                _SET_INTERSECTION: [
-                                    "$skills_normalized",
-                                    [s.lower() for s in pos.requirements],
-                                ]
-                            }
-                        },
-                        len(pos.requirements) if pos.requirements else 1,
+                    _ADD_OP: [
+                        {_MULTIPLY: ["$skill_score", w_skill]},
+                        {_MULTIPLY: ["$exp_score", w_exp]},
+                        {_MULTIPLY: ["$avail_score", w_avail]},
                     ]
-                },
+                }
             }
         },
         {
@@ -424,7 +531,7 @@ async def get_top_candidates(
                         _MATCH: {
                             _EXPR: {
                                 "$and": [
-                                    {"$eq": [_F_CANDIDATE_ID, "$$cand_id"]},
+                                    {"$eq": [_F_CANDIDATE_ID, _VAR_CAND_ID]},
                                     {"$eq": [_F_POSITION_ID, pos_oid]},
                                 ]
                             }
@@ -435,12 +542,12 @@ async def get_top_candidates(
             }
         },
         {_ADD_FIELDS: {"is_mapped": {_SIZE: "$mapping"}}},
-        {_UNSET: ["mapping", "skills_normalized"]},
+        {_UNSET: ["mapping", "skills_normalized", "skill_score", "exp_score", "avail_score"]},
         {_SORT: {"match_score": -1, "experience_years": -1}},
         {_LIMIT_OP: limit},
     ]
 
-    results = await Candidate.get_motor_collection().aggregate(pipeline).to_list(None)
+    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(None)
     return [TopCandidateItem.model_validate(r) for r in results]
 
 
@@ -465,7 +572,7 @@ async def get_position_candidates(
             _LOOKUP: {
                 "from": "candidates",
                 "let": {"cand_id": _F_CANDIDATE_ID},
-                "pipeline": [{_MATCH: {_EXPR: {"$eq": ["$_id", "$$cand_id"]}}}],
+                "pipeline": [{_MATCH: {_EXPR: {"$eq": ["$_id", _VAR_CAND_ID]}}}],
                 "as": "candidate",
             }
         },
@@ -485,7 +592,7 @@ async def get_position_candidates(
         {_SORT: {"stage": 1, "mapped_at": -1}},
     ]
 
-    rows = await Mapping.get_motor_collection().aggregate(pipeline).to_list(None)
+    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(None)
     return [PositionMappedCandidate.model_validate(r) for r in rows]
 
 
@@ -521,14 +628,12 @@ async def map_candidate_to_position(
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, _ERR_ALREADY_MAPPED)
 
-    # Calculate match score
-    match_score = None
-    if pos.requirements:
-        pos_reqs_lower = [s.lower() for s in pos.requirements]
-        matched_skills = sum(
-            1 for skill in (cand.skills_normalized or []) if skill in pos_reqs_lower
-        )
-        match_score = matched_skills / len(pos.requirements)
+    match_score: float = _py_composite_score(
+        pos.requirements,
+        pos.seniority.value,
+        cand.skills_normalized or [],
+        cand.experience_years,
+    )
 
     # Create mapping
     mapping = Mapping(

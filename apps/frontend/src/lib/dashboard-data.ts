@@ -21,15 +21,15 @@ import type {
 } from "@/types/dashboard";
 
 const PIPELINE_STAGE_ORDER: PipelineStage[] = [
-  "added",
-  "shortlisted",
+  "sourced",
   "sent_to_client",
-  "rejected",
-  "hold",
-  "offer_sent",
+  "interview",
+  "decision_pending",
+  "offer",
   "offer_accepted",
-  "joined",
-  "dropped",
+  "position_close",
+  "rejected",
+  "on_hold",
 ];
 
 const DEFAULT_TOTALS: DashboardTotals = {
@@ -261,9 +261,11 @@ function buildRecruiters(
   return employees.map((employee) => {
     const employeeMappings = mappings.filter((mapping) => mapping.employee_id === employee.id);
     const inPipeline = employeeMappings.filter((mapping) => {
-      return !["joined", "rejected", "dropped", "hold"].includes(mapping.pipeline_stage);
+      return !["position_close", "rejected", "on_hold"].includes(mapping.pipeline_stage);
     }).length;
-    const joined = employeeMappings.filter((mapping) => mapping.pipeline_stage === "joined").length;
+    const joined = employeeMappings.filter(
+      (mapping) => mapping.pipeline_stage === "position_close",
+    ).length;
 
     const touchedClientIds = new Set(employeeMappings.map((mapping) => mapping.job_opening_id));
     const openSeats = Array.from(touchedClientIds).reduce((sum, clientId) => {

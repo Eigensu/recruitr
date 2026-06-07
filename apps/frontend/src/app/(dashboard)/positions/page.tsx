@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   IconSearch,
@@ -14,9 +14,18 @@ import {
   IconChevronRight,
   IconBulb,
   IconAlertCircle,
+  IconLoader2,
 } from "@tabler/icons-react";
-import { usePositionsStore, MockPosition, MockCandidate } from "@/stores/usePositionsStore";
 import { cn } from "@/lib/utils";
+import { useApiFetch } from "@/lib/api";
+import {
+  listPositions,
+  getPositionFilters,
+  getTopCandidates,
+  mapCandidateToPosition,
+  unmapCandidateFromPosition,
+} from "@/lib/api/positions";
+import type { ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
 import {
   DndContext,
   DragOverlay,
@@ -31,24 +40,68 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core";
 
-// ─── Position Card (left panel, droppable) ────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const POSITION_STATUS_LABELS: Record<string, string> = {
+  open: "Open",
+  on_hold: "On Hold",
+  closed: "Closed",
+};
+
+function mappedLabel(count: number, preview: ApiPosition["mapped_preview"]): string {
+  if (count === 1 && preview[0]) return preview[0].full_name;
+  if (count <= 3)
+    return preview
+      .slice(0, count)
+      .map((mp) => mp.full_name.split(" ")[0])
+      .join(", ");
+  return `${count} mapped`;
+}
+
+function applyMappingDelta(
+  positions: ApiPosition[],
+  positionId: string,
+  delta: 1 | -1,
+  candidate: Pick<ApiTopCandidate, "id" | "full_name">,
+): ApiPosition[] {
+  return positions.map((p) => {
+    if (p.id !== positionId) return p;
+    if (delta === 1) {
+      return {
+        ...p,
+        mapped_count: p.mapped_count + 1,
+        mapped_preview:
+          p.mapped_preview.length < 5
+            ? [...p.mapped_preview, { id: candidate.id, full_name: candidate.full_name }]
+            : p.mapped_preview,
+      };
+    }
+    return {
+      ...p,
+      mapped_count: Math.max(0, p.mapped_count - 1),
+      mapped_preview: p.mapped_preview.filter((mp) => mp.id !== candidate.id),
+    };
+  });
+}
+
+// ─── Position Card ────────────────────────────────────────────────────────────
 
 function PositionCard({
   position,
   isSelected,
-  mappedCandidates,
   onClick,
 }: Readonly<{
-  position: MockPosition;
+  position: ApiPosition;
   isSelected: boolean;
-  mappedCandidates: MockCandidate[];
   onClick: () => void;
 }>) {
   const { setNodeRef, isOver } = useDroppable({ id: position.id });
 
-  const filled = mappedCandidates.length;
-  const total = position.openingsCount;
+  const total = position.total_seats;
+  const filled = position.mapped_count;
   const progress = total > 0 ? Math.min((filled / total) * 100, 100) : 0;
+  const isActive = position.status === "open";
+  const statusLabel = POSITION_STATUS_LABELS[position.status] ?? "Closed";
 
   return (
     <motion.div
@@ -63,7 +116,7 @@ function PositionCard({
           onClick();
         }
       }}
-      tabIndex={position.status === "Closed" ? -1 : 0}
+      tabIndex={isActive ? 0 : -1}
       role="button"
       aria-pressed={isSelected}
       className={cn(
@@ -72,15 +125,13 @@ function PositionCard({
           ? "border-yellow bg-surface-panel shadow-md shadow-yellow/5"
           : "border-border bg-surface-panel hover:border-border hover:shadow-sm",
         isOver && "border-yellow/70 shadow-lg shadow-yellow/10 scale-[1.01]",
-        position.status === "Closed" && "opacity-40 pointer-events-none",
+        !isActive && "opacity-40 pointer-events-none",
       )}
     >
-      {/* Selected left accent */}
       {isSelected && (
         <div className="absolute left-0 top-3 bottom-3 w-0.75 bg-yellow rounded-r-full" />
       )}
 
-      {/* Drop overlay */}
       <AnimatePresence>
         {isOver && (
           <motion.div
@@ -97,76 +148,74 @@ function PositionCard({
         )}
       </AnimatePresence>
 
-      {/* ── Top row: Role + Status + Openings ── */}
+      {/* Top row */}
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
-          {/* Status badge — small, above role */}
           <div className="mb-1">
             <span
               className={cn(
                 "inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase",
-                position.status === "Open"
+                isActive
                   ? "text-emerald-600 bg-emerald-500/10 border border-emerald-500/20"
                   : "text-red-500 bg-red-500/10 border border-red-500/20",
               )}
             >
-              {position.status === "Open" ? (
+              {isActive ? (
                 <IconCircleCheck className="size-2.5" />
               ) : (
                 <IconAlertCircle className="size-2.5" />
               )}
-              {position.status}
+              {statusLabel}
             </span>
           </div>
-
-          {/* Role — primary heading, font-heading */}
           <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
             {position.role}
           </h3>
-
-          {/* Client name — secondary */}
           <p className="text-xs text-text-secondary mt-0.5 truncate font-medium">
-            {position.clientName}
+            {position.client_name}
           </p>
         </div>
-
-        {/* Openings count */}
         <div className="shrink-0 text-center min-w-9">
           <div className="text-2xl font-black text-teal-500 leading-none">{total}</div>
           <div className="text-[9px] text-text-muted uppercase font-bold tracking-wider mt-0.5">
-            open
+            seats
           </div>
         </div>
       </div>
 
-      {/* ── Tags row: dept + seniority + city ── */}
+      {/* Tags row */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium">
-          {position.department}
-        </span>
+        {position.department && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium">
+            {position.department}
+          </span>
+        )}
         <span
           className={cn(
             "text-[10px] px-2 py-0.5 rounded-full font-bold",
-            position.seniority === "Junior" &&
+            position.seniority?.toLowerCase() === "junior" &&
               "bg-blue-500/10 text-blue-500 border border-blue-500/20",
-            position.seniority === "Mid" && "bg-yellow/20 text-navy border border-yellow/40",
-            position.seniority === "Senior" &&
+            position.seniority?.toLowerCase() === "mid" &&
+              "bg-yellow/20 text-navy border border-yellow/40",
+            position.seniority?.toLowerCase() === "senior" &&
               "bg-purple-500/10 text-purple-500 border border-purple-500/20",
           )}
         >
           {position.seniority}
         </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-muted flex items-center gap-0.5">
-          <IconMapPin className="size-2.5 shrink-0" />
-          {position.city}
-        </span>
+        {position.city && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-muted flex items-center gap-0.5">
+            <IconMapPin className="size-2.5 shrink-0" />
+            {position.city}
+          </span>
+        )}
       </div>
 
-      {/* ── Fill progress ── */}
+      {/* Pipeline fill progress */}
       <div className="mb-2.5">
         <div className="flex justify-between items-center mb-1">
           <span className="text-[10px] text-text-muted font-semibold uppercase tracking-wider">
-            Filled
+            Pipeline
           </span>
           <span className="text-[10px] font-bold text-text-secondary">
             {filled} / {total}
@@ -182,50 +231,50 @@ function PositionCard({
         </div>
       </div>
 
-      {/* ── Mapped candidate avatars ── */}
-      {mappedCandidates.length > 0 && (
-        <div className="flex items-center gap-2 pt-2.5 border-t border-border">
+      {/* Mapped candidate avatars */}
+      {position.mapped_preview.length > 0 && (
+        <div className="flex items-center gap-2 mt-1.5">
           <div className="flex -space-x-1.5">
-            {mappedCandidates.slice(0, 5).map((c) => (
+            {position.mapped_preview.slice(0, 5).map((mp) => (
               <div
-                key={c.id}
-                title={c.name}
-                className="size-6 rounded-full bg-yellow/20 border-2 border-surface flex items-center justify-center text-[9px] font-black text-navy"
+                key={mp.id}
+                title={mp.full_name}
+                className="size-6 rounded-full bg-yellow border-2 border-surface flex items-center justify-center text-[9px] font-black text-navy"
               >
-                {c.name
+                {mp.full_name
                   .split(" ")
                   .map((n) => n[0])
                   .join("")
                   .slice(0, 2)}
               </div>
             ))}
-            {mappedCandidates.length > 5 && (
+            {position.mapped_count > 5 && (
               <div className="size-6 rounded-full bg-surface-2 border-2 border-surface flex items-center justify-center text-[9px] font-bold text-text-muted">
-                +{mappedCandidates.length - 5}
+                +{position.mapped_count - 5}
               </div>
             )}
           </div>
-          <span className="text-[10px] text-text-muted">{mappedCandidates.length} mapped</span>
+          <span className="text-[10px] text-text-secondary font-medium truncate">
+            {mappedLabel(position.mapped_count, position.mapped_preview)}
+          </span>
         </div>
       )}
     </motion.div>
   );
 }
 
-// ─── Candidate Card (right panel, draggable) ──────────────────────────────────
+// ─── Candidate Card ────────────────────────────────────────────────────────────
 
 function DraggableCandidateCard({
   cand,
   rank,
   isMapped,
   onToggleMap,
-  hasPosition,
 }: Readonly<{
-  cand: MockCandidate & { dynamicScore: number };
-  rank?: number;
+  cand: ApiTopCandidate;
+  rank: number;
   isMapped: boolean;
   onToggleMap: () => void;
-  hasPosition: boolean;
 }>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: cand.id,
@@ -236,13 +285,16 @@ function DraggableCandidateCard({
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
 
+  // match_score is 0..1 from the API; convert to percentage integer
+  const score = typeof cand.match_score === "number" ? Math.round(cand.match_score * 100) : null;
+
   const scoreBadgeClass = cn(
     "text-xs font-black px-2 py-1 rounded-lg shrink-0 leading-none",
-    cand.dynamicScore >= 90 && "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
-    cand.dynamicScore >= 80 &&
-      cand.dynamicScore < 90 &&
-      "bg-yellow/20 text-navy border border-yellow/40",
-    cand.dynamicScore < 80 && "bg-surface-2 text-text-muted border border-border",
+    score !== null &&
+      score >= 90 &&
+      "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
+    score !== null && score >= 70 && score < 90 && "bg-yellow/20 text-navy border border-yellow/40",
+    score !== null && score < 70 && "bg-surface-2 text-text-muted border border-border",
   );
 
   return (
@@ -258,18 +310,16 @@ function DraggableCandidateCard({
       )}
     >
       {/* Rank badge */}
-      {rank !== undefined && (
-        <div
-          className={cn(
-            "absolute -left-3 top-1/2 -translate-y-1/2 size-5 rounded-full flex items-center justify-center text-[9px] font-black border",
-            rank <= 3
-              ? "bg-yellow text-navy border-yellow shadow-sm"
-              : "bg-surface-2 text-text-muted border-border",
-          )}
-        >
-          {rank}
-        </div>
-      )}
+      <div
+        className={cn(
+          "absolute -left-3 top-1/2 -translate-y-1/2 size-5 rounded-full flex items-center justify-center text-[9px] font-black border",
+          rank <= 3
+            ? "bg-yellow text-navy border-yellow shadow-sm"
+            : "bg-surface-2 text-text-muted border-border",
+        )}
+      >
+        {rank}
+      </div>
 
       {/* Drag handle */}
       <div
@@ -285,13 +335,13 @@ function DraggableCandidateCard({
         <div className="flex items-start justify-between gap-2 mb-1.5">
           <div className="min-w-0">
             <h4 className="font-semibold text-sm text-text-primary group-hover-accent truncate transition-colors">
-              {cand.name}
+              {cand.full_name}
             </h4>
             <p className="text-[11px] text-text-muted mt-0.5 truncate">
-              {cand.previousCompany || "Freelance"} &bull; {cand.experienceYears}y exp
+              {cand.previous_company || "Freelance"} &bull; {cand.experience_years}y exp
             </p>
           </div>
-          <div className={scoreBadgeClass}>{cand.dynamicScore}%</div>
+          {score !== null && <div className={scoreBadgeClass}>{score}%</div>}
         </div>
 
         {/* Skills */}
@@ -314,33 +364,30 @@ function DraggableCandidateCard({
         {/* Footer */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] text-text-muted truncate">{cand.email}</span>
-
-          {hasPosition && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleMap();
-              }}
-              className={cn(
-                "shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 leading-none",
-                isMapped
-                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20"
-                  : "bg-surface-2 text-text-primary border-border hover:bg-yellow hover:text-navy hover:border-yellow",
-              )}
-            >
-              {isMapped ? (
-                <>
-                  <IconCircleCheck className="size-3" />
-                  Mapped
-                </>
-              ) : (
-                <>
-                  <IconChevronRight className="size-3" />
-                  Map
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMap();
+            }}
+            className={cn(
+              "shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 leading-none",
+              isMapped
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20"
+                : "bg-surface-2 text-text-primary border-border hover:bg-yellow hover:text-navy hover:border-yellow",
+            )}
+          >
+            {isMapped ? (
+              <>
+                <IconCircleCheck className="size-3" />
+                Mapped
+              </>
+            ) : (
+              <>
+                <IconChevronRight className="size-3" />
+                Map
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
@@ -349,17 +396,20 @@ function DraggableCandidateCard({
 
 // ─── Drag overlay ghost ───────────────────────────────────────────────────────
 
-function DragGhostCard({ cand }: Readonly<{ cand: MockCandidate & { dynamicScore: number } }>) {
+function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
+  const score = typeof cand.match_score === "number" ? Math.round(cand.match_score * 100) : null;
   return (
     <div className="p-3.5 rounded-xl border border-yellow/50 bg-surface shadow-2xl shadow-yellow/20 w-64 rotate-1 opacity-95">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <h4 className="font-bold text-text-primary text-sm truncate">{cand.name}</h4>
-        <span className="text-xs font-black text-navy bg-yellow/80 border border-yellow px-2 py-0.5 rounded-lg shrink-0">
-          {cand.dynamicScore}%
-        </span>
+        <h4 className="font-bold text-text-primary text-sm truncate">{cand.full_name}</h4>
+        {score !== null && (
+          <span className="text-xs font-black text-navy bg-yellow/80 border border-yellow px-2 py-0.5 rounded-lg shrink-0">
+            {score}%
+          </span>
+        )}
       </div>
       <p className="text-[11px] text-text-muted mb-2 truncate">
-        {cand.previousCompany || "Freelance"}
+        {cand.previous_company || "Freelance"}
       </p>
       <div className="flex flex-wrap gap-1">
         {cand.skills.slice(0, 2).map((s) => (
@@ -375,85 +425,122 @@ function DragGhostCard({ cand }: Readonly<{ cand: MockCandidate & { dynamicScore
   );
 }
 
-// ─── Score computation ────────────────────────────────────────────────────────
-
-function computeScore(cand: MockCandidate, position: MockPosition | null): number {
-  let score = cand.matchScore;
-  if (!position) return score;
-
-  const role = position.role.toLowerCase();
-  const dept = position.department.toLowerCase();
-  const candSkills = cand.skills.map((s) => s.toLowerCase());
-
-  if (role.includes("chef") || dept.includes("kitchen")) {
-    const kw = ["chef", "oven", "cuisine", "food safety", "cooking", "tandoor"];
-    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
-    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
-  } else if (role.includes("steward") || role.includes("captain") || role.includes("associate")) {
-    const kw = ["service", "table", "guest", "pos", "billing", "hostess"];
-    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
-    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 20, 40);
-  } else if (role.includes("bartender")) {
-    const kw = ["mixology", "cocktail", "pouring", "bar"];
-    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
-    score = hits.length > 0 ? Math.min(score + 15, 100) : Math.max(score - 25, 30);
-  } else if (role.includes("manager") || role.includes("head") || dept.includes("operations")) {
-    const kw = ["operation", "management", "scheduling", "p&l", "staff", "admin"];
-    const hits = candSkills.filter((s) => kw.some((k) => s.includes(k)));
-    score = hits.length > 0 ? Math.min(score + 10, 100) : Math.max(score - 15, 45);
-  }
-
-  return Math.round(score);
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PositionsPage() {
-  const {
-    positions,
-    candidates,
-    mappings,
-    selectedPositionId,
-    setSelectedPositionId,
-    mapCandidate,
-    unmapCandidate,
-  } = usePositionsStore();
+  const apiFetch = useApiFetch();
+
+  const [positions, setPositions] = useState<ApiPosition[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(true);
+  const [filters, setFilters] = useState<ApiPositionFilters | null>(null);
+
+  const [candidates, setCandidates] = useState<ApiTopCandidate[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedClient, setSelectedClient] = useState("All");
-  const [activeDragCand, setActiveDragCand] = useState<
-    (MockCandidate & { dynamicScore: number }) | null
-  >(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
+  const [activeDragCand, setActiveDragCand] = useState<ApiTopCandidate | null>(null);
 
-  const clients = useMemo(
-    () => ["All", ...Array.from(new Set(positions.map((p) => p.clientName)))],
-    [positions],
-  );
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-  const filteredPositions = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return positions.filter((pos) => {
-      const matchSearch =
-        pos.role.toLowerCase().includes(q) ||
-        pos.clientName.toLowerCase().includes(q) ||
-        pos.department.toLowerCase().includes(q) ||
-        pos.city.toLowerCase().includes(q);
-      const matchClient = selectedClient === "All" || pos.clientName === selectedClient;
-      return matchSearch && matchClient;
-    });
-  }, [positions, searchTerm, selectedClient]);
+  // Load filter options once
+  useEffect(() => {
+    getPositionFilters(apiFetch).then(setFilters).catch(console.error);
+  }, [apiFetch]);
 
-  const selectedPosition = useMemo(
-    () => positions.find((p) => p.id === selectedPositionId) ?? null,
-    [positions, selectedPositionId],
-  );
+  // Reload positions when search or client filter changes
+  useEffect(() => {
+    async function load() {
+      setPositionsLoading(true);
+      try {
+        const res = await listPositions(apiFetch, {
+          search: debouncedSearch || undefined,
+          client_id: selectedClientId || undefined,
+          limit: 100,
+        });
+        setPositions(res.items);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setPositionsLoading(false);
+      }
+    }
+    void load();
+  }, [apiFetch, debouncedSearch, selectedClientId]);
 
-  const displayedCandidates = useMemo(() => {
-    const scored = candidates
-      .map((c) => ({ ...c, dynamicScore: computeScore(c, selectedPosition) }))
-      .sort((a, b) => b.dynamicScore - a.dynamicScore);
-    return selectedPosition ? scored.slice(0, 10) : scored;
-  }, [candidates, selectedPosition]);
+  // Load top candidates when selected position changes
+  useEffect(() => {
+    async function load() {
+      if (!selectedPositionId) {
+        setCandidates([]);
+        return;
+      }
+      setCandidatesLoading(true);
+      try {
+        const result = await getTopCandidates(apiFetch, selectedPositionId);
+        setCandidates(result);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setCandidatesLoading(false);
+      }
+    }
+    void load();
+  }, [apiFetch, selectedPositionId]);
+
+  const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? null;
+
+  async function doMap(positionId: string, candidateId: string) {
+    const cand = candidates.find((c) => c.id === candidateId);
+    if (!cand) return;
+
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === candidateId ? { ...c, is_mapped: true } : c)),
+    );
+    setPositions((prev) => applyMappingDelta(prev, positionId, 1, cand));
+
+    try {
+      await mapCandidateToPosition(apiFetch, positionId, candidateId);
+    } catch {
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, is_mapped: false } : c)),
+      );
+      setPositions((prev) => applyMappingDelta(prev, positionId, -1, cand));
+    }
+  }
+
+  async function doUnmap(positionId: string, candidateId: string) {
+    const cand = candidates.find((c) => c.id === candidateId);
+    if (!cand) return;
+
+    const prevPos = positions.find((p) => p.id === positionId);
+    const prevCount = prevPos?.mapped_count ?? 0;
+    const prevPreview = prevPos?.mapped_preview ?? [];
+
+    setCandidates((prev) =>
+      prev.map((c) => (c.id === candidateId ? { ...c, is_mapped: false } : c)),
+    );
+    setPositions((prev) => applyMappingDelta(prev, positionId, -1, cand));
+
+    try {
+      await unmapCandidateFromPosition(apiFetch, positionId, candidateId);
+    } catch {
+      setCandidates((prev) =>
+        prev.map((c) => (c.id === candidateId ? { ...c, is_mapped: true } : c)),
+      );
+      setPositions((prev) =>
+        prev.map((p) =>
+          p.id === positionId ? { ...p, mapped_count: prevCount, mapped_preview: prevPreview } : p,
+        ),
+      );
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -461,26 +548,38 @@ export default function PositionsPage() {
   );
 
   function handleDragStart(event: DragStartEvent) {
-    const cand = event.active.data.current?.cand as MockCandidate | undefined;
-    if (cand) {
-      setActiveDragCand({ ...cand, dynamicScore: computeScore(cand, selectedPosition) });
-    }
+    const cand = event.active.data.current?.cand as ApiTopCandidate | undefined;
+    if (cand) setActiveDragCand(cand);
   }
 
-  function handleDragEnd(event: DragEndEvent) {
+  async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveDragCand(null);
     if (!over) return;
 
     const candId = active.id as string;
     const positionId = over.id as string;
-    const targetPos = positions.find((p) => p.id === positionId);
-    if (!targetPos) return;
+    if (!positions.some((p) => p.id === positionId)) return;
 
-    const alreadyMapped = (mappings[positionId] ?? []).includes(candId);
-    if (!alreadyMapped) {
-      mapCandidate(positionId, candId);
-      setSelectedPositionId(positionId);
+    const draggedCand = active.data.current?.cand as ApiTopCandidate | undefined;
+
+    // If dropping onto the currently selected position, use full optimistic update
+    if (selectedPositionId === positionId) {
+      const alreadyMapped = candidates.find((c) => c.id === candId)?.is_mapped ?? false;
+      if (!alreadyMapped) await doMap(positionId, candId);
+      return;
+    }
+
+    // Dropping onto a different position — switch selection + partial optimistic update
+    setSelectedPositionId(positionId);
+
+    if (draggedCand) {
+      applyPositionMappingDelta(positionId, 1, draggedCand);
+      try {
+        await mapCandidateToPosition(apiFetch, positionId, candId);
+      } catch {
+        applyPositionMappingDelta(positionId, -1, draggedCand);
+      }
     }
   }
 
@@ -501,7 +600,8 @@ export default function PositionsPage() {
                 Open Positions
               </h1>
               <p className="text-sm mt-1 text-text-muted">
-                Drag candidates onto a position to map them, or click a position to see top matches.
+                Click a position to see top matched candidates. Drag candidates onto a position to
+                map them.
               </p>
             </div>
             <a
@@ -535,49 +635,55 @@ export default function PositionsPage() {
                   Client
                 </span>
                 <select
-                  value={selectedClient}
-                  onChange={(e) => setSelectedClient(e.target.value)}
+                  value={selectedClientId}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
                   className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-surface-2 border border-border text-text-primary focus:outline-none focus:border-yellow"
                 >
-                  {clients.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  <option value="">All</option>
+                  {filters?.clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
                 <span className="text-[11px] text-text-muted shrink-0 font-medium">
-                  {filteredPositions.length}
+                  {positions.length}
                 </span>
               </div>
             </div>
 
             {/* Position card list */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
-              {filteredPositions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
-                  <IconSearch className="size-8 opacity-20" />
-                  <p className="text-sm">No positions match your filters.</p>
-                </div>
-              ) : (
-                filteredPositions.map((pos) => {
-                  const mappedCands = (mappings[pos.id] ?? [])
-                    .map((id) => candidates.find((c) => c.id === id))
-                    .filter(Boolean) as MockCandidate[];
-
-                  return (
+            {(() => {
+              if (positionsLoading) {
+                return (
+                  <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
+                    <IconLoader2 className="size-6 animate-spin opacity-40" />
+                  </div>
+                );
+              }
+              if (positions.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
+                    <IconSearch className="size-8 opacity-20" />
+                    <p className="text-sm">No positions match your filters.</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+                  {positions.map((pos) => (
                     <PositionCard
                       key={pos.id}
                       position={pos}
                       isSelected={selectedPositionId === pos.id}
-                      mappedCandidates={mappedCands}
                       onClick={() =>
                         setSelectedPositionId(selectedPositionId === pos.id ? null : pos.id)
                       }
                     />
-                  );
-                })
-              )}
-            </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── RIGHT: Candidates ── */}
@@ -609,7 +715,7 @@ export default function PositionsPage() {
                         <span className="text-text-primary font-semibold">
                           {selectedPosition.role}
                         </span>{" "}
-                        &bull; {selectedPosition.clientName}
+                        &bull; {selectedPosition.client_name}
                       </p>
                     </div>
                     <button
@@ -630,91 +736,100 @@ export default function PositionsPage() {
                   >
                     <IconUsers className="size-4 text-text-muted" />
                     <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
-                      Candidate Pool
+                      Candidates
                     </h2>
-                    <span className="text-[11px] text-text-muted ml-1">
-                      {candidates.length} total
-                    </span>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Hint banner */}
+            {/* Empty state when no position selected */}
             <AnimatePresence>
               {!selectedPosition && (
                 <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden shrink-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted p-8"
                 >
-                  <div className="mx-4 mt-3 flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-yellow/5 border border-yellow/20 text-text-primary text-xs font-medium">
-                    <IconBulb className="size-4 shrink-0 mt-0.5" />
-                    <span>
-                      Click a position on the left to see its top 10 matched candidates. You can
-                      also drag any candidate directly onto a position card to map them.
-                    </span>
-                  </div>
+                  <IconBulb className="size-10 opacity-20" />
+                  <p className="text-sm text-center leading-relaxed">
+                    Select a position to see its top 10 matched candidates.
+                  </p>
+                  <p className="text-[11px] text-text-muted/60 text-center">
+                    You can also drag candidates onto a position card to map them.
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Candidate list */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
-              <AnimatePresence mode="popLayout">
-                {displayedCandidates.map((cand, idx) => {
-                  const isMapped = selectedPosition
-                    ? (mappings[selectedPosition.id] ?? []).includes(cand.id)
-                    : false;
-
-                  return (
-                    <motion.div
-                      key={cand.id}
-                      layout
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      transition={{ duration: 0.15, delay: idx * 0.025 }}
-                      className={selectedPosition ? "pl-5" : ""}
-                    >
-                      <DraggableCandidateCard
-                        cand={cand}
-                        rank={selectedPosition ? idx + 1 : undefined}
-                        isMapped={isMapped}
-                        hasPosition={!!selectedPosition}
-                        onToggleMap={() => {
-                          if (!selectedPosition) return;
-                          if (isMapped) {
-                            unmapCandidate(selectedPosition.id, cand.id);
-                          } else {
-                            mapCandidate(selectedPosition.id, cand.id);
-                          }
-                        }}
-                      />
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-
-            {/* Footer summary when position selected */}
             {selectedPosition && (
-              <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-text-muted shrink-0">
-                <span>
-                  Mapped:{" "}
-                  <strong className="text-text-primary">
-                    {(mappings[selectedPosition.id] ?? []).length}
-                  </strong>{" "}
-                  / {selectedPosition.openingsCount} openings
-                </span>
-                <a
-                  href={`/positions/${selectedPosition.id}/pipeline`}
-                  className="font-bold text-navy bg-yellow/70 hover:bg-yellow px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                >
-                  Kanban Pipeline &rarr;
-                </a>
-              </div>
+              <>
+                {(() => {
+                  if (candidatesLoading) {
+                    return (
+                      <div className="flex items-center justify-center h-40 text-text-muted gap-2">
+                        <IconLoader2 className="size-6 animate-spin opacity-40" />
+                        <p className="text-sm">Finding best matches…</p>
+                      </div>
+                    );
+                  }
+                  if (candidates.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
+                        <IconUsers className="size-8 opacity-20" />
+                        <p className="text-sm">No matching candidates found.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+                      <AnimatePresence mode="popLayout">
+                        {candidates.map((cand, idx) => (
+                          <motion.div
+                            key={cand.id}
+                            layout
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -10 }}
+                            transition={{ duration: 0.15, delay: idx * 0.025 }}
+                            className="pl-5"
+                          >
+                            <DraggableCandidateCard
+                              cand={cand}
+                              rank={idx + 1}
+                              isMapped={cand.is_mapped}
+                              onToggleMap={() => {
+                                if (cand.is_mapped) {
+                                  doUnmap(selectedPosition.id, cand.id);
+                                } else {
+                                  doMap(selectedPosition.id, cand.id);
+                                }
+                              }}
+                            />
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })()}
+
+                {/* Footer summary */}
+                <div className="px-5 py-3 border-t border-border flex items-center justify-between text-xs text-text-muted shrink-0">
+                  <span>
+                    Pipeline:{" "}
+                    <strong className="text-text-primary">{selectedPosition.mapped_count}</strong> /{" "}
+                    {selectedPosition.total_seats} seats
+                  </span>
+                  <a
+                    href={`/positions/${selectedPosition.id}/pipeline`}
+                    className="font-bold text-navy bg-yellow/70 hover:bg-yellow px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                  >
+                    Kanban Pipeline &rarr;
+                  </a>
+                </div>
+              </>
             )}
           </div>
         </div>

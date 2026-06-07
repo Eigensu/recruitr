@@ -17,7 +17,7 @@ type ChartPoint = {
   y: number;
 };
 
-export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphProps) {
+export default function RecruiterLineGraph({ recruiters }: Readonly<RecruiterLineGraphProps>) {
   const graphRef = useRef<HTMLElement>(null);
   const isInView = useInView(graphRef, { once: true, amount: 0.28 });
   const defaultRecruiter = recruiters[0]?.name ?? "";
@@ -147,7 +147,10 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
                 {
                   label: "Pipeline",
                   value: (
-                    <span className="mt-0.5 font-heading text-sm text-yellow">
+                    <span
+                      className="mt-0.5 font-heading text-sm font-bold"
+                      style={{ color: "var(--color-chart-line-val)" }}
+                    >
                       {active.inPipeline}
                     </span>
                   ),
@@ -188,8 +191,14 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
           >
             <defs>
               <linearGradient id="recruiterLine" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#F3FF54" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="#F3FF54" stopOpacity="0.25" />
+                <stop
+                  offset="0%"
+                  style={{ stopColor: "var(--color-chart-line-val)", stopOpacity: 0.9 }}
+                />
+                <stop
+                  offset="100%"
+                  style={{ stopColor: "var(--color-chart-line-val)", stopOpacity: 0.15 }}
+                />
               </linearGradient>
             </defs>
 
@@ -230,7 +239,8 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
 
             <motion.path
               d={`M ${chart.polyline} L ${chart.width - chart.padding.right},${chart.height - chart.padding.bottom} L ${chart.padding.left},${chart.height - chart.padding.bottom} Z`}
-              fill="rgba(243,255,84,0.09)"
+              style={{ fill: "var(--color-chart-line-val)" }}
+              fillOpacity={0.08}
               initial={{ opacity: 0 }}
               animate={isInView ? { opacity: 1 } : { opacity: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
@@ -243,10 +253,18 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
                   x2={activePoint.x}
                   y1={chart.padding.top}
                   y2={chart.height - chart.padding.bottom}
-                  stroke="rgba(243,255,84,0.26)"
+                  style={{ stroke: "var(--color-chart-line-val)" }}
+                  strokeOpacity={0.3}
                   strokeWidth="1"
+                  strokeDasharray="4 3"
                 />
-                <circle cx={activePoint.x} cy={activePoint.y} r={11} fill="rgba(243,255,84,0.16)" />
+                <circle
+                  cx={activePoint.x}
+                  cy={activePoint.y}
+                  r={11}
+                  style={{ fill: "var(--color-chart-line-val)" }}
+                  fillOpacity={0.18}
+                />
               </g>
             )}
 
@@ -258,8 +276,10 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
                     cx={point.x}
                     cy={point.y}
                     r={isActive ? 9 : 6.5}
-                    fill={isActive ? "#F3FF54" : "rgba(255,255,255,0.65)"}
-                    stroke={isActive ? "rgba(0,0,0,0.35)" : "rgba(0,0,0,0.25)"}
+                    style={{
+                      fill: isActive ? "var(--color-chart-line-val)" : "var(--color-chart-dot-val)",
+                      stroke: isActive ? "var(--color-chart-line-val)" : "var(--color-border-val)",
+                    }}
                     strokeWidth="2"
                     className="cursor-pointer"
                     onMouseEnter={(e) => {
@@ -343,14 +363,17 @@ export default function RecruiterLineGraph({ recruiters }: RecruiterLineGraphPro
         </div>
       </div>
 
-      <div className="mt-5 pt-4">
-        <p className="text-xs leading-relaxed" style={{ opacity: 0.7 }}>
-          <span className="font-semibold" style={{ opacity: 1 }}>
-            Recruiter Performance:
-          </span>{" "}
-          The line graph shows pipeline volume per recruiter. Recruiters with higher peaks are
-          managing larger candidate pools. Consistent high values indicate sustained activity, while
-          fluctuations may suggest seasonal hiring patterns or workload redistribution.
+      <div
+        className="mt-5 rounded-lg px-4 py-3"
+        style={{ background: "var(--color-surface-2-val)" }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+          <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            {"Recruiter Performance: "}
+          </span>
+          {
+            "The line graph shows pipeline volume per recruiter. Recruiters with higher peaks are managing larger candidate pools. Consistent high values indicate sustained activity, while fluctuations may suggest seasonal hiring patterns or workload redistribution."
+          }
         </p>
       </div>
     </motion.section>

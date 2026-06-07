@@ -17,13 +17,17 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
 
   return (
     <motion.article
-      initial={{ opacity: 0, y: 14 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ once: true, amount: 0.35 }}
-      transition={{ duration: 0.4, delay: index * 0.035, ease: "easeOut" }}
-      whileHover={{ y: -2 }}
-      className="rounded-lg p-3 h-full"
-      style={{ background: tone.cardBg, color: tone.cardText, boxShadow: tone.shadow }}
+      transition={{ duration: 0.3, delay: index * 0.035 }}
+      className="rounded-lg p-3 h-full cursor-default hover:-translate-y-0.5 active:scale-[0.98]"
+      style={{
+        background: tone.cardBg,
+        color: tone.cardText,
+        boxShadow: tone.shadow,
+        transition: "transform 100ms ease-out",
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

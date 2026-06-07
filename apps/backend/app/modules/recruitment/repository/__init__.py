@@ -1,24 +1,43 @@
-"""Recruitment data access layer (repositories and queries).
-
-During Phase C/D refactoring, repository will be split into:
-- queries.py (read operations)
-- writes.py (write operations)
-
-For now, re-export from the root repository_impl.py module.
-"""
+"""Recruitment data access layer — re-exports from repository_impl."""
 
 from app.modules.recruitment.repository_impl import (
-    fetch_mappings,
+    create_employee,
+    create_mapping,
+    delete_mapping,
+    find_employee_by_email,
     generate_client_code,
     generate_position_code,
+    get_candidate,
+    get_client,
+    get_mapping,
+    get_position,
+    link_employee_user,
+    list_clients,
+    log_activity,
+    move_stage,
     next_seq,
+    recompute_position_seats,
     set_seq,
+    update_candidate_current_stage,
 )
 
 __all__ = [
-    "next_seq",
-    "set_seq",
+    "create_employee",
+    "create_mapping",
+    "delete_mapping",
+    "find_employee_by_email",
     "generate_client_code",
     "generate_position_code",
-    "fetch_mappings",
+    "get_candidate",
+    "get_client",
+    "get_mapping",
+    "get_position",
+    "link_employee_user",
+    "list_clients",
+    "log_activity",
+    "move_stage",
+    "next_seq",
+    "recompute_position_seats",
+    "set_seq",
+    "update_candidate_current_stage",
 ]

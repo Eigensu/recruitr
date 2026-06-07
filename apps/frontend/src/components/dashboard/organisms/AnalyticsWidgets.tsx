@@ -52,13 +52,19 @@ export default function AnalyticsWidgets({ widgets }: Readonly<AnalyticsWidgetsP
           return (
             <motion.article
               key={widget.id}
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
               viewport={{ once: true, amount: 0.35 }}
-              transition={{ duration: 0.35, delay: index * 0.04, ease: "easeOut" }}
-              whileHover={{ y: -2 }}
-              className={cn(DASHBOARD_WIDGET_CLASS, "transition-transform")}
-              style={{ background: tone.cardBg, color: tone.cardText }}
+              transition={{ duration: 0.3, delay: index * 0.04 }}
+              className={cn(
+                DASHBOARD_WIDGET_CLASS,
+                "cursor-default hover:-translate-y-0.5 active:scale-[0.98]",
+              )}
+              style={{
+                background: tone.cardBg,
+                color: tone.cardText,
+                transition: "transform 100ms ease-out",
+              }}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

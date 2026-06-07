@@ -68,16 +68,15 @@ def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Phase 1 stub — extract raw text from a PDF using PyMuPDF.
+    """Extract raw text from a resume file using PyMuPDF.
 
-    Phase 2 will pipe this text to an LLM endpoint (OpenAI / Gemini)
-    to extract a structured list of skills as JSON.
+    Supports PDF and DOCX — format is auto-detected from the byte stream.
 
     Args:
-        file_bytes: Raw PDF bytes downloaded from Cloudinary.
+        file_bytes: Raw file bytes (PDF or DOCX) from Cloudinary or local disk.
 
     Returns:
-        Concatenated plain text from all PDF pages.
+        Concatenated plain text from all pages.
     """
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    doc = fitz.open(stream=file_bytes)
     return "\n".join(page.get_text() for page in doc)

@@ -15,7 +15,7 @@ interface AnimatedNumberProps {
 export default function AnimatedNumber({
   value,
   decimals = 0,
-  duration = 900,
+  duration = 500,
   suffix = "",
   prefix = "",
   locale = "en-IN",

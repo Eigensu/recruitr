@@ -106,6 +106,10 @@
   /* Chart track (donut empty ring) */
   --color-chart-track: rgba(255, 255, 255, 0.08);
 
+  /* Chart line — visible on dark surfaces */
+  --color-chart-line-val: #f3ff54;
+  --color-chart-dot-val: rgba(255, 255, 255, 0.65);
+
   --color-toggle-bg: rgba(255, 255, 255, 0.1);
   --color-toggle-icon: #ffffff;
 }
@@ -133,6 +137,10 @@
 
   /* Chart track */
   --color-chart-track: #d1d1d6;
+
+  /* Chart line — visible on light surfaces */
+  --color-chart-line-val: #002348;
+  --color-chart-dot-val: #94a3b8;
 
   --color-toggle-bg: #002348;
   --color-toggle-icon: #f3ff54;

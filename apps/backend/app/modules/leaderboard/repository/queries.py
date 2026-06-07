@@ -280,7 +280,7 @@ async def fetch_rankings(
 
 async def fetch_overview() -> dict[str, Any]:
     stats = await EmployeeStat.find(EmployeeStat.is_active == True).to_list()  # noqa: E712
-    jobs = await JobOpening.find(JobOpening.is_active == True).to_list()  # noqa: E712
+    job_count = await JobOpening.get_motor_collection().count_documents({"is_active": True})
     total_recruiters = len(stats)
     total_mappings = sum(stat.mappings.total_mappings for stat in stats)
     offers = sum(stat.mappings.offers_received for stat in stats)
@@ -306,7 +306,7 @@ async def fetch_overview() -> dict[str, Any]:
             "joins": joins,
             "growth": growth,
             "top_score": top_score,
-            "companies": len(jobs),
+            "companies": job_count,
         },
         "top_recruiter": recruiter,
     }
@@ -370,10 +370,11 @@ async def fetch_monthly_growth() -> dict[str, Any]:
 
 async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
     jobs = (
-        await JobOpening.find(JobOpening.is_active == True)  # noqa: E712
-        .sort("-total_seats")
+        await JobOpening.get_motor_collection()
+        .find({"is_active": True})
+        .sort("total_seats", -1)
         .limit(limit)
-        .to_list()
+        .to_list(length=None)
     )
     cursor = await CandidateMapping.get_motor_collection().aggregate(  # type: ignore
         [
@@ -390,11 +391,11 @@ async def fetch_company_progress(limit: int = 8) -> list[dict[str, Any]]:
     mapping_by_job = {item["_id"]: item for item in mappings}
     return [
         {
-            "company": job.client_name,
-            "role": job.role,
-            "totalSeats": job.total_seats,
-            "filled": job.filled_seats,
-            "recruiterCount": len(mapping_by_job.get(job.id, {}).get("recruiters", [])),
+            "company": job.get("client_name", ""),
+            "role": job.get("role", ""),
+            "totalSeats": int(job.get("total_seats", 0)),
+            "filled": int(job.get("filled_seats", 0)),
+            "recruiterCount": len(mapping_by_job.get(job["_id"], {}).get("recruiters", [])),
         }
         for job in jobs
     ]

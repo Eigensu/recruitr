@@ -11,9 +11,11 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
@@ -31,6 +33,8 @@ from app.modules.recruitment.schemas import (
     ResumeConfirm,
     TenantScope,
 )
+from app.modules.recruitment.utils.resume_parser import parse_resume
+from app.modules.storage.service import extract_text_from_pdf
 
 router = APIRouter()
 
@@ -58,6 +62,53 @@ _COUNT = "$count"
 _SIZE = "$size"
 _TO_STR = "$toString"
 _EXPR = "$expr"
+
+_log = logging.getLogger(__name__)
+
+
+# ── Background tasks ───────────────────────────────────────────────────────────
+
+
+async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
+    """Download resume PDF, parse it, and update candidate fields.
+
+    Runs as a background task after confirm_resume returns. Failures are logged
+    but never surface to the caller — the resume URL is already saved.
+    Fields are only updated when the candidate currently has no value
+    (skills are always refreshed since the resume is the source of truth).
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(resume_url)
+            resp.raise_for_status()
+        raw_text = extract_text_from_pdf(resp.content)
+        parsed = parse_resume(raw_text)
+    except Exception:
+        _log.exception("Resume parse failed for candidate %s", candidate_id)
+        return
+
+    from app.common.utils.object_id import to_object_id
+
+    try:
+        oid = to_object_id(candidate_id, "candidate_id")
+        doc = await Candidate.find_one({"_id": oid})
+        if not doc:
+            return
+
+        update: dict = {"resume_raw_text": raw_text}
+        if parsed.skills:
+            update["skills"] = parsed.skills
+            update["skills_normalized"] = [s.lower() for s in parsed.skills]
+        if parsed.phone and not doc.phone:
+            update["phone"] = parsed.phone
+        if parsed.experience_years is not None and doc.experience_years == 0:
+            update["experience_years"] = parsed.experience_years
+        if parsed.previous_company and not doc.previous_company:
+            update["previous_company"] = parsed.previous_company
+
+        await doc.set(update)
+    except Exception:
+        _log.exception("Resume DB update failed for candidate %s", candidate_id)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -311,10 +362,14 @@ async def get_candidate_mappings(tenant: _Tenant, candidate_id: str) -> list[Can
 
 @router.post("/{candidate_id}/resume")
 async def confirm_resume(
-    tenant: _Tenant, candidate_id: str, data: ResumeConfirm
+    tenant: _Tenant,
+    candidate_id: str,
+    data: ResumeConfirm,
+    background_tasks: BackgroundTasks,
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"resume_public_id": data.resume_public_id, "resume_url": data.resume_url})
+    background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
     return CandidateResponse(

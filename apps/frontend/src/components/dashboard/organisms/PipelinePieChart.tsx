@@ -15,7 +15,7 @@ interface PipelinePieChartProps {
   stages: PipelineStageMetric[];
 }
 
-export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
+export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartProps>) {
   const chartRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(chartRef, { once: true, amount: 0.42 });
   const [activeStage, setActiveStage] = useState(stages[0]?.stage);
@@ -164,7 +164,12 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
             <p className="mt-2 font-heading text-3xl">
               <AnimatedNumber value={active?.count ?? total} />
             </p>
-            <p className="mt-1 text-sm text-yellow">{active?.label ?? "All stages"}</p>
+            <p
+              className="mt-1 text-sm font-semibold"
+              style={{ color: "var(--color-text-primary)" }}
+            >
+              {active?.label ?? "All stages"}
+            </p>
             <p className="mt-1 text-xs" style={{ opacity: 0.6 }}>
               <AnimatedNumber value={active?.percent ?? 100} suffix="%" /> of pipeline
             </p>
@@ -172,12 +177,16 @@ export default function PipelinePieChart({ stages }: PipelinePieChartProps) {
         </motion.div>
       </div>
 
-      <div className="mt-5 pt-4">
-        <p className="text-xs leading-relaxed" style={{ opacity: 0.7 }}>
-          Pipeline Overview: Your recruitment pipeline is distributed across {stages.length} stages.
-          The largest concentration is in {largestSegment?.label ?? "Unknown"}, which represents{" "}
-          <span className="font-semibold">{largestSegment?.percent ?? 0}% of total candidates</span>
-          . Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.
+      <div
+        className="mt-5 rounded-lg px-4 py-3"
+        style={{ background: "var(--color-surface-2-val)" }}
+      >
+        <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
+          {`Pipeline Overview: Your recruitment pipeline is distributed across ${stages.length} stages. The largest concentration is in ${largestSegment?.label ?? "Unknown"}, which represents `}
+          <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            {`${largestSegment?.percent ?? 0}% of total candidates`}
+          </span>
+          {`. Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.`}
         </p>
       </div>
     </section>
