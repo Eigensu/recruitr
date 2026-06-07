@@ -17,6 +17,8 @@ Usage (production):
 from __future__ import annotations
 
 import asyncio
+import os
+import sys
 from datetime import UTC, datetime
 from typing import Any
 
@@ -65,6 +67,11 @@ def _backfill_requirements(role: str) -> list[str]:
 
 
 async def migrate() -> None:
+    if os.getenv("DEMO_MODE", "false").lower() != "true":
+        print("Migration aborted: DEMO_MODE flag is not 'true'.")
+        print("Production data must not be mass-updated to the demo tenant.")
+        sys.exit(1)
+
     client = AsyncMongoClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB_NAME]
     now = datetime.now(UTC)

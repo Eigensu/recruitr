@@ -23,6 +23,7 @@ from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
+from app.modules.recruitment.repository import generate_position_code
 from app.modules.recruitment.schemas import (
     ClientOption,
     MapCandidateRequest,
@@ -36,6 +37,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
     TopCandidateItem,
 )
+from app.modules.recruitment.utils.matching import _get_effective_requirements
 
 router = APIRouter()
 
@@ -335,17 +337,22 @@ async def list_positions(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionListItem:
-    # Generate position code (Phase C: will be moved to service layer)
-    # Format: CLI-NNN-POS-NNN (handled by service in full implementation)
+    # Verify client belongs to tenant and get details
     client_oid = to_object_id(data.client_id, "client_id")
     if not client_oid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _ERR_INVALID_CLIENT_ID)
 
+    client_doc = await Client.find_one(Client.id == client_oid, Client.brand_id == tenant.brand_id)
+    if not client_doc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or unauthorized client")
+
+    code = await generate_position_code(tenant.brand_id, client_doc.code)
+
     doc = Position(
         brand_id=tenant.brand_id,
-        code="TBD",  # Will be set by service
+        code=code,
         client_id=client_oid,
-        client_name=data.client_id,  # Will be populated from client lookup
+        client_name=client_doc.name,
         role=data.role,
         department=data.department,
         city=data.city,
@@ -517,8 +524,9 @@ async def get_top_candidates(
     if not pos:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
 
-    has_reqs = bool(pos.requirements)
-    req_lower = [s.lower() for s in pos.requirements]
+    reqs = _get_effective_requirements(pos)
+    has_reqs = bool(reqs)
+    req_lower = [s.lower() for s in reqs]
     n_req = len(req_lower) or 1
 
     if has_reqs:
