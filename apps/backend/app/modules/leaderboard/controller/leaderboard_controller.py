@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.dependencies import get_current_user
 from app.modules.auth.schemas import TokenPayload
+from app.modules.leaderboard.repository import backfill_stats_from_mappings
 from app.modules.leaderboard.schemas import (
     ActivityPage,
     CompanyProgressResponse,
@@ -76,3 +77,17 @@ async def get_badges(
     _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> RecruiterBadgesResponse:
     return await service.get_badges(employee_id)
+
+
+@router.post("/backfill")
+async def backfill_leaderboard(
+    _: TokenPayload = Depends(get_current_user),  # noqa: B008
+) -> dict:
+    """Rebuild EmployeeStat from all existing Mapping documents and recompute ranks.
+
+    Safe to call multiple times — uses upsert. Call this once after deploying
+    to bootstrap the leaderboard from historical mapping data.
+    """
+    updated = await backfill_stats_from_mappings()
+    await service.invalidate_cache()
+    return {"status": "ok", "employees_updated": updated}

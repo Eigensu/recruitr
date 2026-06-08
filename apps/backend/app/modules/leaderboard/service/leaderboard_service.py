@@ -249,6 +249,10 @@ async def handle_activity(
     return processed
 
 
+async def invalidate_cache() -> None:
+    await invalidate_leaderboard_cache()
+
+
 async def refresh_rankings() -> None:
     await recompute_ranks()
     await invalidate_leaderboard_cache()

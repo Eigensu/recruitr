@@ -8,6 +8,7 @@ from app.modules.leaderboard.repository.queries import (
     fetch_recruiter,
 )
 from app.modules.leaderboard.repository.writes import (
+    backfill_stats_from_mappings,
     create_monthly_snapshots,
     recompute_ranks,
     record_activity_atomic,
@@ -15,6 +16,7 @@ from app.modules.leaderboard.repository.writes import (
 )
 
 __all__ = [
+    "backfill_stats_from_mappings",
     "create_monthly_snapshots",
     "fetch_activity",
     "fetch_badges",
