@@ -1,27 +1,26 @@
 import React from "react";
-import { IconMail, IconPhone, IconBriefcase } from "@tabler/icons-react";
+import { IconMail, IconBriefcase } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
-import { cn } from "@/lib/utils";
 
 interface CandidateCardProps {
   candidate: ApiCandidate;
   onClick: () => void;
 }
 
-const AVATAR_COLORS = [
-  "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
-  "bg-blue-500/15 text-blue-600 border-blue-500/30",
-  "bg-purple-500/15 text-purple-600 border-purple-500/30",
-  "bg-pink-500/15 text-pink-600 border-pink-500/30",
-  "bg-amber-400/20 text-amber-700 border-amber-400/30",
+const PALETTES = [
+  { bg: "rgba(52,211,153,0.1)", text: "#34d399", border: "rgba(52,211,153,0.18)" },
+  { bg: "rgba(96,165,250,0.1)", text: "#60a5fa", border: "rgba(96,165,250,0.18)" },
+  { bg: "rgba(167,139,250,0.1)", text: "#a78bfa", border: "rgba(167,139,250,0.18)" },
+  { bg: "rgba(251,146,60,0.1)", text: "#fb923c", border: "rgba(251,146,60,0.18)" },
+  { bg: "rgba(243,255,84,0.1)", text: "#f3ff54", border: "rgba(243,255,84,0.18)" },
 ];
 
-export function getAvatarColor(name: string) {
+export function getAvatarPalette(name: string) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = (name.codePointAt(i) ?? 0) + ((hash << 5) - hash);
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return PALETTES[Math.abs(hash) % PALETTES.length];
 }
 
 export function getInitials(name: string) {
@@ -34,65 +33,69 @@ export function getInitials(name: string) {
 }
 
 export default function CandidateCard({ candidate, onClick }: Readonly<CandidateCardProps>) {
+  const palette = getAvatarPalette(candidate.full_name);
+  const initials = getInitials(candidate.full_name);
+
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={`View details for ${candidate.full_name}`}
-      className="p-5 rounded-xl border border-border bg-surface-panel hover:border-yellow/50 hover:shadow-lg hover:shadow-yellow/5 transition-all duration-200 cursor-pointer flex flex-col h-full group text-left w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
+      className="group w-full h-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow rounded-2xl"
     >
-      <div className="flex items-start gap-4 mb-4">
-        <div
-          className={cn(
-            "flex items-center justify-center size-12 rounded-full border shrink-0 font-bold text-lg",
-            getAvatarColor(candidate.full_name),
-          )}
-        >
-          {getInitials(candidate.full_name)}
-        </div>
+      <div className="flex flex-col h-full rounded-2xl bg-surface-panel border border-border overflow-hidden transition-all duration-200 group-hover:border-white/10 group-hover:-translate-y-px group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+        {/* Palette accent bar */}
+        <div className="h-0.5 shrink-0" style={{ backgroundColor: palette.text, opacity: 0.55 }} />
 
-        <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-text-primary text-lg truncate group-hover-accent transition-colors">
-            {candidate.full_name}
-          </h3>
-          <p className="text-sm text-text-secondary flex items-center gap-1.5 truncate mt-0.5">
-            <IconBriefcase className="size-3.5 shrink-0" />
-            <span className="truncate">
-              {candidate.previous_company ?? "Freelance"} &bull; {candidate.experience_years} yrs
-            </span>
-          </p>
-        </div>
-      </div>
-
-      {/* Skills */}
-      <div className="flex flex-wrap gap-1.5 mb-5">
-        {candidate.skills.slice(0, 3).map((skill) => (
-          <span
-            key={skill}
-            className="skill-tag text-[11px] font-semibold px-2 py-0.5 rounded-full"
-          >
-            {skill}
-          </span>
-        ))}
-        {candidate.skills.length > 3 && (
-          <span className="text-[10px] px-1.5 py-0.5 text-text-muted font-medium">
-            +{candidate.skills.length - 3} more
-          </span>
-        )}
-      </div>
-
-      {/* Contact footer */}
-      <div className="mt-auto pt-4 border-t border-border/50 flex flex-col gap-2 w-full">
-        <div className="flex items-center text-xs text-text-secondary truncate">
-          <IconMail className="size-3.5 mr-2 shrink-0 opacity-70" />
-          <span className="truncate">{candidate.email}</span>
-        </div>
-        {candidate.phone && (
-          <div className="flex items-center text-xs text-text-secondary">
-            <IconPhone className="size-3.5 mr-2 shrink-0 opacity-70" />
-            <span>{candidate.phone}</span>
+        <div className="flex flex-col h-full p-5 gap-4">
+          {/* Identity row */}
+          <div className="flex items-start gap-3.5">
+            <div
+              className="size-10 rounded-xl shrink-0 flex items-center justify-center font-heading font-bold text-sm"
+              style={{
+                backgroundColor: palette.bg,
+                color: palette.text,
+                border: `1px solid ${palette.border}`,
+              }}
+            >
+              {initials}
+            </div>
+            <div className="flex-1 min-w-0 pt-0.5">
+              <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
+                {candidate.full_name}
+              </h3>
+              <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1.5 truncate">
+                <IconBriefcase className="size-3 shrink-0" />
+                <span className="truncate">
+                  {candidate.previous_company ?? "Independent"} · {candidate.experience_years}y
+                </span>
+              </p>
+            </div>
           </div>
-        )}
+
+          {/* Skills */}
+          <div className="flex flex-wrap gap-1.5">
+            {candidate.skills.slice(0, 4).map((skill) => (
+              <span
+                key={skill}
+                className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+              >
+                {skill}
+              </span>
+            ))}
+            {candidate.skills.length > 4 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
+                +{candidate.skills.length - 4}
+              </span>
+            )}
+          </div>
+
+          {/* Contact footer */}
+          <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center gap-1.5 text-[11px] text-text-muted">
+            <IconMail className="size-3.5 shrink-0 opacity-50" />
+            <span className="truncate">{candidate.email}</span>
+          </div>
+        </div>
       </div>
     </button>
   );

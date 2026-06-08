@@ -44,6 +44,24 @@
   color: var(--color-navy);
 }
 
+/* Candidate card staggered reveal */
+@keyframes candidateReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.candidate-card-reveal {
+  opacity: 0;
+  animation: candidateReveal 0.28s ease forwards;
+  height: 100%;
+}
+
 /* Theme-aware skill tag: yellow tint in dark, navy tint in light */
 .skill-tag {
   color: var(--color-yellow);

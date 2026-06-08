@@ -37,6 +37,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
     TopCandidateItem,
 )
+from app.modules.recruitment.service_impl import map_candidate as service_map_candidate
 from app.modules.recruitment.utils.matching import _get_effective_requirements
 
 router = APIRouter()
@@ -714,19 +715,12 @@ async def map_candidate_to_position(
         cand.preferred_train_line,
     )
 
-    # Create mapping
-    mapping = Mapping(
-        brand_id=tenant.brand_id,
+    mapping = await service_map_candidate(
+        scope=tenant,
         candidate_id=cand_oid,
-        position_id=pos_oid,
-        client_id=pos.client_id,
-        employee_id=tenant.employee_id,
-        stage="sourced",
-        decision="pending",
+        position=pos,
         match_score=match_score,
-        mapped_at=None,  # Beanie will set to now
     )
-    await mapping.insert()
 
     return MapCandidateResponse(
         mapping_id=str(mapping.id),
