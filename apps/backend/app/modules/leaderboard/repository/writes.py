@@ -159,7 +159,7 @@ async def backfill_stats_from_mappings() -> int:
         }
     ]
 
-    cursor = Mapping.get_motor_collection().aggregate(pipeline)
+    cursor = await Mapping.get_motor_collection().aggregate(pipeline)
     rows = await cursor.to_list(length=None)
 
     for row in rows:
