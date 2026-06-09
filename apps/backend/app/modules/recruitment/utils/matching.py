@@ -10,12 +10,15 @@ frontend must hide the score ring entirely, never render 0%.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from app.modules.recruitment.models import Candidate, Position
 from app.modules.recruitment.schemas import TenantScope
+
+logger = logging.getLogger(__name__)
 
 # Aggregation operator constants
 _MATCH = "$match"
@@ -46,9 +49,19 @@ _ROLE_KEYWORDS_CACHE: dict[str, list[str]] = {}
 
 def _load_role_keywords() -> dict[str, list[str]]:
     global _ROLE_KEYWORDS_CACHE
-    if not _ROLE_KEYWORDS_CACHE and _ROLE_KEYWORDS_FILE.exists():
+    if _ROLE_KEYWORDS_CACHE:
+        return _ROLE_KEYWORDS_CACHE
+    if not _ROLE_KEYWORDS_FILE.exists():
+        logger.warning(
+            "role_keywords.json missing at %s — role keyword defaults will be used",
+            _ROLE_KEYWORDS_FILE,
+        )
+        return _ROLE_KEYWORDS_CACHE
+    try:
         with open(_ROLE_KEYWORDS_FILE) as f:
             _ROLE_KEYWORDS_CACHE = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        logger.exception("Failed to load %s", _ROLE_KEYWORDS_FILE)
     return _ROLE_KEYWORDS_CACHE
 
 

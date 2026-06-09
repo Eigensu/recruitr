@@ -45,7 +45,7 @@
 }
 
 /* Candidate card staggered reveal */
-@keyframes candidateReveal {
+@keyframes candidate-reveal {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -58,7 +58,7 @@
 
 .candidate-card-reveal {
   opacity: 0;
-  animation: candidateReveal 0.28s ease forwards;
+  animation: candidate-reveal 0.28s ease forwards;
   height: 100%;
 }
 

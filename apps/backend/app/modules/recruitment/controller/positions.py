@@ -706,7 +706,7 @@ async def map_candidate_to_position(
         raise HTTPException(status.HTTP_409_CONFLICT, _ERR_ALREADY_MAPPED)
 
     match_score: float = _py_composite_score(
-        pos.requirements,
+        _get_effective_requirements(pos),
         pos.seniority.value,
         pos.train_line,
         cand.skills_normalized or [],

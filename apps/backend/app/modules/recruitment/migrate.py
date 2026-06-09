@@ -1,4 +1,8 @@
-"""Production data migration: old dashboard collections → unified recruitment schema.
+"""Demo/development data migration: old dashboard collections → unified recruitment schema.
+
+All migrated entities are assigned to the demo tenant/domain "binge.consulting".
+This script is NOT for production use — it requires DEMO_MODE=true to run.
+If DEMO_MODE is not "true", the script aborts via sys.exit(1) before touching any data.
 
 Maps data from:
   job_openings  → positions (new fields + requirements backfill)
@@ -8,9 +12,8 @@ Maps data from:
   activities    → activities (add brand_id)
   documents     → documents (add brand_id)
 
-Usage (production):
-    cd apps/backend
-    python -m app.modules.recruitment.migrate
+Usage:
+    DEMO_MODE=true python -m app.modules.recruitment.migrate
     # Review output, then restart the application.
 """
 
