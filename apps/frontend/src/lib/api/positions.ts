@@ -56,7 +56,7 @@ export function mapCandidateToPosition(
   positionId: string,
   candidateId: string,
 ): Promise<unknown> {
-  return apiFetch(`/api/v1/positions/${positionId}/candidates`, {
+  return apiFetch(`/api/v1/positions/${positionId}/map-candidate`, {
     method: "POST",
     body: JSON.stringify({ candidate_id: candidateId }),
   });
@@ -77,7 +77,7 @@ export function unmapCandidateFromPosition(
   positionId: string,
   candidateId: string,
 ): Promise<void> {
-  return apiFetch(`/api/v1/positions/${positionId}/candidates/${candidateId}`, {
-    method: "DELETE",
+  return apiFetch(`/api/v1/positions/${positionId}/unmap-candidate?candidate_id=${candidateId}`, {
+    method: "POST",
   });
 }

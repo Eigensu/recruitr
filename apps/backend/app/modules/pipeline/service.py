@@ -89,17 +89,23 @@ async def match_candidate_to_position(
     pos_oid = PydanticObjectId(position_id)
     cand_oid = PydanticObjectId(candidate_id)
 
-    # Verify both documents exist before opening a transaction
-    position = await Position.get(pos_oid)
-    if not position:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found")
-    if not await Candidate.get(cand_oid):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
-
     client = get_client()
 
     async with await client.start_session() as session:  # noqa: SIM117
-        with session.start_transaction():
+        async with session.start_transaction():
+            # Verify both documents exist inside the transaction to avoid TOCTOU
+            position = await Position.get(pos_oid, session=session)
+            if not position:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Position not found",
+                )
+            if not await Candidate.get(cand_oid, session=session):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Candidate not found",
+                )
+
             # 1. Push candidate into position's matched list
             await Position.find_one(Position.id == pos_oid, session=session).update(
                 {

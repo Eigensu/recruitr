@@ -130,11 +130,11 @@ async def get_candidate(scope: TenantScope, candidate_id: str) -> Candidate:
 
 
 async def update_candidate_current_stage(
-    candidate_id: PydanticObjectId, stage: PipelineStage
+    scope: TenantScope, candidate_id: PydanticObjectId, stage: PipelineStage
 ) -> None:
     """Denormalize the latest pipeline stage onto the candidate document."""
     await Candidate.get_motor_collection().update_one(
-        {"_id": candidate_id},
+        {"_id": candidate_id, "brand_id": scope.brand_id},
         {"$set": {"current_stage": stage.value, "updated_at": datetime.now(UTC)}},
     )
 
@@ -227,7 +227,7 @@ async def move_stage(
     mapping.decision = decision
 
     # Denormalize onto candidate
-    await update_candidate_current_stage(mapping.candidate_id, new_stage)
+    await update_candidate_current_stage(scope, mapping.candidate_id, new_stage)
 
     # Recompute seats when a terminal stage is reached
     if new_stage in TERMINAL_STAGES:

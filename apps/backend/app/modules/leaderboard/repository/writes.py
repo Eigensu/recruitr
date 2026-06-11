@@ -13,7 +13,13 @@ from app.modules.leaderboard.models import EmployeeStat, LeaderboardHistory, Rec
 from app.modules.leaderboard.utils.badge_engine import evaluate_badges
 from app.modules.leaderboard.utils.cache_manager import update_rank
 from app.modules.leaderboard.utils.growth_calculator import percent_growth, success_rate
-from app.modules.leaderboard.utils.ranking_calculator import activity_points
+from app.modules.leaderboard.utils.ranking_calculator import (
+    JOINED_POINTS,
+    MAPPING_POINTS,
+    OFFER_POINTS,
+    REJECTION_PENALTY,
+    activity_points,
+)
 
 
 async def record_activity_atomic(
@@ -121,6 +127,83 @@ async def unlock_badges(employee_oid: Any, badges: list) -> None:
             "$set": {"updated_at": datetime.now(UTC)},
         },
     )
+
+
+async def backfill_stats_from_mappings() -> int:
+    """Populate EmployeeStat from existing Mapping documents.
+
+    Idempotent — safe to run multiple times; uses upsert.
+    Returns the number of employees updated.
+    """
+    from app.modules.recruitment.models import Mapping  # avoid circular import at module level
+
+    _stage = "$stage"
+    _cond = "$cond"
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$employee_id",
+                "total_mappings": {"$sum": 1},
+                "offers_received": {
+                    "$sum": {
+                        _cond: [
+                            {"$in": [_stage, ["offer", "offer_accepted", "position_close"]]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "joined_candidates": {"$sum": {_cond: [{"$eq": [_stage, "position_close"]}, 1, 0]}},
+                "rejected_candidates": {"$sum": {_cond: [{"$eq": [_stage, "rejected"]}, 1, 0]}},
+            }
+        }
+    ]
+
+    cursor = await Mapping.get_motor_collection().aggregate(pipeline)
+    rows = await cursor.to_list(length=None)
+
+    for row in rows:
+        employee_oid = row["_id"]
+        total = int(row["total_mappings"])
+        offers = int(row["offers_received"])
+        joined = int(row["joined_candidates"])
+        rejected = int(row["rejected_candidates"])
+        xp = max(
+            total * MAPPING_POINTS
+            + offers * OFFER_POINTS
+            + joined * JOINED_POINTS
+            - rejected * REJECTION_PENALTY,
+            0,
+        )
+        await EmployeeStat.get_motor_collection().update_one(
+            {"employee_id": employee_oid},
+            {
+                "$set": {
+                    "mappings.total_mappings": total,
+                    "mappings.offers_received": offers,
+                    "mappings.joined_candidates": joined,
+                    "mappings.rejected_candidates": rejected,
+                    "xp_points": xp,
+                    "total_score": xp,
+                    "is_active": True,
+                    "updated_at": datetime.now(UTC),
+                },
+                "$setOnInsert": {
+                    "created_at": datetime.now(UTC),
+                    "employee_id": employee_oid,
+                    "level": 1,
+                    "streak_days": 0,
+                    "leaderboard_rank": 0,
+                    "monthly_growth": 0.0,
+                    "badges": [],
+                },
+            },
+            upsert=True,
+        )
+        await update_rank(str(employee_oid), xp)
+
+    await recompute_ranks()
+    return len(rows)
 
 
 async def create_monthly_snapshots(month: str) -> int:

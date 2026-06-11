@@ -1,0 +1,50 @@
+{
+  "steward": [
+    "customer service", "table setting", "order taking", "food serving", "beverage serving", 
+    "pos system", "billing", "guest relations", "cleaning", "menu knowledge"
+  ],
+  "cafe steward": [
+    "customer service", "table setting", "order taking", "food serving", "beverage serving", 
+    "pos system", "billing", "guest relations", "cleaning", "menu knowledge"
+  ],
+  "captain": [
+    "team leadership", "guest relations", "upselling", "order taking", "complaint handling", 
+    "staff training", "inventory management", "pos system", "table management", "quality control"
+  ],
+  "bartender": [
+    "mixology", "cocktail creation", "beverage knowledge", "bar inventory", "speed pouring", 
+    "customer service", "pos system", "menu design", "hygiene", "garnishing"
+  ],
+  "commis chef": [
+    "food preparation", "chopping", "cooking", "kitchen hygiene", "inventory assistance", 
+    "food safety", "plating", "recipe execution", "equipment handling", "teamwork"
+  ],
+  "sous chef": [
+    "kitchen management", "menu planning", "food cost control", "staff training", "food preparation", 
+    "quality control", "inventory management", "recipe development", "food safety", "plating"
+  ],
+  "executive chef": [
+    "menu development", "kitchen management", "food cost control", "vendor management", "staff training", 
+    "quality control", "budgeting", "culinary innovation", "food safety", "inventory management"
+  ],
+  "barista": [
+    "espresso preparation", "latte art", "coffee knowledge", "customer service", "equipment maintenance", 
+    "pos system", "cash handling", "milk frothing", "inventory", "cleaning"
+  ],
+  "restaurant manager": [
+    "restaurant operations", "staff management", "p&l management", "guest relations", "inventory control", 
+    "marketing", "vendor management", "budgeting", "health and safety", "hiring"
+  ],
+  "host": [
+    "greeting guests", "reservation management", "table assignment", "customer service", "phone etiquette", 
+    "complaint handling", "menu knowledge", "pos system", "guest feedback", "waitlist management"
+  ],
+  "gre": [
+    "greeting guests", "reservation management", "table assignment", "customer service", "phone etiquette", 
+    "complaint handling", "menu knowledge", "pos system", "guest feedback", "waitlist management"
+  ],
+  "arm": [
+    "restaurant operations", "staff supervision", "guest relations", "inventory management", "shift scheduling", 
+    "pos management", "cash handling", "training", "quality control", "complaint handling"
+  ]
+}

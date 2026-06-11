@@ -291,11 +291,14 @@ function DraggableCandidateCard({
   const score = typeof cand.match_score === "number" ? Math.round(cand.match_score * 100) : null;
 
   const scoreBadgeClass = cn(
-    "text-xs font-black px-2 py-1 rounded-lg shrink-0 leading-none",
+    "text-xs font-black px-2.5 py-1 rounded-full shrink-0 leading-none",
     score !== null &&
       score >= 90 &&
-      "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20",
-    score !== null && score >= 70 && score < 90 && "bg-yellow/20 text-navy border border-yellow/40",
+      "bg-emerald-500/10 text-emerald-500 border border-emerald-500/30",
+    score !== null &&
+      score >= 70 &&
+      score < 90 &&
+      "bg-yellow/10 text-yellow border border-yellow/30",
     score !== null && score < 70 && "bg-surface-2 text-text-muted border border-border",
   );
 
@@ -405,7 +408,7 @@ function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <h4 className="font-bold text-text-primary text-sm truncate">{cand.full_name}</h4>
         {score !== null && (
-          <span className="text-xs font-black text-navy bg-yellow/80 border border-yellow px-2 py-0.5 rounded-lg shrink-0">
+          <span className="text-xs font-black text-yellow bg-yellow/10 border border-yellow/30 px-2.5 py-1 rounded-full shrink-0">
             {score}%
           </span>
         )}

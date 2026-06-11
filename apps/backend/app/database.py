@@ -24,6 +24,8 @@ from app.modules.recruitment.models import (
     Employee,
     Mapping,
     Position,
+    RecruiterTag,
+    Team,
 )
 
 # Module-level client reference for transaction access
@@ -47,6 +49,8 @@ async def init_db() -> None:
             Candidate,
             Mapping,
             Employee,
+            Team,
+            RecruiterTag,
             ActivityLog,
             CandidateDocument,
             # Gamification
