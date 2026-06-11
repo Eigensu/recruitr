@@ -66,6 +66,20 @@ async def get_current_employee(
     return employee
 
 
+async def require_admin(
+    token: TokenPayload = Depends(get_current_user),  # noqa: B008
+) -> TokenPayload:
+    """Raise 403 unless the authenticated user has is_admin=True in the database."""
+    from beanie import PydanticObjectId
+
+    from app.modules.auth.models import User
+
+    user = await User.get(PydanticObjectId(token.sub))
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return token
+
+
 def get_tenant(
     employee=Depends(get_current_employee),  # noqa: B008
 ):

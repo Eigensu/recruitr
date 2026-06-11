@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.modules.auth.schemas import TokenPayload
 from app.modules.leaderboard.repository import backfill_stats_from_mappings
 from app.modules.leaderboard.schemas import (
@@ -81,7 +81,7 @@ async def get_badges(
 
 @router.post("/backfill")
 async def backfill_leaderboard(
-    _: TokenPayload = Depends(get_current_user),  # noqa: B008
+    _: TokenPayload = Depends(require_admin),  # noqa: B008
 ) -> dict:
     """Rebuild EmployeeStat from all existing Mapping documents and recompute ranks.
 

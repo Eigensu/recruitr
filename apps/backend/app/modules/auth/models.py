@@ -13,6 +13,7 @@ class User(Document):
     full_name: str | None = None
     google_id: str | None = None  # Google sub (unique user ID)
     is_active: bool = True
+    is_admin: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
