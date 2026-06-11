@@ -12,13 +12,22 @@ from fastapi.responses import RedirectResponse
 from app.config import settings
 from app.dependencies import get_current_user
 from app.modules.auth.models import User
-from app.modules.auth.schemas import TokenPayload, UserCreate, UserInfoResponse, UserLogin
-from app.modules.auth.security import create_access_token, get_password_hash, verify_password
+from app.modules.auth.schemas import (
+    TokenPayload,
+    UserCreate,
+    UserInfoResponse,
+    UserLogin,
+)
+from app.modules.auth.security import (
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 
 _COOKIE_SECURE = not settings.DEBUG
 
 _GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"  # nosec B105 — public OAuth endpoint, not a secret
 _GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 router = APIRouter()

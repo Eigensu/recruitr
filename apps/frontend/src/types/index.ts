@@ -106,6 +106,8 @@ export interface ApiPositionFilters {
 
 // ── Candidates ───────────────────────────────────────────────────────────────
 
+export type CandidateSource = "internal" | "external";
+
 /** Legacy type used by old /api/v1/candidates (old module). Phase C will remove it. */
 export interface Candidate {
   id: string;
@@ -114,6 +116,31 @@ export interface Candidate {
   phone: string | null;
   resume_url: string | null;
   extracted_skills: string[];
+  // Candidate management additions
+  tags: string[];
+  source: CandidateSource;
+  cv_link: string | null;
+}
+
+export interface CandidateFilters {
+  search?: string;
+  source?: CandidateSource;
+  tags?: string[];
+  has_resume?: boolean;
+  has_cv_link?: boolean;
+  page: number;
+  limit: number;
+}
+
+export interface BulkUploadFailure {
+  filename: string;
+  reason: string;
+}
+
+export interface BulkUploadResult {
+  created: number;
+  updated: number;
+  failed: BulkUploadFailure[];
 }
 
 export interface CandidateMatchScore extends Candidate {

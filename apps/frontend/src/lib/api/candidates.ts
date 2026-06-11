@@ -1,16 +1,55 @@
-/**
- * Client-side API helpers for the candidates resource.
- *
- * All functions accept the `apiFetch` returned by `useApiFetch()` so they
- * can be called from any client component.
- */
-
+import { cookies } from "next/headers";
 import type {
   ApiCandidate,
   ApiCandidateMappingItem,
+  Candidate,
+  CandidateFilters,
   PaginatedResponse,
   PipelineStage,
 } from "@/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export function buildCandidateQuery(filters: Partial<CandidateFilters>): string {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
+  if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
+  if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+async function serverFetch<T>(path: string): Promise<T> {
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: {
+      Accept: "application/json",
+      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) throw new Error(`Candidates API ${res.status}: ${path}`);
+  return res.json() as Promise<T>;
+}
+
+/** Server-side initial load (used by the candidates page server component). */
+export function getCandidates(filters: Partial<CandidateFilters> = {}) {
+  return serverFetch<Candidate[]>(`/api/v1/candidates${buildCandidateQuery(filters)}`);
+}
+
+export function getCandidateTags() {
+  return serverFetch<string[]>("/api/v1/candidates/tags");
+}
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
 

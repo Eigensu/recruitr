@@ -1,16 +1,16 @@
 import { Suspense } from "react";
 import {
   AnalyticsWidgets,
-  ClientActivityTable,
   DashboardKpiCard,
   KpiGridSkeleton,
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
 } from "@/components/dashboard";
+import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
 import {
   getDashboardAnalyticsData,
-  getClientActivityData,
+  getClientProfilesData,
   getDashboardOverview,
   getPipelineDashboardData,
   getRecruiterDashboardData,
@@ -50,10 +50,10 @@ async function RecruiterLineSection() {
   return <RecruiterLineGraph recruiters={recruiters} />;
 }
 
-async function ClientActivitySection() {
-  const clients = await getClientActivityData();
+async function ClientProfilesSection() {
+  const rows = await getClientProfilesData();
 
-  return <ClientActivityTable rows={clients} />;
+  return <ClientProfilesTable rows={rows} />;
 }
 
 export default function DashboardPage() {
@@ -104,7 +104,7 @@ export default function DashboardPage() {
         </div>
 
         <Suspense fallback={<PanelSkeleton rows={8} />}>
-          <ClientActivitySection />
+          <ClientProfilesSection />
         </Suspense>
       </div>
     </div>

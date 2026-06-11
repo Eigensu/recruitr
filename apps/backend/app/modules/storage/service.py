@@ -53,6 +53,25 @@ def generate_upload_signature() -> dict:
     }
 
 
+def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
+    """Upload raw PDF bytes directly to Cloudinary from the backend.
+
+    Used by bulk-upload — does NOT use the signed browser-upload flow.
+    The file bytes are sent straight from the API server to Cloudinary.
+
+    Returns:
+        The Cloudinary upload result dict (includes public_id, secure_url).
+    """
+    return cloudinary.uploader.upload(
+        pdf_bytes,
+        resource_type="raw",
+        folder=RESUME_FOLDER,
+        public_id=filename.removesuffix(".pdf"),
+        overwrite=False,
+        use_filename=True,
+    )
+
+
 def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
     """Verify Cloudinary's webhook notification signature.
 

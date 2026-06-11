@@ -5,12 +5,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import get_tenant
+from app.dependencies import get_current_user, get_tenant
+from app.modules.auth.schemas import TokenPayload
 from app.modules.dashboard import service
 from app.modules.dashboard.schemas import (
     DashboardActivityPage,
     DashboardCandidatePage,
     DashboardClientPage,
+    DashboardClientProfilePage,
     DashboardEmployeePage,
     DashboardFilters,
     DashboardMappingPage,
@@ -155,6 +157,16 @@ async def get_mappings(
         page,
         limit,
     )
+
+
+@router.get("/client-profiles")
+async def get_client_profiles(
+    _: Annotated[TokenPayload, Depends(get_current_user)],
+    page: _Page = 1,
+    limit: _Limit = 20,
+) -> DashboardClientProfilePage:
+    """One row per client, aggregated across all their job openings."""
+    return await service.get_client_profiles(page, limit)
 
 
 @router.get("/activity")

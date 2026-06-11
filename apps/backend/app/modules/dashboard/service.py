@@ -13,6 +13,7 @@ from app.config import settings
 from app.modules.dashboard.repository import (
     fetch_activities,
     fetch_candidates,
+    fetch_client_profiles,
     fetch_clients,
     fetch_employees,
     fetch_mappings,
@@ -23,9 +24,11 @@ from app.modules.dashboard.schemas import (
     ActivityAnalyticsItem,
     CandidateAnalyticsItem,
     ClientAnalyticsItem,
+    ClientProfileRow,
     DashboardActivityPage,
     DashboardCandidatePage,
     DashboardClientPage,
+    DashboardClientProfilePage,
     DashboardEmployeePage,
     DashboardFilters,
     DashboardMappingPage,
@@ -43,7 +46,6 @@ def _cache_key(
     page: int | None = None,
     limit: int | None = None,
 ) -> str:
-    """Build a brand-scoped cache key so one tenant's write never flushes another's cache."""
     payload = filters.model_dump(mode="json", exclude_none=True)
     raw = json.dumps(
         {"filters": payload, "page": page, "limit": limit}, sort_keys=True, default=str
@@ -181,6 +183,21 @@ async def get_activities(filters: DashboardFilters, page: int, limit: int) -> Da
     payload = await fetch_activities(filters, page, limit)
     items = [ActivityAnalyticsItem.model_validate(item) for item in payload["items"]]
     response = _make_paginated_response(payload, items, DashboardActivityPage)
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
+    )
+    return response
+
+
+async def get_client_profiles(page: int, limit: int) -> DashboardClientProfilePage:
+    cache_key = dashboard_cache.build_key("client_profiles", f"p{page}_l{limit}")
+    cached = await dashboard_cache.get_json(cache_key)
+    if cached is not None:
+        return DashboardClientProfilePage.model_validate(cached)
+
+    payload = await fetch_client_profiles(page, limit)
+    items = [ClientProfileRow.model_validate(item) for item in payload["items"]]
+    response = _make_paginated_response(payload, items, DashboardClientProfilePage)
     await dashboard_cache.set_json(
         cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )

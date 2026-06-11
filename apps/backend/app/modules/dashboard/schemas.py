@@ -2,13 +2,14 @@
 
 from datetime import UTC, datetime
 from functools import partial
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.dtos.pagination import PaginatedResponse
 from app.modules.recruitment.enums import ActivityType, PipelineStage, PositionStatus
 
-# ── Nested helper schema (kept here since it's a response shape, not a model) ──
+# ── Nested helper schema ───────────────────────────────────────────────────────
 
 
 class EmployeeMappings(BaseModel):
@@ -100,10 +101,25 @@ class CandidateAnalyticsItem(BaseModel):
     experience_years: float = 0
     skills: list[str] = Field(default_factory=list)
     resume_url: str | None = None
-    current_stage: PipelineStage
+    current_stage: PipelineStage = PipelineStage.sourced
     created_at: datetime
     updated_at: datetime
-    is_active: bool
+    is_active: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_unified_candidate(cls, data: Any) -> Any:
+        """Accept the unified Candidate shape (name/extracted_skills/cv_link)."""
+        if isinstance(data, dict):
+            if not data.get("full_name") and data.get("name"):
+                data["full_name"] = data["name"]
+            if not data.get("skills") and data.get("extracted_skills"):
+                data["skills"] = data["extracted_skills"]
+            if not data.get("resume_url"):
+                data["resume_url"] = data.get("resume_url") or data.get("cv_link") or data.get("resume_link")
+            if not data.get("current_stage"):
+                data["current_stage"] = PipelineStage.sourced.value
+        return data
 
 
 class MappingAnalyticsItem(BaseModel):
@@ -129,6 +145,15 @@ class ActivityAnalyticsItem(BaseModel):
 # ── Paginated responses ────────────────────────────────────────────────────────
 
 
+class ClientProfileRow(BaseModel):
+    client_name: str
+    total_open_positions: int
+    total_candidates: int
+    active_recruiters: int
+    last_activity: datetime | None = None
+    status: str  # "active" | "on_hold" | "closed"
+
+
 class DashboardEmployeePage(PaginatedResponse[EmployeeAnalyticsItem]):
     pass
 
@@ -146,4 +171,8 @@ class DashboardMappingPage(PaginatedResponse[MappingAnalyticsItem]):
 
 
 class DashboardActivityPage(PaginatedResponse[ActivityAnalyticsItem]):
+    pass
+
+
+class DashboardClientProfilePage(PaginatedResponse[ClientProfileRow]):
     pass

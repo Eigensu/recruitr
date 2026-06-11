@@ -19,10 +19,14 @@ class Position(Document):
     requirements: list[str] = Field(default_factory=list)  # keyword list
     status: Literal["open", "filled", "archived"] = "open"
     matched_candidates: list[MatchedCandidate] = Field(default_factory=list)
+    # Links this recruiter-world Position to a dashboard-world JobOpening so the
+    # Kanban, recruiter_ids, and last_activity all resolve to one record.
+    job_opening_id: PydanticObjectId | None = None
 
     class Settings:
         name = "positions"
         indexes = [
             IndexModel("brand_id"),
             IndexModel("status"),
+            IndexModel("job_opening_id"),
         ]
