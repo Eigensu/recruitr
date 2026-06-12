@@ -287,6 +287,7 @@ export interface PipelineCard {
   position_code: string;
   position_role: string;
   position_client: string;
+  employee_id: string | null;
   stage: KanbanStage;
   match_score: number | null;
   decision: string;

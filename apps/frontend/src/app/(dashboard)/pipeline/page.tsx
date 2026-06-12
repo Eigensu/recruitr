@@ -1,21 +1,66 @@
-import KanbanBoard from "@/components/kanban/Board";
+import { cookies } from "next/headers";
+import GlobalPipelineBoard from "@/components/kanban/GlobalPipelineBoard";
+import type { ApiPosition, PaginatedResponse } from "@/types";
 
-export default function PipelinePage() {
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+interface EmployeeItem {
+  id: string;
+  name: string;
+  email: string;
+}
+
+async function serverFetch<T>(path: string): Promise<T> {
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { ...(cookieHeader ? { Cookie: cookieHeader } : {}) },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export default async function PipelinePage() {
+  let employees: { id: string; name: string }[] = [];
+  let positions: { id: string; label: string; client: string }[] = [];
+
+  try {
+    // GET /api/v1/teams/employees — brand-scoped employee list
+    const data = await serverFetch<EmployeeItem[]>("/api/v1/teams/employees");
+    employees = data.map((e) => ({ id: e.id, name: e.name }));
+  } catch {
+    /* non-critical — filter bar will just be empty */
+  }
+
+  try {
+    // GET /api/v1/positions — paginated, fetch up to 200 open positions
+    const data = await serverFetch<PaginatedResponse<ApiPosition>>("/api/v1/positions?limit=200");
+    positions = data.items.map((p) => ({
+      id: p.id,
+      label: `${p.code} · ${p.role}`,
+      client: p.client_name,
+    }));
+  } catch {
+    /* non-critical */
+  }
+
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-canvas">
-      {/* Header */}
-      <div className="px-6 pt-6 pb-5 border-b border-border shrink-0">
-        <h1 className="text-3xl font-heading font-bold text-text-primary tracking-wide">
+    <div className="flex h-full flex-col overflow-hidden bg-canvas">
+      <div className="shrink-0 border-b border-border px-6 pb-5 pt-6">
+        <h1 className="font-heading text-3xl font-bold tracking-wide text-text-primary">
           Recruitment Pipeline
         </h1>
-        <p className="text-sm mt-1 text-text-muted">
+        <p className="mt-1 text-sm text-text-muted">
           Drag candidates across stages to advance them through the pipeline.
         </p>
       </div>
 
-      {/* Board */}
       <div className="flex-1 overflow-hidden p-5">
-        <KanbanBoard />
+        <GlobalPipelineBoard employees={employees} positions={positions} />
       </div>
     </div>
   );

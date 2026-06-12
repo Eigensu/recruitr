@@ -9,6 +9,7 @@ import {
   IconLayoutDashboard,
   IconBriefcase,
   IconUsers,
+  IconLayoutKanban,
   IconTrophy,
   IconSettings,
   IconLayoutSidebarLeftCollapse,
@@ -37,6 +38,11 @@ const NAV_LINKS = [
     label: "Candidates",
     href: "/candidates",
     icon: <IconUsers className="h-5 w-5 shrink-0" />,
+  },
+  {
+    label: "Pipeline",
+    href: "/pipeline",
+    icon: <IconLayoutKanban className="h-5 w-5 shrink-0" />,
   },
   {
     label: "Leaderboard",

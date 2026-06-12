@@ -1,4 +1,8 @@
+"use client";
+
+import { motion } from "motion/react";
 import { IconBuildingStore } from "@tabler/icons-react";
+import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import {
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_TABLE_HEADER_CLASS,
@@ -7,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { ClientProfileRow, ClientProfileStatus } from "@/types/dashboard";
 
 interface Props {
-  rows: ClientProfileRow[];
+  readonly rows: ClientProfileRow[];
 }
 
 const STATUS_STYLES: Record<ClientProfileStatus, { label: string; bg: string; color: string }> = {
@@ -30,7 +34,11 @@ function formatTimeAgo(isoDate: string | null): string {
 
 export default function ClientProfilesTable({ rows }: Props) {
   return (
-    <section
+    <motion.section
+      initial={{ opacity: 0, y: 18 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.12 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}
       className={cn(DASHBOARD_PANEL_CLASS, "overflow-hidden")}
       style={{ color: "var(--color-text-primary)" }}
     >
@@ -46,7 +54,7 @@ export default function ClientProfilesTable({ rows }: Props) {
           style={{ background: "var(--color-surface-2-val)", color: "var(--color-text-primary)" }}
         >
           <IconBuildingStore className="size-4 text-yellow" />
-          {rows.length} clients
+          <AnimatedNumber value={rows.length} /> clients
         </div>
       </div>
 
@@ -60,7 +68,7 @@ export default function ClientProfilesTable({ rows }: Props) {
               <th
                 className={cn(
                   DASHBOARD_TABLE_HEADER_CLASS,
-                  "w-[26%] px-4 py-3 text-left text-base",
+                  "w-[28%] px-5 py-3 text-left text-base",
                 )}
               >
                 Client
@@ -68,15 +76,15 @@ export default function ClientProfilesTable({ rows }: Props) {
               <th
                 className={cn(
                   DASHBOARD_TABLE_HEADER_CLASS,
-                  "w-[14%] px-2 py-3 text-center text-base",
+                  "w-[13%] px-2 py-3 text-center text-base",
                 )}
               >
-                Open Positions
+                Open
               </th>
               <th
                 className={cn(
                   DASHBOARD_TABLE_HEADER_CLASS,
-                  "w-[12%] px-2 py-3 text-center text-base",
+                  "w-[13%] px-2 py-3 text-center text-base",
                 )}
               >
                 Candidates
@@ -84,10 +92,10 @@ export default function ClientProfilesTable({ rows }: Props) {
               <th
                 className={cn(
                   DASHBOARD_TABLE_HEADER_CLASS,
-                  "w-[16%] px-2 py-3 text-center text-base",
+                  "w-[15%] px-2 py-3 text-center text-base",
                 )}
               >
-                Active Recruiters
+                Recruiters
               </th>
               <th
                 className={cn(
@@ -100,7 +108,7 @@ export default function ClientProfilesTable({ rows }: Props) {
               <th
                 className={cn(
                   DASHBOARD_TABLE_HEADER_CLASS,
-                  "w-[16%] px-4 py-3 text-center text-base",
+                  "w-[15%] px-4 py-3 text-center text-base",
                 )}
               >
                 Status
@@ -119,27 +127,45 @@ export default function ClientProfilesTable({ rows }: Props) {
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              rows.map((row, index) => {
                 const st = STATUS_STYLES[row.status] ?? STATUS_STYLES.closed;
                 return (
-                  <tr
+                  <motion.tr
                     key={row.client_name}
-                    className="border-t"
-                    style={{ borderColor: "var(--color-border-val)" }}
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true, amount: 0.2 }}
+                    transition={{ duration: 0.2, delay: index * 0.01 }}
+                    className="hover:bg-white/[0.035]"
+                    style={{ color: "var(--color-text-primary)" }}
                   >
-                    <td className="px-4 py-3 text-left font-semibold">{row.client_name}</td>
-                    <td className="px-2 py-3 text-center tabular-nums">
-                      {row.total_open_positions}
+                    {/* Client name */}
+                    <td className="px-5 py-3">
+                      <p className="text-base font-medium">{row.client_name}</p>
                     </td>
-                    <td className="px-2 py-3 text-center tabular-nums">{row.total_candidates}</td>
-                    <td className="px-2 py-3 text-center tabular-nums">{row.active_recruiters}</td>
-                    <td
-                      className="px-2 py-3 text-center"
-                      style={{ color: "var(--color-text-secondary)" }}
-                    >
+
+                    {/* Open positions — yellow: outstanding work */}
+                    <td className="px-3 py-3 text-center text-base text-yellow">
+                      <AnimatedNumber value={row.total_open_positions} />
+                    </td>
+
+                    {/* Candidates — neutral */}
+                    <td className="px-3 py-3 text-center text-base">
+                      <AnimatedNumber value={row.total_candidates} />
+                    </td>
+
+                    {/* Active recruiters — green: people doing work */}
+                    <td className="px-3 py-3 text-center text-base text-emerald-400">
+                      <AnimatedNumber value={row.active_recruiters} />
+                    </td>
+
+                    {/* Last activity — muted */}
+                    <td className="px-3 py-3 text-center text-base" style={{ opacity: 0.55 }}>
                       {formatTimeAgo(row.last_activity)}
                     </td>
-                    <td className="px-4 py-3 text-center">
+
+                    {/* Status badge */}
+                    <td className="px-5 py-3 text-center">
                       <span
                         className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
                         style={{ background: st.bg, color: st.color }}
@@ -147,13 +173,13 @@ export default function ClientProfilesTable({ rows }: Props) {
                         {st.label}
                       </span>
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })
             )}
           </tbody>
         </table>
       </div>
-    </section>
+    </motion.section>
   );
 }

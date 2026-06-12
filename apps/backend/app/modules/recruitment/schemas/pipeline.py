@@ -18,6 +18,7 @@ class StageMappingItem(BaseModel):
     position_code: str
     position_role: str
     position_client: str
+    employee_id: str | None = None
     stage: PipelineStage
     match_score: float | None = None
     decision: str = "pending"

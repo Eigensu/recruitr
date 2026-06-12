@@ -16,8 +16,8 @@ import type { CandidateCard, CandidateStatus } from "@/types";
 import { usePipelineStore, type KanbanFilters } from "@/stores/usePipelineStore";
 import { useApiFetch } from "@/lib/api";
 import { fetchFilteredPipeline } from "@/lib/api/pipeline";
-import KanbanColumn from "./Column";
-import CandidateCardComponent from "./CandidateCard";
+import TriageColumn from "./TriageColumn";
+import TriageCardComponent from "./TriageCard";
 import KanbanFilterBar from "./KanbanFilterBar";
 import AddCandidatesPanel from "./AddCandidatesPanel";
 
@@ -56,8 +56,9 @@ export default function KanbanBoard({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const allCards = Object.values(columns).flat();
-  const activeCard: CandidateCard | null =
-    activeCardId ? (allCards.find((c) => c.id === activeCardId) ?? null) : null;
+  const activeCard: CandidateCard | null = activeCardId
+    ? (allCards.find((c) => c.id === activeCardId) ?? null)
+    : null;
 
   const findCardColumn = useCallback(
     (cardId: string): CandidateStatus | null => {
@@ -182,7 +183,7 @@ export default function KanbanBoard({
         >
           <div className="grid flex-1 grid-cols-3 gap-4">
             {COLUMNS.map((col) => (
-              <KanbanColumn
+              <TriageColumn
                 key={col.id}
                 id={col.id}
                 label={isFiltered ? `${col.label} (${columns[col.id].length})` : col.label}
@@ -193,7 +194,7 @@ export default function KanbanBoard({
           </div>
 
           <DragOverlay>
-            {activeCard ? <CandidateCardComponent card={activeCard} isDragging /> : null}
+            {activeCard ? <TriageCardComponent card={activeCard} isDragging /> : null}
           </DragOverlay>
         </DndContext>
       )}

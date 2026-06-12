@@ -1,32 +1,47 @@
-import KanbanBoard from "@/components/kanban/Board";
-import { getDashboardClients, getDashboardEmployees } from "@/lib/api/dashboard";
-import { getCandidateTags } from "@/lib/api/candidates";
+import { cookies } from "next/headers";
+import BoardClientWrapper from "@/components/kanban/BoardClientWrapper";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+interface EmployeeItem {
+  id: string;
+  name: string;
+  email: string;
+}
 
 interface PageProps {
   readonly params: Promise<{ id: string }>;
 }
 
+async function serverFetch<T>(path: string): Promise<T> {
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { ...(cookieHeader ? { Cookie: cookieHeader } : {}) },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 export default async function PipelinePage({ params }: PageProps) {
   const { id } = await params;
 
-  // Filter-bar data — best-effort, non-blocking on failure.
   let employees: { id: string; name: string }[] = [];
-  let clients: { id: string; label: string }[] = [];
   let availableTags: string[] = [];
+
   try {
-    const { items } = await getDashboardEmployees({ limit: 100 });
-    employees = items.map((e) => ({ id: e.id, name: e.name }));
+    const data = await serverFetch<EmployeeItem[]>("/api/v1/teams/employees");
+    employees = data.map((e) => ({ id: e.id, name: e.name }));
   } catch {
     /* non-critical */
   }
+
   try {
-    const { items } = await getDashboardClients({ limit: 100 });
-    clients = items.map((c) => ({ id: c.id, label: `${c.client_name} · ${c.role}` }));
-  } catch {
-    /* non-critical */
-  }
-  try {
-    availableTags = await getCandidateTags();
+    availableTags = await serverFetch<string[]>("/api/v1/candidates/tags");
   } catch {
     /* non-critical */
   }
@@ -42,12 +57,7 @@ export default async function PipelinePage({ params }: PageProps) {
         </p>
       </div>
       <div className="flex-1 overflow-hidden">
-        <KanbanBoard
-          positionId={id}
-          employees={employees}
-          clients={clients}
-          availableTags={availableTags}
-        />
+        <BoardClientWrapper positionId={id} employees={employees} availableTags={availableTags} />
       </div>
     </div>
   );

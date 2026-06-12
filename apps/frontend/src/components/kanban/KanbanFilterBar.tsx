@@ -37,10 +37,10 @@ interface ClientOption {
 }
 
 interface Props {
-  employees: Employee[];
-  clients: ClientOption[];
-  availableTags: string[];
-  onFilterChange: (filters: KanbanFilters) => void;
+  readonly employees: readonly Employee[];
+  readonly clients: readonly ClientOption[];
+  readonly availableTags: readonly string[];
+  readonly onFilterChange: (filters: KanbanFilters) => void;
 }
 
 const selectStyle = {

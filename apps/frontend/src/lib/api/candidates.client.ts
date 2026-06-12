@@ -1,6 +1,13 @@
 "use client";
 
-import type { BulkUploadResult, Candidate, CandidateFilters, CandidateSource } from "@/types";
+import type {
+  ApiCandidate,
+  BulkUploadResult,
+  Candidate,
+  CandidateFilters,
+  CandidateSource,
+  PaginatedResponse,
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -17,6 +24,20 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   return qs ? `?${qs}` : "";
 }
 
+function toCandidate(a: ApiCandidate): Candidate {
+  return {
+    id: a.id,
+    name: a.full_name,
+    email: a.email,
+    phone: a.phone,
+    resume_url: a.resume_url,
+    extracted_skills: a.skills ?? [],
+    tags: a.recruiter_tags ?? [],
+    source: "external",
+    cv_link: null,
+  };
+}
+
 export async function clientFetchCandidates(
   filters: Partial<CandidateFilters>,
 ): Promise<Candidate[]> {
@@ -24,7 +45,8 @@ export async function clientFetchCandidates(
     credentials: "include",
   });
   if (!res.ok) throw new Error(`Candidates fetch failed: ${res.status}`);
-  return res.json();
+  const data: PaginatedResponse<ApiCandidate> = await res.json();
+  return (data.items ?? []).map(toCandidate);
 }
 
 export async function clientCreateCandidate(data: {

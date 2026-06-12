@@ -3,14 +3,19 @@
 Endpoints:
   GET    /pipeline/board                    kanban board state (all stages + mappings)
   POST   /pipeline/mappings/{id}/move       move mapping to new stage (with activity logging)
+  GET    /pipeline/filtered                 Kanban view filtered by position (frontend board)
+  GET    /pipeline/top-candidates           keyword-scored candidate suggestions
+  PATCH  /pipeline/match                    assign/move a candidate onto a position
 """
 
 from __future__ import annotations
 
 import contextlib
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
@@ -30,6 +35,51 @@ router = APIRouter()
 # ── Annotated aliases ──────────────────────────────────────────────────────────
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
+
+# ── Frontend-facing DTOs (not part of the core recruitment schemas) ────────────
+
+
+class FilteredCandidate(BaseModel):
+    """Candidate row for the Kanban filtered view (3-column board)."""
+
+    id: str
+    name: str
+    email: str
+    phone: str | None = None
+    resume_url: str | None = None
+    extracted_skills: list[str] = []
+    tags: list[str] = []
+    source: str = "internal"
+    cv_link: str | None = None
+    status: Literal["pending", "accepted", "rejected"] = "pending"
+
+
+class SuggestedCandidate(BaseModel):
+    """Candidate row for the top-candidates suggestion panel."""
+
+    id: str
+    name: str
+    email: str
+    resume_url: str | None = None
+    extracted_skills: list[str] = []
+    tags: list[str] = []
+    source: str = "internal"
+    cv_link: str | None = None
+    match_score: float
+
+
+class MatchRequest(BaseModel):
+    position_id: str
+    candidate_id: str
+    target_status: Literal["pending", "accepted", "rejected"] = "pending"
+
+
+class MatchResponse(BaseModel):
+    position_id: str
+    candidate_id: str
+    status: str
+    recruiter_daily_score: int = 0
+
 
 # ── Stage labels (matching frontend expectations) ─────────────────────────────
 
@@ -112,49 +162,86 @@ def _activity_type_for_stage(stage: PipelineStage) -> str:
 async def get_pipeline_board(tenant: _Tenant) -> PipelineBoard:
     """
     Fetch the Kanban board state for this brand.
-    Returns all KANBAN_STAGES with their mappings (excludes sourced + terminal stages).
+    Uses a single aggregation with $lookup to avoid N+1 queries.
     """
-    stages = []
+    kanban_stage_values = [s.value for s in KANBAN_STAGES]
 
-    for stage in KANBAN_STAGES:
-        mappings_docs = await Mapping.find(
-            {"brand_id": tenant.brand_id, "stage": stage.value}
-        ).to_list(None)
+    agg = [
+        {_MATCH: {"brand_id": tenant.brand_id, "stage": {"$in": kanban_stage_values}}},
+        {
+            _LOOKUP: {
+                "from": "candidates",
+                "localField": "candidate_id",
+                "foreignField": "_id",
+                "as": "cand",
+            }
+        },
+        {_UNWIND: "$cand"},
+        {
+            _LOOKUP: {
+                "from": "positions",
+                "localField": "position_id",
+                "foreignField": "_id",
+                "as": "pos",
+            }
+        },
+        {_UNWIND: "$pos"},
+        {
+            _PROJECT: {
+                "mapping_id": {_TO_STR: "$_id"},
+                "candidate_id": {_TO_STR: "$candidate_id"},
+                "candidate_name": "$cand.full_name",
+                "candidate_email": "$cand.email",
+                "position_id": {_TO_STR: "$position_id"},
+                "position_code": "$pos.code",
+                "position_role": "$pos.role",
+                "position_client": "$pos.client_name",
+                "employee_id": {_TO_STR: "$employee_id"},
+                "stage": 1,
+                "match_score": 1,
+                "decision": 1,
+                "mapped_at": 1,
+            }
+        },
+    ]
 
-        stage_mappings = []
-        for m in mappings_docs:
-            # Fetch candidate and position details
-            cand = await Candidate.find_one({"_id": m.candidate_id})
-            pos = await Position.find_one({"_id": m.position_id})
+    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
 
-            if cand and pos:
-                stage_mappings.append(
-                    StageMappingItem(
-                        mapping_id=str(m.id),
-                        candidate_id=str(cand.id),
-                        candidate_name=cand.full_name,
-                        candidate_email=cand.email,
-                        position_id=str(pos.id),
-                        position_code=pos.code,
-                        position_role=pos.role,
-                        position_client=pos.client_name,
-                        stage=stage,
-                        match_score=m.match_score,
-                        decision=m.decision or "pending",
-                        mapped_at=m.mapped_at,
-                    )
-                )
-
-        stages.append(
-            PipelineStageColumn(
-                stage=stage,
-                label=_STAGE_LABELS[stage],
-                count=len(stage_mappings),
-                mappings=stage_mappings,
+    # Group rows into stage columns
+    stage_map: dict[str, list[StageMappingItem]] = {s.value: [] for s in KANBAN_STAGES}
+    for row in rows:
+        stage_val = row.get("stage")
+        if stage_val not in stage_map:
+            continue
+        stage_map[stage_val].append(
+            StageMappingItem(
+                mapping_id=row["mapping_id"],
+                candidate_id=row["candidate_id"],
+                candidate_name=row["candidate_name"],
+                candidate_email=row["candidate_email"],
+                position_id=row["position_id"],
+                position_code=row["position_code"],
+                position_role=row["position_role"],
+                position_client=row["position_client"],
+                employee_id=row.get("employee_id"),
+                stage=PipelineStage(stage_val),
+                match_score=row.get("match_score"),
+                decision=row.get("decision") or "pending",
+                mapped_at=row["mapped_at"],
             )
         )
 
-    return PipelineBoard(stages=stages)
+    return PipelineBoard(
+        stages=[
+            PipelineStageColumn(
+                stage=stage,
+                label=_STAGE_LABELS[stage],
+                count=len(stage_map[stage.value]),
+                mappings=stage_map[stage.value],
+            )
+            for stage in KANBAN_STAGES
+        ]
+    )
 
 
 # ── Move mapping ───────────────────────────────────────────────────────────────
@@ -210,4 +297,231 @@ async def move_mapping_to_stage(
         decision=mapping.decision or "pending",
         recruiter_score_delta=score_delta,
         activity_id=str(activity.id) if activity else None,
+    )
+
+
+# ── Aggregation helpers ────────────────────────────────────────────────────────
+
+_MATCH = "$match"
+_IF_NULL = "$ifNull"
+_LOOKUP = "$lookup"
+_UNWIND = "$unwind"
+_PROJECT = "$project"
+_TO_STR = "$toString"
+
+# ── Filtered pipeline (Kanban board for a position) ────────────────────────────
+
+_PosId = Annotated[str, Query(...)]
+_OptStr = Annotated[str | None, Query()]
+_OptStrList = Annotated[list[str] | None, Query()]
+_OptDt = Annotated[datetime | None, Query()]
+_LimitQ = Annotated[int, Query(ge=1, le=50)]
+
+
+@router.get("/filtered")
+async def get_filtered_pipeline(
+    tenant: _Tenant,
+    position_id: _PosId,
+    recruiter_id: _OptStr = None,
+    client_id: _OptStr = None,
+    tags: _OptStrList = None,
+    stage: _OptStr = None,
+    mapped_after: _OptDt = None,
+    mapped_before: _OptDt = None,
+) -> list[FilteredCandidate]:
+    """Return all mapped candidates for a position grouped into 3 Kanban columns."""
+    pos_oid = to_object_id(position_id, "position_id")
+
+    mapping_match: dict = {"brand_id": tenant.brand_id, "position_id": pos_oid}
+    if recruiter_id:
+        mapping_match["employee_id"] = to_object_id(recruiter_id, "recruiter_id")
+    if client_id:
+        mapping_match["client_id"] = to_object_id(client_id, "client_id")
+    if stage:
+        mapping_match["stage"] = stage
+    if mapped_after or mapped_before:
+        date_filter: dict = {}
+        if mapped_after:
+            date_filter["$gte"] = mapped_after
+        if mapped_before:
+            date_filter["$lte"] = mapped_before
+        mapping_match["mapped_at"] = date_filter
+
+    agg: list[dict] = [
+        {_MATCH: mapping_match},
+        {
+            _LOOKUP: {
+                "from": "candidates",
+                "localField": "candidate_id",
+                "foreignField": "_id",
+                "as": "candidate",
+            }
+        },
+        {_UNWIND: "$candidate"},
+    ]
+
+    if tags:
+        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": [t.lower() for t in tags]}}})
+
+    agg.append(
+        {
+            _PROJECT: {
+                "_id": 0,
+                "id": {_TO_STR: "$candidate._id"},
+                "name": "$candidate.full_name",
+                "email": "$candidate.email",
+                "phone": "$candidate.phone",
+                "resume_url": "$candidate.resume_url",
+                "extracted_skills": {"$ifNull": ["$candidate.skills", []]},
+                "tags": {
+                    "$concatArrays": [
+                        {"$ifNull": ["$candidate.recruiter_tags", []]},
+                        {"$ifNull": ["$candidate.ai_tags", []]},
+                    ]
+                },
+                "source": "internal",
+                "cv_link": None,
+                "status": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {
+                                    "$in": [
+                                        "$stage",
+                                        [
+                                            PipelineStage.offer_accepted.value,
+                                            PipelineStage.position_close.value,
+                                        ],
+                                    ]
+                                },
+                                "then": "accepted",
+                            },
+                            {
+                                "case": {"$in": ["$stage", [PipelineStage.rejected.value]]},
+                                "then": "rejected",
+                            },
+                        ],
+                        "default": "pending",
+                    }
+                },
+            }
+        }
+    )
+
+    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
+    return [FilteredCandidate(**r) for r in rows]
+
+
+# ── Top candidates (keyword match scoring) ─────────────────────────────────────
+
+
+@router.get("/top-candidates")
+async def get_top_candidates(
+    tenant: _Tenant,
+    position_id: str = Query(...),
+    limit: int = Query(10, ge=1, le=50),
+) -> list[SuggestedCandidate]:
+    """Return top N candidates scored by skill overlap with a position's requirements."""
+    pos_oid = to_object_id(position_id, "position_id")
+    position = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
+    if not position:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Position not found")
+
+    job_keywords = position.requirements  # already stored lowercased
+
+    agg: list[dict] = [
+        {_MATCH: {"brand_id": tenant.brand_id, "is_active": True}},
+        {
+            "$addFields": {
+                "match_score": {
+                    "$cond": {
+                        "if": {"$gt": [len(job_keywords), 0]},
+                        "then": {
+                            "$divide": [
+                                {
+                                    "$size": {
+                                        "$setIntersection": ["$skills_normalized", job_keywords]
+                                    }
+                                },
+                                len(job_keywords),
+                            ]
+                        },
+                        "else": 0,
+                    }
+                }
+            }
+        },
+        {"$sort": {"match_score": -1}},
+        {"$limit": limit},
+        {
+            _PROJECT: {
+                "id": {_TO_STR: "$_id"},
+                "name": "$full_name",
+                "email": 1,
+                "resume_url": 1,
+                "extracted_skills": {"$ifNull": ["$skills", []]},
+                "tags": {
+                    "$concatArrays": [
+                        {"$ifNull": ["$recruiter_tags", []]},
+                        {"$ifNull": ["$ai_tags", []]},
+                    ]
+                },
+                "source": "internal",
+                "cv_link": None,
+                "match_score": 1,
+            }
+        },
+    ]
+
+    rows = await (await Candidate.get_motor_collection().aggregate(agg)).to_list(length=None)
+    return [SuggestedCandidate(**r) for r in rows]
+
+
+# ── Match / assign candidate to position ───────────────────────────────────────
+
+_STATUS_TO_STAGE: dict[str, PipelineStage] = {
+    "pending": PipelineStage.sourced,
+    "accepted": PipelineStage.offer_accepted,
+    "rejected": PipelineStage.rejected,
+}
+
+
+@router.patch("/match")
+async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
+    """Assign a candidate to a position (or update their stage). Upserts the Mapping."""
+    pos_oid = to_object_id(req.position_id, "position_id")
+    cand_oid = to_object_id(req.candidate_id, "candidate_id")
+
+    position = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
+    if not position:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Position not found")
+
+    candidate = await Candidate.find_one({"_id": cand_oid, "brand_id": tenant.brand_id})
+    if not candidate:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
+
+    target_stage = _STATUS_TO_STAGE.get(req.target_status, PipelineStage.sourced)
+
+    existing = await Mapping.find_one(
+        {"candidate_id": cand_oid, "position_id": pos_oid, "brand_id": tenant.brand_id}
+    )
+    if existing:
+        await existing.set({"stage": target_stage.value, "updated_at": datetime.now(UTC)})
+    else:
+        mapping = Mapping(
+            brand_id=tenant.brand_id,
+            candidate_id=cand_oid,
+            position_id=pos_oid,
+            client_id=position.client_id,
+            employee_id=tenant.employee_id,
+            stage=target_stage,
+        )
+        with contextlib.suppress(Exception):
+            await mapping.insert()
+
+    return MatchResponse(
+        position_id=req.position_id,
+        candidate_id=req.candidate_id,
+        status=req.target_status,
+        recruiter_daily_score=0,
     )

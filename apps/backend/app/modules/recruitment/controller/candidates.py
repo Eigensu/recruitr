@@ -150,6 +150,17 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
     return doc
 
 
+# ── Tags (must be before /{candidate_id} to avoid route conflict) ─────────────
+
+
+@router.get("/tags")
+async def list_candidate_tags(tenant: _Tenant) -> list[str]:
+    """Return all distinct recruiter tags for candidates in this brand."""
+    collection = Candidate.get_motor_collection()
+    tags = await collection.distinct("recruiter_tags", {"brand_id": tenant.brand_id})
+    return sorted(t for t in tags if t)
+
+
 # ── List ───────────────────────────────────────────────────────────────────────
 
 
