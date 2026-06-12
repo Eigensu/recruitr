@@ -19,6 +19,7 @@ from app.modules.recruitment.enums import (
     PIPELINE_ORDER,
     ActivityType,
     PipelineStage,
+    PositionStatus,
 )
 from app.modules.recruitment.models import (
     ActivityLog,
@@ -51,6 +52,7 @@ _IF_NULL = "$ifNull"
 
 # Field path constants (frequently referenced across pipelines)
 _F_STAGE = "$stage"
+_F_STATUS = "$status"
 _F_EMPLOYEE_ID = "$employee_id"
 _F_POSITION_ID = "$position_id"
 _F_EMP_MAPPINGS = "$emp_mappings"
@@ -195,7 +197,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
         {
             _GROUP: {
                 "_id": None,
-                "open_positions": {"$sum": {_COND: [{"$eq": ["$status", "open"]}, 1, 0]}},
+                "open_positions": {"$sum": {_COND: [{"$eq": [_F_STATUS, "open"]}, 1, 0]}},
                 "total_seats_open": {"$sum": "$remaining_seats"},
                 "seats_filled": {"$sum": "$filled_seats"},
             }
@@ -451,6 +453,90 @@ async def fetch_mappings(filters: DashboardFilters, page: int, limit: int) -> di
     result = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}
+
+
+async def fetch_client_profiles(page: int, limit: int) -> dict[str, Any]:
+    """Aggregate positions grouped by client_name to produce one row per client.
+
+    Derived status: "active" if ≥1 open position, "on_hold" if none open but
+    ≥1 on_hold, "closed" otherwise.  Candidate / recruiter counts come from
+    the candidate_mappings collection via lookup.
+    """
+    pipeline: list[dict[str, Any]] = [
+        {_MATCH: {"is_active": True}},
+        {
+            _LOOKUP: {
+                "from": "candidate_mappings",
+                "let": {"pos_oid": "$_id"},
+                "pipeline": [{_MATCH: {_EXPR: {"$eq": [_F_POSITION_ID, "$$pos_oid"]}}}],
+                "as": "pos_mappings",
+            }
+        },
+        {
+            _GROUP: {
+                "_id": "$client_name",
+                "total_open_positions": {
+                    "$sum": {_COND: [{"$eq": [_F_STATUS, PositionStatus.open.value]}, 1, 0]}
+                },
+                "total_on_hold": {
+                    "$sum": {_COND: [{"$eq": [_F_STATUS, PositionStatus.on_hold.value]}, 1, 0]}
+                },
+                "candidate_id_arrays": {"$push": "$pos_mappings.candidate_id"},
+                "employee_id_arrays": {"$push": "$pos_mappings.employee_id"},
+                "last_activity": {"$max": "$updated_at"},
+            }
+        },
+        {
+            _ADD_FIELDS: {
+                "client_name": "$_id",
+                "all_candidate_ids": {
+                    "$reduce": {
+                        "input": "$candidate_id_arrays",
+                        "initialValue": [],
+                        "in": {"$setUnion": ["$$value", "$$this"]},
+                    }
+                },
+                "all_employee_ids": {
+                    "$reduce": {
+                        "input": "$employee_id_arrays",
+                        "initialValue": [],
+                        "in": {"$setUnion": ["$$value", "$$this"]},
+                    }
+                },
+                "status": {
+                    "$switch": {
+                        "branches": [
+                            {
+                                "case": {"$gt": ["$total_open_positions", 0]},
+                                "then": "active",
+                            },
+                            {
+                                "case": {"$gt": ["$total_on_hold", 0]},
+                                "then": "on_hold",
+                            },
+                        ],
+                        "default": "closed",
+                    }
+                },
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "client_name": 1,
+                "total_open_positions": 1,
+                "total_candidates": {_SIZE: "$all_candidate_ids"},
+                "active_recruiters": {_SIZE: "$all_employee_ids"},
+                "last_activity": 1,
+                "status": 1,
+            }
+        },
+        {_SORT: {"last_activity": -1, "client_name": 1}},
+        _paginate(page, limit),
+    ]
+    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    items, total = _unpack_facet(result)
+    return {"items": items, "total": total, "page": page, "limit": limit}
 
 
 async def fetch_activities(filters: DashboardFilters, page: int, limit: int) -> dict[str, Any]:
