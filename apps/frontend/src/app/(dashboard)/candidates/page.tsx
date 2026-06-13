@@ -11,8 +11,8 @@ export default async function CandidatesPage() {
       getCandidates({ page: 1, limit: 50 }),
       getCandidateTags(),
     ]);
-  } catch {
-    // Backend unreachable during SSR — render empty; client can retry via filters.
+  } catch (err) {
+    console.error("Failed to load candidates page data during SSR:", err);
   }
 
   return (

@@ -203,9 +203,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
             }
         },
     ]
-    job_result = await (await Position.get_motor_collection().aggregate(job_pipeline)).to_list(
-        length=None
-    )
+    job_result = await Position.get_motor_collection().aggregate(job_pipeline).to_list(length=None)
     job_totals = job_result[0] if job_result else {}
 
     mapping_match = _base_mapping_match(filters, include_terminal=False)
@@ -233,8 +231,8 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
         {_MATCH: joined_match},
         {_GROUP: {"_id": None, "joined_candidates": {"$sum": 1}}},
     ]
-    joined_result = await (await Mapping.get_motor_collection().aggregate(joined_pipeline)).to_list(
-        length=None
+    joined_result = (
+        await Mapping.get_motor_collection().aggregate(joined_pipeline).to_list(length=None)
     )
     joined_totals = joined_result[0] if joined_result else {}
 
@@ -256,7 +254,7 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
         {_MATCH: mapping_match},
         {_GROUP: {"_id": _F_STAGE, "count": {"$sum": 1}}},
     ]
-    results = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    results = await Mapping.get_motor_collection().aggregate(pipeline).to_list(length=None)
     counts = {PipelineStage(item["_id"]): int(item["count"]) for item in results if item.get("_id")}
     total = sum(counts.values())
 
@@ -324,7 +322,7 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
         {_SORT: {"created_at": -1, "name": 1}},
         _paginate(page, limit),
     ]
-    result = await (await Employee.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Employee.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}
 
@@ -380,7 +378,7 @@ async def fetch_clients(filters: DashboardFilters, page: int, limit: int) -> dic
         {_SORT: {"created_at": -1, "client_name": 1}},
         _paginate(page, limit),
     ]
-    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Position.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}
 
@@ -428,7 +426,7 @@ async def fetch_candidates(filters: DashboardFilters, page: int, limit: int) -> 
             _paginate(page, limit),
         ]
     )
-    result = await (await Candidate.get_motor_collection().aggregate(agg)).to_list(length=None)
+    result = await Candidate.get_motor_collection().aggregate(agg).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}
 
@@ -450,20 +448,21 @@ async def fetch_mappings(filters: DashboardFilters, page: int, limit: int) -> di
         {_SORT: {"mapped_at": -1, "updated_at": -1}},
         _paginate(page, limit),
     ]
-    result = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Mapping.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}
 
 
-async def fetch_client_profiles(page: int, limit: int) -> dict[str, Any]:
-    """Aggregate positions grouped by client_name to produce one row per client.
+async def fetch_client_profiles(brand_id: str, page: int, limit: int) -> dict[str, Any]:
+    """Aggregate positions grouped by client to produce one row per client.
 
     Derived status: "active" if ≥1 open position, "on_hold" if none open but
     ≥1 on_hold, "closed" otherwise.  Candidate / recruiter counts come from
     the candidate_mappings collection via lookup.
     """
+    brand_oid = to_object_id(brand_id, "brand_id")
     pipeline: list[dict[str, Any]] = [
-        {_MATCH: {"is_active": True}},
+        {_MATCH: {"is_active": True, "brand_id": brand_oid}},
         {
             _LOOKUP: {
                 "from": "candidate_mappings",
@@ -474,7 +473,8 @@ async def fetch_client_profiles(page: int, limit: int) -> dict[str, Any]:
         },
         {
             _GROUP: {
-                "_id": "$client_name",
+                "_id": "$client_id",
+                "client_name": {"$first": "$client_name"},
                 "total_open_positions": {
                     "$sum": {_COND: [{"$eq": [_F_STATUS, PositionStatus.open.value]}, 1, 0]}
                 },
@@ -488,7 +488,7 @@ async def fetch_client_profiles(page: int, limit: int) -> dict[str, Any]:
         },
         {
             _ADD_FIELDS: {
-                "client_name": "$_id",
+                "client_name": "$client_name",
                 "all_candidate_ids": {
                     "$reduce": {
                         "input": "$candidate_id_arrays",
@@ -534,7 +534,7 @@ async def fetch_client_profiles(page: int, limit: int) -> dict[str, Any]:
         {_SORT: {"last_activity": -1, "client_name": 1}},
         _paginate(page, limit),
     ]
-    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Position.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total = _unpack_facet(result)
     return {"items": items, "total": total, "page": page, "limit": limit}
 
@@ -558,8 +558,6 @@ async def fetch_activities(filters: DashboardFilters, page: int, limit: int) -> 
         {_SORT: {"created_at": -1}},
         _paginate(page, limit),
     ]
-    result = await (await ActivityLog.get_motor_collection().aggregate(pipeline)).to_list(
-        length=None
-    )
+    result = await ActivityLog.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total_count = _unpack_facet(result)
     return {"items": items, "total": total_count, "page": page, "limit": limit}

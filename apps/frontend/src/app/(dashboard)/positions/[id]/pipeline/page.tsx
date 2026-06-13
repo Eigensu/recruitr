@@ -33,17 +33,15 @@ export default async function PipelinePage({ params }: PageProps) {
   let employees: { id: string; name: string }[] = [];
   let availableTags: string[] = [];
 
-  try {
-    const data = await serverFetch<EmployeeItem[]>("/api/v1/teams/employees");
-    employees = data.map((e) => ({ id: e.id, name: e.name }));
-  } catch {
-    /* non-critical */
+  const [empResult, tagsResult] = await Promise.allSettled([
+    serverFetch<EmployeeItem[]>("/api/v1/teams/employees"),
+    serverFetch<string[]>("/api/v1/candidates/tags"),
+  ]);
+  if (empResult.status === "fulfilled") {
+    employees = empResult.value.map((e) => ({ id: e.id, name: e.name }));
   }
-
-  try {
-    availableTags = await serverFetch<string[]>("/api/v1/candidates/tags");
-  } catch {
-    /* non-critical */
+  if (tagsResult.status === "fulfilled") {
+    availableTags = tagsResult.value;
   }
 
   return (

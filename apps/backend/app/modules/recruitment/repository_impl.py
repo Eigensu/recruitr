@@ -102,7 +102,7 @@ async def recompute_position_seats(position_id: PydanticObjectId) -> None:
         {"$match": {"position_id": position_id, "stage": PipelineStage.position_close.value}},
         {"$count": "filled"},
     ]
-    result = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(None)
+    result = await Mapping.get_motor_collection().aggregate(pipeline).to_list(None)
     filled = int(result[0]["filled"]) if result else 0
 
     pos = await Position.get(position_id)

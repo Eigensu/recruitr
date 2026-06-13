@@ -241,7 +241,7 @@ async def list_positions(
         _paginate(page, limit),
     ]
 
-    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Position.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total = _unpack(result)
     return _make_page(items, total, page, limit)
 
@@ -486,7 +486,7 @@ async def get_position_candidates(
         {_SORT: {"mapped_at": -1}},
     ]
 
-    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    rows = await Mapping.get_motor_collection().aggregate(pipeline).to_list(length=None)
     return [PositionMappedCandidate.model_validate(r) for r in rows]
 
 

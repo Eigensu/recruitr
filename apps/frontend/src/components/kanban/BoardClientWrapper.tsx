@@ -7,6 +7,7 @@ const KanbanBoard = dynamic(() => import("./Board"), { ssr: false });
 interface Props {
   readonly positionId: string;
   readonly employees?: readonly { id: string; name: string }[];
+  readonly clients?: readonly { id: string; label: string }[];
   readonly availableTags?: readonly string[];
 }
 

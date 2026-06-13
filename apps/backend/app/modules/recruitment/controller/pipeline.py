@@ -16,6 +16,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
@@ -205,7 +206,7 @@ async def get_pipeline_board(tenant: _Tenant) -> PipelineBoard:
         },
     ]
 
-    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
+    rows = await Mapping.get_motor_collection().aggregate(agg).to_list(length=None)
 
     # Group rows into stage columns
     stage_map: dict[str, list[StageMappingItem]] = {s.value: [] for s in KANBAN_STAGES}
@@ -408,7 +409,7 @@ async def get_filtered_pipeline(
         }
     )
 
-    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
+    rows = await Mapping.get_motor_collection().aggregate(agg).to_list(length=None)
     return [FilteredCandidate(**r) for r in rows]
 
 
@@ -473,7 +474,7 @@ async def get_top_candidates(
         },
     ]
 
-    rows = await (await Candidate.get_motor_collection().aggregate(agg)).to_list(length=None)
+    rows = await Candidate.get_motor_collection().aggregate(agg).to_list(length=None)
     return [SuggestedCandidate(**r) for r in rows]
 
 
@@ -516,7 +517,7 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
             employee_id=tenant.employee_id,
             stage=target_stage,
         )
-        with contextlib.suppress(Exception):
+        with contextlib.suppress(DuplicateKeyError):
             await mapping.insert()
 
     return MatchResponse(

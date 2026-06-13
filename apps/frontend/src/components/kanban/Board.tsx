@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -52,6 +52,7 @@ export default function KanbanBoard({
   const apiFetch = useApiFetch();
   const [boardLoading, setBoardLoading] = useState(false);
   const [showAddPanel, setShowAddPanel] = useState(false);
+  const dragOriginColumn = useRef<CandidateStatus | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -102,6 +103,7 @@ export default function KanbanBoard({
     const from = findCardColumn(active.id as string);
     const to = over.id as CandidateStatus;
     if (from && from !== to && COLUMNS.some((c) => c.id === to)) {
+      dragOriginColumn.current ??= from;
       moveCard(active.id as string, from, to);
     }
   }
@@ -109,7 +111,15 @@ export default function KanbanBoard({
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveCardId(null);
-    if (!over) return;
+    const origin = dragOriginColumn.current;
+    dragOriginColumn.current = null;
+    if (!over) {
+      if (origin) {
+        const current = findCardColumn(active.id as string);
+        if (current && current !== origin) moveCard(active.id as string, current, origin);
+      }
+      return;
+    }
 
     const cardId = active.id as string;
     const to = over.id as CandidateStatus;

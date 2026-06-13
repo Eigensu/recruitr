@@ -189,13 +189,13 @@ async def get_activities(filters: DashboardFilters, page: int, limit: int) -> Da
     return response
 
 
-async def get_client_profiles(page: int, limit: int) -> DashboardClientProfilePage:
-    cache_key = dashboard_cache.build_key("client_profiles", f"p{page}_l{limit}")
+async def get_client_profiles(brand_id: str, page: int, limit: int) -> DashboardClientProfilePage:
+    cache_key = dashboard_cache.build_key("client_profiles", f"b{brand_id}_p{page}_l{limit}")
     cached = await dashboard_cache.get_json(cache_key)
     if cached is not None:
         return DashboardClientProfilePage.model_validate(cached)
 
-    payload = await fetch_client_profiles(page, limit)
+    payload = await fetch_client_profiles(brand_id, page, limit)
     items = [ClientProfileRow.model_validate(item) for item in payload["items"]]
     response = _make_paginated_response(payload, items, DashboardClientProfilePage)
     await dashboard_cache.set_json(

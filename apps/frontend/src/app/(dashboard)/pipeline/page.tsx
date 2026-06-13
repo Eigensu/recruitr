@@ -37,9 +37,19 @@ export default async function PipelinePage() {
   }
 
   try {
-    // GET /api/v1/positions — paginated, fetch up to 200 open positions
-    const data = await serverFetch<PaginatedResponse<ApiPosition>>("/api/v1/positions?limit=200");
-    positions = data.items.map((p) => ({
+    // GET /api/v1/positions — paginated; accumulate all pages (backend cap: 100/page)
+    const allPositions: ApiPosition[] = [];
+    let page = 1;
+
+    while (true) {
+      const data = await serverFetch<PaginatedResponse<ApiPosition>>(
+        `/api/v1/positions?limit=100&page=${page}`,
+      );
+      allPositions.push(...data.items);
+      if (!data.meta.has_next) break;
+      page++;
+    }
+    positions = allPositions.map((p) => ({
       id: p.id,
       label: `${p.code} · ${p.role}`,
       client: p.client_name,

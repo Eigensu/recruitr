@@ -20,6 +20,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
+from app.config import settings
 from app.dependencies import get_tenant
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.models import Candidate, Mapping
@@ -35,6 +36,8 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import extract_text_from_pdf
+
+_CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
 router = APIRouter()
 
@@ -157,7 +160,9 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
 async def list_candidate_tags(tenant: _Tenant) -> list[str]:
     """Return all distinct recruiter tags for candidates in this brand."""
     collection = Candidate.get_motor_collection()
-    tags = await collection.distinct("recruiter_tags", {"brand_id": tenant.brand_id})
+    tags = await collection.distinct(
+        "recruiter_tags", {"brand_id": tenant.brand_id, "is_active": True}
+    )
     return sorted(t for t in tags if t)
 
 
@@ -170,6 +175,10 @@ async def list_candidates(
     search: _Search = None,
     experience: _ExpFilter = None,
     stage: _Stage = None,
+    source: Annotated[str | None, Query()] = None,
+    tags: Annotated[list[str] | None, Query()] = None,
+    has_resume: Annotated[bool | None, Query()] = None,
+    has_cv_link: Annotated[bool | None, Query()] = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
@@ -194,6 +203,22 @@ async def list_candidates(
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
 
+    if source:
+        match["source"] = source
+
+    if tags:
+        match["recruiter_tags"] = {"$in": [t.lower() for t in tags]}
+
+    if has_resume is True:
+        match["resume_url"] = {"$exists": True, "$ne": None}
+    elif has_resume is False:
+        match["resume_url"] = {"$in": [None, ""]}
+
+    if has_cv_link is True:
+        match["cv_link"] = {"$exists": True, "$ne": None}
+    elif has_cv_link is False:
+        match["cv_link"] = {"$in": [None, ""]}
+
     pipeline = [
         {_MATCH: match},
         {
@@ -214,7 +239,7 @@ async def list_candidates(
         {_SORT: {"created_at": -1, "full_name": 1}},
         _paginate(page, limit),
     ]
-    result = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await Candidate.get_motor_collection().aggregate(pipeline).to_list(length=None)
     items, total = _unpack(result)
     return _make_page(items, total, page, limit, CandidateResponse)
 
@@ -392,7 +417,7 @@ async def get_candidate_mappings(tenant: _Tenant, candidate_id: str) -> list[Can
         },
         {_SORT: {"mapped_at": -1}},
     ]
-    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    rows = await Mapping.get_motor_collection().aggregate(pipeline).to_list(length=None)
     return [CandidateMappingItem.model_validate(r) for r in rows]
 
 
@@ -407,6 +432,8 @@ async def confirm_resume(
     background_tasks: BackgroundTasks,
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    if _CLOUDINARY_HOST and not data.resume_url.startswith(_CLOUDINARY_HOST):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "resume_url must be a Cloudinary URL")
     await doc.set({"resume_public_id": data.resume_public_id, "resume_url": data.resume_url})
     background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)
     cand_oid = to_object_id(candidate_id, "candidate_id")

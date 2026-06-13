@@ -24,7 +24,6 @@ _STATUS_TO_STAGE = {
 }
 
 
-
 async def resolve_employee_id(user_id: str, *, session=None) -> PydanticObjectId | None:
     """Resolve an authenticated User to a DashboardEmployee id (by email).
 
@@ -59,7 +58,6 @@ async def ensure_position_opening(position: Position) -> PydanticObjectId | None
     position.job_opening_id = opening.id
     await position.save()
     return opening.id
-
 
 
 async def find_top_candidates(position_id: str, limit: int = 10) -> list[dict]:
@@ -351,4 +349,4 @@ async def find_filtered_candidates(
     )
 
     collection = CandidateMapping.get_motor_collection()
-    return await (await collection.aggregate(pipeline)).to_list(length=None)
+    return await collection.aggregate(pipeline).to_list(length=None)
