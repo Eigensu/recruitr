@@ -206,7 +206,7 @@ async def get_pipeline_board(tenant: _Tenant) -> PipelineBoard:
         },
     ]
 
-    rows = await Mapping.get_motor_collection().aggregate(agg).to_list(length=None)
+    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
 
     # Group rows into stage columns
     stage_map: dict[str, list[StageMappingItem]] = {s.value: [] for s in KANBAN_STAGES}
@@ -409,7 +409,7 @@ async def get_filtered_pipeline(
         }
     )
 
-    rows = await Mapping.get_motor_collection().aggregate(agg).to_list(length=None)
+    rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
     return [FilteredCandidate(**r) for r in rows]
 
 
@@ -474,7 +474,7 @@ async def get_top_candidates(
         },
     ]
 
-    rows = await Candidate.get_motor_collection().aggregate(agg).to_list(length=None)
+    rows = await (await Candidate.get_motor_collection().aggregate(agg)).to_list(length=None)
     return [SuggestedCandidate(**r) for r in rows]
 
 

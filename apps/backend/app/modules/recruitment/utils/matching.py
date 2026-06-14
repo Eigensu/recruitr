@@ -170,5 +170,5 @@ async def top_candidates(
         },
     ]
 
-    cursor = Candidate.get_motor_collection().aggregate(pipeline)
+    cursor = await Candidate.get_motor_collection().aggregate(pipeline)
     return await cursor.to_list(None)

@@ -148,7 +148,7 @@ async def list_candidates(
         {_SORT: {"created_at": -1, "full_name": 1}},
         _paginate(page, limit),
     ]
-    result = await Candidate.get_motor_collection().aggregate(pipeline).to_list(length=None)
+    result = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     items, total = _unpack(result)
     return _make_page(items, total, page, limit, CandidateResponse)
 
@@ -302,7 +302,7 @@ async def get_candidate_mappings(tenant: _Tenant, candidate_id: str) -> list[Can
         },
         {_SORT: {"mapped_at": -1}},
     ]
-    rows = await Mapping.get_motor_collection().aggregate(pipeline).to_list(length=None)
+    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
     return [CandidateMappingItem.model_validate(r) for r in rows]
 
 
