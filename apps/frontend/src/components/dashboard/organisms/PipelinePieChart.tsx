@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
-import { IconChartPie } from "@tabler/icons-react";
+import { IconChartFunnel } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import {
   CHART_COLORS,
@@ -19,48 +19,8 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
   const chartRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(chartRef, { once: true, amount: 0.42 });
   const [activeStage, setActiveStage] = useState(stages[0]?.stage);
-  const total = stages.reduce((sum, stage) => sum + stage.count, 0);
+  const maxCount = stages.reduce((max, s) => Math.max(max, s.count), 1);
   const active = stages.find((stage) => stage.stage === activeStage) ?? stages[0];
-
-  const segments = useMemo(() => {
-    const gap = 0.75;
-
-    return stages.reduce(
-      (acc, stage, index) => {
-        const rawLength = total === 0 ? 0 : (stage.count / total) * 100;
-        const length = Math.max(rawLength - gap, 0);
-        const segment = {
-          ...stage,
-          color: CHART_COLORS[index % CHART_COLORS.length] ?? "#FFFFFF",
-          dash: `${length} ${100 - length}`,
-          offset: -acc.cursor,
-        };
-
-        return {
-          cursor: acc.cursor + rawLength,
-          items: [...acc.items, segment],
-        };
-      },
-      {
-        cursor: 0,
-        items: [] as Array<
-          PipelineStageMetric & {
-            color: string;
-            dash: string;
-            offset: number;
-          }
-        >,
-      },
-    ).items;
-  }, [stages, total]);
-
-  const largestSegment = useMemo(() => {
-    if (!segments.length) return null;
-    return segments.reduce(
-      (max, current) => (current.percent > max.percent ? current : max),
-      segments[0],
-    );
-  }, [segments]);
 
   if (!stages.length) {
     return (
@@ -71,12 +31,12 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl">Pipeline Pie Chart</h2>
+            <h2 className="font-heading text-xl">Pipeline Funnel</h2>
             <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
-              Interactive share of pipeline stages
+              Candidate flow through pipeline stages
             </p>
           </div>
-          <IconChartPie className="size-6 text-yellow" />
+          <IconChartFunnel className="size-6 text-yellow" />
         </div>
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm" style={{ opacity: 0.5 }}>
@@ -96,98 +56,97 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl" style={{ color: "var(--color-text-primary)" }}>
-            Pipeline Pie Chart
+            Pipeline Funnel
           </h2>
           <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            Interactive share of pipeline stages
+            Candidate flow through pipeline stages
           </p>
         </div>
-        <IconChartPie className="size-6 text-yellow" />
+        <IconChartFunnel className="size-6 text-yellow" />
       </div>
 
-      <div className="mt-4 flex flex-1 items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94 }}
-          animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.94 }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
-          className="relative mx-auto aspect-square w-full max-w-[24rem]"
-        >
-          <svg viewBox="0 0 120 120" className="size-full -rotate-90 drop-shadow-lg">
-            <circle
-              cx="60"
-              cy="60"
-              r="45"
-              fill="none"
-              stroke="var(--color-chart-track)"
-              strokeWidth="17"
-            />
-            {segments.map((segment, index) => {
-              const isActive = segment.stage === activeStage;
+      <div className="mt-4 flex flex-1 flex-col justify-center gap-1.5">
+        {stages.map((stage, index) => {
+          const widthPct = (stage.count / maxCount) * 100;
+          const color = CHART_COLORS[index % CHART_COLORS.length] ?? "#FFFFFF";
+          const isActive = stage.stage === activeStage;
 
-              return (
-                <motion.circle
-                  key={segment.stage}
-                  cx="60"
-                  cy="60"
-                  r="45"
-                  fill="none"
-                  stroke={segment.color}
-                  strokeWidth="17"
-                  strokeLinecap="butt"
-                  pathLength={100}
-                  strokeDashoffset={segment.offset}
-                  initial={{ strokeDasharray: "0 100", opacity: 0 }}
-                  animate={
-                    isInView
-                      ? { strokeDasharray: segment.dash, opacity: isActive ? 1 : 0.78 }
-                      : { strokeDasharray: "0 100", opacity: 0 }
-                  }
-                  transition={{ duration: 0.72, delay: index * 0.08, ease: "easeOut" }}
-                  onMouseEnter={() => setActiveStage(segment.stage)}
-                  onFocus={() => setActiveStage(segment.stage)}
-                  tabIndex={0}
-                  role="img"
-                  aria-label={`${segment.label}: ${segment.count} candidates, ${segment.percent}% of pipeline`}
-                  className="cursor-pointer outline-none transition-opacity"
-                />
-              );
-            })}
-          </svg>
-
-          <div
-            className="absolute inset-10 flex flex-col items-center justify-center rounded-full p-5 text-center shadow-inner shadow-black/30"
-            style={{ background: "var(--color-surface-val)", color: "var(--color-text-primary)" }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-normal" style={{ opacity: 0.6 }}>
-              Selected
-            </p>
-            <p className="mt-2 font-heading text-3xl">
-              <AnimatedNumber value={active?.count ?? total} />
-            </p>
-            <p
-              className="mt-1 text-sm font-semibold"
-              style={{ color: "var(--color-text-primary)" }}
+          return (
+            <button
+              key={stage.stage}
+              className="flex w-full items-center gap-2 outline-none"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              onMouseEnter={() => setActiveStage(stage.stage)}
+              onFocus={() => setActiveStage(stage.stage)}
+              aria-label={`${stage.label}: ${stage.count} candidates, ${stage.percent}% of pipeline`}
             >
-              {active?.label ?? "All stages"}
-            </p>
-            <p className="mt-1 text-xs" style={{ opacity: 0.6 }}>
-              <AnimatedNumber value={active?.percent ?? 100} suffix="%" /> of pipeline
-            </p>
-          </div>
-        </motion.div>
+              <span
+                className="w-24 shrink-0 truncate text-right text-xs transition-opacity"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  opacity: isActive ? 1 : 0.55,
+                }}
+              >
+                {stage.label}
+              </span>
+
+              <div className="flex h-6 flex-1 items-center justify-center">
+                <motion.div
+                  className="relative flex h-full items-center justify-center overflow-hidden rounded-sm"
+                  style={{ background: color, opacity: isActive ? 1 : 0.7 }}
+                  initial={{ width: "0%" }}
+                  animate={isInView ? { width: `${Math.max(widthPct, 1.5)}%` } : { width: "0%" }}
+                  transition={{ duration: 0.55, delay: index * 0.07, ease: "easeOut" }}
+                >
+                  {isActive && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="whitespace-nowrap px-1.5 text-xs font-semibold text-white drop-shadow"
+                    >
+                      {stage.count}
+                    </motion.span>
+                  )}
+                </motion.div>
+              </div>
+
+              <span
+                className="w-10 shrink-0 text-left text-xs font-medium tabular-nums transition-opacity"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  opacity: isActive ? 1 : 0.55,
+                }}
+              >
+                {stage.percent}%
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div
-        className="mt-5 rounded-lg px-4 py-3"
+        className="mt-4 flex items-center justify-between rounded-lg px-4 py-3"
         style={{ background: "var(--color-surface-2-val)" }}
       >
-        <p className="text-xs leading-relaxed" style={{ color: "var(--color-text-secondary)" }}>
-          {`Pipeline Overview: Your recruitment pipeline is distributed across ${stages.length} stages. The largest concentration is in ${largestSegment?.label ?? "Unknown"}, which represents `}
-          <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
-            {`${largestSegment?.percent ?? 0}% of total candidates`}
-          </span>
-          {`. Monitor stage progression to identify potential bottlenecks and optimize time-to-hire.`}
-        </p>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ opacity: 0.6 }}>
+            Selected
+          </p>
+          <p className="mt-1 font-heading text-2xl">
+            <AnimatedNumber value={active?.count ?? 0} />
+          </p>
+          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+            {active?.label ?? "—"}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="font-heading text-2xl">
+            <AnimatedNumber value={active?.percent ?? 0} suffix="%" />
+          </p>
+          <p className="text-xs" style={{ opacity: 0.6 }}>
+            of pipeline
+          </p>
+        </div>
       </div>
     </section>
   );
