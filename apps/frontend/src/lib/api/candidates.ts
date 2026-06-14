@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import type {
   ApiCandidate,
   ApiCandidateMappingItem,
-  Candidate,
   CandidateFilters,
   PaginatedResponse,
   PipelineStage,
@@ -42,26 +41,14 @@ async function serverFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function toCandidate(a: ApiCandidate): Candidate {
-  return {
-    id: a.id,
-    name: a.full_name,
-    email: a.email,
-    phone: a.phone,
-    resume_url: a.resume_url,
-    extracted_skills: a.skills ?? [],
-    tags: a.recruiter_tags ?? [],
-    source: "external",
-    cv_link: null,
-  };
-}
-
 /** Server-side initial load (used by the candidates page server component). */
-export async function getCandidates(filters: Partial<CandidateFilters> = {}): Promise<Candidate[]> {
+export async function getCandidates(
+  filters: Partial<CandidateFilters> = {},
+): Promise<ApiCandidate[]> {
   const data = await serverFetch<PaginatedResponse<ApiCandidate>>(
     `/api/v1/candidates${buildCandidateQuery(filters)}`,
   );
-  return (data.items ?? []).map(toCandidate);
+  return data.items ?? [];
 }
 
 export function getCandidateTags() {

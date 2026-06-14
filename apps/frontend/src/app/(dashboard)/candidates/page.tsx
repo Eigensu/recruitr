@@ -1,9 +1,9 @@
 import { getCandidates, getCandidateTags } from "@/lib/api/candidates";
 import CandidatesClient from "@/components/candidates/CandidatesClient";
-import type { Candidate } from "@/types";
+import type { ApiCandidate } from "@/types";
 
 export default async function CandidatesPage() {
-  let initialCandidates: Candidate[] = [];
+  let initialCandidates: ApiCandidate[] = [];
   let availableTags: string[] = [];
 
   try {

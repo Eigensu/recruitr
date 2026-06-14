@@ -4,7 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { clientConfirmResume, clientCreateCandidate } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
-import type { Candidate } from "@/types";
+import type { ApiCandidate } from "@/types";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -16,7 +16,7 @@ const schema = z.object({
 });
 
 interface Props {
-  onSuccess: (candidate: Candidate) => void;
+  onSuccess: (candidate: ApiCandidate) => void;
   onCancel: () => void;
 }
 
@@ -76,12 +76,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     setErrors({});
     try {
       let candidate = await clientCreateCandidate({
-        name: parsed.data.name,
+        full_name: parsed.data.name,
         email: parsed.data.email,
         phone: parsed.data.phone,
-        source: parsed.data.source,
-        tags: parsed.data.tags,
-        cv_link: parsed.data.cv_link || undefined,
+        recruiter_tags: parsed.data.tags,
       });
 
       // Internal candidates → optional direct PDF upload via the Cloudinary

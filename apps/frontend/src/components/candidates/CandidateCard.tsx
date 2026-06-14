@@ -1,5 +1,5 @@
 import React from "react";
-import { IconMail, IconBriefcase } from "@tabler/icons-react";
+import { IconMail, IconBriefcase, IconFileText } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
 
 interface CandidateCardProps {
@@ -91,9 +91,23 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
           </div>
 
           {/* Contact footer */}
-          <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center gap-1.5 text-[11px] text-text-muted">
-            <IconMail className="size-3.5 shrink-0 opacity-50" />
-            <span className="truncate">{candidate.email}</span>
+          <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <IconMail className="size-3.5 shrink-0 opacity-50" />
+              <span className="truncate">{candidate.email}</span>
+            </div>
+            {candidate.resume_url && (
+              <a
+                href={candidate.resume_url}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={(e) => e.stopPropagation()}
+                className="flex shrink-0 items-center gap-1 font-semibold text-yellow hover:opacity-80 transition-opacity"
+              >
+                <IconFileText className="size-3.5" />
+                CV
+              </a>
+            )}
           </div>
         </div>
       </div>
