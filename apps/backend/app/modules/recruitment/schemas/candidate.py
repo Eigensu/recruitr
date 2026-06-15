@@ -20,6 +20,7 @@ class CandidateCreate(BaseModel):
     ai_tags: list[str] = Field(default_factory=list)
     recruiter_tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
+    cv_link: str | None = None
 
 
 class CandidateUpdate(BaseModel):
@@ -32,6 +33,7 @@ class CandidateUpdate(BaseModel):
     ai_tags: list[str] | None = None
     recruiter_tags: list[str] | None = None
     preferred_train_line: str | None = None
+    cv_link: str | None = None
 
 
 class CandidateResponse(BaseModel):
@@ -46,6 +48,7 @@ class CandidateResponse(BaseModel):
     ai_tags: list[str] = Field(default_factory=list)
     recruiter_tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
+    cv_link: str | None = None
     resume_url: str | None = None
     current_stage: PipelineStage
     mappings_count: int = 0

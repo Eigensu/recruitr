@@ -19,13 +19,12 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
 
 export async function clientFetchCandidates(
   filters: Partial<CandidateFilters>,
-): Promise<ApiCandidate[]> {
+): Promise<PaginatedResponse<ApiCandidate>> {
   const res = await fetch(`${API_URL}/api/v1/candidates${buildQuery(filters)}`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error(`Candidates fetch failed: ${res.status}`);
-  const data: PaginatedResponse<ApiCandidate> = await res.json();
-  return data.items ?? [];
+  return res.json() as Promise<PaginatedResponse<ApiCandidate>>;
 }
 
 export async function clientCreateCandidate(data: {
@@ -33,6 +32,7 @@ export async function clientCreateCandidate(data: {
   email: string;
   phone?: string;
   recruiter_tags?: string[];
+  cv_link?: string;
 }): Promise<ApiCandidate> {
   const res = await fetch(`${API_URL}/api/v1/candidates`, {
     method: "POST",

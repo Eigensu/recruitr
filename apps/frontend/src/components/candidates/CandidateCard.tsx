@@ -1,6 +1,7 @@
 import React from "react";
-import { IconMail, IconBriefcase, IconFileText } from "@tabler/icons-react";
+import { IconMail, IconBriefcase, IconFileText, IconLink } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
+import { resolveCvRef } from "@/lib/api/candidates";
 
 interface CandidateCardProps {
   candidate: ApiCandidate;
@@ -35,15 +36,20 @@ export function getInitials(name: string) {
 export default function CandidateCard({ candidate, onClick }: Readonly<CandidateCardProps>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
+  const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`View details for ${candidate.full_name}`}
-      className="group w-full h-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow rounded-2xl"
-    >
-      <div className="flex flex-col h-full rounded-2xl bg-surface-panel border border-border overflow-hidden transition-all duration-200 group-hover:border-white/10 group-hover:-translate-y-px group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+    <div className="group relative w-full h-full">
+      {/* Full-card click target — sits behind content so the CV link stays on top */}
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`View details for ${candidate.full_name}`}
+        className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
+      />
+
+      {/* Visual card — pointer-events-none so clicks fall through to the button above */}
+      <div className="pointer-events-none relative flex flex-col h-full rounded-2xl bg-surface-panel border border-border overflow-hidden transition-all duration-200 group-hover:border-white/10 group-hover:-translate-y-px group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
         {/* Palette accent bar */}
         <div className="h-0.5 shrink-0" style={{ backgroundColor: palette.text, opacity: 0.55 }} />
 
@@ -96,21 +102,33 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
               <IconMail className="size-3.5 shrink-0 opacity-50" />
               <span className="truncate">{candidate.email}</span>
             </div>
-            {candidate.resume_url && (
-              <a
-                href={candidate.resume_url}
-                target="_blank"
-                rel="noreferrer noopener"
-                onClick={(e) => e.stopPropagation()}
-                className="flex shrink-0 items-center gap-1 font-semibold text-yellow hover:opacity-80 transition-opacity"
-              >
-                <IconFileText className="size-3.5" />
-                CV
-              </a>
-            )}
+            {cvRef &&
+              (cvRef.href ? (
+                <a
+                  href={cvRef.href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-semibold text-yellow hover:opacity-80 transition-opacity"
+                >
+                  {candidate.cv_link ? (
+                    <IconLink className="size-3.5" />
+                  ) : (
+                    <IconFileText className="size-3.5" />
+                  )}
+                  CV
+                </a>
+              ) : (
+                <span
+                  className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-medium opacity-40 cursor-default"
+                  title="CV on file — not yet uploaded"
+                >
+                  <IconFileText className="size-3.5" />
+                  CV
+                </span>
+              ))}
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

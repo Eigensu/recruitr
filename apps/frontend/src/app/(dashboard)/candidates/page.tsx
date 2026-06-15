@@ -4,13 +4,17 @@ import type { ApiCandidate } from "@/types";
 
 export default async function CandidatesPage() {
   let initialCandidates: ApiCandidate[] = [];
+  let initialTotal = 0;
   let availableTags: string[] = [];
 
   try {
-    [initialCandidates, availableTags] = await Promise.all([
+    const [candidatePage, tags] = await Promise.all([
       getCandidates({ page: 1, limit: 50 }),
       getCandidateTags(),
     ]);
+    initialCandidates = candidatePage.items ?? [];
+    initialTotal = candidatePage.meta?.total ?? initialCandidates.length;
+    availableTags = tags;
   } catch (err) {
     console.error("Failed to load candidates page data during SSR:", err);
   }
@@ -36,7 +40,11 @@ export default async function CandidatesPage() {
           </h1>
         </header>
 
-        <CandidatesClient initialCandidates={initialCandidates} availableTags={availableTags} />
+        <CandidatesClient
+          initialCandidates={initialCandidates}
+          initialTotal={initialTotal}
+          availableTags={availableTags}
+        />
       </div>
     </div>
   );

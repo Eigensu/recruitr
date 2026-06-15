@@ -7,10 +7,12 @@ import {
   IconExternalLink,
   IconCircleCheck,
   IconBriefcase,
+  IconFileText,
+  IconLink,
 } from "@tabler/icons-react";
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
-import { getCandidateMappings } from "@/lib/api/candidates";
+import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
 interface CandidateDrawerProps {
@@ -93,6 +95,7 @@ function DrawerInner({
 }>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
+  const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
 
   return (
     <>
@@ -145,6 +148,30 @@ function DrawerInner({
               {candidate.phone}
             </span>
           )}
+          {cvRef &&
+            (cvRef.href ? (
+              <a
+                href={cvRef.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="flex items-center gap-2 text-xs text-text-muted hover:text-yellow transition-colors w-fit"
+              >
+                {candidate.cv_link ? (
+                  <IconLink className="size-3.5 shrink-0" />
+                ) : (
+                  <IconFileText className="size-3.5 shrink-0" />
+                )}
+                {cvRef.label}
+              </a>
+            ) : (
+              <span
+                className="flex items-center gap-2 text-xs opacity-40 cursor-default w-fit"
+                title="CV on file — not yet uploaded"
+              >
+                <IconFileText className="size-3.5 shrink-0" />
+                {cvRef.label} (on file)
+              </span>
+            ))}
         </div>
       </div>
 

@@ -80,6 +80,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         email: parsed.data.email,
         phone: parsed.data.phone,
         recruiter_tags: parsed.data.tags,
+        cv_link: parsed.data.cv_link,
       });
 
       // Internal candidates → optional direct PDF upload via the Cloudinary

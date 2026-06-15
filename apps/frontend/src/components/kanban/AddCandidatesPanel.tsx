@@ -89,7 +89,7 @@ export default function AddCandidatesPanel({ positionId, onAssigned, onClose }: 
     const handle = setTimeout(() => {
       setLoading(true);
       clientFetchCandidates({ search: search || undefined, page: 1, limit: 25 })
-        .then(setResults)
+        .then((data) => setResults(data.items ?? []))
         .catch(() => setResults([]))
         .finally(() => setLoading(false));
     }, 250);

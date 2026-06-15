@@ -8,6 +8,42 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * Resolves a candidate's best CV reference.
+ * Returns { href } when the value is a navigable absolute http/https URL,
+ * or { href: null } when it's a bare filename / relative path (legacy seed data
+ * before upload_cvs.py has run) — so the UI can still show a "CV on file" badge.
+ * Returns null when there is no CV reference at all.
+ */
+function isAbsoluteUrl(url: string): boolean {
+  try {
+    const p = new URL(url);
+    return p.protocol === "http:" || p.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves a candidate's best CV reference.
+ * Returns { href } when the value is a navigable absolute http/https URL,
+ * or { href: null } when it's a bare filename / relative path (legacy seed data
+ * before upload_cvs.py has run) — so the UI can still show a "CV on file" badge.
+ * Returns null when there is no CV reference at all.
+ */
+export function resolveCvRef(
+  cvLink: string | null | undefined,
+  resumeUrl: string | null | undefined,
+): { label: string; href: string | null } | null {
+  if (cvLink) {
+    return { label: "CV Link", href: isAbsoluteUrl(cvLink) ? cvLink : null };
+  }
+  if (resumeUrl) {
+    return { label: "Resume", href: isAbsoluteUrl(resumeUrl) ? resumeUrl : null };
+  }
+  return null;
+}
+
 export function buildCandidateQuery(filters: Partial<CandidateFilters>): string {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);

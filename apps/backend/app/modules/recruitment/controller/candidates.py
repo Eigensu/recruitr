@@ -262,6 +262,7 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         ai_tags=data.ai_tags,
         recruiter_tags=data.recruiter_tags,
         preferred_train_line=data.preferred_train_line,
+        cv_link=data.cv_link,
     )
     try:
         await doc.insert()
@@ -282,6 +283,7 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=0,
@@ -309,6 +311,7 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -344,6 +347,8 @@ async def update_candidate(
         update["recruiter_tags"] = data.recruiter_tags
     if data.preferred_train_line is not None:
         update["preferred_train_line"] = data.preferred_train_line
+    if data.cv_link is not None:
+        update["cv_link"] = data.cv_link
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -360,6 +365,7 @@ async def update_candidate(
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -450,6 +456,7 @@ async def confirm_resume(
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,

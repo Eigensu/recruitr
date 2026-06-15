@@ -9,8 +9,11 @@ import CandidateDrawer from "./CandidateDrawer";
 import AddCandidateForm from "./AddCandidateForm";
 import BulkUploadDrawer from "./BulkUploadDrawer";
 
+const PAGE_SIZE = 50;
+
 interface Props {
   initialCandidates: ApiCandidate[];
+  initialTotal: number;
   availableTags: string[];
 }
 
@@ -19,41 +22,82 @@ const drawerStyle = {
   border: "1px solid var(--color-border-val)",
 };
 
-export default function CandidatesClient({ initialCandidates, availableTags }: Readonly<Props>) {
+export default function CandidatesClient({
+  initialCandidates,
+  initialTotal,
+  availableTags,
+}: Readonly<Props>) {
   const [candidates, setCandidates] = useState<ApiCandidate[]>(initialCandidates);
+  const [total, setTotal] = useState(initialTotal);
+  const [page, setPage] = useState(1);
+  const [activeFilters, setActiveFilters] = useState<Partial<CandidateFilters>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<ApiCandidate | null>(null);
 
   async function handleFilterChange(filters: Partial<CandidateFilters>) {
     setLoading(true);
+    setActiveFilters(filters);
+    setPage(1);
     try {
-      setCandidates(await clientFetchCandidates(filters));
+      const data = await clientFetchCandidates({ ...filters, page: 1, limit: PAGE_SIZE });
+      setCandidates(data.items ?? []);
+      setTotal(data.meta?.total ?? 0);
     } catch {
       setCandidates([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   }
 
+  async function handleLoadMore() {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const data = await clientFetchCandidates({
+        ...activeFilters,
+        page: nextPage,
+        limit: PAGE_SIZE,
+      });
+      setCandidates((prev) => [...prev, ...(data.items ?? [])]);
+      setTotal(data.meta?.total ?? total);
+      setPage(nextPage);
+    } catch {
+      // leave existing candidates as-is
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   function handleCandidateAdded(candidate: ApiCandidate) {
     setCandidates((prev) => [candidate, ...prev]);
+    setTotal((t) => t + 1);
     setShowAddForm(false);
   }
 
   function handleBulkComplete() {
-    clientFetchCandidates({ page: 1, limit: 50 })
-      .then(setCandidates)
+    clientFetchCandidates({ page: 1, limit: PAGE_SIZE })
+      .then((data) => {
+        setCandidates(data.items ?? []);
+        setTotal(data.meta?.total ?? 0);
+        setPage(1);
+      })
       .catch(() => undefined);
     setShowBulkUpload(false);
   }
+
+  const hasMore = candidates.length < total;
+  const candidateLabel = total === 1 ? "1 candidate" : `${total} candidates`;
+  const countLabel = hasMore ? `Showing ${candidates.length} of ${candidateLabel}` : candidateLabel;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          {candidates.length} candidate{candidates.length === 1 ? "" : "s"}
+          {countLabel}
         </span>
         <div className="flex gap-2">
           <button
@@ -120,6 +164,25 @@ export default function CandidatesClient({ initialCandidates, availableTags }: R
           {candidates.map((c) => (
             <CandidateCard key={c.id} candidate={c} onClick={() => setSelectedCandidate(c)} />
           ))}
+        </div>
+      )}
+
+      {!loading && hasMore && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="rounded-lg px-5 py-2 text-sm font-medium"
+            style={{
+              background: "var(--color-surface-val)",
+              color: "var(--color-text-primary)",
+              border: "1px solid var(--color-border-val)",
+              opacity: loadingMore ? 0.6 : 1,
+            }}
+          >
+            {loadingMore ? "Loading…" : `Load more (${total - candidates.length} remaining)`}
+          </button>
         </div>
       )}
 

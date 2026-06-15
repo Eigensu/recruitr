@@ -25,11 +25,10 @@ async function serverFetch<T>(path: string): Promise<T> {
 
 export async function getCandidates(
   filters: Partial<CandidateFilters> = {},
-): Promise<ApiCandidate[]> {
-  const data = await serverFetch<PaginatedResponse<ApiCandidate>>(
+): Promise<PaginatedResponse<ApiCandidate>> {
+  return serverFetch<PaginatedResponse<ApiCandidate>>(
     `/api/v1/candidates${buildCandidateQuery(filters)}`,
   );
-  return data.items ?? [];
 }
 
 export function getCandidateTags() {

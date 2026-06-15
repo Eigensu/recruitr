@@ -173,6 +173,7 @@ export interface ApiCandidate {
   ai_tags: string[];
   recruiter_tags: string[];
   preferred_train_line: string | null;
+  cv_link: string | null;
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;
