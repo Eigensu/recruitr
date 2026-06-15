@@ -1,4 +1,4 @@
-import { getCandidates, getCandidateTags } from "@/lib/api/candidates";
+import { getCandidates, getCandidateTags } from "@/lib/api/candidates.server";
 import CandidatesClient from "@/components/candidates/CandidatesClient";
 import type { ApiCandidate } from "@/types";
 

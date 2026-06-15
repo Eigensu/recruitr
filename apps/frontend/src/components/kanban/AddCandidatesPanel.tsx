@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Candidate, CandidateSource } from "@/types";
+import type { ApiCandidate, CandidateSource } from "@/types";
 import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import { assignCandidate, fetchSuggestions, type SuggestedCandidate } from "@/lib/api/pipeline";
 
@@ -67,7 +67,7 @@ export default function AddCandidatesPanel({ positionId, onAssigned, onClose }: 
   const [tab, setTab] = useState<Tab>("suggested");
   const [suggested, setSuggested] = useState<SuggestedCandidate[]>([]);
   const [search, setSearch] = useState("");
-  const [results, setResults] = useState<Candidate[]>([]);
+  const [results, setResults] = useState<ApiCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
@@ -233,7 +233,7 @@ export default function AddCandidatesPanel({ positionId, onAssigned, onClose }: 
                   className="truncate text-sm font-medium"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  {c.name}
+                  {c.full_name}
                 </p>
                 <p
                   className="truncate text-[11px]"
@@ -241,8 +241,7 @@ export default function AddCandidatesPanel({ positionId, onAssigned, onClose }: 
                 >
                   {c.email}
                 </p>
-                <SourceChip source={c.source} />
-                <Chips items={[...c.tags, ...c.extracted_skills]} />
+                <Chips items={[...c.recruiter_tags, ...c.skills]} />
               </div>
               <AssignButton id={c.id} />
             </div>

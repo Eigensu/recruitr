@@ -432,7 +432,7 @@ async def confirm_resume(
     background_tasks: BackgroundTasks,
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
-    if _CLOUDINARY_HOST and not data.resume_url.startswith(_CLOUDINARY_HOST):
+    if settings.CLOUDINARY_CLOUD_NAME and not data.resume_url.startswith(_CLOUDINARY_HOST):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "resume_url must be a Cloudinary URL")
     await doc.set({"resume_public_id": data.resume_public_id, "resume_url": data.resume_url})
     background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)

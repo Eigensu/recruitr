@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import type {
   ApiCandidate,
   ApiCandidateMappingItem,
@@ -20,39 +19,6 @@ export function buildCandidateQuery(filters: Partial<CandidateFilters>): string 
   if (filters.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
   return qs ? `?${qs}` : "";
-}
-
-async function serverFetch<T>(path: string): Promise<T> {
-  const cookieStore = await cookies();
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
-
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      Accept: "application/json",
-      ...(cookieHeader ? { Cookie: cookieHeader } : {}),
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) throw new Error(`Candidates API ${res.status}: ${path}`);
-  return res.json() as Promise<T>;
-}
-
-/** Server-side initial load (used by the candidates page server component). */
-export async function getCandidates(
-  filters: Partial<CandidateFilters> = {},
-): Promise<ApiCandidate[]> {
-  const data = await serverFetch<PaginatedResponse<ApiCandidate>>(
-    `/api/v1/candidates${buildCandidateQuery(filters)}`,
-  );
-  return data.items ?? [];
-}
-
-export function getCandidateTags() {
-  return serverFetch<string[]>("/api/v1/candidates/tags");
 }
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
