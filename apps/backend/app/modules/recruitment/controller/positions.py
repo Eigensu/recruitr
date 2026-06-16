@@ -14,6 +14,7 @@ Endpoints:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,6 +23,7 @@ from pymongo.errors import DuplicateKeyError
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
+from app.modules.recruitment.enums import PositionStatus, Seniority
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.repository import generate_position_code
 from app.modules.recruitment.schemas import (
@@ -328,7 +330,7 @@ async def list_positions(
         _paginate(page, limit),
     ]
 
-    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(length=None)  # type: ignore[misc]
     items, total = _unpack(result)
     return _make_page(items, total, page, limit, PositionListItem)
 
@@ -360,13 +362,13 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         department=data.department,
         city=data.city,
         train_line=data.train_line,
-        seniority=data.seniority,
+        seniority=Seniority(data.seniority),
         requirements=reqs,
         total_seats=data.total_seats,
         filled_seats=0,
         remaining_seats=data.total_seats,
-        status="open",
-        date_opened=data.date_opened,
+        status=PositionStatus.open,
+        date_opened=data.date_opened or datetime.now(UTC),
         target_close=data.target_close,
         notes=data.notes,
     )
@@ -622,7 +624,7 @@ async def get_top_candidates(
         {_LIMIT_OP: limit},
     ]
 
-    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(
+    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(  # type: ignore[misc]
         length=None
     )
     return [TopCandidateItem.model_validate(r) for r in results]
@@ -669,7 +671,7 @@ async def get_position_candidates(
         {_SORT: {"stage": 1, "mapped_at": -1}},
     ]
 
-    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    rows = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)  # type: ignore[misc]
     return [PositionMappedCandidate.model_validate(r) for r in rows]
 
 
@@ -683,6 +685,8 @@ async def map_candidate_to_position(
     """Map a candidate to this position (create a mapping)."""
     pos_oid = to_object_id(position_id, "position_id")
     cand_oid = to_object_id(req.candidate_id, "candidate_id")
+    if not cand_oid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid candidate_id")
 
     pos = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id, "is_active": True})
     if not pos:
