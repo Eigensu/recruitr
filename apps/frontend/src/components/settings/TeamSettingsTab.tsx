@@ -1,11 +1,21 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { IconPlus, IconTag, IconUsers, IconTrash, IconUserCheck } from "@tabler/icons-react";
+import {
+  IconPlus,
+  IconTag,
+  IconUsers,
+  IconTrash,
+  IconUserCheck,
+  IconPencil,
+  IconCheck,
+  IconX,
+} from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
 import {
   listTeams,
   createTeam,
+  updateTeam,
   listTeamEmployees,
   assignEmployeesToTeam,
   type Team,
@@ -23,6 +33,9 @@ export default function TeamSettingsTab() {
 
   const [newTeamName, setNewTeamName] = useState("");
   const [newTagName, setNewTagName] = useState("");
+
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const [selectedEmployees, setSelectedEmployees] = useState<Set<string>>(new Set());
   const [targetTeamId, setTargetTeamId] = useState<string>("");
@@ -57,6 +70,28 @@ export default function TeamSettingsTab() {
       setNewTeamName("");
     } catch (err) {
       console.error("Failed to create team:", err);
+    }
+  }
+
+  function startEditTeam(team: Team) {
+    setEditingTeamId(team.id);
+    setEditingName(team.name);
+  }
+
+  function cancelEditTeam() {
+    setEditingTeamId(null);
+    setEditingName("");
+  }
+
+  async function handleRenameTeam(teamId: string) {
+    const name = editingName.trim();
+    if (!name) return;
+    try {
+      const updated = await updateTeam(apiFetch, teamId, { name });
+      setTeams((prev) => prev.map((t) => (t.id === teamId ? updated : t)));
+      cancelEditTeam();
+    } catch (err) {
+      console.error("Failed to rename team:", err);
     }
   }
 
@@ -155,8 +190,51 @@ export default function TeamSettingsTab() {
                 <div className="p-4 text-center text-sm text-text-muted">No teams created yet.</div>
               ) : (
                 teams.map((team) => (
-                  <div key={team.id} className="p-3 px-4 flex items-center justify-between">
-                    <span className="text-sm font-medium text-text-primary">{team.name}</span>
+                  <div key={team.id} className="p-3 px-4 flex items-center justify-between gap-2">
+                    {editingTeamId === team.id ? (
+                      <>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRenameTeam(team.id);
+                            if (e.key === "Escape") cancelEditTeam();
+                          }}
+                          className="flex-1 px-2 py-1 rounded-md border border-border bg-canvas text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-navy"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRenameTeam(team.id)}
+                          disabled={!editingName.trim()}
+                          className="p-1 rounded-md text-green-600 hover:bg-surface-2 disabled:opacity-40 cursor-pointer"
+                          aria-label="Save team name"
+                        >
+                          <IconCheck className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditTeam}
+                          className="p-1 rounded-md text-text-muted hover:bg-surface-2 cursor-pointer"
+                          aria-label="Cancel"
+                        >
+                          <IconX className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium text-text-primary">{team.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEditTeam(team)}
+                          className="p-1 rounded-md text-text-muted hover:bg-surface-2 hover:text-text-primary cursor-pointer"
+                          aria-label="Edit team"
+                        >
+                          <IconPencil className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))
               )}

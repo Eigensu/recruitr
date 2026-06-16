@@ -1,10 +1,24 @@
 """Beanie Document model for the User."""
 
 from datetime import datetime
+from enum import Enum
 
 from beanie import Document, Replace, Update, before_event
 from pydantic import Field
 from pymongo import IndexModel
+
+
+class UserRole(str, Enum):
+    """Access tier for a login user. Hierarchy: admin ⊇ maintainer ⊇ employee.
+
+    - employee: regular recruiter; appears in the leaderboard and earns points.
+    - maintainer: company manager (CEO); manages teams but is not a recruiter.
+    - admin: full system access (single owner). Not a recruiter.
+    """
+
+    employee = "employee"
+    maintainer = "maintainer"
+    admin = "admin"
 
 
 class User(Document):
@@ -13,7 +27,7 @@ class User(Document):
     full_name: str | None = None
     google_id: str | None = None  # Google sub (unique user ID)
     is_active: bool = True
-    is_admin: bool = False
+    role: UserRole = UserRole.employee
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

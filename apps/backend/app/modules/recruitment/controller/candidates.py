@@ -12,6 +12,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Annotated
 
 import httpx
@@ -207,15 +208,19 @@ async def list_candidates(
         match["source"] = source
 
     if tags:
-        match["recruiter_tags"] = {"$in": [t.lower() for t in tags]}
+        # Stored tags keep their canonical casing (e.g. "Immediate Joiner"),
+        # so match case-insensitively rather than forcing lower-case.
+        match["recruiter_tags"] = {
+            "$in": [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
+        }
 
     if has_resume is True:
-        match["resume_url"] = {"$exists": True, "$ne": None}
+        match["resume_url"] = {"$exists": True, "$nin": [None, ""]}
     elif has_resume is False:
         match["resume_url"] = {"$in": [None, ""]}
 
     if has_cv_link is True:
-        match["cv_link"] = {"$exists": True, "$ne": None}
+        match["cv_link"] = {"$exists": True, "$nin": [None, ""]}
     elif has_cv_link is False:
         match["cv_link"] = {"$in": [None, ""]}
 

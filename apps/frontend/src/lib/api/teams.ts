@@ -16,6 +16,17 @@ export async function createTeam(apiFetch: ApiFetch, name: string): Promise<Team
   });
 }
 
+export async function updateTeam(
+  apiFetch: ApiFetch,
+  teamId: string,
+  changes: { name?: string; is_active?: boolean },
+): Promise<Team> {
+  return apiFetch(`/api/v1/teams/${teamId}`, {
+    method: "PUT",
+    body: JSON.stringify(changes),
+  });
+}
+
 export interface EmployeeTeamInfo {
   id: string;
   name: string;

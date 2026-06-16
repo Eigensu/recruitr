@@ -97,5 +97,5 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     """
     if not file_bytes.startswith(b"%PDF-"):
         raise ValueError("Input is not a PDF file")
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
-    return "\n".join(page.get_text() for page in doc)
+    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+        return "\n".join(page.get_text() for page in doc)

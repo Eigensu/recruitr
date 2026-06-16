@@ -37,23 +37,28 @@ export default async function PipelinePage() {
   }
 
   try {
-    // GET /api/v1/positions — paginated; accumulate all pages (backend cap: 100/page)
-    const allPositions: ApiPosition[] = [];
+    // GET /api/v1/positions — paginated; accumulate all pages (backend cap: 100/page).
+    // MAX_PAGE_ITER guards against an unbounded loop if the backend ever reports
+    // has_next incorrectly.
+    const MAX_PAGE_ITER = 100;
+    const collected: { id: string; label: string; client: string }[] = [];
     let page = 1;
 
-    while (true) {
+    for (; page <= MAX_PAGE_ITER; page++) {
       const data = await serverFetch<PaginatedResponse<ApiPosition>>(
         `/api/v1/positions?limit=100&page=${page}`,
       );
-      allPositions.push(...data.items);
+      for (const p of data.items) {
+        collected.push({ id: p.id, label: `${p.code} · ${p.role}`, client: p.client_name });
+      }
       if (!data.meta.has_next) break;
-      page++;
     }
-    positions = allPositions.map((p) => ({
-      id: p.id,
-      label: `${p.code} · ${p.role}`,
-      client: p.client_name,
-    }));
+    if (page > MAX_PAGE_ITER) {
+      console.warn(
+        `pipeline positions: hit MAX_PAGE_ITER (${MAX_PAGE_ITER}); list may be truncated`,
+      );
+    }
+    positions = collected;
   } catch {
     /* non-critical */
   }

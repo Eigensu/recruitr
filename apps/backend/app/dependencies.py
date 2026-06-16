@@ -40,24 +40,36 @@ def get_current_user(request: Request) -> TokenPayload:
         ) from None
 
 
+async def get_current_user_doc(
+    token: TokenPayload = Depends(get_current_user),  # noqa: B008
+):
+    """Load the full User document for the authenticated request.
+
+    A single source of truth for the user's role and identity, resolved once
+    per request (FastAPI caches the dependency) and reused by the employee,
+    tenant, and role-guard dependencies below.
+    """
+    from app.modules.auth.models import User
+
+    user = await User.get(PydanticObjectId(token.sub))
+    if not user:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User account not found")
+    return user
+
+
 # ── Employee / tenant ──────────────────────────────────────────────────────────
 
 
 async def get_current_employee(
-    token: TokenPayload = Depends(get_current_user),  # noqa: B008
+    user=Depends(get_current_user_doc),  # noqa: B008
 ):
     """Resolve the logged-in user to their Employee record.
 
     Imports are deferred to avoid a circular dependency between this module
     and the recruitment service.
     """
-    from app.modules.auth.models import User
     from app.modules.recruitment.models import Employee
     from app.modules.recruitment.service import ensure_employee_for_user
-
-    user = await User.get(PydanticObjectId(token.sub))
-    if not user:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User account not found")
 
     employee = await Employee.find_one({"email": user.email.lower()})
     if not employee:
@@ -66,22 +78,33 @@ async def get_current_employee(
     return employee
 
 
-async def require_admin(
-    token: TokenPayload = Depends(get_current_user),  # noqa: B008
-) -> TokenPayload:
-    """Raise 403 unless the authenticated user has is_admin=True in the database."""
-    from beanie import PydanticObjectId
+def require_admin(
+    user=Depends(get_current_user_doc),  # noqa: B008
+):
+    """Raise 403 unless the authenticated user has the admin role."""
+    from app.modules.auth.models import UserRole
 
-    from app.modules.auth.models import User
-
-    user = await User.get(PydanticObjectId(token.sub))
-    if not user or not user.is_admin:
+    if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
-    return token
+    return user
+
+
+def require_maintainer(
+    user=Depends(get_current_user_doc),  # noqa: B008
+):
+    """Raise 403 unless the user is a maintainer or admin (admin ⊇ maintainer)."""
+    from app.modules.auth.models import UserRole
+
+    if user.role not in (UserRole.maintainer, UserRole.admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Maintainer access required"
+        )
+    return user
 
 
 def get_tenant(
     employee=Depends(get_current_employee),  # noqa: B008
+    user=Depends(get_current_user_doc),  # noqa: B008
 ):
     """Return a TenantScope for the current request.
 
@@ -95,4 +118,4 @@ def get_tenant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not assigned to a brand. Please complete onboarding.",
         )
-    return TenantScope(brand_id=employee.brand_id, employee_id=employee.id)
+    return TenantScope(brand_id=employee.brand_id, employee_id=employee.id, role=user.role)

@@ -81,7 +81,7 @@ async def get_badges(
 
 @router.post("/backfill")
 async def backfill_leaderboard(
-    _: TokenPayload = Depends(require_admin),  # noqa: B008
+    _=Depends(require_admin),  # noqa: B008 — admin-only guard
 ) -> dict:
     """Rebuild EmployeeStat from all existing Mapping documents and recompute ranks.
 

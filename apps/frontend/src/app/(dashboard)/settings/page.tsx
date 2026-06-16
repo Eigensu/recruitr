@@ -18,12 +18,16 @@ import {
   IconLogout,
 } from "@tabler/icons-react";
 import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export default function SettingsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const TABS = ["General", "Domain", "SEO", "Team", "Account"];
+  const { isMaintainer } = useCurrentUser();
+
+  // The Team tab manages teams/assignments — maintainers and admins only.
+  const TABS = ["General", "Domain", "SEO", ...(isMaintainer ? ["Team"] : []), "Account"];
   const [activeTab, setActiveTab] = useState("General");
 
   async function handleLogout() {

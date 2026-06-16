@@ -32,6 +32,7 @@ class UserInfoResponse(BaseModel):
     user_id: str
     email: str
     full_name: str | None = None
+    role: str  # "employee" | "maintainer" | "admin"
     # Employee / tenant context — null until ensure_employee_for_user runs
     employee_id: str | None = None
     brand_id: str | None = None

@@ -5,10 +5,15 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+export type UserRole = "employee" | "maintainer" | "admin";
+
 export interface UserInfo {
   user_id: string;
-  org_id: string | null;
-  org_role: string | null;
+  email: string;
+  full_name: string | null;
+  role: UserRole;
+  employee_id: string | null;
+  brand_id: string | null;
 }
 
 // ── Brands ───────────────────────────────────────────────────────────────────

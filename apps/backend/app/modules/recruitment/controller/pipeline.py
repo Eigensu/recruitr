@@ -11,6 +11,7 @@ Endpoints:
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -327,6 +328,7 @@ async def get_filtered_pipeline(
     client_id: _OptStr = None,
     tags: _OptStrList = None,
     stage: _OptStr = None,
+    source: _OptStr = None,
     mapped_after: _OptDt = None,
     mapped_before: _OptDt = None,
 ) -> list[FilteredCandidate]:
@@ -362,7 +364,12 @@ async def get_filtered_pipeline(
     ]
 
     if tags:
-        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": [t.lower() for t in tags]}}})
+        # Stored tags keep their canonical casing, so match case-insensitively.
+        patterns = [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
+        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": patterns}}})
+
+    if source:
+        agg.append({_MATCH: {"candidate.source": source}})
 
     agg.append(
         {
@@ -380,8 +387,8 @@ async def get_filtered_pipeline(
                         {"$ifNull": ["$candidate.ai_tags", []]},
                     ]
                 },
-                "source": "internal",
-                "cv_link": None,
+                "source": {"$ifNull": ["$candidate.source", "internal"]},
+                "cv_link": "$candidate.cv_link",
                 "status": {
                     "$switch": {
                         "branches": [
