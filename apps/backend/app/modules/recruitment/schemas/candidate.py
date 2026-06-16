@@ -21,6 +21,9 @@ class CandidateCreate(BaseModel):
     recruiter_tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     cv_link: str | None = None
+    current_role: str | None = None
+    salary: float | None = None
+    notes: str | None = None
 
 
 class CandidateUpdate(BaseModel):
@@ -34,6 +37,9 @@ class CandidateUpdate(BaseModel):
     recruiter_tags: list[str] | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
+    current_role: str | None = None
+    salary: float | None = None
+    notes: str | None = None
 
 
 class CandidateResponse(BaseModel):
@@ -52,6 +58,9 @@ class CandidateResponse(BaseModel):
     resume_url: str | None = None
     current_stage: PipelineStage
     mappings_count: int = 0
+    current_role: str | None = None
+    salary: float | None = None
+    notes: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

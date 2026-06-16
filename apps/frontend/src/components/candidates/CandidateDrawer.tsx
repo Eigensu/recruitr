@@ -9,6 +9,10 @@ import {
   IconBriefcase,
   IconFileText,
   IconLink,
+  IconSparkles,
+  IconTag,
+  IconCurrencyDollar,
+  IconNotes,
 } from "@tabler/icons-react";
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
@@ -177,6 +181,27 @@ function DrawerInner({
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
+        {/* Current role / salary */}
+        {(candidate.current_role ?? candidate.salary) && (
+          <>
+            <section className="flex flex-wrap gap-4">
+              {candidate.current_role && (
+                <div className="flex items-center gap-2 text-sm text-text-muted">
+                  <IconBriefcase className="size-3.5 shrink-0 opacity-60" />
+                  <span>{candidate.current_role}</span>
+                </div>
+              )}
+              {candidate.salary && (
+                <div className="flex items-center gap-2 text-sm text-text-muted">
+                  <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
+                  <span>{candidate.salary.toLocaleString()}</span>
+                </div>
+              )}
+            </section>
+            <div className="h-px bg-border/50" />
+          </>
+        )}
+
         {/* Skills */}
         <section>
           <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
@@ -195,6 +220,92 @@ function DrawerInner({
         </section>
 
         <div className="h-px bg-border/50" />
+
+        {/* Tags */}
+        {(candidate.ai_tags.length > 0 || candidate.recruiter_tags.length > 0) && (
+          <>
+            <section>
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
+                Tags
+              </h3>
+              {candidate.ai_tags.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconSparkles className="size-3 opacity-60" style={{ color: "#60a5fa" }} />
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-widest"
+                      style={{ color: "#60a5fa" }}
+                    >
+                      Auto · Parsed
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.ai_tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
+                        style={{
+                          background: "rgba(96,165,250,0.1)",
+                          color: "#60a5fa",
+                          border: "1px solid rgba(96,165,250,0.25)",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {candidate.recruiter_tags.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconTag className="size-3 opacity-60" style={{ color: "#fb923c" }} />
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-widest"
+                      style={{ color: "#fb923c" }}
+                    >
+                      Manual · Recruiter
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.recruiter_tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
+                        style={{
+                          background: "rgba(251,146,60,0.1)",
+                          color: "#fb923c",
+                          border: "1px solid rgba(251,146,60,0.25)",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+            <div className="h-px bg-border/50" />
+          </>
+        )}
+
+        {/* Notes */}
+        {candidate.notes && (
+          <>
+            <section>
+              <div className="flex items-center gap-1.5 mb-2">
+                <IconNotes className="size-3.5 opacity-60 text-text-muted" />
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                  Notes
+                </h3>
+              </div>
+              <p className="text-[12px] text-text-muted leading-relaxed whitespace-pre-wrap">
+                {candidate.notes}
+              </p>
+            </section>
+            <div className="h-px bg-border/50" />
+          </>
+        )}
 
         {/* Mapped positions */}
         <section>

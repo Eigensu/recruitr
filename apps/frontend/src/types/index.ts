@@ -182,6 +182,9 @@ export interface ApiCandidate {
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;
+  current_role: string | null;
+  salary: number | null;
+  notes: string | null;
   created_at: string;
 }
 

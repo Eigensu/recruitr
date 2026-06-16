@@ -185,6 +185,9 @@ class Candidate(Document):
     resume_url: str | None = None
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
+    current_role: str | None = None
+    salary: float | None = None
+    notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
