@@ -78,6 +78,11 @@ export default function CandidatesClient({
     setShowAddForm(false);
   }
 
+  function handleCandidateUpdated(updated: ApiCandidate) {
+    setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelectedCandidate(updated);
+  }
+
   function handleBulkComplete() {
     clientFetchCandidates({ page: 1, limit: PAGE_SIZE })
       .then((data) => {
@@ -186,7 +191,11 @@ export default function CandidatesClient({
         </div>
       )}
 
-      <CandidateDrawer candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
+      <CandidateDrawer
+        candidate={selectedCandidate}
+        onClose={() => setSelectedCandidate(null)}
+        onUpdate={handleCandidateUpdated}
+      />
     </div>
   );
 }

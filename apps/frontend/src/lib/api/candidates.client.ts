@@ -52,7 +52,13 @@ export async function clientUpdateCandidate(
   data: Partial<{
     full_name: string;
     phone: string;
+    previous_company: string;
+    experience_years: number;
     recruiter_tags: string[];
+    cv_link: string;
+    current_role: string;
+    salary: number;
+    notes: string;
   }>,
 ): Promise<ApiCandidate> {
   const res = await fetch(`${API_URL}/api/v1/candidates/${id}`, {
