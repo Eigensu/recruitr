@@ -25,6 +25,7 @@ import {
   mapCandidateToPosition,
   unmapCandidateFromPosition,
 } from "@/lib/api/positions";
+import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import type { ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
 import AddPositionModal from "@/components/positions/AddPositionModal";
 import { useToast } from "@/components/ui/Toast";
@@ -444,6 +445,8 @@ export default function PositionsPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [debouncedCandidateSearch, setDebouncedCandidateSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
   const [activeDragCand, setActiveDragCand] = useState<ApiTopCandidate | null>(null);
@@ -451,11 +454,14 @@ export default function PositionsPage() {
 
   const toast = useToast();
 
-  // Debounce search input
+  // Debounce search inputs
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setDebouncedCandidateSearch(candidateSearch);
+    }, 300);
     return () => clearTimeout(t);
-  }, [searchTerm]);
+  }, [searchTerm, candidateSearch]);
 
   // Load filter options once
   useEffect(() => {
@@ -482,7 +488,7 @@ export default function PositionsPage() {
     void load();
   }, [apiFetch, debouncedSearch, selectedClientId]);
 
-  // Load top candidates when selected position changes
+  // Load candidates when selected position or search changes
   useEffect(() => {
     async function load() {
       if (!selectedPositionId) {
@@ -491,8 +497,39 @@ export default function PositionsPage() {
       }
       setCandidatesLoading(true);
       try {
-        const result = await getTopCandidates(apiFetch, selectedPositionId);
-        setCandidates(result);
+        if (debouncedCandidateSearch.trim()) {
+          const res = await clientFetchCandidates({
+            search: debouncedCandidateSearch.trim(),
+            limit: 25,
+            page: 1,
+          });
+          setCandidates((prev) => {
+            const mappedPreviewIds = new Set(
+              positions
+                .find((p) => p.id === selectedPositionId)
+                ?.mapped_preview.map((mp) => mp.id) ?? [],
+            );
+            return res.items.map((c) => ({
+              id: c.id,
+              full_name: c.full_name,
+              email: c.email,
+              phone: c.phone,
+              previous_company: c.previous_company,
+              experience_years: c.experience_years,
+              education_level: c.education_level,
+              skills: c.skills,
+              ai_tags: c.ai_tags,
+              recruiter_tags: c.recruiter_tags,
+              preferred_train_line: c.preferred_train_line,
+              resume_url: c.resume_url,
+              match_score: null,
+              is_mapped: prev.find((pc) => pc.id === c.id)?.is_mapped ?? mappedPreviewIds.has(c.id),
+            }));
+          });
+        } else {
+          const result = await getTopCandidates(apiFetch, selectedPositionId);
+          setCandidates(result);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -500,7 +537,8 @@ export default function PositionsPage() {
       }
     }
     void load();
-  }, [apiFetch, selectedPositionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiFetch, selectedPositionId, debouncedCandidateSearch]);
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? null;
 
@@ -693,9 +731,11 @@ export default function PositionsPage() {
                       key={pos.id}
                       position={pos}
                       isSelected={selectedPositionId === pos.id}
-                      onClick={() =>
-                        setSelectedPositionId(selectedPositionId === pos.id ? null : pos.id)
-                      }
+                      onClick={() => {
+                        setSelectedPositionId(selectedPositionId === pos.id ? null : pos.id);
+                        setCandidateSearch("");
+                        setDebouncedCandidateSearch("");
+                      }}
                     />
                   ))}
                 </div>
@@ -715,29 +755,49 @@ export default function PositionsPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.15 }}
-                    className="flex items-start justify-between gap-3"
+                    className="w-full"
                   >
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <IconSparkles className="size-4 text-yellow shrink-0" />
-                        <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
-                          Top 10 Matches
-                        </h2>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {debouncedCandidateSearch ? (
+                            <IconSearch className="size-4 text-yellow shrink-0" />
+                          ) : (
+                            <IconSparkles className="size-4 text-yellow shrink-0" />
+                          )}
+                          <h2 className="text-sm font-bold text-text-primary uppercase tracking-wider font-heading">
+                            {debouncedCandidateSearch ? "Search Results" : "Top 10 Matches"}
+                          </h2>
+                        </div>
+                        <p className="text-xs text-text-muted pl-6">
+                          for{" "}
+                          <span className="text-text-primary font-semibold">
+                            {selectedPosition.role}
+                          </span>{" "}
+                          &bull; {selectedPosition.client_name}
+                        </p>
                       </div>
-                      <p className="text-xs text-text-muted pl-6">
-                        for{" "}
-                        <span className="text-text-primary font-semibold">
-                          {selectedPosition.role}
-                        </span>{" "}
-                        &bull; {selectedPosition.client_name}
-                      </p>
+                      <button
+                        onClick={() => {
+                          setSelectedPositionId(null);
+                          setCandidateSearch("");
+                          setDebouncedCandidateSearch("");
+                        }}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-2 border border-transparent hover:border-border transition-all shrink-0"
+                      >
+                        <IconX className="size-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => setSelectedPositionId(null)}
-                      className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-2 border border-transparent hover:border-border transition-all shrink-0"
-                    >
-                      <IconX className="size-4" />
-                    </button>
+                    <div className="mt-4 relative">
+                      <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="Search all candidates to map..."
+                        value={candidateSearch}
+                        onChange={(e) => setCandidateSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-surface-2 border border-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-yellow transition-all"
+                      />
+                    </div>
                   </motion.div>
                 ) : (
                   <motion.div
