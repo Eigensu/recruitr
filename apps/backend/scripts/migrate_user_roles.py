@@ -81,7 +81,7 @@ async def _list(db) -> None:
     users = await db["users"].find({}).to_list(length=None)
     print(f"\nUsers ({len(users)}):")
     for user in users:
-        role = user.get("role", user.get("is_admin") and "admin (legacy)" or "—")
+        role = user.get("role") or ("admin (legacy)" if user.get("is_admin") else "—")
         print(f"  {user['email']:<40}  role={role}")
 
 

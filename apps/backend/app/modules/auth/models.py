@@ -1,6 +1,6 @@
 """Beanie Document model for the User."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from beanie import Document, Replace, Update, before_event
@@ -28,12 +28,12 @@ class User(Document):
     google_id: str | None = None  # Google sub (unique user ID)
     is_active: bool = True
     role: UserRole = UserRole.employee
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @before_event(Update, Replace)
     def update_timestamp(self):
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     class Settings:
         name = "users"

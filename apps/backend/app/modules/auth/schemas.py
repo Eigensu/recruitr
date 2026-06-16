@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.modules.auth.models import UserRole
+
 
 class UserCreate(BaseModel):
     """Schema for creating a new user (signup)."""
@@ -32,7 +34,7 @@ class UserInfoResponse(BaseModel):
     user_id: str
     email: str
     full_name: str | None = None
-    role: str  # "employee" | "maintainer" | "admin"
+    role: UserRole
     # Employee / tenant context — null until ensure_employee_for_user runs
     employee_id: str | None = None
     brand_id: str | None = None

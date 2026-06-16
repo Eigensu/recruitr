@@ -268,6 +268,9 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         recruiter_tags=data.recruiter_tags,
         preferred_train_line=data.preferred_train_line,
         cv_link=data.cv_link,
+        current_role=data.current_role,
+        salary=data.salary,
+        notes=data.notes,
     )
     try:
         await doc.insert()
@@ -292,6 +295,9 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=0,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -320,6 +326,9 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -354,6 +363,12 @@ async def update_candidate(
         update["preferred_train_line"] = data.preferred_train_line
     if data.cv_link is not None:
         update["cv_link"] = data.cv_link
+    if data.current_role is not None:
+        update["current_role"] = data.current_role
+    if data.salary is not None:
+        update["salary"] = data.salary
+    if data.notes is not None:
+        update["notes"] = data.notes
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -374,6 +389,9 @@ async def update_candidate(
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -465,5 +483,8 @@ async def confirm_resume(
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )

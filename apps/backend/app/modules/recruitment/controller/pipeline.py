@@ -275,8 +275,8 @@ async def move_mapping_to_stage(
     # Update mapping
     await mapping.set({"stage": req.new_stage.value, "decision": "pending"})
 
-    # Recompute seats when moving into a terminal stage (closes position if full)
-    if req.new_stage in TERMINAL_STAGES:
+    # Recompute seats when crossing a terminal stage boundary in either direction
+    if req.new_stage in TERMINAL_STAGES or old_stage in TERMINAL_STAGES:
         await recompute_position_seats(mapping.position_id)
 
     # Calculate recruiter score
@@ -518,6 +518,7 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
     existing = await Mapping.find_one(
         {"candidate_id": cand_oid, "position_id": pos_oid, "brand_id": tenant.brand_id}
     )
+    prev_stage = existing.stage if existing else None
     if existing:
         await existing.set({"stage": target_stage.value, "updated_at": datetime.now(UTC)})
     else:
@@ -532,7 +533,7 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
         with contextlib.suppress(DuplicateKeyError):
             await mapping.insert()
 
-    if target_stage in TERMINAL_STAGES:
+    if target_stage in TERMINAL_STAGES or prev_stage in TERMINAL_STAGES:
         await recompute_position_seats(pos_oid)
 
     return MatchResponse(

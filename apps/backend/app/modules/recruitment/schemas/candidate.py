@@ -22,7 +22,7 @@ class CandidateCreate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    salary: float | None = None
+    salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
 
@@ -38,7 +38,7 @@ class CandidateUpdate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    salary: float | None = None
+    salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
 

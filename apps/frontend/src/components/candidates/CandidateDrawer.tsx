@@ -240,7 +240,7 @@ function ViewBody({
   return (
     <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
       {/* Current role / salary */}
-      {(candidate.current_role ?? candidate.salary) && (
+      {(candidate.current_role != null || candidate.salary != null) && (
         <>
           <section className="flex flex-wrap gap-4">
             {candidate.current_role && (
@@ -249,7 +249,7 @@ function ViewBody({
                 <span>{candidate.current_role}</span>
               </div>
             )}
-            {candidate.salary && (
+            {candidate.salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
                 <span>{candidate.salary.toLocaleString()}</span>
@@ -406,7 +406,7 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
-    salary: candidate.salary ? String(candidate.salary) : "",
+    salary: candidate.salary == null ? "" : String(candidate.salary),
     cv_link: candidate.cv_link ?? "",
     tagInput: "",
     recruiter_tags: [...candidate.recruiter_tags],

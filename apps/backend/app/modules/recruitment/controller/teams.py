@@ -73,7 +73,14 @@ async def list_employees(tenant: _Tenant):
 
 @router.put("/employees/assign", dependencies=[_RequireMaintainer])
 async def bulk_assign_employees(tenant: _Tenant, payload: BulkAssignEmployees):
-    target_team_id = PydanticObjectId(payload.team_id) if payload.team_id else None
+    target_team_id = None
+    if payload.team_id:
+        team = await Team.find_one(
+            {"_id": PydanticObjectId(payload.team_id), "brand_id": tenant.brand_id}
+        )
+        if not team:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
+        target_team_id = team.id
     oids = [PydanticObjectId(eid) for eid in payload.employee_ids]
 
     await Employee.find({"_id": {"$in": oids}, "brand_id": tenant.brand_id}).update(
