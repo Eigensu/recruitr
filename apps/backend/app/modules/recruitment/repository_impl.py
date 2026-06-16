@@ -99,7 +99,17 @@ async def get_position(scope: TenantScope, position_id: str) -> Position:
 async def recompute_position_seats(position_id: PydanticObjectId) -> None:
     """Recalculate filled/remaining seats from terminal-stage mapping count."""
     pipeline = [
-        {"$match": {"position_id": position_id, "stage": PipelineStage.position_close.value}},
+        {
+            "$match": {
+                "position_id": position_id,
+                "stage": {
+                    "$in": [
+                        PipelineStage.offer_accepted.value,
+                        PipelineStage.position_close.value,
+                    ]
+                },
+            }
+        },
         {"$count": "filled"},
     ]
     result = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(None)

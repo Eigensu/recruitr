@@ -27,12 +27,17 @@ KANBAN_STAGES: list[PipelineStage] = [
 
 # Stages that close a mapping's active lifecycle
 TERMINAL_STAGES: frozenset[PipelineStage] = frozenset(
-    {PipelineStage.position_close, PipelineStage.rejected}
+    {PipelineStage.offer_accepted, PipelineStage.position_close, PipelineStage.rejected}
 )
 
 # Stages that should not appear in active-pipeline counts
 INACTIVE_STAGES: frozenset[PipelineStage] = frozenset(
-    {PipelineStage.position_close, PipelineStage.rejected, PipelineStage.on_hold}
+    {
+        PipelineStage.offer_accepted,
+        PipelineStage.position_close,
+        PipelineStage.rejected,
+        PipelineStage.on_hold,
+    }
 )
 
 # For dashboard pipeline funnel — full ordered list

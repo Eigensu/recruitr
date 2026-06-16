@@ -494,7 +494,7 @@ async def get_top_candidates(
 
 _STATUS_TO_STAGE: dict[str, PipelineStage] = {
     "pending": PipelineStage.sourced,
-    "accepted": PipelineStage.position_close,
+    "accepted": PipelineStage.offer_accepted,
     "rejected": PipelineStage.rejected,
 }
 
