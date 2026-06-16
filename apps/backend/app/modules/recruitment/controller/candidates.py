@@ -22,7 +22,7 @@ from pymongo.errors import DuplicateKeyError
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.config import settings
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, require_maintainer
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.models import Candidate, Mapping
 from app.modules.recruitment.schemas import (
@@ -394,6 +394,20 @@ async def update_candidate(
         notes=doc.notes,
         created_at=doc.created_at,
     )
+
+
+# ── Delete (soft) ─────────────────────────────────────────────────────────────
+
+
+@router.delete("/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_candidate(
+    tenant: _Tenant,
+    candidate_id: str,
+    _: Annotated[object, Depends(require_maintainer)],
+):
+    """Soft-delete a candidate (sets is_active=False). Mappings are preserved."""
+    doc = await _get_or_404(tenant, candidate_id)
+    await doc.set({"is_active": False})
 
 
 # ── Mappings (for drawer) ──────────────────────────────────────────────────────

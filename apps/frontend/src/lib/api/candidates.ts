@@ -6,8 +6,6 @@ import type {
   PipelineStage,
 } from "@/types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 /**
  * Resolves a candidate's best CV reference.
  * Returns { href } when the value is a navigable absolute http/https URL,
@@ -150,4 +148,8 @@ export function confirmResume(
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function deleteCandidate(apiFetch: ApiFetch, id: string): Promise<void> {
+  return apiFetch(`/api/v1/candidates/${id}`, { method: "DELETE" });
 }

@@ -85,6 +85,14 @@ export async function clientConfirmResume(
   return res.json();
 }
 
+export async function clientDeleteCandidate(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/candidates/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function clientBulkUpload(files: File[]): Promise<BulkUploadResult> {
   const formData = new FormData();
   files.forEach((f) => formData.append("files", f));

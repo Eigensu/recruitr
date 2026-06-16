@@ -81,3 +81,11 @@ export function unmapCandidateFromPosition(
     method: "POST",
   });
 }
+
+export function deletePosition(apiFetch: ApiFetch, positionId: string): Promise<void> {
+  return apiFetch(`/api/v1/positions/${positionId}`, { method: "DELETE" });
+}
+
+export function reopenPosition(apiFetch: ApiFetch, positionId: string): Promise<ApiPosition> {
+  return apiFetch(`/api/v1/positions/${positionId}/reopen`, { method: "POST" });
+}

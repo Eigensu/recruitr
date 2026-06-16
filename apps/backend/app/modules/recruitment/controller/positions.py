@@ -22,7 +22,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, require_maintainer
 from app.modules.recruitment.enums import PositionStatus, Seniority
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.repository import generate_position_code
@@ -505,9 +505,56 @@ async def update_position(
 
 
 @router.delete("/{position_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_position(tenant: _Tenant, position_id: str):
+async def delete_position(
+    tenant: _Tenant,
+    position_id: str,
+    _: Annotated[object, Depends(require_maintainer)],
+):
     doc = await _get_or_404(tenant, position_id)
     await doc.set({"is_active": False})
+
+
+# ── Reopen ─────────────────────────────────────────────────────────────────────
+
+
+@router.post("/{position_id}/reopen", status_code=status.HTTP_200_OK)
+async def reopen_position(
+    tenant: _Tenant,
+    position_id: str,
+    _: Annotated[object, Depends(require_maintainer)],
+) -> PositionListItem:
+    """Set a closed or on-hold position back to open (maintainer/admin only)."""
+    oid = to_object_id(position_id, "position_id")
+    doc = await Position.find_one({"_id": oid, "brand_id": tenant.brand_id, "is_active": True})
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Position not found")
+    if doc.status == PositionStatus.open:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Position is already open")
+    await doc.set({"status": PositionStatus.open})
+    pos_oid = to_object_id(position_id, "position_id")
+    count = await Mapping.find({"position_id": pos_oid, "brand_id": tenant.brand_id}).count()
+    return PositionListItem(
+        id=str(doc.id),
+        code=doc.code,
+        client_id=str(doc.client_id),
+        client_name=doc.client_name,
+        role=doc.role,
+        department=doc.department,
+        city=doc.city,
+        train_line=doc.train_line,
+        seniority=doc.seniority,
+        status=PositionStatus.open,
+        total_seats=doc.total_seats,
+        filled_seats=doc.filled_seats,
+        remaining_seats=doc.remaining_seats,
+        mapped_count=count,
+        mapped_preview=[],
+        assigned_employee_id=None,
+        assigned_employee_name=None,
+        date_opened=doc.date_opened,
+        target_close=doc.target_close,
+        notes=doc.notes,
+    )
 
 
 # ── Top candidates (with match scoring) ────────────────────────────────────────
