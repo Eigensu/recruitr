@@ -20,6 +20,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
+from app.config import settings
 from app.dependencies import get_tenant
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.models import Candidate, Mapping
@@ -35,6 +36,8 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import extract_text_from_pdf
+
+_CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
 router = APIRouter()
 
@@ -150,6 +153,19 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
     return doc
 
 
+# ── Tags (must be before /{candidate_id} to avoid route conflict) ─────────────
+
+
+@router.get("/tags")
+async def list_candidate_tags(tenant: _Tenant) -> list[str]:
+    """Return all distinct recruiter tags for candidates in this brand."""
+    collection = Candidate.get_motor_collection()
+    tags = await collection.distinct(
+        "recruiter_tags", {"brand_id": tenant.brand_id, "is_active": True}
+    )
+    return sorted(t for t in tags if t)
+
+
 # ── List ───────────────────────────────────────────────────────────────────────
 
 
@@ -159,6 +175,10 @@ async def list_candidates(
     search: _Search = None,
     experience: _ExpFilter = None,
     stage: _Stage = None,
+    source: Annotated[str | None, Query()] = None,
+    tags: Annotated[list[str] | None, Query()] = None,
+    has_resume: Annotated[bool | None, Query()] = None,
+    has_cv_link: Annotated[bool | None, Query()] = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
@@ -182,6 +202,22 @@ async def list_candidates(
         match["experience_years"] = {"$gte": 2, "$lte": 5}
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
+
+    if source:
+        match["source"] = source
+
+    if tags:
+        match["recruiter_tags"] = {"$in": [t.lower() for t in tags]}
+
+    if has_resume is True:
+        match["resume_url"] = {"$exists": True, "$ne": None}
+    elif has_resume is False:
+        match["resume_url"] = {"$in": [None, ""]}
+
+    if has_cv_link is True:
+        match["cv_link"] = {"$exists": True, "$ne": None}
+    elif has_cv_link is False:
+        match["cv_link"] = {"$in": [None, ""]}
 
     pipeline = [
         {_MATCH: match},
@@ -226,6 +262,7 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         ai_tags=data.ai_tags,
         recruiter_tags=data.recruiter_tags,
         preferred_train_line=data.preferred_train_line,
+        cv_link=data.cv_link,
     )
     try:
         await doc.insert()
@@ -246,6 +283,7 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=0,
@@ -273,6 +311,7 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -308,6 +347,8 @@ async def update_candidate(
         update["recruiter_tags"] = data.recruiter_tags
     if data.preferred_train_line is not None:
         update["preferred_train_line"] = data.preferred_train_line
+    if data.cv_link is not None:
+        update["cv_link"] = data.cv_link
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -324,6 +365,7 @@ async def update_candidate(
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
@@ -396,6 +438,8 @@ async def confirm_resume(
     background_tasks: BackgroundTasks,
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    if settings.CLOUDINARY_CLOUD_NAME and not data.resume_url.startswith(_CLOUDINARY_HOST):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "resume_url must be a Cloudinary URL")
     await doc.set({"resume_public_id": data.resume_public_id, "resume_url": data.resume_url})
     background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -412,6 +456,7 @@ async def confirm_resume(
         ai_tags=doc.ai_tags,
         recruiter_tags=doc.recruiter_tags,
         preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,

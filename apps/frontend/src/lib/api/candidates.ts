@@ -1,16 +1,61 @@
-/**
- * Client-side API helpers for the candidates resource.
- *
- * All functions accept the `apiFetch` returned by `useApiFetch()` so they
- * can be called from any client component.
- */
-
 import type {
   ApiCandidate,
   ApiCandidateMappingItem,
+  CandidateFilters,
   PaginatedResponse,
   PipelineStage,
 } from "@/types";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/**
+ * Resolves a candidate's best CV reference.
+ * Returns { href } when the value is a navigable absolute http/https URL,
+ * or { href: null } when it's a bare filename / relative path (legacy seed data
+ * before upload_cvs.py has run) — so the UI can still show a "CV on file" badge.
+ * Returns null when there is no CV reference at all.
+ */
+function isAbsoluteUrl(url: string): boolean {
+  try {
+    const p = new URL(url);
+    return p.protocol === "http:" || p.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves a candidate's best CV reference.
+ * Returns { href } when the value is a navigable absolute http/https URL,
+ * or { href: null } when it's a bare filename / relative path (legacy seed data
+ * before upload_cvs.py has run) — so the UI can still show a "CV on file" badge.
+ * Returns null when there is no CV reference at all.
+ */
+export function resolveCvRef(
+  cvLink: string | null | undefined,
+  resumeUrl: string | null | undefined,
+): { label: string; href: string | null } | null {
+  if (cvLink) {
+    return { label: "CV Link", href: isAbsoluteUrl(cvLink) ? cvLink : null };
+  }
+  if (resumeUrl) {
+    return { label: "Resume", href: isAbsoluteUrl(resumeUrl) ? resumeUrl : null };
+  }
+  return null;
+}
+
+export function buildCandidateQuery(filters: Partial<CandidateFilters>): string {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("search", filters.search);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
+  if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
+  if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
 

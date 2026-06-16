@@ -10,6 +10,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+# - E501 (line length) is enforced by the formatter (`ruff format`), not the linter
+#   (consistent with .trunk/configs/ruff.toml).
+# - B008 is the FastAPI Depends()/Query()/File() default-argument idiom — a known
+#   false positive for this framework.
+ignore = ["E501", "B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

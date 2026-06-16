@@ -26,7 +26,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "apps" / "backend"))
 
-PDF_DIR = Path(__file__).parent / "pdfs" / "Database CV_s FY26-27"
+PDF_DIR = Path(__file__).parent / "Database CV_s FY26-27"
 MANPOWER_FILE = Path(__file__).parent / "Binge - Manpower Database - Combined.xlsx"
 
 from app.config import settings

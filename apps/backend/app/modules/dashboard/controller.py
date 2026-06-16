@@ -11,6 +11,7 @@ from app.modules.dashboard.schemas import (
     DashboardActivityPage,
     DashboardCandidatePage,
     DashboardClientPage,
+    DashboardClientProfilePage,
     DashboardEmployeePage,
     DashboardFilters,
     DashboardMappingPage,
@@ -155,6 +156,16 @@ async def get_mappings(
         page,
         limit,
     )
+
+
+@router.get("/client-profiles")
+async def get_client_profiles(
+    tenant: _Tenant,
+    page: _Page = 1,
+    limit: _Limit = 20,
+) -> DashboardClientProfilePage:
+    """One row per client, aggregated across all their job openings."""
+    return await service.get_client_profiles(str(tenant.brand_id), page, limit)
 
 
 @router.get("/activity")

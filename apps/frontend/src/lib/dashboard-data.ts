@@ -2,6 +2,7 @@ import { PIPELINE_STAGE_LABELS } from "@/lib/dashboard-constants";
 import {
   getAllDashboardActivities,
   getAllDashboardMappings,
+  getClientProfiles,
   getDashboardClients,
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
@@ -9,6 +10,7 @@ import {
 import { getEmployeesForDashboard } from "@/lib/api/employees";
 import type {
   ClientActivityRow,
+  ClientProfileRow,
   DashboardActivityItem,
   DashboardAnalyticsWidget,
   DashboardDemoData,
@@ -437,4 +439,20 @@ export async function getDashboardAnalyticsData() {
     totals: data.totals,
     analytics: data.analytics,
   };
+}
+
+export async function getClientProfilesData(): Promise<ClientProfileRow[]> {
+  try {
+    const { items } = await getClientProfiles({ page: 1, limit: 20 });
+    return items.map((item) => ({
+      client_name: item.client_name,
+      total_open_positions: item.total_open_positions,
+      total_candidates: item.total_candidates,
+      active_recruiters: item.active_recruiters,
+      last_activity: item.last_activity,
+      status: item.status,
+    }));
+  } catch {
+    return [];
+  }
 }

@@ -13,7 +13,11 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from app.config import settings
-from app.modules.dashboard.enums import ActivityType, JobStatus, PipelineStage
+from app.modules.dashboard.enums import (
+    ActivityType,
+    JobStatus,
+    PipelineStage,
+)
 
 _EMPLOYEE_NAMES = [
     "Edwin D'Souza",
@@ -94,6 +98,8 @@ _COMPANIES = [
     "Mainland Group",
     "Independent Outlet",
 ]
+
+_TAGS = ["senior", "urgent", "referral", "remote", "priority", "walk-in"]
 
 _STAGE_WEIGHTS: list[tuple[PipelineStage, int]] = [
     (PipelineStage.sourced, 18),
@@ -182,23 +188,38 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
             "Nitya",
             "Meera",
         ][idx % 10]
-        last = ["Shah", "Verma", "Singh", "Nair", "Pillai", "Rao", "Khan", "Bose", "Iyer", "Gupta"][
-            (idx // 3) % 10
-        ]
+        last = [
+            "Shah",
+            "Verma",
+            "Singh",
+            "Nair",
+            "Pillai",
+            "Rao",
+            "Khan",
+            "Bose",
+            "Iyer",
+            "Gupta",
+        ][(idx // 3) % 10]
         stage = _weighted_stage(rng)
         created = _rand_time(rng, min_days=15, max_days=220)
+        source = rng.choices(["internal", "external"], weights=[60, 40], k=1)[0]
+        resume_link = f"https://cdn.demo/resumes/{idx + 1}.pdf"
 
         candidate_docs.append(
             {
                 "_id": ObjectId(),
                 "brand_id": seed_brand_id,
-                "full_name": f"{first} {last}",
+                "name": f"{first} {last}",
                 "email": f"{first.lower()}.{last.lower()}.{idx + 1}@mail.demo",
                 "phone": f"+91-98{rng.randint(10000000, 99999999)}",
                 "previous_company": rng.choice(_COMPANIES),
                 "experience": round(rng.uniform(0.8, 8.5), 1),
-                "skills": rng.sample(_SKILLS, k=rng.randint(3, 5)),
-                "resume_link": f"https://cdn.demo/resumes/{idx + 1}.pdf",
+                "extracted_skills": rng.sample(_SKILLS, k=rng.randint(3, 5)),
+                "tags": rng.sample(_TAGS, k=rng.randint(0, 2)),
+                "source": source,
+                # External candidates carry a CV link; internal ones a hosted resume.
+                "cv_link": resume_link if source == "external" else None,
+                "resume_url": resume_link if source == "internal" else None,
                 "current_stage": stage.value,
                 "created_at": created,
                 "updated_at": created,
@@ -349,9 +370,13 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
             PipelineStage.rejected: ActivityType.rejected,
         }.get(stage, ActivityType.mapped)
 
-        job = next((entry for entry in job_docs if entry["_id"] == mapping["position_id"]), None)
+        job = next(
+            (entry for entry in job_docs if entry["_id"] == mapping["position_id"]),
+            None,
+        )
         candidate = next(
-            (entry for entry in candidate_docs if entry["_id"] == mapping["candidate_id"]), None
+            (entry for entry in candidate_docs if entry["_id"] == mapping["candidate_id"]),
+            None,
         )
         activity_docs.append(
             {
@@ -362,7 +387,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
                 "target_entity_type": "candidate",
                 "target_entity_id": str(mapping["candidate_id"]),
                 "description": (
-                    f"{candidate['full_name']} for {job['client_name']} ({job['role']}) moved to "
+                    f"{candidate['name']} for {job['client_name']} ({job['role']}) moved to "
                     f"{stage.value.replace('_', ' ')}"
                     if job and candidate
                     else f"Candidate moved to {stage.value.replace('_', ' ')}"
@@ -376,14 +401,15 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
     document_docs: list[dict[str, Any]] = []
     for candidate in rng.sample(candidate_docs, k=80):
         uploaded_at = _rand_time(rng, min_days=0, max_days=120)
+        file_url = candidate.get("resume_url") or candidate.get("cv_link")
         document_docs.append(
             {
                 "_id": ObjectId(),
                 "brand_id": seed_brand_id,
                 "candidate_id": candidate["_id"],
-                "file_name": f"{candidate['full_name'].replace(' ', '_').lower()}_resume.pdf",
+                "file_name": f"{candidate['name'].replace(' ', '_').lower()}_resume.pdf",
                 "file_type": "resume",
-                "file_url": candidate["resume_link"],
+                "file_url": file_url,
                 "uploaded_at": uploaded_at,
             }
         )

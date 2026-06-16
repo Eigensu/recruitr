@@ -5,7 +5,10 @@ import re
 
 def validate_domain(domain: str) -> str:
     """Validate and normalise a brand domain (e.g. 'acme.com')."""
-    domain = domain.strip().lower().removeprefix("https://").removeprefix("http://").rstrip("/")
+    # NOTE: use removeprefix (not lstrip) — lstrip strips any of the characters
+    # in the argument, which would corrupt domains like "shop.com".
+    domain = domain.strip().lower()
+    domain = domain.removeprefix("https://").removeprefix("http://").rstrip("/")
     pattern = r"^([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$"
     if not re.match(pattern, domain):
         raise ValueError(f"'{domain}' is not a valid domain name.")

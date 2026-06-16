@@ -106,6 +106,8 @@ export interface ApiPositionFilters {
 
 // ── Candidates ───────────────────────────────────────────────────────────────
 
+export type CandidateSource = "internal" | "external";
+
 /** Legacy type used by old /api/v1/candidates (old module). Phase C will remove it. */
 export interface Candidate {
   id: string;
@@ -114,6 +116,31 @@ export interface Candidate {
   phone: string | null;
   resume_url: string | null;
   extracted_skills: string[];
+  // Candidate management additions
+  tags: string[];
+  source: CandidateSource;
+  cv_link: string | null;
+}
+
+export interface CandidateFilters {
+  search?: string;
+  source?: CandidateSource;
+  tags?: string[];
+  has_resume?: boolean;
+  has_cv_link?: boolean;
+  page: number;
+  limit: number;
+}
+
+export interface BulkUploadFailure {
+  filename: string;
+  reason: string;
+}
+
+export interface BulkUploadResult {
+  created: number;
+  updated: number;
+  failed: BulkUploadFailure[];
 }
 
 export interface CandidateMatchScore extends Candidate {
@@ -146,6 +173,7 @@ export interface ApiCandidate {
   ai_tags: string[];
   recruiter_tags: string[];
   preferred_train_line: string | null;
+  cv_link: string | null;
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;
@@ -260,6 +288,7 @@ export interface PipelineCard {
   position_code: string;
   position_role: string;
   position_client: string;
+  employee_id: string | null;
   stage: KanbanStage;
   match_score: number | null;
   decision: string;

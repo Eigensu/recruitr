@@ -36,6 +36,42 @@ from app.config import settings
 
 DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
 PDF_DIR = Path(os.getenv("PDF_DIR", str(Path(__file__).parent / "Database CV_s FY26-27")))
+MANPOWER_FILE = Path(__file__).parent / "Binge - Manpower Database - Combined.xlsx"
+
+
+_COL_CAND_ID = "Cand ID"
+_COL_CV_LINK = "CV Link"
+
+
+def _hint_to_path(hint: str, file_index: dict[str, Path]) -> Path | None:
+    key = _slug(Path(hint).stem)
+    if key in file_index:
+        return file_index[key]
+    return next((p for fs, p in file_index.items() if key in fs or fs in key), None)
+
+
+def _build_excel_map(file_index: dict[str, Path]) -> dict[str, Path]:
+    """Build CAN-XXX → local file path map from the Excel manpower file."""
+    if not MANPOWER_FILE.exists():
+        return {}
+    try:
+        import pandas as pd
+        df = pd.read_excel(MANPOWER_FILE, sheet_name="Candidate Database", header=1)
+        df.columns = df.iloc[0].tolist()
+        df = df.iloc[1:].reset_index(drop=True)
+        df = df[[_COL_CAND_ID, _COL_CV_LINK]].dropna(subset=[_COL_CAND_ID])
+        df = df[df[_COL_CAND_ID].str.startswith("CAN-", na=False)]
+        result: dict[str, Path] = {}
+        for _, row in df.iterrows():
+            cid = str(row[_COL_CAND_ID]).strip()
+            cv_hint = str(row[_COL_CV_LINK]).strip() if not pd.isna(row.get(_COL_CV_LINK)) else ""
+            if cv_hint and cv_hint != "nan":
+                path = _hint_to_path(cv_hint, file_index)
+                if path:
+                    result[cid] = path
+        return result
+    except Exception:
+        return {}
 
 
 def _slug(s: str) -> str:
@@ -65,16 +101,29 @@ def _substring_match(name_slug: str, local_index: dict[str, Path]) -> Path | Non
     return next((p for fs, p in local_index.items() if name_slug in fs), None)
 
 
+def _extract_cand_id(public_id: str | None) -> str | None:
+    """Extract CAN-XXX from a Cloudinary public_id like 'eigensu/resumes/resumes/CAN-050_...'."""
+    if not public_id:
+        return None
+    m = re.search(r"(CAN-\d+)", public_id, re.IGNORECASE)
+    return m.group(1).upper() if m else None
+
+
 def _find_local_file(
     name: str,
+    cv_link: str | None,
     public_id: str | None,
     resume_url: str | None,
     local_index: dict[str, Path],
+    excel_map: dict[str, Path],
 ) -> Path | None:
     name_slug = _slug(name)
+    cand_id = _extract_cand_id(public_id)
 
     return (
-        _lookup(name_slug, local_index)
+        (cand_id and excel_map.get(cand_id))
+        or (cv_link and not _is_valid_url(cv_link) and _lookup(_slug(Path(cv_link).stem), local_index))
+        or _lookup(name_slug, local_index)
         or (public_id and _lookup(_public_id_name_part(public_id), local_index))
         or (
             resume_url
@@ -92,10 +141,11 @@ def _is_valid_url(url: str | None) -> bool:
 async def _get_file_bytes(
     doc: Candidate,
     local_index: dict[str, Path],
+    excel_map: dict[str, Path],
     http: httpx.AsyncClient,
 ) -> tuple[bytes, str]:
     """Return (file_bytes, source_label). Raises on failure."""
-    local = _find_local_file(doc.full_name, doc.resume_public_id, doc.resume_url, local_index)
+    local = _find_local_file(doc.full_name, doc.cv_link, doc.resume_public_id, doc.resume_url, local_index, excel_map)
     if local:
         return local.read_bytes(), f"local:{local.name}"
 
@@ -110,10 +160,11 @@ async def _get_file_bytes(
 async def process_candidate(
     doc: Candidate,
     local_index: dict[str, Path],
+    excel_map: dict[str, Path],
     http: httpx.AsyncClient,
 ) -> str:
     try:
-        file_bytes, source = await _get_file_bytes(doc, local_index, http)
+        file_bytes, source = await _get_file_bytes(doc, local_index, excel_map, http)
     except Exception as exc:
         return f"  SKIP  {exc}"
 
@@ -143,14 +194,16 @@ async def process_candidate(
     )
 
     if not DRY_RUN:
-        await doc.set(update)
+        await Candidate.get_motor_collection().update_one(
+            {"_id": doc.id}, {"$set": update}
+        )
 
     return summary
 
 
-async def main(mongo_uri: str) -> None:
+async def main(mongo_uri: str, db_name: str = "eigensu") -> None:
     motor = AsyncIOMotorClient(mongo_uri)
-    await init_beanie(motor.get_default_database(), document_models=[Candidate])
+    await init_beanie(motor[db_name], document_models=[Candidate])
 
     query = {"resume_url": {"$ne": None}, "resume_raw_text": None}
     candidates = await Candidate.find(query).to_list()
@@ -160,14 +213,15 @@ async def main(mongo_uri: str) -> None:
         return
 
     local_index = _build_local_index()
+    excel_map = _build_excel_map(local_index)
     mode = "[DRY RUN] " if DRY_RUN else ""
-    print(f"{mode}Found {len(candidates)} candidate(s).  Local PDF dir: {PDF_DIR} ({len(local_index)} files)\n")
+    print(f"{mode}Found {len(candidates)} candidate(s).  Local PDF dir: {PDF_DIR} ({len(local_index)} files, {len(excel_map)} excel-mapped)\n")
 
     ok_local = ok_http = failed = skipped = 0
     async with httpx.AsyncClient() as http:
         for i, doc in enumerate(candidates, 1):
             print(f"[{i}/{len(candidates)}] {doc.full_name} ({doc.id})")
-            result = await process_candidate(doc, local_index, http)
+            result = await process_candidate(doc, local_index, excel_map, http)
             print(result)
             if result.startswith("  SKIP"):
                 if "parse failed" in result or "no local file and invalid URL" in result:
@@ -187,7 +241,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Backfill parsed resume text")
     parser.add_argument("--uri", help="MongoDB connection URI (overrides .env)")
+    parser.add_argument("--db", default="eigensu", help="MongoDB database name")
     args = parser.parse_args()
 
     uri = args.uri or settings.MONGODB_URI
-    asyncio.run(main(mongo_uri=uri))
+    asyncio.run(main(mongo_uri=uri, db_name=args.db))

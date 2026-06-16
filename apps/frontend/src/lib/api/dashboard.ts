@@ -219,3 +219,19 @@ export function getAllDashboardMappings(maxMappings = 500) {
 export function getAllDashboardActivities(limit = 60) {
   return fetchAllPages<ApiDashboardActivityItem>("/api/v1/dashboard/activity", {}, limit);
 }
+
+export interface ApiClientProfileRow {
+  client_name: string;
+  total_open_positions: number;
+  total_candidates: number;
+  active_recruiters: number;
+  last_activity: string | null;
+  status: "active" | "on_hold" | "closed";
+}
+
+export function getClientProfiles(query: Record<string, QueryValue> = {}) {
+  return dashboardFetch<ApiPaginatedResponse<ApiClientProfileRow>>(
+    "/api/v1/dashboard/client-profiles",
+    query,
+  );
+}

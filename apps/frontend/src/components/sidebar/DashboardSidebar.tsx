@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
@@ -9,6 +9,7 @@ import {
   IconLayoutDashboard,
   IconBriefcase,
   IconUsers,
+  IconLayoutKanban,
   IconTrophy,
   IconSettings,
   IconLayoutSidebarLeftCollapse,
@@ -37,6 +38,11 @@ const NAV_LINKS = [
     label: "Candidates",
     href: "/candidates",
     icon: <IconUsers className="h-5 w-5 shrink-0" />,
+  },
+  {
+    label: "Pipeline",
+    href: "/pipeline",
+    icon: <IconLayoutKanban className="h-5 w-5 shrink-0" />,
   },
   {
     label: "Leaderboard",
@@ -199,6 +205,7 @@ function UserRow({ user }: { readonly user: { full_name: string; email: string }
 /** The full sidebar */
 export default function DashboardSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<{ full_name: string; email: string } | null>(null);
 
@@ -206,7 +213,7 @@ export default function DashboardSidebar() {
     fetch(`${API_URL}/api/v1/auth/me`, { credentials: "include" })
       .then((r) => {
         if (!r.ok) {
-          console.error(`Auth check failed: ${r.status}`);
+          router.replace("/sign-in");
           return null;
         }
         return r.json();
@@ -214,10 +221,10 @@ export default function DashboardSidebar() {
       .then((data) => {
         if (data) setUser({ full_name: data.full_name, email: data.email });
       })
-      .catch((err) => {
-        console.error("Error fetching user session:", err);
+      .catch(() => {
+        router.replace("/sign-in");
       });
-  }, []);
+  }, [router]);
 
   return (
     <Sidebar open={open} setOpen={setOpen}>

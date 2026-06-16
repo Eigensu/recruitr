@@ -53,6 +53,25 @@ def generate_upload_signature() -> dict:
     }
 
 
+def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
+    """Upload raw PDF bytes directly to Cloudinary from the backend.
+
+    Used by bulk-upload — does NOT use the signed browser-upload flow.
+    The file bytes are sent straight from the API server to Cloudinary.
+
+    Returns:
+        The Cloudinary upload result dict (includes public_id, secure_url).
+    """
+    return cloudinary.uploader.upload(
+        pdf_bytes,
+        resource_type="raw",
+        folder=RESUME_FOLDER,
+        public_id=filename.removesuffix(".pdf"),
+        overwrite=False,
+        use_filename=True,
+    )
+
+
 def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
     """Verify Cloudinary's webhook notification signature.
 
@@ -68,15 +87,15 @@ def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract raw text from a resume file using PyMuPDF.
+    """Extract raw text from a PDF file using PyMuPDF (PDF only).
 
-    Supports PDF and DOCX — format is auto-detected from the byte stream.
-
-    Args:
-        file_bytes: Raw file bytes (PDF or DOCX) from Cloudinary or local disk.
+    Raises:
+        ValueError: If file_bytes is not a PDF.
 
     Returns:
         Concatenated plain text from all pages.
     """
-    doc = fitz.open(stream=file_bytes)
+    if not file_bytes.startswith(b"%PDF-"):
+        raise ValueError("Input is not a PDF file")
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
     return "\n".join(page.get_text() for page in doc)

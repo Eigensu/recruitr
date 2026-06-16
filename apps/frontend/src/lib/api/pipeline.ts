@@ -1,29 +1,72 @@
-import type { KanbanStage, PipelineBoardData } from "@/types";
+import type { CandidateCard, CandidateSource, CandidateStatus } from "@/types";
+import type { KanbanFilters } from "@/stores/usePipelineStore";
 
-type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-export interface StageMoveResponse {
-  mapping_id: string;
-  candidate_id: string;
-  position_id: string;
-  old_stage: KanbanStage;
-  new_stage: KanbanStage;
-  decision: string;
-  recruiter_score_delta: number;
-  activity_id: string | null;
+type FilteredCard = CandidateCard & { status: CandidateStatus };
+
+export interface SuggestedCandidate {
+  id: string;
+  name: string;
+  email: string;
+  resume_url: string | null;
+  extracted_skills: string[];
+  tags: string[];
+  source: CandidateSource;
+  cv_link: string | null;
+  match_score: number;
 }
 
-export function getPipelineBoard(apiFetch: ApiFetch): Promise<PipelineBoardData> {
-  return apiFetch("/api/v1/pipeline/board");
+/** Keyword-scored suggestions for a position (reuses the match engine). */
+export async function fetchSuggestions(
+  positionId: string,
+  limit = 10,
+): Promise<SuggestedCandidate[]> {
+  const res = await fetch(
+    `${API_URL}/api/v1/pipeline/top-candidates?position_id=${positionId}&limit=${limit}`,
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error(`Suggestions fetch failed: ${res.status}`);
+  return res.json();
 }
 
-export function moveMappingStage(
-  apiFetch: ApiFetch,
-  mappingId: string,
-  newStage: KanbanStage,
-): Promise<StageMoveResponse> {
-  return apiFetch(`/api/v1/pipeline/mappings/${mappingId}/move`, {
-    method: "POST",
-    body: JSON.stringify({ new_stage: newStage }),
+/** Assign a candidate to a position's pipeline (lands in Pending). */
+export async function assignCandidate(positionId: string, candidateId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/pipeline/match`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      position_id: positionId,
+      candidate_id: candidateId,
+      target_status: "pending",
+    }),
   });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function fetchFilteredPipeline(
+  positionId: string,
+  filters: KanbanFilters,
+): Promise<Record<CandidateStatus, CandidateCard[]>> {
+  const params = new URLSearchParams({ position_id: positionId });
+  if (filters.recruiter_id) params.set("recruiter_id", filters.recruiter_id);
+  if (filters.client_id) params.set("client_id", filters.client_id);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.stage) params.set("stage", filters.stage);
+  if (filters.mapped_after) params.set("mapped_after", filters.mapped_after);
+  if (filters.mapped_before) params.set("mapped_before", filters.mapped_before);
+  if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
+
+  const res = await fetch(`${API_URL}/api/v1/pipeline/filtered?${params.toString()}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Pipeline filtered fetch failed: ${res.status}`);
+  const cards: FilteredCard[] = await res.json();
+
+  return {
+    pending: cards.filter((c) => c.status === "pending"),
+    accepted: cards.filter((c) => c.status === "accepted"),
+    rejected: cards.filter((c) => c.status === "rejected"),
+  };
 }

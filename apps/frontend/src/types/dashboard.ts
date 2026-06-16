@@ -80,3 +80,14 @@ export interface DashboardDemoData {
   totals: DashboardTotals;
   analytics: DashboardAnalyticsWidget[];
 }
+
+export type ClientProfileStatus = "active" | "on_hold" | "closed";
+
+export interface ClientProfileRow {
+  client_name: string;
+  total_open_positions: number;
+  total_candidates: number;
+  active_recruiters: number;
+  last_activity: string | null; // ISO datetime string
+  status: ClientProfileStatus;
+}

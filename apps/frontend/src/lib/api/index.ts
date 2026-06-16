@@ -7,6 +7,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -19,28 +20,37 @@ export class ForbiddenError extends Error {
 }
 
 export function useApiFetch() {
-  const apiFetch = useCallback(async <T>(path: string, options?: RequestInit): Promise<T> => {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(options?.headers as Record<string, string>),
-    };
+  const router = useRouter();
 
-    const res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers,
-      credentials: "include", // Ensure cookies are passed
-    });
+  const apiFetch = useCallback(
+    async <T>(path: string, options?: RequestInit): Promise<T> => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(options?.headers as Record<string, string>),
+      };
 
-    if (!res.ok) {
-      if (res.status === 403) throw new ForbiddenError();
-      const errorText = await res.text();
-      throw new Error(errorText || `API error: ${res.status}`);
-    }
+      const res = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
 
-    // 204 No Content — return null
-    if (res.status === 204) return null as T;
-    return res.json() as Promise<T>;
-  }, []);
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.replace("/sign-in");
+          throw new Error("Session expired");
+        }
+        if (res.status === 403) throw new ForbiddenError();
+        const errorText = await res.text();
+        throw new Error(errorText || `API error: ${res.status}`);
+      }
+
+      // 204 No Content — return null
+      if (res.status === 204) return null as T;
+      return res.json() as Promise<T>;
+    },
+    [router],
+  );
 
   return apiFetch;
 }

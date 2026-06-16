@@ -1,12 +1,26 @@
 import { create } from "zustand";
 import type { CandidateCard, CandidateStatus } from "@/types";
 
+export interface KanbanFilters {
+  recruiter_id?: string;
+  client_id?: string;
+  source?: "internal" | "external";
+  tags?: string[];
+  stage?: string;
+  mapped_after?: string;
+  mapped_before?: string;
+}
+
 interface PipelineState {
   columns: Record<CandidateStatus, CandidateCard[]>;
   setColumns: (columns: Record<CandidateStatus, CandidateCard[]>) => void;
   moveCard: (cardId: string, from: CandidateStatus, to: CandidateStatus) => void;
   activeCardId: string | null;
   setActiveCardId: (id: string | null) => void;
+  // Filter state
+  activeFilters: KanbanFilters;
+  isFiltered: boolean;
+  setActiveFilters: (filters: KanbanFilters) => void;
 }
 
 const MOCK_COLUMNS: Record<CandidateStatus, CandidateCard[]> = {
@@ -75,6 +89,11 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 
   activeCardId: null,
   setActiveCardId: (id) => set({ activeCardId: id }),
+
+  activeFilters: {},
+  isFiltered: false,
+  setActiveFilters: (filters) =>
+    set({ activeFilters: filters, isFiltered: Object.keys(filters).length > 0 }),
 }));
 
 // Selector helpers

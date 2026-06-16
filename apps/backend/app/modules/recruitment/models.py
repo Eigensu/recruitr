@@ -181,6 +181,7 @@ class Candidate(Document):
     ai_tags: list[str] = Field(default_factory=list)
     recruiter_tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
+    cv_link: str | None = None
     resume_url: str | None = None
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
