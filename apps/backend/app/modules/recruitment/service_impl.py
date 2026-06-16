@@ -35,9 +35,11 @@ async def ensure_employee_for_user(user: object) -> Employee:
     Called on every login and Google OAuth callback so that the Employee
     always exists before the session cookie is issued.
 
-    The Employee.brand_id is left None if not already set — onboarding
-    completes that assignment.  get_tenant() will 403 until it is set.
+    If the employee has no brand yet and exactly one brand exists in the DB,
+    it is auto-assigned so the user can access the app without manual onboarding.
     """
+    from app.modules.brands.models import Brand
+
     email: str = getattr(user, "email", "")
     name: str = getattr(user, "full_name", None) or email
     user_id: PydanticObjectId = user.id  # type: ignore[assignment]
@@ -47,6 +49,16 @@ async def ensure_employee_for_user(user: object) -> Employee:
         employee = await create_employee(name=name, email=email, user_id=user_id)
     else:
         employee = await link_employee_user(employee, user_id)
+
+    if employee.brand_id is None:
+        brand = await Brand.find_one({})
+        if brand is not None:
+            await Employee.get_motor_collection().update_one(
+                {"_id": employee.id},
+                {"$set": {"brand_id": brand.id}},
+            )
+            employee.brand_id = brand.id
+
     return employee
 
 

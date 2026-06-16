@@ -52,14 +52,15 @@ def _set_auth_cookie(response: Response, user_id: str) -> None:
     )
 
 
-async def _ensure_employee(user: User) -> None:
-    """Fire-and-forget employee linking — never blocks the auth response."""
+async def _ensure_employee(user: User) -> bool:
+    """Ensure an Employee record exists for the user. Returns True if brand is assigned."""
     try:
         from app.modules.recruitment.service import ensure_employee_for_user
 
-        await ensure_employee_for_user(user)
+        employee = await ensure_employee_for_user(user)
+        return employee.brand_id is not None
     except Exception:  # noqa: BLE001
-        pass
+        return False
 
 
 # ── Standard email/password endpoints ────────────────────────────────────────
@@ -235,10 +236,10 @@ async def google_callback(
     if not google_id or not email:
         return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
 
-    user, is_new = await _find_or_create_google_user(google_id, email, profile.get("name"))
-    await _ensure_employee(user)
+    user, _ = await _find_or_create_google_user(google_id, email, profile.get("name"))
+    has_brand = await _ensure_employee(user)
 
-    redirect_path = "/onboarding" if is_new else "/"
+    redirect_path = "/" if has_brand else "/onboarding"
     redirect = RedirectResponse(f"{frontend}{redirect_path}")
     _set_auth_cookie(redirect, str(user.id))
     return redirect
