@@ -13,6 +13,12 @@ const schema = z.object({
   source: z.enum(["internal", "external"]),
   tags: z.array(z.string()),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  current_role: z.string().optional(),
+  salary: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().positive("Must be a positive number").optional(),
+  ),
+  notes: z.string().optional(),
 });
 
 interface Props {
@@ -37,6 +43,9 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     tagInput: "",
     tags: [] as string[],
     cv_link: "",
+    current_role: "",
+    salary: "",
+    notes: "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,6 +70,9 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       source: form.source,
       tags: form.tags,
       cv_link: form.cv_link || undefined,
+      current_role: form.current_role || undefined,
+      salary: form.salary || undefined,
+      notes: form.notes || undefined,
     });
 
     if (!parsed.success) {
@@ -81,10 +93,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         phone: parsed.data.phone,
         recruiter_tags: parsed.data.tags,
         cv_link: parsed.data.cv_link,
+        current_role: parsed.data.current_role,
+        salary: parsed.data.salary,
+        notes: parsed.data.notes,
       });
 
-      // Internal candidates → optional direct PDF upload via the Cloudinary
-      // signed flow, then attach to the new candidate.
       if (parsed.data.source === "internal" && resumeFile) {
         const uploaded = await uploadResumeToCloudinary(resumeFile);
         candidate = await clientConfirmResume(candidate.id, uploaded);
@@ -188,8 +201,49 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Tags
+          Current Role
         </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. Senior Engineer"
+          value={form.current_role}
+          onChange={(e) => setForm((f) => ({ ...f, current_role: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Salary
+        </label>
+        <input
+          type="number"
+          min="0"
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 85000"
+          value={form.salary}
+          onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
+        />
+        {errors.salary && (
+          <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+            {errors.salary}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center gap-2">
+          <label className="block text-xs font-medium" style={labelStyle}>
+            Manual Tags
+          </label>
+          <span
+            className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+            style={{ background: "rgba(251,146,60,0.15)", color: "#fb923c" }}
+          >
+            recruiter
+          </span>
+        </div>
         <div className="flex gap-2">
           <input
             className={inputCls}
@@ -219,7 +273,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
               <span
                 key={tag}
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                style={inputStyle}
+                style={{
+                  background: "rgba(251,146,60,0.1)",
+                  color: "#fb923c",
+                  border: "1px solid rgba(251,146,60,0.25)",
+                }}
               >
                 {tag}
                 <button
@@ -272,6 +330,20 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
             {errors.cv_link}
           </p>
         )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Notes
+        </label>
+        <textarea
+          rows={3}
+          className={inputCls}
+          style={{ ...inputStyle, resize: "vertical" }}
+          placeholder="Any notes about this candidate…"
+          value={form.notes}
+          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+        />
       </div>
 
       <div className="flex gap-3 pt-2">

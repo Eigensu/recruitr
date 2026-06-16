@@ -11,6 +11,7 @@ Endpoints:
 from __future__ import annotations
 
 import contextlib
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -20,8 +21,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
-from app.modules.recruitment.enums import KANBAN_STAGES, PipelineStage
+from app.modules.recruitment.enums import KANBAN_STAGES, TERMINAL_STAGES, PipelineStage
 from app.modules.recruitment.models import ActivityLog, Candidate, Mapping, Position
+from app.modules.recruitment.repository_impl import recompute_position_seats
 from app.modules.recruitment.schemas import (
     PipelineBoard,
     PipelineStageColumn,
@@ -273,6 +275,10 @@ async def move_mapping_to_stage(
     # Update mapping
     await mapping.set({"stage": req.new_stage.value, "decision": "pending"})
 
+    # Recompute seats when crossing a terminal stage boundary in either direction
+    if req.new_stage in TERMINAL_STAGES or old_stage in TERMINAL_STAGES:
+        await recompute_position_seats(mapping.position_id)
+
     # Calculate recruiter score
     score_delta = _score_for_stage(req.new_stage)
 
@@ -327,6 +333,7 @@ async def get_filtered_pipeline(
     client_id: _OptStr = None,
     tags: _OptStrList = None,
     stage: _OptStr = None,
+    source: _OptStr = None,
     mapped_after: _OptDt = None,
     mapped_before: _OptDt = None,
 ) -> list[FilteredCandidate]:
@@ -362,7 +369,12 @@ async def get_filtered_pipeline(
     ]
 
     if tags:
-        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": [t.lower() for t in tags]}}})
+        # Stored tags keep their canonical casing, so match case-insensitively.
+        patterns = [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
+        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": patterns}}})
+
+    if source:
+        agg.append({_MATCH: {"candidate.source": source}})
 
     agg.append(
         {
@@ -380,8 +392,8 @@ async def get_filtered_pipeline(
                         {"$ifNull": ["$candidate.ai_tags", []]},
                     ]
                 },
-                "source": "internal",
-                "cv_link": None,
+                "source": {"$ifNull": ["$candidate.source", "internal"]},
+                "cv_link": "$candidate.cv_link",
                 "status": {
                     "$switch": {
                         "branches": [
@@ -506,6 +518,7 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
     existing = await Mapping.find_one(
         {"candidate_id": cand_oid, "position_id": pos_oid, "brand_id": tenant.brand_id}
     )
+    prev_stage = existing.stage if existing else None
     if existing:
         await existing.set({"stage": target_stage.value, "updated_at": datetime.now(UTC)})
     else:
@@ -519,6 +532,9 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
         )
         with contextlib.suppress(DuplicateKeyError):
             await mapping.insert()
+
+    if target_stage in TERMINAL_STAGES or prev_stage in TERMINAL_STAGES:
+        await recompute_position_seats(pos_oid)
 
     return MatchResponse(
         position_id=req.position_id,

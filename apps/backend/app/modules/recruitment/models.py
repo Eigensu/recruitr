@@ -185,6 +185,9 @@ class Candidate(Document):
     resume_url: str | None = None
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
+    current_role: str | None = None
+    salary: float | None = None
+    notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
@@ -214,7 +217,7 @@ class StageEvent(BaseModel):
     """Immutable history entry appended on every stage transition."""
 
     stage: PipelineStage
-    decision: Decision
+    decision: Decision = Decision.pending
     by_employee_id: PydanticObjectId
     at: datetime = Field(default_factory=_utcnow)
 
@@ -229,7 +232,7 @@ class Mapping(Document):
     brand_id: PydanticObjectId
     candidate_id: PydanticObjectId
     position_id: PydanticObjectId
-    client_id: PydanticObjectId  # denormalized for filtering
+    client_id: PydanticObjectId | None = None  # denormalized for filtering; None for legacy docs
     employee_id: PydanticObjectId  # recruiter who last acted
     stage: PipelineStage = PipelineStage.sourced
     decision: Decision = Decision.pending

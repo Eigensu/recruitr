@@ -50,7 +50,9 @@ export default function KanbanBoard({
     isFiltered,
   } = usePipelineStore();
   const apiFetch = useApiFetch();
-  const [boardLoading, setBoardLoading] = useState(false);
+  // Start in the loading state so stale global columns from a previously viewed
+  // position are not rendered/draggable until this board's data loads.
+  const [boardLoading, setBoardLoading] = useState(true);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const dragOriginColumn = useRef<CandidateStatus | null>(null);
 
@@ -83,7 +85,11 @@ export default function KanbanBoard({
   );
 
   useEffect(() => {
-    void loadBoard({});
+    void (async () => {
+      setBoardLoading(true);
+      await loadBoard({});
+      setBoardLoading(false);
+    })();
   }, [loadBoard]);
 
   async function handleFilterChange(filters: KanbanFilters) {

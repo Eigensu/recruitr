@@ -35,6 +35,7 @@ from app.modules.recruitment.schemas.team import (
     EmployeeTeamResponse,
     TeamCreate,
     TeamResponse,
+    TeamUpdate,
 )
 
 __all__ = [
@@ -65,6 +66,7 @@ __all__ = [
     "StageMoveResponse",
     # Team & Tag DTOs
     "TeamCreate",
+    "TeamUpdate",
     "TeamResponse",
     "BulkAssignEmployees",
     "EmployeeTeamResponse",

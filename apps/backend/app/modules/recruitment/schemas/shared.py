@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from beanie import PydanticObjectId
 from pydantic import BaseModel
 
+from app.modules.auth.models import UserRole
+
 
 @dataclass(frozen=True, slots=True)
 class TenantScope:
@@ -12,6 +14,12 @@ class TenantScope:
 
     brand_id: PydanticObjectId
     employee_id: PydanticObjectId
+    role: UserRole = UserRole.employee
+
+    @property
+    def is_recruiter(self) -> bool:
+        """Only employee-role users count toward the leaderboard and activity feeds."""
+        return self.role == UserRole.employee
 
 
 class ResumeConfirm(BaseModel):

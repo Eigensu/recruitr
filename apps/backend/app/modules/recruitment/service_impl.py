@@ -83,13 +83,14 @@ async def map_candidate(
     # Gamification — fire-and-forget
     await _credit_gamification(scope, mapping, PipelineStage.sourced)
 
-    await log_activity(
-        scope=scope,
-        activity_type=ActivityType.mapped,
-        target_entity_type="candidate",
-        target_entity_id=str(candidate_id),
-        description=(f"Mapped to {position.role} @ {position.client_name}"),
-    )
+    if scope.is_recruiter:
+        await log_activity(
+            scope=scope,
+            activity_type=ActivityType.mapped,
+            target_entity_type="candidate",
+            target_entity_id=str(candidate_id),
+            description=(f"Mapped to {position.role} @ {position.client_name}"),
+        )
 
     await _invalidate_caches(scope.brand_id)
     return mapping
@@ -99,13 +100,14 @@ async def unmap_candidate(*, scope: TenantScope, mapping: Mapping) -> None:
     """Delete a mapping (unmap action), log activity, invalidate caches."""
     await delete_mapping(mapping)
 
-    await log_activity(
-        scope=scope,
-        activity_type=ActivityType.unmapped,
-        target_entity_type="candidate",
-        target_entity_id=str(mapping.candidate_id),
-        description="Unmapped from position",
-    )
+    if scope.is_recruiter:
+        await log_activity(
+            scope=scope,
+            activity_type=ActivityType.unmapped,
+            target_entity_type="candidate",
+            target_entity_id=str(mapping.candidate_id),
+            description="Unmapped from position",
+        )
 
     await _invalidate_caches(scope.brand_id)
 
@@ -154,14 +156,15 @@ async def advance_stage(
 
     await _credit_gamification(scope, mapping, new_stage)
 
-    activity_type = _STAGE_ACTIVITY.get(new_stage, ActivityType.stage_moved)
-    await log_activity(
-        scope=scope,
-        activity_type=activity_type,
-        target_entity_type="candidate",
-        target_entity_id=str(mapping.candidate_id),
-        description=f"Stage moved to {new_stage.value.replace('_', ' ')}",
-    )
+    if scope.is_recruiter:
+        activity_type = _STAGE_ACTIVITY.get(new_stage, ActivityType.stage_moved)
+        await log_activity(
+            scope=scope,
+            activity_type=activity_type,
+            target_entity_type="candidate",
+            target_entity_id=str(mapping.candidate_id),
+            description=f"Stage moved to {new_stage.value.replace('_', ' ')}",
+        )
 
     await _invalidate_caches(scope.brand_id)
     return mapping
@@ -171,7 +174,14 @@ async def advance_stage(
 
 
 async def _credit_gamification(scope: TenantScope, mapping: Mapping, stage: PipelineStage) -> None:
-    """Call leaderboard record_activity_atomic — idempotent, best-effort."""
+    """Call leaderboard record_activity_atomic — idempotent, best-effort.
+
+    Skipped for maintainers/admins: they are not recruiters and must never
+    appear in the leaderboard or earn an EmployeeStat.
+    """
+    if not scope.is_recruiter:
+        return
+
     leaderboard_type = _GAMIFICATION_STAGE.get(stage)
     if not leaderboard_type:
         return

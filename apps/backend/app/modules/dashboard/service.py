@@ -190,7 +190,7 @@ async def get_activities(filters: DashboardFilters, page: int, limit: int) -> Da
 
 
 async def get_client_profiles(brand_id: str, page: int, limit: int) -> DashboardClientProfilePage:
-    cache_key = dashboard_cache.build_key("client_profiles", f"b{brand_id}_p{page}_l{limit}")
+    cache_key = dashboard_cache.build_key(brand_id, "client_profiles", f"p{page}_l{limit}")
     cached = await dashboard_cache.get_json(cache_key)
     if cached is not None:
         return DashboardClientProfilePage.model_validate(cached)

@@ -17,6 +17,11 @@ class TeamCreate(BaseModel):
     name: str
 
 
+class TeamUpdate(BaseModel):
+    name: str | None = None
+    is_active: bool | None = None
+
+
 class EmployeeTeamResponse(BaseModel):
     id: str
     name: str

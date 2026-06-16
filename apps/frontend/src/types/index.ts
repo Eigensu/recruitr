@@ -5,10 +5,15 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+export type UserRole = "employee" | "maintainer" | "admin";
+
 export interface UserInfo {
   user_id: string;
-  org_id: string | null;
-  org_role: string | null;
+  email: string;
+  full_name: string | null;
+  role: UserRole;
+  employee_id: string | null;
+  brand_id: string | null;
 }
 
 // ── Brands ───────────────────────────────────────────────────────────────────
@@ -177,6 +182,9 @@ export interface ApiCandidate {
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;
+  current_role: string | null;
+  salary: number | null;
+  notes: string | null;
   created_at: string;
 }
 

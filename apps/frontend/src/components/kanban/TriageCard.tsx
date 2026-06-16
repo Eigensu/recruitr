@@ -31,6 +31,7 @@ export default function TriageCard({ card, isDragging: isDragOverlay = false }: 
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...listeners}
       className={cn(
         "group relative select-none rounded-xl border bg-surface-panel p-3 transition-all duration-150",
         isDragging && !isDragOverlay && "scale-95 opacity-40",
@@ -40,10 +41,7 @@ export default function TriageCard({ card, isDragging: isDragOverlay = false }: 
         "border-border",
       )}
     >
-      <div
-        {...listeners}
-        className="absolute right-2.5 top-2.5 cursor-grab opacity-0 transition-opacity group-hover:opacity-40"
-      >
+      <div className="absolute right-2.5 top-2.5 opacity-0 transition-opacity group-hover:opacity-40">
         <IconGripVertical className="size-3.5 text-text-muted" />
       </div>
 

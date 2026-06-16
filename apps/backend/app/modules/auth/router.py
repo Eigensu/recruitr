@@ -130,6 +130,7 @@ async def read_user_me(
         user_id=str(user.id),
         email=user.email,
         full_name=user.full_name,
+        role=user.role.value,
         employee_id=str(employee.id) if employee else None,
         brand_id=str(employee.brand_id) if employee and employee.brand_id else None,
     )
