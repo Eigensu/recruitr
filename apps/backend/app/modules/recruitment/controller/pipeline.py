@@ -21,8 +21,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant
-from app.modules.recruitment.enums import KANBAN_STAGES, PipelineStage
+from app.modules.recruitment.enums import KANBAN_STAGES, TERMINAL_STAGES, PipelineStage
 from app.modules.recruitment.models import ActivityLog, Candidate, Mapping, Position
+from app.modules.recruitment.repository_impl import recompute_position_seats
 from app.modules.recruitment.schemas import (
     PipelineBoard,
     PipelineStageColumn,
@@ -274,6 +275,10 @@ async def move_mapping_to_stage(
     # Update mapping
     await mapping.set({"stage": req.new_stage.value, "decision": "pending"})
 
+    # Recompute seats when moving into a terminal stage (closes position if full)
+    if req.new_stage in TERMINAL_STAGES:
+        await recompute_position_seats(mapping.position_id)
+
     # Calculate recruiter score
     score_delta = _score_for_stage(req.new_stage)
 
@@ -489,7 +494,7 @@ async def get_top_candidates(
 
 _STATUS_TO_STAGE: dict[str, PipelineStage] = {
     "pending": PipelineStage.sourced,
-    "accepted": PipelineStage.offer_accepted,
+    "accepted": PipelineStage.position_close,
     "rejected": PipelineStage.rejected,
 }
 
@@ -526,6 +531,9 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
         )
         with contextlib.suppress(DuplicateKeyError):
             await mapping.insert()
+
+    if target_stage in TERMINAL_STAGES:
+        await recompute_position_seats(pos_oid)
 
     return MatchResponse(
         position_id=req.position_id,
