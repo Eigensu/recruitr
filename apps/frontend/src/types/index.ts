@@ -280,6 +280,7 @@ export interface CandidateCard {
 // ── Pipeline Kanban (Phase D — real API types) ────────────────────────────────
 
 export type KanbanStage =
+  | "sourced"
   | "sent_to_client"
   | "interview"
   | "decision_pending"

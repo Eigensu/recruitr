@@ -9,26 +9,26 @@ interface Employee {
 }
 
 const PIPELINE_STAGES = [
-  "added",
-  "shortlisted",
+  "sourced",
   "sent_to_client",
-  "rejected",
-  "hold",
-  "offer_sent",
+  "interview",
+  "decision_pending",
+  "offer",
   "offer_accepted",
-  "joined",
-  "dropped",
+  "position_close",
+  "rejected",
+  "on_hold",
 ];
 const STAGE_LABELS: Record<string, string> = {
-  added: "Added",
-  shortlisted: "Shortlisted",
+  sourced: "Sourced",
   sent_to_client: "Sent to Client",
-  rejected: "Rejected",
-  hold: "Hold",
-  offer_sent: "Offer Sent",
+  interview: "Interview",
+  decision_pending: "Decision Pending",
+  offer: "Offer",
   offer_accepted: "Offer Accepted",
-  joined: "Joined",
-  dropped: "Dropped",
+  position_close: "Joined",
+  rejected: "Rejected",
+  on_hold: "On Hold",
 };
 
 interface ClientOption {
@@ -108,17 +108,6 @@ export default function KanbanFilterBar({
           ))}
         </select>
       )}
-
-      <select
-        value={f.source ?? ""}
-        onChange={(e) => update("source", (e.target.value as "internal" | "external") || undefined)}
-        className={selectCls}
-        style={selectStyle}
-      >
-        <option value="">All Sources</option>
-        <option value="internal">Internal</option>
-        <option value="external">External</option>
-      </select>
 
       <select
         value={f.stage ?? ""}
