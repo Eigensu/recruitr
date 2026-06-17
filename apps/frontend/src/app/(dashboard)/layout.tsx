@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { readonly children: React
         <DashboardSidebar />
         <main className="flex-1 overflow-hidden bg-canvas md:rounded-xl md:shadow-2xl flex flex-col">
           {/* Inner scroll container — main itself never scrolls so rounded corners stay intact */}
-          <div className="flex-1 overflow-y-auto scrollbar-none">
+          <div className="flex-1 overflow-y-auto scrollbar-none pb-16 md:pb-0">
             <ForbiddenBoundary>{children}</ForbiddenBoundary>
           </div>
         </main>

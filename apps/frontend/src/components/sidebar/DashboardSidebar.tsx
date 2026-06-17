@@ -21,6 +21,7 @@ import {
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
+import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -245,35 +246,38 @@ export default function DashboardSidebar() {
   ];
 
   return (
-    <Sidebar open={open} setOpen={setOpen}>
-      <SidebarBody className="justify-between gap-6">
-        {/* Top: logo + nav */}
-        <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
-          <div className="py-1">
-            <LogoRow />
+    <>
+      <Sidebar open={open} setOpen={setOpen}>
+        <SidebarBody className="justify-between gap-6">
+          {/* Top: logo + nav */}
+          <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+            <div className="py-1">
+              <LogoRow />
+            </div>
+            <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
+              {visibleLinks.map((link) => {
+                const isActive =
+                  link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+                return <SidebarLink key={link.href} link={link} active={isActive} />;
+              })}
+            </nav>
           </div>
-          <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
-            {visibleLinks.map((link) => {
-              const isActive =
-                link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-              return <SidebarLink key={link.href} link={link} active={isActive} />;
-            })}
-          </nav>
-        </div>
 
-        {/* Bottom: onboarding + theme toggle + user */}
-        <div className="flex flex-col">
-          <OnboardingProgressCard progress={76} />
+          {/* Bottom: onboarding + theme toggle + user */}
+          <div className="flex flex-col">
+            <OnboardingProgressCard progress={76} />
 
-          <div className="mt-4 flex flex-col pt-2">
-            <ThemeToggleRow />
+            <div className="mt-4 flex flex-col pt-2">
+              <ThemeToggleRow />
 
-            <div className="h-px bg-white/10 my-2 mx-4" />
+              <div className="h-px bg-white/10 my-2 mx-4" />
 
-            <UserRow user={user} />
+              <UserRow user={user} />
+            </div>
           </div>
-        </div>
-      </SidebarBody>
-    </Sidebar>
+        </SidebarBody>
+      </Sidebar>
+      <MobileBottomNav />
+    </>
   );
 }
