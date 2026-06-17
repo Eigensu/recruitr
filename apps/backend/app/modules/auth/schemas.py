@@ -38,3 +38,9 @@ class UserInfoResponse(BaseModel):
     # Employee / tenant context — null until ensure_employee_for_user runs
     employee_id: str | None = None
     brand_id: str | None = None
+
+
+class UserUpdate(BaseModel):
+    """Payload for PATCH /auth/me."""
+
+    full_name: str | None = Field(None, max_length=120)
