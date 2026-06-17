@@ -349,9 +349,7 @@ export default function RecruiterLineGraph({ recruiters }: Readonly<RecruiterLin
                   fill="currentColor"
                   opacity="0.4"
                 >
-                  {point.recruiter.name.length > 10
-                    ? `${point.recruiter.name.slice(0, 10)}…`
-                    : point.recruiter.name}
+                  {point.recruiter.name.split(" ")[0]}
                 </text>
               );
             })}

@@ -43,12 +43,20 @@ async def ensure_employee_for_user(user: object) -> Employee:
     email: str = getattr(user, "email", "")
     name: str = getattr(user, "full_name", None) or email
     user_id: PydanticObjectId = user.id  # type: ignore[assignment]
+    role: str = getattr(user, "role", "employee")
 
     employee = await find_employee_by_email(email)
     if employee is None:
         employee = await create_employee(name=name, email=email, user_id=user_id)
     else:
         employee = await link_employee_user(employee, user_id)
+
+    # Keep role in sync so leaderboard queries can filter without joining users.
+    if employee.role != role:
+        await Employee.get_motor_collection().update_one(
+            {"_id": employee.id}, {"$set": {"role": role}}
+        )
+        employee.role = role
 
     if employee.brand_id is None:
         brand = await Brand.find_one({})
