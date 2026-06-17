@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { ApiCandidate, CandidateFilters } from "@/types";
-import { clientFetchCandidates } from "@/lib/api/candidates.client";
+import { clientDeleteCandidate, clientFetchCandidates } from "@/lib/api/candidates.client";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import CandidateFilterBar from "./CandidateFilterBar";
 import CandidateCard from "./CandidateCard";
 import CandidateDrawer from "./CandidateDrawer";
@@ -27,6 +28,7 @@ export default function CandidatesClient({
   initialTotal,
   availableTags,
 }: Readonly<Props>) {
+  const { isMaintainer } = useCurrentUser();
   const [candidates, setCandidates] = useState<ApiCandidate[]>(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
@@ -81,6 +83,13 @@ export default function CandidatesClient({
   function handleCandidateUpdated(updated: ApiCandidate) {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setSelectedCandidate(updated);
+  }
+
+  async function handleDeleteCandidate(id: string) {
+    await clientDeleteCandidate(id);
+    setCandidates((prev) => prev.filter((c) => c.id !== id));
+    setTotal((t) => t - 1);
+    if (selectedCandidate?.id === id) setSelectedCandidate(null);
   }
 
   function handleBulkComplete() {
@@ -167,7 +176,13 @@ export default function CandidatesClient({
       {!loading && candidates.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {candidates.map((c) => (
-            <CandidateCard key={c.id} candidate={c} onClick={() => setSelectedCandidate(c)} />
+            <CandidateCard
+              key={c.id}
+              candidate={c}
+              onClick={() => setSelectedCandidate(c)}
+              isMaintainer={isMaintainer}
+              onDelete={handleDeleteCandidate}
+            />
           ))}
         </div>
       )}

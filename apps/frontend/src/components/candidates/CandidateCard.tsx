@@ -1,11 +1,15 @@
-import React from "react";
-import { IconMail, IconBriefcase, IconFileText, IconLink } from "@tabler/icons-react";
+"use client";
+
+import React, { useState } from "react";
+import { IconMail, IconBriefcase, IconFileText, IconLink, IconTrash } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
 import { resolveCvRef } from "@/lib/api/candidates";
 
 interface CandidateCardProps {
   candidate: ApiCandidate;
   onClick: () => void;
+  isMaintainer?: boolean;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 const PALETTES = [
@@ -33,10 +37,33 @@ export function getInitials(name: string) {
     .toUpperCase();
 }
 
-export default function CandidateCard({ candidate, onClick }: Readonly<CandidateCardProps>) {
+export default function CandidateCard({
+  candidate,
+  onClick,
+  isMaintainer,
+  onDelete,
+}: Readonly<CandidateCardProps>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
   const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(candidate.id);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
 
   return (
     <div className="group relative w-full h-full">
@@ -77,6 +104,29 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
                 </span>
               </p>
             </div>
+            {isMaintainer && onDelete && (
+              <div className="pointer-events-auto relative z-10 shrink-0">
+                {confirmDelete ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={deleting}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-red-500/90 text-white hover:bg-red-600 transition-colors disabled:opacity-60"
+                  >
+                    {deleting ? "…" : "Confirm"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    aria-label="Delete candidate"
+                    className="p-1.5 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <IconTrash className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Skills */}
@@ -129,6 +179,19 @@ export default function CandidateCard({ candidate, onClick }: Readonly<Candidate
           </div>
         </div>
       </div>
+
+      {/* Click-away to cancel confirm state */}
+      {confirmDelete && (
+        <button
+          type="button"
+          aria-label="Cancel delete"
+          className="fixed inset-0 z-0 cursor-default"
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDelete(false);
+          }}
+        />
+      )}
     </div>
   );
 }

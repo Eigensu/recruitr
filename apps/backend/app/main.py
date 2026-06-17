@@ -14,6 +14,7 @@ from app.modules.brands.router import router as brands_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
+    activity_router,
     candidates_router,
     pipeline_router,
     positions_router,
@@ -70,6 +71,7 @@ app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(leaderboard_router, prefix="/api/v1/leaderboard", tags=["Leaderboard"])
+app.include_router(activity_router, prefix="/api/v1/activity", tags=["Activity"])
 
 
 @app.get("/health", tags=["Health"])

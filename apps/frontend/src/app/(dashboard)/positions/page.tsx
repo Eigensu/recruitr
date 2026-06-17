@@ -15,6 +15,7 @@ import {
   IconBulb,
   IconAlertCircle,
   IconLoader2,
+  IconTrash,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useApiFetch } from "@/lib/api";
@@ -24,7 +25,10 @@ import {
   getTopCandidates,
   mapCandidateToPosition,
   unmapCandidateFromPosition,
+  deletePosition,
+  reopenPosition,
 } from "@/lib/api/positions";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import type { ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
 import AddPositionModal from "@/components/positions/AddPositionModal";
@@ -93,18 +97,54 @@ function PositionCard({
   position,
   isSelected,
   onClick,
+  isMaintainer,
+  onDelete,
+  onReopen,
 }: Readonly<{
   position: ApiPosition;
   isSelected: boolean;
   onClick: () => void;
+  isMaintainer?: boolean;
+  onDelete?: (id: string) => Promise<void>;
+  onReopen?: (id: string) => Promise<void>;
 }>) {
   const { setNodeRef, isOver } = useDroppable({ id: position.id });
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [reopening, setReopening] = React.useState(false);
 
   const total = position.total_seats;
   const filled = position.mapped_count;
   const progress = total > 0 ? Math.min((filled / total) * 100, 100) : 0;
   const isActive = position.status === "open";
   const statusLabel = POSITION_STATUS_LABELS[position.status] ?? "Closed";
+
+  async function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(position.id);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  async function handleReopenClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onReopen) return;
+    setReopening(true);
+    try {
+      await onReopen(position.id);
+    } finally {
+      setReopening(false);
+    }
+  }
 
   return (
     <motion.div
@@ -119,7 +159,7 @@ function PositionCard({
           onClick();
         }
       }}
-      tabIndex={isActive ? 0 : -1}
+      tabIndex={isActive || isMaintainer ? 0 : -1}
       role="button"
       aria-pressed={isSelected}
       className={cn(
@@ -128,7 +168,8 @@ function PositionCard({
           ? "border-yellow bg-surface-panel shadow-md shadow-yellow/5"
           : "border-border bg-surface-panel hover:border-border hover:shadow-sm",
         isOver && "border-yellow/70 shadow-lg shadow-yellow/10 scale-[1.01]",
-        !isActive && "opacity-40 pointer-events-none",
+        !isActive && !isMaintainer && "opacity-40 pointer-events-none",
+        !isActive && isMaintainer && "opacity-60",
       )}
     >
       {isSelected && (
@@ -154,7 +195,7 @@ function PositionCard({
       {/* Top row */}
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex-1 min-w-0">
-          <div className="mb-1">
+          <div className="mb-1 flex items-center gap-2">
             <span
               className={cn(
                 "inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase",
@@ -170,6 +211,16 @@ function PositionCard({
               )}
               {statusLabel}
             </span>
+            {!isActive && isMaintainer && onReopen && (
+              <button
+                type="button"
+                onClick={handleReopenClick}
+                disabled={reopening}
+                className="pointer-events-auto relative z-10 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-60"
+              >
+                {reopening ? "…" : "Reopen"}
+              </button>
+            )}
           </div>
           <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
             {position.role}
@@ -178,13 +229,47 @@ function PositionCard({
             {position.client_name}
           </p>
         </div>
-        <div className="shrink-0 text-center min-w-9">
-          <div className="text-2xl font-black text-teal-500 leading-none">{total}</div>
-          <div className="text-[9px] text-text-muted uppercase font-bold tracking-wider mt-0.5">
-            seats
+        <div className="shrink-0 flex flex-col items-center gap-1 min-w-9">
+          <div className="text-center">
+            <div className="text-2xl font-black text-teal-500 leading-none">{total}</div>
+            <div className="text-[9px] text-text-muted uppercase font-bold tracking-wider mt-0.5">
+              seats
+            </div>
           </div>
+          {isMaintainer &&
+            onDelete &&
+            (confirmDelete ? (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                disabled={deleting}
+                className="pointer-events-auto text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-500/90 text-white hover:bg-red-600 transition-colors disabled:opacity-60 z-10 relative"
+              >
+                {deleting ? "…" : "Confirm?"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDeleteClick}
+                aria-label="Delete position"
+                className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 z-10 relative"
+              >
+                <IconTrash className="size-3.5" />
+              </button>
+            ))}
         </div>
       </div>
+      {confirmDelete && (
+        <button
+          type="button"
+          aria-label="Cancel delete"
+          className="fixed inset-0 z-0 cursor-default"
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDelete(false);
+          }}
+        />
+      )}
 
       {/* Tags row */}
       <div className="flex flex-wrap gap-1.5 mb-3">
@@ -435,6 +520,7 @@ function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
 
 export default function PositionsPage() {
   const apiFetch = useApiFetch();
+  const { isMaintainer } = useCurrentUser();
 
   const [positions, setPositions] = useState<ApiPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
@@ -596,6 +682,17 @@ export default function PositionsPage() {
     }
   }
 
+  async function handleDeletePosition(id: string) {
+    await deletePosition(apiFetch, id);
+    setPositions((prev) => prev.filter((p) => p.id !== id));
+    if (selectedPositionId === id) setSelectedPositionId(null);
+  }
+
+  async function handleReopenPosition(id: string) {
+    const updated = await reopenPosition(apiFetch, id);
+    setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
@@ -736,6 +833,9 @@ export default function PositionsPage() {
                         setCandidateSearch("");
                         setDebouncedCandidateSearch("");
                       }}
+                      isMaintainer={isMaintainer}
+                      onDelete={handleDeletePosition}
+                      onReopen={handleReopenPosition}
                     />
                   ))}
                 </div>

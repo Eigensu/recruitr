@@ -16,6 +16,7 @@ import {
   IconLayoutSidebarLeftExpand,
   IconMoon,
   IconSun,
+  IconActivity,
 } from "@tabler/icons-react";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
@@ -207,7 +208,9 @@ export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState<{ full_name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ full_name: string; email: string; role?: string } | null>(
+    null,
+  );
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/auth/me`, { credentials: "include" })
@@ -219,12 +222,27 @@ export default function DashboardSidebar() {
         return r.json();
       })
       .then((data) => {
-        if (data) setUser({ full_name: data.full_name, email: data.email });
+        if (data) setUser({ full_name: data.full_name, email: data.email, role: data.role });
       })
       .catch(() => {
         router.replace("/sign-in");
       });
   }, [router]);
+
+  const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
+
+  const visibleLinks = [
+    ...NAV_LINKS,
+    ...(isMaintainer
+      ? [
+          {
+            label: "Activity",
+            href: "/activity",
+            icon: <IconActivity className="h-5 w-5 shrink-0" />,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Sidebar open={open} setOpen={setOpen}>
@@ -235,7 +253,7 @@ export default function DashboardSidebar() {
             <LogoRow />
           </div>
           <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
-            {NAV_LINKS.map((link) => {
+            {visibleLinks.map((link) => {
               const isActive =
                 link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
               return <SidebarLink key={link.href} link={link} active={isActive} />;
