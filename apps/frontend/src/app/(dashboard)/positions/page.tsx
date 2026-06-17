@@ -46,6 +46,8 @@ import {
   DragStartEvent,
   DragEndEvent,
 } from "@dnd-kit/core";
+import PositionCardSkeleton from "@/components/positions/skeletons/PositionCardSkeleton";
+import PositionTableSkeleton from "@/components/positions/skeletons/PositionTableSkeleton";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -808,8 +810,10 @@ export default function PositionsPage() {
             {(() => {
               if (positionsLoading) {
                 return (
-                  <div className="flex flex-col items-center justify-center h-40 text-text-muted gap-2">
-                    <IconLoader2 className="size-6 animate-spin opacity-40" />
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <PositionCardSkeleton key={i} />
+                    ))}
                   </div>
                 );
               }
@@ -943,9 +947,12 @@ export default function PositionsPage() {
                 {(() => {
                   if (candidatesLoading) {
                     return (
-                      <div className="flex items-center justify-center h-40 text-text-muted gap-2">
-                        <IconLoader2 className="size-6 animate-spin opacity-40" />
-                        <p className="text-sm">Finding best matches…</p>
+                      <div className="flex-1 overflow-y-auto p-4 space-y-3 dashboard-scrollbar">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="pl-5">
+                            <PositionTableSkeleton />
+                          </div>
+                        ))}
                       </div>
                     );
                   }
