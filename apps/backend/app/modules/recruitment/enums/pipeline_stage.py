@@ -15,8 +15,9 @@ class PipelineStage(StrEnum):
     on_hold = "on_hold"
 
 
-# Ordered columns on the Kanban board (Sourced renders as a tray, not a column)
+# Ordered columns on the Kanban board
 KANBAN_STAGES: list[PipelineStage] = [
+    PipelineStage.sourced,
     PipelineStage.sent_to_client,
     PipelineStage.interview,
     PipelineStage.decision_pending,
