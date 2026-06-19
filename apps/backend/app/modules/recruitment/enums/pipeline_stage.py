@@ -24,6 +24,7 @@ KANBAN_STAGES: list[PipelineStage] = [
     PipelineStage.offer,
     PipelineStage.offer_accepted,
     PipelineStage.position_close,
+    PipelineStage.rejected,
 ]
 
 # Stages that close a mapping's active lifecycle

@@ -63,6 +63,7 @@ const STAGE_LABELS: Record<KanbanStage, string> = {
   offer: "Offer",
   offer_accepted: "Offer Accepted",
   position_close: "Joined",
+  rejected: "Rejected",
 };
 
 const ALL_STAGES: KanbanStage[] = [
@@ -73,6 +74,7 @@ const ALL_STAGES: KanbanStage[] = [
   "offer",
   "offer_accepted",
   "position_close",
+  "rejected",
 ];
 
 const selectStyle = {
