@@ -6,56 +6,18 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
 import {
-  IconLayoutDashboard,
-  IconBriefcase,
-  IconUsers,
-  IconLayoutKanban,
-  IconTrophy,
-  IconSettings,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconMoon,
   IconSun,
-  IconActivity,
 } from "@tabler/icons-react";
+import { NAV_CONFIG, isNavItemActive, type NavItemConfig } from "@/components/sidebar/nav-config";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
+import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-const NAV_LINKS = [
-  {
-    label: "Dashboard",
-    href: "/",
-    icon: <IconLayoutDashboard className="h-5 w-5 shrink-0" />,
-  },
-  {
-    label: "Positions",
-    href: "/positions",
-    icon: <IconBriefcase className="h-5 w-5 shrink-0" />,
-  },
-  {
-    label: "Candidates",
-    href: "/candidates",
-    icon: <IconUsers className="h-5 w-5 shrink-0" />,
-  },
-  {
-    label: "Pipeline",
-    href: "/pipeline",
-    icon: <IconLayoutKanban className="h-5 w-5 shrink-0" />,
-  },
-  {
-    label: "Leaderboard",
-    href: "/leaderboard",
-    icon: <IconTrophy className="h-5 w-5 shrink-0" />,
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: <IconSettings className="h-5 w-5 shrink-0" />,
-  },
-];
 
 /** Logo row — single component, handles both open/collapsed states */
 function LogoRow() {
@@ -231,49 +193,49 @@ export default function DashboardSidebar() {
 
   const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
 
-  const visibleLinks = [
-    ...NAV_LINKS,
-    ...(isMaintainer
-      ? [
-          {
-            label: "Activity",
-            href: "/activity",
-            icon: <IconActivity className="h-5 w-5 shrink-0" />,
-          },
-        ]
-      : []),
-  ];
+  const visibleConfigs: NavItemConfig[] = NAV_CONFIG.filter(
+    (item) => !item.maintainerOnly || isMaintainer,
+  );
+
+  const visibleLinks = visibleConfigs.map((item) => ({
+    label: item.label,
+    href: item.href,
+    icon: <item.icon className="h-5 w-5 shrink-0" />,
+  }));
 
   return (
-    <Sidebar open={open} setOpen={setOpen}>
-      <SidebarBody className="justify-between gap-6">
-        {/* Top: logo + nav */}
-        <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
-          <div className="py-1">
-            <LogoRow />
+    <>
+      <Sidebar open={open} setOpen={setOpen}>
+        <SidebarBody className="justify-between gap-6">
+          {/* Top: logo + nav */}
+          <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+            <div className="py-1">
+              <LogoRow />
+            </div>
+            <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
+              {visibleLinks.map((link, i) => {
+                const config = visibleConfigs[i];
+                const isActive = isNavItemActive(pathname, link.href, config.exact);
+                return <SidebarLink key={link.href} link={link} active={isActive} />;
+              })}
+            </nav>
           </div>
-          <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
-            {visibleLinks.map((link) => {
-              const isActive =
-                link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-              return <SidebarLink key={link.href} link={link} active={isActive} />;
-            })}
-          </nav>
-        </div>
 
-        {/* Bottom: onboarding + theme toggle + user */}
-        <div className="flex flex-col">
-          <OnboardingProgressCard progress={76} />
+          {/* Bottom: onboarding + theme toggle + user */}
+          <div className="flex flex-col">
+            <OnboardingProgressCard progress={76} />
 
-          <div className="mt-4 flex flex-col pt-2">
-            <ThemeToggleRow />
+            <div className="mt-4 flex flex-col pt-2">
+              <ThemeToggleRow />
 
-            <div className="h-px bg-white/10 my-2 mx-4" />
+              <div className="h-px bg-white/10 my-2 mx-4" />
 
-            <UserRow user={user} />
+              <UserRow user={user} />
+            </div>
           </div>
-        </div>
-      </SidebarBody>
-    </Sidebar>
+        </SidebarBody>
+      </Sidebar>
+      <MobileBottomNav items={visibleConfigs} />
+    </>
   );
 }

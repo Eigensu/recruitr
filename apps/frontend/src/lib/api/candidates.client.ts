@@ -76,7 +76,7 @@ export async function clientConfirmResume(
   data: { resume_public_id: string; resume_url: string },
 ): Promise<ApiCandidate> {
   const res = await fetch(`${API_URL}/api/v1/candidates/${candidateId}/resume`, {
-    method: "PATCH",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ candidate_id: candidateId, ...data }),

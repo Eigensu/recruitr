@@ -56,6 +56,7 @@ interface Filters {
 }
 
 const STAGE_LABELS: Record<KanbanStage, string> = {
+  sourced: "Sourced",
   sent_to_client: "Sent to Client",
   interview: "Interview",
   decision_pending: "Decision Pending",
@@ -65,6 +66,7 @@ const STAGE_LABELS: Record<KanbanStage, string> = {
 };
 
 const ALL_STAGES: KanbanStage[] = [
+  "sourced",
   "sent_to_client",
   "interview",
   "decision_pending",

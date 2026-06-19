@@ -8,7 +8,11 @@ Background: the User model replaced the boolean `is_admin` flag with a
        - otherwise / missing role    → role = "employee"
      then removes the obsolete `is_admin` field.
 
-  2. (promote) Manually sets a user's role by email. Role assignment is
+  2. (sync-employee-roles) Copies User.role → Employee.role for every
+     employee whose linked user has a non-employee role. Idempotent.
+     Run this once after deploying the Employee.role field addition.
+
+  3. (promote) Manually sets a user's role by email. Role assignment is
      intentionally manual — there is no self-serve UI — so use this to make
      yourself an admin or to appoint a maintainer (CEO) account.
 
@@ -18,7 +22,10 @@ Usage:
     # 1. Run the one-time migration (safe to re-run; idempotent)
     python -m scripts.migrate_user_roles migrate
 
-    # 2. Promote a specific account
+    # 2. Backfill Employee.role from User.role (run once after deploy)
+    python -m scripts.migrate_user_roles sync-employee-roles
+
+    # 3. Promote a specific account
     python -m scripts.migrate_user_roles promote --email you@example.com --role admin
     python -m scripts.migrate_user_roles promote --email ceo@example.com --role maintainer
 
@@ -77,6 +84,28 @@ async def _promote(db, email: str, role: str) -> None:
         print(f"✓ Set role='{role}' for '{email.lower()}'")
 
 
+async def _sync_employee_roles(db) -> None:
+    """Copy User.role → Employee.role for every employee, joined by email."""
+    users = await db["users"].find({"role": {"$in": ["admin", "maintainer"]}}).to_list(length=None)
+
+    updated = 0
+    for user in users:
+        result = await db["employees"].update_many(
+            {"email": user["email"]},
+            {"$set": {"role": user["role"], "updated_at": datetime.now(UTC)}},
+        )
+        updated += result.modified_count
+
+    # Default everyone else to "employee" if role field is missing
+    defaulted = await db["employees"].update_many(
+        {"role": {"$exists": False}},
+        {"$set": {"role": "employee", "updated_at": datetime.now(UTC)}},
+    )
+
+    print(f"✓ Synced {updated} admin/maintainer employee(s)")
+    print(f"✓ Defaulted {defaulted.modified_count} employee(s) to role=employee")
+
+
 async def _list(db) -> None:
     users = await db["users"].find({}).to_list(length=None)
     print(f"\nUsers ({len(users)}):")
@@ -91,6 +120,8 @@ async def run(args: argparse.Namespace, *, mongo_uri: str, db_name: str) -> None
     try:
         if args.command == "migrate":
             await _migrate(db)
+        elif args.command == "sync-employee-roles":
+            await _sync_employee_roles(db)
         elif args.command == "promote":
             await _promote(db, args.email, args.role)
         elif args.command == "list":
@@ -106,6 +137,9 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("migrate", help="One-time is_admin → role migration")
+    sub.add_parser(
+        "sync-employee-roles", help="Backfill Employee.role from User.role (run once after deploy)"
+    )
 
     promote = sub.add_parser("promote", help="Set a user's role by email")
     promote.add_argument("--email", required=True, help="User login email")

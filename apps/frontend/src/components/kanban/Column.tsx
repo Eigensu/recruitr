@@ -6,6 +6,7 @@ import type { KanbanStage, PipelineCard } from "@/types";
 import KanbanCard from "./CandidateCard";
 
 const STAGE_ACCENT: Record<KanbanStage, string> = {
+  sourced: "text-slate-400 border-slate-500/30 bg-slate-500/5",
   sent_to_client: "text-blue-400 border-blue-500/30 bg-blue-500/5",
   interview: "text-purple-400 border-purple-500/30 bg-purple-500/5",
   decision_pending: "text-amber-400 border-amber-500/30 bg-amber-500/5",
@@ -15,6 +16,7 @@ const STAGE_ACCENT: Record<KanbanStage, string> = {
 };
 
 const STAGE_DOT: Record<KanbanStage, string> = {
+  sourced: "bg-slate-400",
   sent_to_client: "bg-blue-400",
   interview: "bg-purple-400",
   decision_pending: "bg-amber-400",

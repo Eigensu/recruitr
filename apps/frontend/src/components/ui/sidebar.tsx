@@ -1,8 +1,7 @@
 "use client";
 import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { IconMenu2, IconX } from "@tabler/icons-react";
+import { motion } from "motion/react";
 import Link from "next/link";
 
 interface Links {
@@ -126,52 +125,9 @@ export const DesktopSidebar = ({
   );
 };
 
-export const MobileSidebar = ({ className, children, ...props }: React.ComponentProps<"div">) => {
-  const { open, setOpen } = useSidebar();
-  return (
-    <div
-      className={cn(
-        "h-12 px-4 flex flex-row md:hidden items-center justify-between bg-sidebar border-b border-border w-full",
-      )}
-      {...props}
-    >
-      <div className="flex justify-end z-20 w-full">
-        <button
-          type="button"
-          aria-label="Toggle menu"
-          className="text-white/50 cursor-pointer hover:text-white transition-colors"
-          onClick={() => setOpen(!open)}
-        >
-          <IconMenu2 />
-        </button>
-      </div>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ x: "-100%", opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: "-100%", opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className={cn(
-              "fixed h-full w-full inset-0 bg-sidebar p-8 z-100 flex flex-col justify-between",
-              className,
-            )}
-          >
-            <button
-              type="button"
-              aria-label="Close menu"
-              className="absolute right-8 top-8 z-50 text-white/50 cursor-pointer hover:text-white transition-colors"
-              onClick={() => setOpen(!open)}
-            >
-              <IconX />
-            </button>
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+// Mobile sidebar is replaced by MobileBottomNav in DashboardSidebar — render nothing here.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const MobileSidebar = (_props: React.ComponentProps<"div">) => null;
 
 export const SidebarLink = ({
   link,

@@ -4,7 +4,6 @@ import type { CandidateCard, CandidateStatus } from "@/types";
 export interface KanbanFilters {
   recruiter_id?: string;
   client_id?: string;
-  source?: "internal" | "external";
   tags?: string[];
   stage?: string;
   mapped_after?: string;
