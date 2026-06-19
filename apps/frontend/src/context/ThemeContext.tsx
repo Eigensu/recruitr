@@ -42,16 +42,26 @@ export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode
   // Always start with "dark" so server and client agree during hydration.
   // After mount, sync to the user's stored preference.
   const [theme, setTheme] = useState<Theme>("dark");
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     const actual = resolveTheme();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTheme(actual);
+    setIsMounted(true);
   }, []);
 
   // Apply [data-theme] to <html> whenever theme changes
   useEffect(() => {
+    if (!isMounted) return;
     document.documentElement.dataset.theme = theme;
+
+    // Add transition class only after initial hydration to prevent load flashes
+    if (!document.body.classList.contains("theme-transition")) {
+      // Small timeout ensures the transition class is added AFTER the DOM paints the correct theme
+      setTimeout(() => document.body.classList.add("theme-transition"), 50);
+    }
+
     try {
       if (typeof globalThis !== "undefined" && "localStorage" in globalThis) {
         globalThis.localStorage.setItem("binge-theme", theme);
@@ -59,7 +69,7 @@ export function ThemeProvider({ children }: Readonly<{ children: React.ReactNode
     } catch {
       return;
     }
-  }, [theme]);
+  }, [theme, isMounted]);
 
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
   const contextValue = useMemo(() => ({ theme, toggleTheme, isDark: theme === "dark" }), [theme]);
