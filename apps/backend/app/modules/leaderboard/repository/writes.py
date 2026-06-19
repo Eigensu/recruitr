@@ -19,6 +19,7 @@ from app.modules.leaderboard.utils.ranking_calculator import (
     OFFER_POINTS,
     REJECTION_PENALTY,
     activity_points,
+    level_for_xp,
 )
 
 
@@ -94,6 +95,10 @@ async def record_activity_atomic(
     stat = await EmployeeStat.get_motor_collection().find_one({"employee_id": employee_oid})
     if stat:
         score = int(stat.get("xp_points", stat.get("total_score", 0)))
+        await EmployeeStat.get_motor_collection().update_one(
+            {"employee_id": employee_oid},
+            {"$set": {"level": level_for_xp(score)}},
+        )
         await update_rank(str(employee_oid), score)
         await unlock_badges(employee_oid, evaluate_badges(stat))
     return True
@@ -106,7 +111,14 @@ async def recompute_ranks() -> list[dict[str, Any]]:
         score = int(stat.get("xp_points", stat.get("total_score", 0)))
         await EmployeeStat.get_motor_collection().update_one(
             {"_id": stat["_id"]},
-            {"$set": {"total_score": score, "xp_points": score, "updated_at": datetime.now(UTC)}},
+            {
+                "$set": {
+                    "total_score": score,
+                    "xp_points": score,
+                    "level": level_for_xp(score),
+                    "updated_at": datetime.now(UTC),
+                }
+            },
         )
         await update_rank(str(stat["employee_id"]), score)
         refreshed.append(
@@ -191,13 +203,13 @@ async def backfill_stats_from_mappings() -> int:
                     "mappings.rejected_candidates": rejected,
                     "xp_points": xp,
                     "total_score": xp,
+                    "level": level_for_xp(xp),
                     "is_active": True,
                     "updated_at": datetime.now(UTC),
                 },
                 "$setOnInsert": {
                     "created_at": datetime.now(UTC),
                     "employee_id": employee_oid,
-                    "level": 1,
                     "streak_days": 0,
                     "leaderboard_rank": 0,
                     "monthly_growth": 0.0,
