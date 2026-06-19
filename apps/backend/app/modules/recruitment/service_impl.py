@@ -7,6 +7,8 @@ never rolls back the domain write.
 
 from __future__ import annotations
 
+import logging
+
 from beanie import PydanticObjectId
 
 from app.modules.recruitment.enums import ActivityType, Decision, PipelineStage
@@ -25,6 +27,8 @@ from app.modules.recruitment.repository import (
     move_stage as repo_move_stage,
 )
 from app.modules.recruitment.schemas import TenantScope
+
+logger = logging.getLogger(__name__)
 
 # ── Employee / login linking ───────────────────────────────────────────────────
 
@@ -209,7 +213,15 @@ async def _credit_gamification(scope: TenantScope, mapping: Mapping, stage: Pipe
             description=f"Candidate pipeline: {stage.value}",
         )
     except Exception:  # noqa: BLE001
-        pass  # gamification failure must never roll back a domain write
+        # Gamification failure must never roll back a domain write — but log it,
+        # otherwise a systemic write failure stays invisible (as it did when the
+        # leaderboard write used an unsupported standalone-Mongo transaction).
+        logger.exception(
+            "Leaderboard credit failed for employee=%s mapping=%s stage=%s",
+            scope.employee_id,
+            mapping.id,
+            stage.value,
+        )
 
 
 async def _invalidate_caches(brand_id: PydanticObjectId) -> None:

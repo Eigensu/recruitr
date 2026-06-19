@@ -49,41 +49,44 @@ async def record_activity_atomic(
     elif activity_type == ActivityTypeEnum.CANDIDATE_REJECTED:
         inc["mappings.rejected_candidates"] = 1
 
-    client = RecruiterActivity.get_motor_collection().database.client
-    async with await client.start_session() as session, session.start_transaction():
-        try:
-            await RecruiterActivity.get_motor_collection().insert_one(
-                {
-                    "employee_id": employee_oid,
-                    "candidate_id": candidate_oid,
-                    "activity_type": activity_type.value,
-                    "title": title,
-                    "description": description,
-                    "points_earned": points,
-                    "activity_reference_id": activity_reference_id,
-                    "created_at": datetime.now(UTC),
-                },
-                session=session,
-            )
-        except DuplicateKeyError:
-            await session.abort_transaction()
-            return False
-
-        await EmployeeStat.get_motor_collection().update_one(
-            {"employee_id": employee_oid},
+    # No multi-document transaction here: the deployment runs on a standalone
+    # MongoDB, where transactions are unsupported and raise OperationFailure.
+    # Idempotency is instead guaranteed by the unique index on
+    # RecruiterActivity.activity_reference_id — the insert is the dedup gate.
+    # We insert the activity first; only if it is genuinely new (no
+    # DuplicateKeyError) do we apply the stat increment. A crash between the two
+    # writes leaves the stat under-counted, which recompute_ranks /
+    # backfill_stats_from_mappings can repair from source mappings.
+    try:
+        await RecruiterActivity.get_motor_collection().insert_one(
             {
-                "$inc": inc,
-                "$set": {"updated_at": datetime.now(UTC), "is_active": True},
-                "$setOnInsert": {
-                    "created_at": datetime.now(UTC),
-                    "employee_id": employee_oid,
-                    "level": 1,
-                    "streak_days": 0,
-                },
+                "employee_id": employee_oid,
+                "candidate_id": candidate_oid,
+                "activity_type": activity_type.value,
+                "title": title,
+                "description": description,
+                "points_earned": points,
+                "activity_reference_id": activity_reference_id,
+                "created_at": datetime.now(UTC),
             },
-            upsert=True,
-            session=session,
         )
+    except DuplicateKeyError:
+        return False
+
+    await EmployeeStat.get_motor_collection().update_one(
+        {"employee_id": employee_oid},
+        {
+            "$inc": inc,
+            "$set": {"updated_at": datetime.now(UTC), "is_active": True},
+            "$setOnInsert": {
+                "created_at": datetime.now(UTC),
+                "employee_id": employee_oid,
+                "level": 1,
+                "streak_days": 0,
+            },
+        },
+        upsert=True,
+    )
 
     stat = await EmployeeStat.get_motor_collection().find_one({"employee_id": employee_oid})
     if stat:
