@@ -447,7 +447,8 @@ function DraggableCandidateCard({
               {cand.full_name}
             </h4>
             <p className="text-[11px] text-text-muted mt-0.5 truncate">
-              {cand.previous_company || "Freelance"} &bull; {cand.experience_years}y exp
+              {cand.previous_company ? `${cand.previous_company} · ` : ""}
+              {cand.experience_years}y exp
             </p>
           </div>
           {score !== null && <div className={scoreBadgeClass}>{score}%</div>}
@@ -517,9 +518,7 @@ function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
           </span>
         )}
       </div>
-      <p className="text-[11px] text-text-muted mb-2 truncate">
-        {cand.previous_company || "Freelance"}
-      </p>
+      <p className="text-[11px] text-text-muted mb-2 truncate">{cand.previous_company}</p>
       <div className="flex flex-wrap gap-1">
         {cand.skills.slice(0, 2).map((s) => (
           <span
