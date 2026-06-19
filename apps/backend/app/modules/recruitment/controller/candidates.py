@@ -36,7 +36,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.utils.resume_parser import parse_resume
-from app.modules.storage.service import extract_text_from_pdf
+from app.modules.storage.service import extract_text_from_file
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
@@ -85,7 +85,7 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(resume_url)
             resp.raise_for_status()
-        raw_text = extract_text_from_pdf(resp.content)
+        raw_text = extract_text_from_file(resp.content)
         parsed = parse_resume(raw_text)
     except Exception:
         _log.exception("Resume parse failed for candidate %s", candidate_id)

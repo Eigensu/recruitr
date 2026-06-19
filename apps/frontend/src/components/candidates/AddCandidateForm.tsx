@@ -296,11 +296,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       {form.source === "internal" && (
         <div>
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Resume PDF
+            Resume
           </label>
           <input
             type="file"
-            accept=".pdf,application/pdf"
+            accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
             className="block w-full text-sm"
             style={{ color: "var(--color-text-secondary)" }}
             onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}

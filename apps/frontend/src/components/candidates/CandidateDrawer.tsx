@@ -19,7 +19,8 @@ import {
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
-import { clientUpdateCandidate } from "@/lib/api/candidates.client";
+import { clientConfirmResume, clientUpdateCandidate } from "@/lib/api/candidates.client";
+import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
 interface CandidateDrawerProps {
@@ -412,6 +413,7 @@ function EditForm({
     recruiter_tags: [...candidate.recruiter_tags],
     notes: candidate.notes ?? "",
   });
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -430,6 +432,10 @@ function EditForm({
     setSaving(true);
     setError(null);
     try {
+      if (resumeFile) {
+        const uploaded = await uploadResumeToCloudinary(resumeFile);
+        await clientConfirmResume(candidate.id, uploaded);
+      }
       const payload: Parameters<typeof clientUpdateCandidate>[1] = {
         full_name: form.full_name.trim() || undefined,
         phone: form.phone.trim() || undefined,
@@ -556,6 +562,36 @@ function EditForm({
           value={form.cv_link}
           onChange={(e) => setForm((f) => ({ ...f, cv_link: e.target.value }))}
         />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Resume
+        </label>
+        {candidate.resume_url && !resumeFile && (
+          <a
+            href={candidate.resume_url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="mb-2 flex items-center gap-2 text-xs hover:text-yellow transition-colors w-fit"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            <IconFileText className="size-3.5 shrink-0" />
+            View current resume
+          </a>
+        )}
+        <input
+          type="file"
+          accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+          className="block w-full text-sm"
+          style={{ color: "var(--color-text-secondary)" }}
+          onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+        />
+        {resumeFile && (
+          <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
+            {resumeFile.name}
+          </p>
+        )}
       </div>
 
       <div>
