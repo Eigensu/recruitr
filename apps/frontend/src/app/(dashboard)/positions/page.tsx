@@ -16,6 +16,7 @@ import {
   IconAlertCircle,
   IconLoader2,
   IconTrash,
+  IconPencil,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useApiFetch } from "@/lib/api";
@@ -100,6 +101,7 @@ function PositionCard({
   isMaintainer,
   onDelete,
   onReopen,
+  onEdit,
 }: Readonly<{
   position: ApiPosition;
   isSelected: boolean;
@@ -107,6 +109,7 @@ function PositionCard({
   isMaintainer?: boolean;
   onDelete?: (id: string) => Promise<void>;
   onReopen?: (id: string) => Promise<void>;
+  onEdit?: (position: ApiPosition) => void;
 }>) {
   const { setNodeRef, isOver } = useDroppable({ id: position.id });
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -235,27 +238,43 @@ function PositionCard({
               seats
             </div>
           </div>
-          {isMaintainer &&
-            onDelete &&
-            (confirmDelete ? (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                disabled={deleting}
-                className="pointer-events-auto text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-500/90 text-white hover:bg-red-600 transition-colors disabled:opacity-60 z-10 relative"
-              >
-                {deleting ? "…" : "Confirm?"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                aria-label="Delete position"
-                className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 z-10 relative"
-              >
-                <IconTrash className="size-3.5" />
-              </button>
-            ))}
+          {isMaintainer && (
+            <div className="flex gap-0.5">
+              {onEdit && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(position);
+                  }}
+                  aria-label="Edit position"
+                  className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-yellow hover:bg-yellow/10 transition-colors z-10 relative"
+                >
+                  <IconPencil className="size-3.5" />
+                </button>
+              )}
+              {onDelete &&
+                (confirmDelete ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={deleting}
+                    className="pointer-events-auto text-[10px] font-bold px-2 py-0.5 rounded-lg bg-red-500/90 text-white hover:bg-red-600 transition-colors disabled:opacity-60 z-10 relative"
+                  >
+                    {deleting ? "…" : "Confirm?"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    aria-label="Delete position"
+                    className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors z-10 relative"
+                  >
+                    <IconTrash className="size-3.5" />
+                  </button>
+                ))}
+            </div>
+          )}
         </div>
       </div>
       {confirmDelete && (
@@ -536,6 +555,7 @@ export default function PositionsPage() {
   const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
   const [activeDragCand, setActiveDragCand] = useState<ApiTopCandidate | null>(null);
   const [addPositionOpen, setAddPositionOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<ApiPosition | null>(null);
 
   const toast = useToast();
 
@@ -692,6 +712,11 @@ export default function PositionsPage() {
     setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
   }
 
+  function handleUpdatePosition(updated: ApiPosition) {
+    setPositions((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
+    toast(`Position "${updated.role}" updated`, "success");
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
@@ -835,6 +860,7 @@ export default function PositionsPage() {
                       isMaintainer={isMaintainer}
                       onDelete={handleDeletePosition}
                       onReopen={handleReopenPosition}
+                      onEdit={(p) => setEditingPosition(p)}
                     />
                   ))}
                 </div>
@@ -1020,6 +1046,19 @@ export default function PositionsPage() {
         onCreated={(pos) => {
           setPositions((prev) => [pos, ...prev]);
           toast(`Position "${pos.role}" created`, "success");
+        }}
+      />
+
+      <AddPositionModal
+        key={editingPosition?.id ?? "edit-closed"}
+        isOpen={Boolean(editingPosition)}
+        onClose={() => setEditingPosition(null)}
+        filters={filters}
+        position={editingPosition ?? undefined}
+        onCreated={() => {}}
+        onUpdated={(updated) => {
+          handleUpdatePosition(updated);
+          setEditingPosition(null);
         }}
       />
     </DndContext>

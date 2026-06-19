@@ -75,6 +75,7 @@ export interface ApiPosition {
   mapped_preview: ApiMappedPreview[];
   assigned_employee_id: string | null;
   assigned_employee_name: string | null;
+  requirements: string[];
   date_opened: string;
   target_close: string | null;
   notes: string | null;

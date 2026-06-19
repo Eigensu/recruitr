@@ -4,7 +4,12 @@ import React, { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconX, IconBriefcase } from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
-import { createPosition, type PositionCreatePayload } from "@/lib/api/positions";
+import {
+  createPosition,
+  updatePosition,
+  type PositionCreatePayload,
+  type PositionUpdatePayload,
+} from "@/lib/api/positions";
 import type { ApiPosition, ApiPositionFilters } from "@/types";
 
 interface Props {
@@ -12,6 +17,9 @@ interface Props {
   onClose: () => void;
   filters: ApiPositionFilters | null;
   onCreated: (position: ApiPosition) => void;
+  /** When provided the modal operates in edit mode */
+  position?: ApiPosition;
+  onUpdated?: (position: ApiPosition) => void;
 }
 
 const INPUT_CLS =
@@ -30,15 +38,36 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-export default function AddPositionModal({ isOpen, onClose, filters, onCreated }: Readonly<Props>) {
+function positionToForm(p: ApiPosition) {
+  return {
+    clientId: p.client_id,
+    role: p.role,
+    department: p.department ?? "",
+    city: p.city ?? "",
+    seniority: p.seniority,
+    requirements: (p.requirements ?? []).join(", "),
+    totalSeats: String(p.total_seats),
+    notes: p.notes ?? "",
+  };
+}
+
+export default function AddPositionModal({
+  isOpen,
+  onClose,
+  filters,
+  onCreated,
+  position,
+  onUpdated,
+}: Readonly<Props>) {
   const apiFetch = useApiFetch();
-  const [form, setForm] = useState(EMPTY_FORM);
+  const isEditing = Boolean(position);
+
+  const [form, setForm] = useState(position ? positionToForm(position) : EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleClose() {
     if (submitting) return;
-    setForm(EMPTY_FORM);
     setError(null);
     onClose();
   }
@@ -48,27 +77,44 @@ export default function AddPositionModal({ isOpen, onClose, filters, onCreated }
     setSubmitting(true);
     setError(null);
 
-    const payload: PositionCreatePayload = {
-      client_id: form.clientId,
-      role: form.role.trim(),
-      department: form.department.trim() || undefined,
-      city: form.city.trim() || undefined,
-      seniority: form.seniority,
-      requirements: form.requirements
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      total_seats: Math.max(0, Number(form.totalSeats) || 0),
-      notes: form.notes.trim() || undefined,
-    };
+    const requirements = form.requirements
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const total_seats = Math.max(0, Number(form.totalSeats) || 0);
 
     try {
-      const created = await createPosition(apiFetch, payload);
-      onCreated(created);
-      setForm(EMPTY_FORM);
-      onClose();
+      if (isEditing && position) {
+        const payload: PositionUpdatePayload = {
+          role: form.role.trim(),
+          department: form.department.trim() || undefined,
+          city: form.city.trim() || undefined,
+          seniority: form.seniority,
+          requirements,
+          total_seats,
+          notes: form.notes.trim() || undefined,
+        };
+        const updated = await updatePosition(apiFetch, position.id, payload);
+        onUpdated?.(updated);
+        onClose();
+      } else {
+        const payload: PositionCreatePayload = {
+          client_id: form.clientId,
+          role: form.role.trim(),
+          department: form.department.trim() || undefined,
+          city: form.city.trim() || undefined,
+          seniority: form.seniority,
+          requirements,
+          total_seats,
+          notes: form.notes.trim() || undefined,
+        };
+        const created = await createPosition(apiFetch, payload);
+        onCreated(created);
+        setForm(EMPTY_FORM);
+        onClose();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create position.");
+      setError(err instanceof Error ? err.message : "Failed to save position.");
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +147,7 @@ export default function AddPositionModal({ isOpen, onClose, filters, onCreated }
                 className="text-lg font-bold font-heading text-white flex items-center gap-2"
               >
                 <IconBriefcase className="size-5 text-yellow" />
-                New Position
+                {isEditing ? "Edit Position" : "New Position"}
               </h2>
               <button
                 type="button"
@@ -127,20 +173,26 @@ export default function AddPositionModal({ isOpen, onClose, filters, onCreated }
                   <label htmlFor="pos-client" className={LABEL_CLS}>
                     Client *
                   </label>
-                  <select
-                    id="pos-client"
-                    required
-                    value={form.clientId}
-                    onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-                    className={INPUT_CLS}
-                  >
-                    <option value="">Select client…</option>
-                    {filters?.clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  {isEditing ? (
+                    <div className="px-3 py-2 text-sm rounded-lg bg-(--color-surface) border border-border text-gray-400">
+                      {position?.client_name}
+                    </div>
+                  ) : (
+                    <select
+                      id="pos-client"
+                      required
+                      value={form.clientId}
+                      onChange={(e) => setForm({ ...form, clientId: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Select client…</option>
+                      {filters?.clients.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -265,7 +317,13 @@ export default function AddPositionModal({ isOpen, onClose, filters, onCreated }
                 disabled={submitting}
                 className="px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-lg shadow-yellow/10 disabled:opacity-60"
               >
-                {submitting ? "Creating…" : "Create Position"}
+                {submitting
+                  ? isEditing
+                    ? "Saving…"
+                    : "Creating…"
+                  : isEditing
+                    ? "Save Changes"
+                    : "Create Position"}
               </button>
             </div>
           </motion.div>
