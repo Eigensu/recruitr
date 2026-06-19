@@ -350,46 +350,32 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or unauthorized client")
 
     reqs = _get_effective_requirements(data)
-    date_opened = data.date_opened or datetime.now(UTC)
 
-    # Retry loop: if the counter is behind the actual data (e.g. from a seed or
-    # manual insert) the generated code will collide.  Each DuplicateKeyError
-    # advances the counter by one, so we clear the gap within a few attempts.
-    _MAX_TRIES = 10
-    doc: Position | None = None
-    for attempt in range(_MAX_TRIES):
-        code = await generate_position_code(tenant.brand_id, client_doc.code)
-        candidate_doc = Position(
-            brand_id=tenant.brand_id,
-            code=code,
-            client_id=client_oid,
-            client_name=client_doc.name,
-            role=data.role,
-            department=data.department,
-            city=data.city,
-            train_line=data.train_line,
-            seniority=Seniority(data.seniority),
-            requirements=reqs,
-            total_seats=data.total_seats,
-            filled_seats=0,
-            remaining_seats=data.total_seats,
-            status=PositionStatus.open,
-            date_opened=date_opened,
-            target_close=data.target_close,
-            notes=data.notes,
-        )
-        try:
-            await candidate_doc.insert()
-            doc = candidate_doc
-            break
-        except DuplicateKeyError:
-            if attempt == _MAX_TRIES - 1:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    "Could not allocate a unique position code — please try again",
-                ) from None
+    code = await generate_position_code(tenant.brand_id, client_doc.code)
 
-    assert doc is not None  # loop always sets doc or raises
+    doc = Position(
+        brand_id=tenant.brand_id,
+        code=code,
+        client_id=client_oid,
+        client_name=client_doc.name,
+        role=data.role,
+        department=data.department,
+        city=data.city,
+        train_line=data.train_line,
+        seniority=Seniority(data.seniority),
+        requirements=reqs,
+        total_seats=data.total_seats,
+        filled_seats=0,
+        remaining_seats=data.total_seats,
+        status=PositionStatus.open,
+        date_opened=data.date_opened or datetime.now(UTC),
+        target_close=data.target_close,
+        notes=data.notes,
+    )
+    try:
+        await doc.insert()
+    except DuplicateKeyError:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Position code already exists") from None
 
     return PositionListItem(
         id=str(doc.id),

@@ -66,7 +66,12 @@ async def generate_client_code(brand_id: PydanticObjectId) -> str:
 
 
 async def generate_position_code(brand_id: PydanticObjectId, client_code: str) -> str:
-    seq = await next_seq(brand_id, f"position:{client_code}")
+    last = await Position.get_motor_collection().find_one(
+        {"brand_id": brand_id, "code": {"$regex": f"^{client_code}-POS-"}},
+        sort=[("code", -1)],
+        projection={"code": 1},
+    )
+    seq = (int(last["code"].rsplit("-", 1)[-1]) + 1) if last else 1
     return f"{client_code}-POS-{seq:03d}"
 
 
