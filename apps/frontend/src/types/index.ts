@@ -286,7 +286,8 @@ export type KanbanStage =
   | "decision_pending"
   | "offer"
   | "offer_accepted"
-  | "position_close";
+  | "position_close"
+  | "rejected";
 
 export interface PipelineCard {
   mapping_id: string;

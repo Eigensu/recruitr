@@ -1,6 +1,8 @@
 """Recruitment domain DTOs and value objects."""
 
 from app.modules.recruitment.schemas.candidate import (
+    BulkUploadFailure,
+    BulkUploadResult,
     CandidateCreate,
     CandidateMappingItem,
     CandidatePage,
@@ -46,6 +48,8 @@ __all__ = [
     "CandidateMappingItem",
     "CandidatePage",
     "ExperienceFilter",
+    "BulkUploadFailure",
+    "BulkUploadResult",
     # Position DTOs
     "MappedPreview",
     "PositionListItem",

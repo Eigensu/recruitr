@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import io
 import time
 
 import cloudinary
@@ -62,11 +63,12 @@ def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
     Returns:
         The Cloudinary upload result dict (includes public_id, secure_url).
     """
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
     return cloudinary.uploader.upload(
         pdf_bytes,
         resource_type="raw",
         folder=RESUME_FOLDER,
-        public_id=filename.removesuffix(".pdf"),
+        public_id=stem,
         overwrite=False,
         use_filename=True,
     )
@@ -87,15 +89,44 @@ def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract raw text from a PDF file using PyMuPDF (PDF only).
+    """Extract raw text from a PDF file using PyMuPDF.
 
     Raises:
         ValueError: If file_bytes is not a PDF.
-
-    Returns:
-        Concatenated plain text from all pages.
     """
     if not file_bytes.startswith(b"%PDF-"):
         raise ValueError("Input is not a PDF file")
     with fitz.open(stream=file_bytes, filetype="pdf") as doc:
         return "\n".join(page.get_text() for page in doc)
+
+
+def extract_text_from_docx(file_bytes: bytes) -> str:
+    """Extract raw text from a .docx file using python-docx.
+
+    Raises:
+        ValueError: If file_bytes cannot be opened as a DOCX.
+    """
+    try:
+        from docx import Document  # python-docx  # noqa: PLC0415
+
+        doc = Document(io.BytesIO(file_bytes))
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    except Exception as exc:
+        raise ValueError(f"Could not parse DOCX file: {exc}") from exc
+
+
+def extract_text_from_file(file_bytes: bytes) -> str:
+    """Detect file type from magic bytes and extract text.
+
+    Supports PDF and DOCX. Old binary .doc is accepted for upload but
+    cannot be parsed — callers should handle ValueError gracefully.
+
+    Raises:
+        ValueError: If the file format is unsupported or extraction fails.
+    """
+    if file_bytes.startswith(b"%PDF-"):
+        return extract_text_from_pdf(file_bytes)
+    # DOCX (and all OOXML formats) are ZIP archives starting with PK
+    if file_bytes[:2] == b"PK":
+        return extract_text_from_docx(file_bytes)
+    raise ValueError("Unsupported file format. Only PDF and DOCX (Word) files can be parsed.")

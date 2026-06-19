@@ -13,6 +13,7 @@ const STAGE_ACCENT: Record<KanbanStage, string> = {
   offer: "text-yellow border-yellow/30 bg-yellow/5",
   offer_accepted: "text-emerald-400 border-emerald-500/30 bg-emerald-500/5",
   position_close: "text-teal-400 border-teal-500/30 bg-teal-500/5",
+  rejected: "text-red-400 border-red-500/30 bg-red-500/5",
 };
 
 const STAGE_DOT: Record<KanbanStage, string> = {
@@ -23,6 +24,7 @@ const STAGE_DOT: Record<KanbanStage, string> = {
   offer: "bg-yellow",
   offer_accepted: "bg-emerald-400",
   position_close: "bg-teal-400",
+  rejected: "bg-red-400",
 };
 
 interface Props {

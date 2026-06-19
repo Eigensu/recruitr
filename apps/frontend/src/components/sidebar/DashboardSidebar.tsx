@@ -197,12 +197,6 @@ export default function DashboardSidebar() {
     (item) => !item.maintainerOnly || isMaintainer,
   );
 
-  const visibleLinks = visibleConfigs.map((item) => ({
-    label: item.label,
-    href: item.href,
-    icon: <item.icon className="h-5 w-5 shrink-0" />,
-  }));
-
   return (
     <>
       <Sidebar open={open} setOpen={setOpen}>
@@ -213,10 +207,14 @@ export default function DashboardSidebar() {
               <LogoRow />
             </div>
             <nav className="mt-6 flex flex-col items-stretch gap-0.5 px-3 w-full">
-              {visibleLinks.map((link, i) => {
-                const config = visibleConfigs[i];
-                const isActive = isNavItemActive(pathname, link.href, config.exact);
-                return <SidebarLink key={link.href} link={link} active={isActive} />;
+              {visibleConfigs.map((config) => {
+                const isActive = isNavItemActive(pathname, config.href, config.exact);
+                const link = {
+                  label: config.label,
+                  href: config.href,
+                  icon: <config.icon className="h-5 w-5 shrink-0" />,
+                };
+                return <SidebarLink key={config.href} link={link} active={isActive} />;
               })}
             </nav>
           </div>
