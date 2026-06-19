@@ -372,10 +372,19 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
         target_close=data.target_close,
         notes=data.notes,
     )
-    try:
-        await doc.insert()
-    except DuplicateKeyError:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Position code already exists") from None
+    # generate_position_code reads-then-writes, so two concurrent creates can
+    # derive the same code. Retry with a freshly generated code on collision
+    # rather than surfacing a spurious 409 to the user.
+    for attempt in range(5):
+        try:
+            await doc.insert()
+            break
+        except DuplicateKeyError:
+            if attempt == 4:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT, "Position code already exists"
+                ) from None
+            doc.code = await generate_position_code(tenant.brand_id, client_doc.code)
 
     return PositionListItem(
         id=str(doc.id),
