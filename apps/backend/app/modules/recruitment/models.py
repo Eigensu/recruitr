@@ -293,6 +293,7 @@ class Employee(Document):
             IndexModel("user_id", sparse=True),
             IndexModel("brand_id"),
             IndexModel("is_active"),
+            IndexModel([("brand_id", 1), ("is_active", 1), ("role", 1)]),
         ]
 
 

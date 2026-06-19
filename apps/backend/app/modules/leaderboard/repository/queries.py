@@ -251,7 +251,12 @@ async def fetch_rankings(
             }
         },
         {"$unwind": "$employee"},
-        {"$match": {"employee.is_active": True}},
+        {
+            "$match": {
+                "employee.is_active": True,
+                "employee.role": {"$nin": ["admin", "maintainer"]},
+            }
+        },
     ]
     if search:
         escaped_search = re.escape(search)

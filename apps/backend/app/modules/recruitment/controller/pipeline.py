@@ -530,9 +530,8 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
             await mapping.insert()
         except DuplicateKeyError:
             # Race condition: another request inserted between find_one and insert.
-            # Fetch without brand_id filter to handle any data inconsistency.
             race_existing = await Mapping.find_one(
-                {"candidate_id": cand_oid, "position_id": pos_oid}
+                {"brand_id": tenant.brand_id, "candidate_id": cand_oid, "position_id": pos_oid}
             )
             if race_existing:
                 prev_stage = race_existing.stage

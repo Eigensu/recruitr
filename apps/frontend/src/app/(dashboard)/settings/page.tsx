@@ -106,7 +106,7 @@ export default function SettingsPage() {
     try {
       const updated = await apiFetch<{ full_name: string | null }>("/api/v1/auth/me", {
         method: "PATCH",
-        body: JSON.stringify({ full_name: trimmed || null }),
+        body: JSON.stringify({ full_name: trimmed || "" }),
       });
       setSavedName(updated.full_name);
       setIsEditingName(false);
@@ -415,7 +415,7 @@ export default function SettingsPage() {
                       className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
                     >
                       <IconLogout className="w-4 h-4" />
-                      Log out of all devices
+                      Log out
                     </button>
                   </div>
                 </div>

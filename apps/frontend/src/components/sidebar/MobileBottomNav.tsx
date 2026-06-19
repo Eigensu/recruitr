@@ -2,23 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  IconLayoutDashboard,
-  IconBriefcase,
-  IconUsers,
-  IconLayoutKanban,
-  IconTrophy,
-} from "@tabler/icons-react";
+import { isNavItemActive, type NavItemConfig } from "@/components/sidebar/nav-config";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: IconLayoutDashboard, exact: true },
-  { href: "/positions", label: "Positions", icon: IconBriefcase, exact: false },
-  { href: "/candidates", label: "Candidates", icon: IconUsers, exact: false },
-  { href: "/pipeline", label: "Pipeline", icon: IconLayoutKanban, exact: false },
-  { href: "/leaderboard", label: "Leaderboard", icon: IconTrophy, exact: false },
-];
+interface MobileBottomNavProps {
+  items: NavItemConfig[];
+}
 
-export default function MobileBottomNav() {
+export default function MobileBottomNav({ items }: MobileBottomNavProps) {
   const pathname = usePathname();
 
   return (
@@ -26,8 +16,8 @@ export default function MobileBottomNav() {
       className="fixed bottom-0 left-0 right-0 z-50 flex md:hidden"
       style={{ background: "var(--color-sidebar)", borderTop: "1px solid rgba(255,255,255,0.08)" }}
     >
-      {NAV_ITEMS.map(({ href, label, icon: Icon, exact }) => {
-        const isActive = exact ? pathname === href : pathname.startsWith(href);
+      {items.map(({ href, label, icon: Icon, exact }) => {
+        const isActive = isNavItemActive(pathname, href, exact);
         return (
           <Link
             key={href}
