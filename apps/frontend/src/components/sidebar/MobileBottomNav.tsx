@@ -23,7 +23,7 @@ export default function MobileBottomNav({ items }: MobileBottomNavProps) {
             key={href}
             href={href}
             className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 transition-colors"
-            style={{ color: isActive ? "#f5c518" : "rgba(255,255,255,0.4)" }}
+            style={{ color: isActive ? "var(--color-nav-active)" : "var(--color-nav-inactive)" }}
             aria-label={label}
           >
             <Icon className="size-5 shrink-0" />
