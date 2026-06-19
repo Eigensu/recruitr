@@ -159,7 +159,7 @@ function PositionCard({
           onClick();
         }
       }}
-      tabIndex={isActive || isMaintainer ? 0 : -1}
+      tabIndex={0}
       role="button"
       aria-pressed={isSelected}
       className={cn(
@@ -168,8 +168,7 @@ function PositionCard({
           ? "border-yellow bg-surface-panel shadow-md shadow-yellow/5"
           : "border-border bg-surface-panel hover:border-border hover:shadow-sm",
         isOver && "border-yellow/70 shadow-lg shadow-yellow/10 scale-[1.01]",
-        !isActive && !isMaintainer && "opacity-40 pointer-events-none",
-        !isActive && isMaintainer && "opacity-60",
+        !isActive && "opacity-60",
       )}
     >
       {isSelected && (
