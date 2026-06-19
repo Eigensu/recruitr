@@ -11,6 +11,7 @@ cloudinary>=1.42.0
 python-multipart>=0.0.16
 pymupdf>=1.24.0
 python-docx>=1.0.0
+lxml>=6.1.0  # pin patched version; python-docx pulls this in (CVE-2026-41066)
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.1
