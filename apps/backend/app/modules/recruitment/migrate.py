@@ -310,18 +310,6 @@ async def migrate() -> None:
         {"$set": {"seq": client_seq}},
         upsert=True,
     )
-    for client_id, seq in pos_seq_by_client.items():
-        client_doc = next(
-            (c for c in (new_clients + list(existing_clients.values())) if c["_id"] == client_id),
-            None,
-        )
-        if client_doc:
-            key = f"position:{client_doc['code']}"
-            await db["counters"].update_one(
-                {"brand_id": brand_id, "key": key},
-                {"$set": {"seq": seq}},
-                upsert=True,
-            )
     print("Counters seeded.")
 
     await client.close()

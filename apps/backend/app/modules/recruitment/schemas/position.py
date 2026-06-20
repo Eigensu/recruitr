@@ -34,6 +34,7 @@ class PositionListItem(BaseModel):
     mapped_preview: list[MappedPreview] = Field(default_factory=list)
     assigned_employee_id: str | None = None
     assigned_employee_name: str | None = None
+    requirements: list[str] = Field(default_factory=list)
     date_opened: datetime
     target_close: datetime | None = None
     notes: str | None = None

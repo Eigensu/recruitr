@@ -168,7 +168,8 @@ function DrawerInner({
         </h2>
         <p className="text-sm text-text-muted mt-1 flex items-center gap-1.5">
           <IconBriefcase className="size-3.5 shrink-0" />
-          {candidate.previous_company ?? "Independent"} · {candidate.experience_years} yrs exp
+          {candidate.previous_company ? `${candidate.previous_company} · ` : ""}
+          {candidate.experience_years} yrs exp
         </p>
 
         {/* Contact */}
