@@ -1,6 +1,5 @@
 import { Skeleton } from "@/components/common/skeletons/Skeleton";
 import PositionCardSkeleton from "@/components/positions/skeletons/PositionCardSkeleton";
-import PositionTableSkeleton from "@/components/positions/skeletons/PositionTableSkeleton";
 
 export default function PositionPageSkeleton() {
   return (

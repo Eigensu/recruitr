@@ -16,6 +16,7 @@ from app.modules.recruitment.enums import (
     ActivityType,
     Decision,
     EducationLevel,
+    Gender,
     PipelineStage,
     PositionStatus,
     Seniority,
@@ -176,10 +177,13 @@ class Candidate(Document):
     previous_company: str | None = None
     experience_years: float = 0
     education_level: EducationLevel | None = None
+    city: str | None = None
+    area: str | None = None
+    gender: Gender | None = None
+    age: int | None = None
     skills: list[str] = Field(default_factory=list)
     skills_normalized: list[str] = Field(default_factory=list)  # lowercased, for $setIntersection
-    ai_tags: list[str] = Field(default_factory=list)
-    recruiter_tags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None
@@ -203,7 +207,7 @@ class Candidate(Document):
             IndexModel([("brand_id", 1), ("email", 1)], unique=True),
             IndexModel("brand_id"),
             IndexModel("skills_normalized"),
-            IndexModel("recruiter_tags"),
+            IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
             IndexModel("is_active"),
             IndexModel("created_at"),

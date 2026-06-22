@@ -11,6 +11,8 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
+  if (filters.city) params.set("city", filters.city);
+  if (filters.gender) params.set("gender", filters.gender);
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
@@ -31,9 +33,13 @@ export async function clientCreateCandidate(data: {
   full_name: string;
   email: string;
   phone?: string;
-  recruiter_tags?: string[];
+  tags?: string[];
   cv_link?: string;
   current_role?: string;
+  city?: string;
+  area?: string;
+  gender?: string;
+  age?: number;
   salary?: number;
   notes?: string;
 }): Promise<ApiCandidate> {
@@ -54,9 +60,13 @@ export async function clientUpdateCandidate(
     phone: string;
     previous_company: string;
     experience_years: number;
-    recruiter_tags: string[];
+    tags: string[];
     cv_link: string;
     current_role: string;
+    city: string;
+    area: string;
+    gender: string;
+    age: number;
     salary: number;
     notes: string;
   }>,

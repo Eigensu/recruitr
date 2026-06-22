@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field
 
 from app.common.dtos.pagination import PaginatedResponse
-from app.modules.recruitment.enums import PipelineStage
+from app.modules.recruitment.enums import PipelineStage, Gender
 
 
 class CandidateCreate(BaseModel):
@@ -16,9 +16,12 @@ class CandidateCreate(BaseModel):
     previous_company: str | None = None
     experience_years: float = Field(default=0, ge=0)
     education_level: str | None = None
+    city: str | None = None
+    area: str | None = None
+    gender: Gender | None = None
+    age: int | None = Field(default=None, ge=0)
     skills: list[str] = Field(default_factory=list)
-    ai_tags: list[str] = Field(default_factory=list)
-    recruiter_tags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -32,9 +35,12 @@ class CandidateUpdate(BaseModel):
     previous_company: str | None = None
     experience_years: float | None = Field(default=None, ge=0)
     education_level: str | None = None
+    city: str | None = None
+    area: str | None = None
+    gender: Gender | None = None
+    age: int | None = Field(default=None, ge=0)
     skills: list[str] | None = None
-    ai_tags: list[str] | None = None
-    recruiter_tags: list[str] | None = None
+    tags: list[str] | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -50,9 +56,12 @@ class CandidateResponse(BaseModel):
     previous_company: str | None = None
     experience_years: float
     education_level: str | None = None
+    city: str | None = None
+    area: str | None = None
+    gender: Gender | None = None
+    age: int | None = None
     skills: list[str]
-    ai_tags: list[str] = Field(default_factory=list)
-    recruiter_tags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None

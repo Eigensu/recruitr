@@ -371,7 +371,7 @@ async def get_filtered_pipeline(
     if tags:
         # Stored tags keep their canonical casing, so match case-insensitively.
         patterns = [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
-        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": patterns}}})
+        agg.append({_MATCH: {"candidate.tags": {"$all": patterns}}})
 
     if source:
         agg.append({_MATCH: {"candidate.source": source}})
@@ -386,12 +386,7 @@ async def get_filtered_pipeline(
                 "phone": "$candidate.phone",
                 "resume_url": "$candidate.resume_url",
                 "extracted_skills": {"$ifNull": ["$candidate.skills", []]},
-                "tags": {
-                    "$concatArrays": [
-                        {"$ifNull": ["$candidate.recruiter_tags", []]},
-                        {"$ifNull": ["$candidate.ai_tags", []]},
-                    ]
-                },
+                "tags": {"$ifNull": ["$candidate.tags", []]},
                 "source": {"$ifNull": ["$candidate.source", "internal"]},
                 "cv_link": "$candidate.cv_link",
                 "status": {
@@ -473,12 +468,7 @@ async def get_top_candidates(
                 "email": 1,
                 "resume_url": 1,
                 "extracted_skills": {"$ifNull": ["$skills", []]},
-                "tags": {
-                    "$concatArrays": [
-                        {"$ifNull": ["$recruiter_tags", []]},
-                        {"$ifNull": ["$ai_tags", []]},
-                    ]
-                },
+                "tags": {"$ifNull": ["$tags", []]},
                 "source": "internal",
                 "cv_link": None,
                 "match_score": 1,

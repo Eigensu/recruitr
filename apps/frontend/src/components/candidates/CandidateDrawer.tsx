@@ -9,8 +9,6 @@ import {
   IconBriefcase,
   IconFileText,
   IconLink,
-  IconSparkles,
-  IconTag,
   IconCurrencyDollar,
   IconNotes,
   IconPencil,
@@ -260,6 +258,29 @@ function ViewBody({
         </>
       )}
 
+      {/* Demographics */}
+      {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
+        <>
+          <section className="flex flex-wrap gap-4">
+            {(candidate.city || candidate.area) && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>{[candidate.city, candidate.area].filter(Boolean).join(" • ")}</span>
+              </div>
+            )}
+            {(candidate.gender || candidate.age) && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>
+                  {[candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </span>
+              </div>
+            )}
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
+
       {/* Skills */}
       <section>
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
@@ -280,68 +301,12 @@ function ViewBody({
       <div className="h-px bg-border/50" />
 
       {/* Tags */}
-      {(candidate.ai_tags.length > 0 || candidate.recruiter_tags.length > 0) && (
+      {candidate.tags.length > 0 && (
         <>
           <section>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
               Tags
             </h3>
-            {candidate.ai_tags.length > 0 && (
-              <div className="mb-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <IconSparkles className="size-3 opacity-60" style={{ color: "#60a5fa" }} />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-widest"
-                    style={{ color: "#60a5fa" }}
-                  >
-                    Auto · Parsed
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {candidate.ai_tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
-                      style={{
-                        background: "rgba(96,165,250,0.1)",
-                        color: "#60a5fa",
-                        border: "1px solid rgba(96,165,250,0.25)",
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {candidate.recruiter_tags.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <IconTag className="size-3 opacity-60" style={{ color: "#fb923c" }} />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-widest"
-                    style={{ color: "#fb923c" }}
-                  >
-                    Manual · Recruiter
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {candidate.recruiter_tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
-                      style={{
-                        background: "rgba(251,146,60,0.1)",
-                        color: "#fb923c",
-                        border: "1px solid rgba(251,146,60,0.25)",
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </section>
           <div className="h-px bg-border/50" />
         </>
@@ -406,10 +371,14 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
+    city: candidate.city ?? "",
+    area: candidate.area ?? "",
+    gender: candidate.gender ?? "",
+    age: candidate.age == null ? "" : String(candidate.age),
     salary: candidate.salary == null ? "" : String(candidate.salary),
     cv_link: candidate.cv_link ?? "",
     tagInput: "",
-    recruiter_tags: [...candidate.recruiter_tags],
+    tags: [...candidate.tags],
     notes: candidate.notes ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -417,12 +386,12 @@ function EditForm({
 
   function addTag() {
     const raw = form.tagInput.trim().toLowerCase();
-    if (!raw || form.recruiter_tags.includes(raw)) return;
-    setForm((f) => ({ ...f, recruiter_tags: [...f.recruiter_tags, raw], tagInput: "" }));
+    if (!raw || form.tags.includes(raw)) return;
+    setForm((f) => ({ ...f, tags: [...f.tags, raw], tagInput: "" }));
   }
 
   function removeTag(tag: string) {
-    setForm((f) => ({ ...f, recruiter_tags: f.recruiter_tags.filter((t) => t !== tag) }));
+    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -436,9 +405,13 @@ function EditForm({
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
         current_role: form.current_role.trim() || undefined,
+        city: form.city.trim() || undefined,
+        area: form.area.trim() || undefined,
+        gender: form.gender.trim() || undefined,
+        age: form.age ? Number(form.age) : undefined,
         salary: form.salary ? Number(form.salary) : undefined,
         cv_link: form.cv_link.trim() || undefined,
-        recruiter_tags: form.recruiter_tags,
+        tags: form.tags,
         notes: form.notes.trim() || undefined,
       };
       const updated = await clientUpdateCandidate(candidate.id, payload);
@@ -529,6 +502,65 @@ function EditForm({
         />
       </div>
 
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            City
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Mumbai"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Area
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Andheri"
+            value={form.area}
+            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Gender
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.gender}
+            onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+          >
+            <option value="">Select...</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Age
+          </label>
+          <input
+            type="number"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 25"
+            value={form.age}
+            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+          />
+        </div>
+      </div>
+
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Salary
@@ -593,16 +625,16 @@ function EditForm({
             Add
           </button>
         </div>
-        {form.recruiter_tags.length > 0 && (
+        {form.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {form.recruiter_tags.map((tag) => (
+            {form.tags.map((tag) => (
               <span
                 key={tag}
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                 style={{
-                  background: "rgba(251,146,60,0.1)",
-                  color: "#fb923c",
-                  border: "1px solid rgba(251,146,60,0.25)",
+                  background: "rgba(96,165,250,0.1)",
+                  color: "#60a5fa",
+                  border: "1px solid rgba(96,165,250,0.25)",
                 }}
               >
                 {tag}
@@ -615,36 +647,6 @@ function EditForm({
                 </button>
               </span>
             ))}
-          </div>
-        )}
-
-        {/* Auto tags — read-only display */}
-        {candidate.ai_tags.length > 0 && (
-          <div className="mt-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <IconSparkles className="size-3 opacity-50" style={{ color: "#60a5fa" }} />
-              <span
-                className="text-[9px] font-bold uppercase tracking-widest opacity-60"
-                style={{ color: "#60a5fa" }}
-              >
-                Auto · Parsed (read-only)
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {candidate.ai_tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-[10px] px-2 py-0.5 rounded-full opacity-60"
-                  style={{
-                    background: "rgba(96,165,250,0.08)",
-                    color: "#60a5fa",
-                    border: "1px solid rgba(96,165,250,0.18)",
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
           </div>
         )}
       </div>

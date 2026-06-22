@@ -14,7 +14,6 @@ import {
   IconChevronRight,
   IconBulb,
   IconAlertCircle,
-  IconLoader2,
   IconTrash,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -606,8 +605,7 @@ export default function PositionsPage() {
               experience_years: c.experience_years,
               education_level: c.education_level,
               skills: c.skills,
-              ai_tags: c.ai_tags,
-              recruiter_tags: c.recruiter_tags,
+              tags: c.tags,
               preferred_train_line: c.preferred_train_line,
               resume_url: c.resume_url,
               match_score: null,

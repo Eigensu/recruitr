@@ -103,6 +103,18 @@ export default function CandidateCard({
                   {candidate.previous_company ?? "Independent"} · {candidate.experience_years}y
                 </span>
               </p>
+              {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
+                <p className="text-[10px] text-text-muted mt-0.5 capitalize truncate">
+                  {[
+                    [candidate.city, candidate.area].filter(Boolean).join(" • "),
+                    [candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
+                      .filter(Boolean)
+                      .join(" • "),
+                  ]
+                    .filter(Boolean)
+                    .join(" | ")}
+                </p>
+              )}
             </div>
             {isMaintainer && onDelete && (
               <div className="pointer-events-auto relative z-10 shrink-0">

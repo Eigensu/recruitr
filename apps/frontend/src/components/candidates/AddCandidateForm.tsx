@@ -14,6 +14,13 @@ const schema = z.object({
   tags: z.array(z.string()),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
+  city: z.string().optional(),
+  area: z.string().optional(),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  age: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().positive("Must be a positive number").optional(),
+  ),
   salary: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().positive("Must be a positive number").optional(),
@@ -44,6 +51,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     tags: [] as string[],
     cv_link: "",
     current_role: "",
+    city: "",
+    area: "",
+    gender: "" as "male" | "female" | "other" | "",
+    age: "",
     salary: "",
     notes: "",
   });
@@ -71,6 +82,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       tags: form.tags,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
+      city: form.city || undefined,
+      area: form.area || undefined,
+      gender: form.gender || undefined,
+      age: form.age || undefined,
       salary: form.salary || undefined,
       notes: form.notes || undefined,
     });
@@ -91,9 +106,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         full_name: parsed.data.name,
         email: parsed.data.email,
         phone: parsed.data.phone,
-        recruiter_tags: parsed.data.tags,
+        tags: parsed.data.tags,
         cv_link: parsed.data.cv_link,
         current_role: parsed.data.current_role,
+        city: parsed.data.city,
+        area: parsed.data.area,
+        gender: parsed.data.gender,
+        age: parsed.data.age,
         salary: parsed.data.salary,
         notes: parsed.data.notes,
       });
@@ -210,6 +229,72 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
           value={form.current_role}
           onChange={(e) => setForm((f) => ({ ...f, current_role: e.target.value }))}
         />
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            City
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Mumbai"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Area
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Andheri"
+            value={form.area}
+            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Gender
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.gender}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, gender: e.target.value as "male" | "female" | "other" | "" }))
+            }
+          >
+            <option value="">Select...</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Age
+          </label>
+          <input
+            type="number"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 25"
+            value={form.age}
+            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+          />
+          {errors.age && (
+            <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+              {errors.age}
+            </p>
+          )}
+        </div>
       </div>
 
       <div>
