@@ -36,6 +36,10 @@ export async function clientCreateCandidate(data: {
   tags?: string[];
   cv_link?: string;
   current_role?: string;
+  previous_role?: string;
+  expected_salary?: number;
+  notice_period?: string;
+  source?: string;
   city?: string;
   area?: string;
   gender?: string;
@@ -63,6 +67,10 @@ export async function clientUpdateCandidate(
     tags: string[];
     cv_link: string;
     current_role: string;
+    previous_role: string;
+    expected_salary: number;
+    notice_period: string;
+    source: string;
     city: string;
     area: string;
     gender: string;
@@ -86,7 +94,7 @@ export async function clientConfirmResume(
   data: { resume_public_id: string; resume_url: string },
 ): Promise<ApiCandidate> {
   const res = await fetch(`${API_URL}/api/v1/candidates/${candidateId}/resume`, {
-    method: "PATCH",
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ candidate_id: candidateId, ...data }),

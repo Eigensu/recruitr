@@ -25,6 +25,10 @@ class CandidateCreate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
+    previous_role: str | None = None
+    expected_salary: float | None = Field(default=None, ge=0)
+    notice_period: str | None = None
+    source: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
@@ -44,6 +48,10 @@ class CandidateUpdate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
+    previous_role: str | None = None
+    expected_salary: float | None = Field(default=None, ge=0)
+    notice_period: str | None = None
+    source: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
@@ -68,6 +76,10 @@ class CandidateResponse(BaseModel):
     current_stage: PipelineStage
     mappings_count: int = 0
     current_role: str | None = None
+    previous_role: str | None = None
+    expected_salary: float | None = None
+    notice_period: str | None = None
+    source: str | None = None
     salary: float | None = None
     notes: str | None = None
     created_at: datetime

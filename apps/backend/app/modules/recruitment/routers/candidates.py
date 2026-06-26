@@ -165,8 +165,23 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         phone=data.phone,
         previous_company=data.previous_company,
         experience_years=data.experience_years,
+        education_level=data.education_level,
+        city=data.city,
+        area=data.area,
+        gender=data.gender,
+        age=data.age,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
+        tags=data.tags,
+        preferred_train_line=data.preferred_train_line,
+        cv_link=data.cv_link,
+        current_role=data.current_role,
+        previous_role=data.previous_role,
+        expected_salary=data.expected_salary,
+        notice_period=data.notice_period,
+        source=data.source,
+        salary=data.salary,
+        notes=data.notes,
     )
     try:
         await doc.insert()
@@ -182,10 +197,25 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=0,
+        current_role=doc.current_role,
+        previous_role=doc.previous_role,
+        expected_salary=doc.expected_salary,
+        notice_period=doc.notice_period,
+        source=doc.source,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -205,10 +235,25 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        previous_role=doc.previous_role,
+        expected_salary=doc.expected_salary,
+        notice_period=doc.notice_period,
+        source=doc.source,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -230,9 +275,40 @@ async def update_candidate(
         update["previous_company"] = data.previous_company
     if data.experience_years is not None:
         update["experience_years"] = data.experience_years
+    if data.education_level is not None:
+        update["education_level"] = data.education_level
+    if data.city is not None:
+        update["city"] = data.city
+    if data.area is not None:
+        update["area"] = data.area
+    if data.gender is not None:
+        update["gender"] = data.gender
+    if data.age is not None:
+        update["age"] = data.age
     if data.skills is not None:
         update["skills"] = data.skills
         update["skills_normalized"] = [s.lower() for s in data.skills]
+    if data.tags is not None:
+        update["tags"] = data.tags
+    if data.preferred_train_line is not None:
+        update["preferred_train_line"] = data.preferred_train_line
+    if data.cv_link is not None:
+        update["cv_link"] = data.cv_link
+    if data.current_role is not None:
+        update["current_role"] = data.current_role
+    if data.previous_role is not None:
+        update["previous_role"] = data.previous_role
+    if data.expected_salary is not None:
+        update["expected_salary"] = data.expected_salary
+    if data.notice_period is not None:
+        update["notice_period"] = data.notice_period
+    if data.source is not None:
+        update["source"] = data.source
+    if data.salary is not None:
+        update["salary"] = data.salary
+    if data.notes is not None:
+        update["notes"] = data.notes
+
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
@@ -244,10 +320,25 @@ async def update_candidate(
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        previous_role=doc.previous_role,
+        expected_salary=doc.expected_salary,
+        notice_period=doc.notice_period,
+        source=doc.source,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )
 
@@ -324,9 +415,24 @@ async def confirm_resume(
         phone=doc.phone,
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
         resume_url=doc.resume_url,
         current_stage=doc.current_stage,
         mappings_count=count,
+        current_role=doc.current_role,
+        previous_role=doc.previous_role,
+        expected_salary=doc.expected_salary,
+        notice_period=doc.notice_period,
+        source=doc.source,
+        salary=doc.salary,
+        notes=doc.notes,
         created_at=doc.created_at,
     )

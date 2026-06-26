@@ -187,6 +187,10 @@ export interface ApiCandidate {
   current_stage: PipelineStage;
   mappings_count: number;
   current_role: string | null;
+  previous_role: string | null;
+  expected_salary: number | null;
+  notice_period: string | null;
+  source: string | null;
   salary: number | null;
   notes: string | null;
   created_at: string;

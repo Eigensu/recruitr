@@ -17,7 +17,8 @@ import {
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
-import { clientUpdateCandidate } from "@/lib/api/candidates.client";
+import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
+import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
 interface CandidateDrawerProps {
@@ -247,10 +248,37 @@ function ViewBody({
                 <span>{candidate.current_role}</span>
               </div>
             )}
-            {candidate.salary != null && (
+            {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>{candidate.salary.toLocaleString()}</span>
+                <span>{candidate.expected_salary.toLocaleString()}</span>
+              </div>
+            )}
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
+
+      {/* Previous role / notice / source */}
+      {(candidate.previous_role != null ||
+        candidate.notice_period != null ||
+        candidate.source != null) && (
+        <>
+          <section className="flex flex-wrap gap-4">
+            {candidate.previous_role && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconBriefcase className="size-3.5 shrink-0 opacity-60" />
+                <span>Prev: {candidate.previous_role}</span>
+              </div>
+            )}
+            {candidate.notice_period && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <span>Notice: {candidate.notice_period}</span>
+              </div>
+            )}
+            {candidate.source && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>Source: {candidate.source}</span>
               </div>
             )}
           </section>
@@ -371,16 +399,20 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
+    previous_role: candidate.previous_role ?? "",
     city: candidate.city ?? "",
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
     age: candidate.age == null ? "" : String(candidate.age),
-    salary: candidate.salary == null ? "" : String(candidate.salary),
+    expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
+    notice_period: candidate.notice_period ?? "",
+    source: candidate.source ?? "internal",
     cv_link: candidate.cv_link ?? "",
     tagInput: "",
     tags: [...candidate.tags],
     notes: candidate.notes ?? "",
   });
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -405,16 +437,25 @@ function EditForm({
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
         current_role: form.current_role.trim() || undefined,
+        previous_role: form.previous_role.trim() || undefined,
         city: form.city.trim() || undefined,
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
         age: form.age ? Number(form.age) : undefined,
-        salary: form.salary ? Number(form.salary) : undefined,
+        expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
+        notice_period: form.notice_period.trim() || undefined,
+        source: form.source.trim() || undefined,
         cv_link: form.cv_link.trim() || undefined,
         tags: form.tags,
         notes: form.notes.trim() || undefined,
       };
-      const updated = await clientUpdateCandidate(candidate.id, payload);
+      let updated = await clientUpdateCandidate(candidate.id, payload);
+
+      if (form.source === "internal" && resumeFile) {
+        const uploaded = await uploadResumeToCloudinary(resumeFile);
+        updated = await clientConfirmResume(updated.id, uploaded);
+      }
+
       onSaved(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -464,6 +505,31 @@ function EditForm({
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Source
+        </label>
+        <div className="flex gap-4">
+          {(["internal", "external"] as const).map((s) => (
+            <label key={s} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="source"
+                value={s}
+                checked={form.source === s}
+                onChange={() => setForm((f) => ({ ...f, source: s }))}
+              />
+              <span
+                className="text-sm font-medium"
+                style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
+              >
+                ● {s === "internal" ? "Internal" : "External"}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Previous Company
         </label>
         <input
@@ -499,6 +565,19 @@ function EditForm({
           placeholder="e.g. Senior Engineer"
           value={form.current_role}
           onChange={(e) => setForm((f) => ({ ...f, current_role: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Previous Role
+        </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. Software Engineer"
+          value={form.previous_role}
+          onChange={(e) => setForm((f) => ({ ...f, previous_role: e.target.value }))}
         />
       </div>
 
@@ -561,24 +640,58 @@ function EditForm({
         </div>
       </div>
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Salary
-        </label>
-        <input
-          type="number"
-          min="0"
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. 85000"
-          value={form.salary}
-          onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
-        />
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Expected Salary
+          </label>
+          <input
+            type="number"
+            min="0"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 85000"
+            value={form.expected_salary}
+            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Notice Period
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 30 days"
+            value={form.notice_period}
+            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
+          />
+        </div>
       </div>
+
+      {form.source === "internal" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Resume PDF
+          </label>
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            className="block w-full text-sm"
+            style={{ color: "var(--color-text-secondary)" }}
+            onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+          />
+          {resumeFile && (
+            <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              {resumeFile.name}
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          CV Link
+          CV Link{form.source === "external" ? " *" : ""}
         </label>
         <input
           type="url"

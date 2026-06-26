@@ -190,6 +190,10 @@ class Candidate(Document):
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
     current_role: str | None = None
+    previous_role: str | None = None
+    expected_salary: float | None = None
+    notice_period: str | None = None
+    source: str | None = None
     salary: float | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage

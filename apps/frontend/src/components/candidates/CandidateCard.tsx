@@ -100,7 +100,13 @@ export default function CandidateCard({
               <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1.5 truncate">
                 <IconBriefcase className="size-3 shrink-0" />
                 <span className="truncate">
-                  {candidate.previous_company ?? "Independent"} · {candidate.experience_years}y
+                  {candidate.current_role
+                    ? `${candidate.current_role} · ${candidate.experience_years}y`
+                    : candidate.previous_role
+                      ? `${candidate.previous_role} · ${candidate.experience_years}y`
+                      : candidate.previous_company
+                        ? candidate.previous_company
+                        : `Independent · ${candidate.experience_years}y`}
                 </span>
               </p>
               {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
