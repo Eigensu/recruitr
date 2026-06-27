@@ -104,10 +104,35 @@ async def list_candidates(
     search: _Search = None,
     experience: _ExpFilter = None,
     stage: _Stage = None,
+    source: str | None = Query(default=None, description="Filter by source"),
+    city: str | None = Query(default=None, description="Filter by city"),
+    gender: str | None = Query(default=None, description="Filter by gender"),
+    has_resume: bool | None = Query(default=None, description="Filter by resume existence"),
+    has_cv_link: bool | None = Query(default=None, description="Filter by cv link existence"),
+    tags: list[str] = Query(default_factory=list, description="Filter by tags"),
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+
+    if source == "internal":
+        match["source"] = {"$in": ["internal", None]}
+    elif source == "external":
+        match["source"] = "external"
+    if city:
+        match["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    if gender:
+        match["gender"] = gender
+    if has_resume is True:
+        match["resume_url"] = {"$ne": None}
+    elif has_resume is False:
+        match["resume_url"] = None
+    if has_cv_link is True:
+        match["cv_link"] = {"$ne": None, "$ne": ""}
+    elif has_cv_link is False:
+        match["cv_link"] = {"$in": [None, ""]}
+    if tags:
+        match["tags"] = {"$in": tags}
 
     if search:
         rx = {"$regex": search, "$options": "i"}

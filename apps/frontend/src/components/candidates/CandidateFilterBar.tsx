@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import type { CandidateFilters, CandidateSource } from "@/types";
 
 interface Props {
@@ -150,14 +151,19 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
         <button
           type="button"
           onClick={() => setTagsOpen((o) => !o)}
-          className="rounded-lg px-3 py-1.5 text-sm"
+          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm"
           style={{
             ...inputStyle,
             background: selectedTags.length > 0 ? "var(--color-yellow)" : "var(--color-canvas-val)",
             color: selectedTags.length > 0 ? "#002348" : "var(--color-text-primary)",
           }}
         >
-          Tags {selectedTags.length > 0 ? `(${selectedTags.length})` : ""} {tagsOpen ? "▲" : "▼"}
+          <span>Tags {selectedTags.length > 0 ? `(${selectedTags.length})` : ""}</span>
+          {tagsOpen ? (
+            <IconChevronUp className="size-4 opacity-50" />
+          ) : (
+            <IconChevronDown className="size-4 opacity-50" />
+          )}
         </button>
         {tagsOpen && (
           <div
