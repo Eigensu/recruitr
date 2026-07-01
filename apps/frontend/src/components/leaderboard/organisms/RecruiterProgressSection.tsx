@@ -6,7 +6,7 @@ import { AnimatedProgressBar } from "@/components/leaderboard/atoms/AnimatedProg
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
-import type { LeaderboardRecruiter } from "@/lib/leaderboard-data";
+import { levelProgressPct, type LeaderboardRecruiter } from "@/lib/leaderboard-data";
 
 interface RecruiterProgressSectionProps {
   readonly recruiters: LeaderboardRecruiter[];
@@ -34,10 +34,7 @@ export function RecruiterProgressSection(props: RecruiterProgressSectionProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {displayed.map((recruiter, index) => {
-          const xpPct = Math.max(
-            0,
-            Math.min(100, Number.isFinite(recruiter.xp) ? (recruiter.xp / 10000) * 100 : 0),
-          );
+          const xpPct = levelProgressPct(recruiter.xp);
           const totalMappings = Number(recruiter.totalMappings);
           const joined = Number(recruiter.joined);
           const joinPctRaw =

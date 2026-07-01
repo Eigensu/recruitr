@@ -276,7 +276,11 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
 
 async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> dict[str, Any]:
     brand_oid = _require_brand(filters)
-    employee_match: dict[str, Any] = {"brand_id": brand_oid, "is_active": True}
+    employee_match: dict[str, Any] = {
+        "brand_id": brand_oid,
+        "is_active": True,
+        "role": {"$nin": ["admin", "maintainer"]},
+    }
     employee_oid = to_object_id(filters.employee_id, "employee_id")
     if employee_oid is not None:
         employee_match["_id"] = employee_oid

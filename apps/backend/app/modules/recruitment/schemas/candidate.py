@@ -106,3 +106,14 @@ class CandidatePage(PaginatedResponse[CandidateResponse]):
 
 
 ExperienceFilter = Literal["lt2", "2to5", "gt5"]
+
+
+class BulkUploadFailure(BaseModel):
+    filename: str
+    reason: str
+
+
+class BulkUploadResult(BaseModel):
+    created: int
+    updated: int
+    failed: list[BulkUploadFailure]

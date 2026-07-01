@@ -284,6 +284,7 @@ class Employee(Document):
     team_id: PydanticObjectId | None = None  # FK → teams._id
     name: str
     email: str  # globally unique — join key with User
+    role: str = "employee"  # mirrors User.role; synced on every login
     avatar_url: str | None = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
@@ -300,6 +301,7 @@ class Employee(Document):
             IndexModel("user_id", sparse=True),
             IndexModel("brand_id"),
             IndexModel("is_active"),
+            IndexModel([("brand_id", 1), ("is_active", 1), ("role", 1)]),
         ]
 
 

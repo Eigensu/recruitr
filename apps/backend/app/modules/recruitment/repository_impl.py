@@ -6,6 +6,7 @@ Never call get_motor_collection() outside this module for domain writes.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -66,8 +67,19 @@ async def generate_client_code(brand_id: PydanticObjectId) -> str:
 
 
 async def generate_position_code(brand_id: PydanticObjectId, client_code: str) -> str:
-    seq = await next_seq(brand_id, f"position:{client_code}")
-    return f"{client_code}-POS-{seq:03d}"
+    # Sort by the numeric suffix, not the zero-padded string: lexicographic
+    # order breaks once the sequence passes 999 ("1000" < "999" as text).
+    prefix = f"{client_code}-POS-"
+    pipeline = [
+        {"$match": {"brand_id": brand_id, "code": {"$regex": f"^{re.escape(prefix)}"}}},
+        {"$addFields": {"_seq": {"$toInt": {"$arrayElemAt": [{"$split": ["$code", "-"]}, -1]}}}},
+        {"$sort": {"_seq": -1}},
+        {"$limit": 1},
+        {"$project": {"_seq": 1}},
+    ]
+    result = await (await Position.get_motor_collection().aggregate(pipeline)).to_list(1)
+    seq = (int(result[0]["_seq"]) + 1) if result else 1
+    return f"{prefix}{seq:03d}"
 
 
 # ── Client ─────────────────────────────────────────────────────────────────────

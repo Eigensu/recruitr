@@ -52,7 +52,6 @@ export async function fetchFilteredPipeline(
   const params = new URLSearchParams({ position_id: positionId });
   if (filters.recruiter_id) params.set("recruiter_id", filters.recruiter_id);
   if (filters.client_id) params.set("client_id", filters.client_id);
-  if (filters.source) params.set("source", filters.source);
   if (filters.stage) params.set("stage", filters.stage);
   if (filters.mapped_after) params.set("mapped_after", filters.mapped_after);
   if (filters.mapped_before) params.set("mapped_before", filters.mapped_before);

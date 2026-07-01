@@ -19,6 +19,7 @@ from app.modules.leaderboard.utils.ranking_calculator import (
     OFFER_POINTS,
     REJECTION_PENALTY,
     activity_points,
+    level_for_xp,
 )
 
 
@@ -49,45 +50,55 @@ async def record_activity_atomic(
     elif activity_type == ActivityTypeEnum.CANDIDATE_REJECTED:
         inc["mappings.rejected_candidates"] = 1
 
-    client = RecruiterActivity.get_motor_collection().database.client
-    async with await client.start_session() as session, session.start_transaction():
-        try:
-            await RecruiterActivity.get_motor_collection().insert_one(
-                {
-                    "employee_id": employee_oid,
-                    "candidate_id": candidate_oid,
-                    "activity_type": activity_type.value,
-                    "title": title,
-                    "description": description,
-                    "points_earned": points,
-                    "activity_reference_id": activity_reference_id,
-                    "created_at": datetime.now(UTC),
-                },
-                session=session,
-            )
-        except DuplicateKeyError:
-            await session.abort_transaction()
-            return False
-
-        await EmployeeStat.get_motor_collection().update_one(
-            {"employee_id": employee_oid},
+    # No multi-document transaction here: the deployment runs on a standalone
+    # MongoDB, where transactions are unsupported and raise OperationFailure.
+    # Idempotency is instead guaranteed by the unique index on
+    # RecruiterActivity.activity_reference_id — the insert is the dedup gate.
+    # We insert the activity first; only if it is genuinely new (no
+    # DuplicateKeyError) do we apply the stat increment. A crash between the two
+    # writes leaves the stat under-counted, which recompute_ranks /
+    # backfill_stats_from_mappings can repair from source mappings.
+    try:
+        await RecruiterActivity.get_motor_collection().insert_one(
             {
-                "$inc": inc,
-                "$set": {"updated_at": datetime.now(UTC), "is_active": True},
-                "$setOnInsert": {
-                    "created_at": datetime.now(UTC),
-                    "employee_id": employee_oid,
-                    "level": 1,
-                    "streak_days": 0,
-                },
+                "employee_id": employee_oid,
+                "candidate_id": candidate_oid,
+                "activity_type": activity_type.value,
+                "title": title,
+                "description": description,
+                "points_earned": points,
+                "activity_reference_id": activity_reference_id,
+                "created_at": datetime.now(UTC),
             },
-            upsert=True,
-            session=session,
         )
+    except DuplicateKeyError:
+        return False
+
+    await EmployeeStat.get_motor_collection().update_one(
+        {"employee_id": employee_oid},
+        {
+            "$inc": inc,
+            "$set": {"updated_at": datetime.now(UTC), "is_active": True},
+            "$setOnInsert": {
+                "created_at": datetime.now(UTC),
+                "employee_id": employee_oid,
+                "level": 1,
+                "streak_days": 0,
+                "leaderboard_rank": 0,
+                "monthly_growth": 0.0,
+                "badges": [],
+            },
+        },
+        upsert=True,
+    )
 
     stat = await EmployeeStat.get_motor_collection().find_one({"employee_id": employee_oid})
     if stat:
         score = int(stat.get("xp_points", stat.get("total_score", 0)))
+        await EmployeeStat.get_motor_collection().update_one(
+            {"employee_id": employee_oid},
+            {"$set": {"level": level_for_xp(score)}},
+        )
         await update_rank(str(employee_oid), score)
         await unlock_badges(employee_oid, evaluate_badges(stat))
     return True
@@ -100,7 +111,14 @@ async def recompute_ranks() -> list[dict[str, Any]]:
         score = int(stat.get("xp_points", stat.get("total_score", 0)))
         await EmployeeStat.get_motor_collection().update_one(
             {"_id": stat["_id"]},
-            {"$set": {"total_score": score, "xp_points": score, "updated_at": datetime.now(UTC)}},
+            {
+                "$set": {
+                    "total_score": score,
+                    "xp_points": score,
+                    "level": level_for_xp(score),
+                    "updated_at": datetime.now(UTC),
+                }
+            },
         )
         await update_rank(str(stat["employee_id"]), score)
         refreshed.append(
@@ -185,13 +203,13 @@ async def backfill_stats_from_mappings() -> int:
                     "mappings.rejected_candidates": rejected,
                     "xp_points": xp,
                     "total_score": xp,
+                    "level": level_for_xp(xp),
                     "is_active": True,
                     "updated_at": datetime.now(UTC),
                 },
                 "$setOnInsert": {
                     "created_at": datetime.now(UTC),
                     "employee_id": employee_oid,
-                    "level": 1,
                     "streak_days": 0,
                     "leaderboard_rank": 0,
                     "monthly_growth": 0.0,

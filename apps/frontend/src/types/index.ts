@@ -75,6 +75,7 @@ export interface ApiPosition {
   mapped_preview: ApiMappedPreview[];
   assigned_employee_id: string | null;
   assigned_employee_name: string | null;
+  requirements: string[];
   date_opened: string;
   target_close: string | null;
   notes: string | null;
@@ -288,12 +289,14 @@ export interface CandidateCard {
 // ── Pipeline Kanban (Phase D — real API types) ────────────────────────────────
 
 export type KanbanStage =
+  | "sourced"
   | "sent_to_client"
   | "interview"
   | "decision_pending"
   | "offer"
   | "offer_accepted"
-  | "position_close";
+  | "position_close"
+  | "rejected";
 
 export interface PipelineCard {
   mapping_id: string;

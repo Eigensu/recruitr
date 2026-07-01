@@ -479,10 +479,9 @@ async def _seed_positions(
     client_map: dict[str, ObjectId],
     client_name_map: dict[str, str],
     now: datetime,
-) -> tuple[list[dict[str, Any]], dict[str, ObjectId], dict[str, int]]:
+) -> tuple[list[dict[str, Any]], dict[str, ObjectId]]:
     position_docs: list[dict[str, Any]] = []
     position_code_to_id: dict[str, ObjectId] = {}
-    max_pos_seq: dict[str, int] = {}
     for idx, (
         c_code,
         role,
@@ -524,10 +523,9 @@ async def _seed_positions(
             }
         )
         position_code_to_id[code] = pid
-        max_pos_seq[c_code] = max(max_pos_seq.get(c_code, 0), pos_seq)
     await db["positions"].insert_many(position_docs)
     print(f"Positions: {len(position_docs)}")
-    return position_docs, position_code_to_id, max_pos_seq
+    return position_docs, position_code_to_id
 
 
 async def _seed_candidates(
@@ -664,22 +662,11 @@ async def _seed_counters(
     db: AsyncDatabase,
     brand_id: ObjectId,
     max_client_seq: int,
-    max_pos_seq: dict[str, int],
 ) -> None:
-    counter_docs: list[dict[str, Any]] = [
+    await db["counters"].insert_one(
         {"_id": ObjectId(), "brand_id": brand_id, "key": "client", "seq": max_client_seq}
-    ]
-    for c_code, max_seq in max_pos_seq.items():
-        counter_docs.append(
-            {
-                "_id": ObjectId(),
-                "brand_id": brand_id,
-                "key": f"position:{c_code}",
-                "seq": max_seq,
-            }
-        )
-    await db["counters"].insert_many(counter_docs)
-    print(f"Counters: {len(counter_docs)}")
+    )
+    print("Counters: 1")
 
 
 # ── Main seed entry point ──────────────────────────────────────────────────────
@@ -713,7 +700,7 @@ async def seed(*, reset: bool = True) -> None:
     await _seed_tags(db, brand_id, now)
     emp_docs = await _seed_employees(db, brand_id, team_map, now)
     _, client_map, max_client_seq, client_name_map = await _seed_clients(db, brand_id, now)
-    position_docs, pos_code_to_id, max_pos_seq = await _seed_positions(
+    position_docs, pos_code_to_id = await _seed_positions(
         db, brand_id, emp_docs, client_map, client_name_map, now
     )
     candidate_docs, cand_email_to_id = await _seed_candidates(db, brand_id, now)
@@ -721,7 +708,7 @@ async def seed(*, reset: bool = True) -> None:
         db, brand_id, emp_docs, position_docs, pos_code_to_id, cand_email_to_id, now
     )
     await _seed_activities(db, brand_id, mapping_docs, position_docs, candidate_docs)
-    await _seed_counters(db, brand_id, max_client_seq, max_pos_seq)
+    await _seed_counters(db, brand_id, max_client_seq)
 
     await mongo.close()
     print("\n✓ Seed complete — run the app and log in with a seeded employee email to start.")

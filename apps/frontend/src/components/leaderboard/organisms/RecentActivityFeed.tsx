@@ -32,7 +32,7 @@ export function RecentActivityFeed(props: RecentActivityFeedProps) {
       </div>
 
       <div className="divide-y divide-border">
-        {items.map((item, index) => (
+        {items.slice(0, 5).map((item, index) => (
           <ActivityFeedCard key={item.id} item={item} index={index} />
         ))}
       </div>

@@ -53,6 +53,7 @@ export default function KanbanBoard({
   // Start in the loading state so stale global columns from a previously viewed
   // position are not rendered/draggable until this board's data loads.
   const [boardLoading, setBoardLoading] = useState(true);
+  const [boardError, setBoardError] = useState<string | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const dragOriginColumn = useRef<CandidateStatus | null>(null);
 
@@ -75,10 +76,12 @@ export default function KanbanBoard({
 
   const loadBoard = useCallback(
     async (filters: KanbanFilters) => {
+      setBoardError(null);
       try {
         setColumns(await fetchFilteredPipeline(positionId, filters));
       } catch (err) {
         console.error("Failed to load pipeline board:", err);
+        setBoardError("Failed to load candidates. Please refresh the page.");
       }
     },
     [positionId, setColumns],
@@ -182,7 +185,14 @@ export default function KanbanBoard({
         </div>
       )}
 
-      {boardLoading ? (
+      {boardError ? (
+        <div
+          className="flex flex-1 items-center justify-center text-sm"
+          style={{ color: "var(--color-danger, #ef4444)" }}
+        >
+          {boardError}
+        </div>
+      ) : boardLoading ? (
         <div
           className="flex flex-1 items-center justify-center text-sm"
           style={{ color: "var(--color-text-secondary)" }}
