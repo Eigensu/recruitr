@@ -9,6 +9,7 @@ import CandidateCard from "./CandidateCard";
 import CandidateDrawer from "./CandidateDrawer";
 import AddCandidateForm from "./AddCandidateForm";
 import BulkUploadDrawer from "./BulkUploadDrawer";
+import CandidateCardSkeleton from "./skeletons/CandidateCardSkeleton";
 
 const PAGE_SIZE = 50;
 
@@ -164,8 +165,10 @@ export default function CandidatesClient({
       )}
 
       {loading && (
-        <div className="py-8 text-center text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Loading…
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <CandidateCardSkeleton key={i} />
+          ))}
         </div>
       )}
       {!loading && candidates.length === 0 && (

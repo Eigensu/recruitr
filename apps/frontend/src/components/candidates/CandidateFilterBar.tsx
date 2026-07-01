@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import type { CandidateFilters, CandidateSource } from "@/types";
 
 interface Props {
@@ -20,6 +21,8 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [hasResume, setHasResume] = useState<boolean | undefined>(undefined);
   const [hasCvLink, setHasCvLink] = useState<boolean | undefined>(undefined);
+  const [city, setCity] = useState("");
+  const [gender, setGender] = useState("");
   const [tagsOpen, setTagsOpen] = useState(false);
 
   function emit(
@@ -29,6 +32,8 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
       selectedTags: string[];
       hasResume: boolean | undefined;
       hasCvLink: boolean | undefined;
+      city: string;
+      gender: string;
     }> = {},
   ) {
     const s = over.search ?? search;
@@ -36,12 +41,16 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     const tags = over.selectedTags ?? selectedTags;
     const resume = "hasResume" in over ? over.hasResume : hasResume;
     const cv = "hasCvLink" in over ? over.hasCvLink : hasCvLink;
+    const c = over.city ?? city;
+    const g = over.gender ?? gender;
     onFilterChange({
       search: s || undefined,
       source: (src as CandidateSource) || undefined,
       tags: tags.length > 0 ? tags : undefined,
       has_resume: resume,
       has_cv_link: cv,
+      city: c || undefined,
+      gender: g || undefined,
       page: 1,
       limit: 50,
     });
@@ -61,6 +70,8 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     setSelectedTags([]);
     setHasResume(undefined);
     setHasCvLink(undefined);
+    setCity("");
+    setGender("");
     onFilterChange({ page: 1, limit: 50 });
   }
 
@@ -69,7 +80,9 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     !!source ||
     selectedTags.length > 0 ||
     hasResume !== undefined ||
-    hasCvLink !== undefined;
+    hasCvLink !== undefined ||
+    !!city ||
+    !!gender;
 
   return (
     <div
@@ -106,18 +119,51 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
         <option value="external">External</option>
       </select>
 
+      <input
+        type="text"
+        placeholder="City…"
+        value={city}
+        onChange={(e) => {
+          setCity(e.target.value);
+          emit({ city: e.target.value });
+        }}
+        className="w-24 rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      />
+
+      <select
+        value={gender}
+        onChange={(e) => {
+          const v = e.target.value;
+          setGender(v);
+          emit({ gender: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Genders</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+
       <div className="relative">
         <button
           type="button"
           onClick={() => setTagsOpen((o) => !o)}
-          className="rounded-lg px-3 py-1.5 text-sm"
+          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm"
           style={{
             ...inputStyle,
             background: selectedTags.length > 0 ? "var(--color-yellow)" : "var(--color-canvas-val)",
             color: selectedTags.length > 0 ? "#002348" : "var(--color-text-primary)",
           }}
         >
-          Tags {selectedTags.length > 0 ? `(${selectedTags.length})` : ""} {tagsOpen ? "▲" : "▼"}
+          <span>Tags {selectedTags.length > 0 ? `(${selectedTags.length})` : ""}</span>
+          {tagsOpen ? (
+            <IconChevronUp className="size-4 opacity-50" />
+          ) : (
+            <IconChevronDown className="size-4 opacity-50" />
+          )}
         </button>
         {tagsOpen && (
           <div

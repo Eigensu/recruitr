@@ -241,7 +241,7 @@ export default function AddCandidatesPanel({ positionId, onAssigned, onClose }: 
                 >
                   {c.email}
                 </p>
-                <Chips items={[...c.recruiter_tags, ...c.skills]} />
+                <Chips items={[...c.tags, ...c.skills]} />
               </div>
               <AssignButton id={c.id} />
             </div>

@@ -5,7 +5,6 @@ import {
   IconPlus,
   IconTag,
   IconUsers,
-  IconTrash,
   IconUserCheck,
   IconPencil,
   IconCheck,

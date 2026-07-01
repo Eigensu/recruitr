@@ -14,10 +14,19 @@ const schema = z.object({
   tags: z.array(z.string()),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
-  salary: z.preprocess(
+  previous_role: z.string().optional(),
+  city: z.string().optional(),
+  area: z.string().optional(),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  age: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().positive("Must be a positive number").optional(),
   ),
+  expected_salary: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().positive("Must be a positive number").optional(),
+  ),
+  notice_period: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -44,7 +53,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     tags: [] as string[],
     cv_link: "",
     current_role: "",
-    salary: "",
+    previous_role: "",
+    city: "",
+    area: "",
+    gender: "" as "male" | "female" | "other" | "",
+    age: "",
+    expected_salary: "",
+    notice_period: "",
     notes: "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -71,7 +86,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       tags: form.tags,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
-      salary: form.salary || undefined,
+      previous_role: form.previous_role || undefined,
+      city: form.city || undefined,
+      area: form.area || undefined,
+      gender: form.gender || undefined,
+      age: form.age || undefined,
+      expected_salary: form.expected_salary || undefined,
+      notice_period: form.notice_period || undefined,
       notes: form.notes || undefined,
     });
 
@@ -91,10 +112,17 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         full_name: parsed.data.name,
         email: parsed.data.email,
         phone: parsed.data.phone,
-        recruiter_tags: parsed.data.tags,
+        tags: parsed.data.tags,
         cv_link: parsed.data.cv_link,
         current_role: parsed.data.current_role,
-        salary: parsed.data.salary,
+        previous_role: parsed.data.previous_role,
+        city: parsed.data.city,
+        area: parsed.data.area,
+        gender: parsed.data.gender,
+        age: parsed.data.age,
+        expected_salary: parsed.data.expected_salary,
+        notice_period: parsed.data.notice_period,
+        source: parsed.data.source,
         notes: parsed.data.notes,
       });
 
@@ -214,22 +242,115 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Salary
+          Previous Role
         </label>
         <input
-          type="number"
-          min="0"
           className={inputCls}
           style={inputStyle}
-          placeholder="e.g. 85000"
-          value={form.salary}
-          onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
+          placeholder="e.g. Software Engineer"
+          value={form.previous_role}
+          onChange={(e) => setForm((f) => ({ ...f, previous_role: e.target.value }))}
         />
-        {errors.salary && (
-          <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
-            {errors.salary}
-          </p>
-        )}
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            City
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Mumbai"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Area
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Andheri"
+            value={form.area}
+            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Gender
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.gender}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, gender: e.target.value as "male" | "female" | "other" | "" }))
+            }
+          >
+            <option value="">Select...</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Age
+          </label>
+          <input
+            type="number"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 25"
+            value={form.age}
+            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+          />
+          {errors.age && (
+            <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+              {errors.age}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Expected Salary
+          </label>
+          <input
+            type="number"
+            min="0"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 85000"
+            value={form.expected_salary}
+            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
+          />
+          {errors.expected_salary && (
+            <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+              {errors.expected_salary}
+            </p>
+          )}
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Notice Period
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 30 days"
+            value={form.notice_period}
+            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
+          />
+        </div>
       </div>
 
       <div>

@@ -221,7 +221,7 @@ _POSITIONS = [
     ("CLI-071", "Steward", _DEPT_FNB_SERVICE, Seniority.junior, 8, PositionStatus.open, 3, None, 3),
 ]
 
-# (name, email, phone, company, exp_years, skills[])
+# (name, email, phone, company, exp_years, city, area, gender, age, skills[], tags[])
 _CANDIDATES = [
     (
         "Priya Nair",
@@ -229,7 +229,9 @@ _CANDIDATES = [
         "+91 98765 43210",
         "The Taj Mahal Palace",
         2.0,
+        "Mumbai", "Andheri", "female", 24,
         ["Guest Relations", "Table Service", "POS Systems", "Order Taking", "Billing"],
+        ["Immediate Joiner", "Hospitality"],
     ),
     (
         "Karan Malhotra",
@@ -237,7 +239,9 @@ _CANDIDATES = [
         "+91 98123 45678",
         "JW Marriott Mumbai",
         3.0,
+        "Mumbai", "Malad", "male", 28,
         ["F&B Service", "Fine Dining", "Banquets", "Team Leadership", "Service"],
+        ["Hospitality", "Premium Candidate"],
     ),
     (
         "Sneha Gupta",
@@ -245,7 +249,9 @@ _CANDIDATES = [
         "+91 97654 32109",
         "Leela Palace",
         1.5,
+        "Mumbai", "Bandra", "female", 22,
         ["Hostess", "Table Reservation", "Billing", "Guest Relations", "POS"],
+        ["Immediate Joiner"],
     ),
     (
         "Sunil Mehta",
@@ -253,7 +259,9 @@ _CANDIDATES = [
         "+91 99887 76655",
         "Trident Nariman Point",
         4.0,
+        "Mumbai", "Powai", "male", 30,
         ["Mixology", "Classic Cocktails", "Inventory Management", "Speed Pouring", "Bar"],
+        ["Bartender"],
     ),
     (
         "Rajesh Kumar",
@@ -261,7 +269,9 @@ _CANDIDATES = [
         "+91 95555 44444",
         "Pizza Express Mumbai",
         6.0,
+        "Mumbai", "Borivali", "male", 35,
         ["Pizza Dough Crafting", "Wood-fired Oven", "Italian Cuisine", "Food Safety", "Cooking"],
+        ["Chef"],
     ),
     (
         "Amit Sharma",
@@ -269,7 +279,9 @@ _CANDIDATES = [
         "+91 94444 33333",
         "Oberoi Hotels",
         5.0,
+        "Mumbai", "Colaba", "male", 32,
         ["Sous Chef", "Kitchen Management", "Continental Cuisine", "Plating", "Food Safety"],
+        ["Chef", "Premium Candidate"],
     ),
     (
         "Vikram Singh",
@@ -277,7 +289,9 @@ _CANDIDATES = [
         "+91 93333 22222",
         "Local Dhaba Elite",
         3.0,
+        "Pune", "Viman Nagar", "male", 26,
         ["Tandoor Cook", "Indian Curry", "Bulk Cooking", "Prep Work", "Cooking"],
+        ["Immediate Joiner"],
     ),
     (
         "Rohan Joshi",
@@ -285,6 +299,7 @@ _CANDIDATES = [
         "+91 92222 11111",
         "Olive Bar & Kitchen",
         8.0,
+        "Mumbai", "Juhu", "male", 38,
         [
             "Restaurant Operations",
             "P&L Management",
@@ -292,6 +307,7 @@ _CANDIDATES = [
             "Customer Satisfaction",
             "Management",
         ],
+        ["Hospitality"],
     ),
     (
         "Nisha Rao",
@@ -299,6 +315,7 @@ _CANDIDATES = [
         "+91 91111 00000",
         "Social Offline",
         4.5,
+        "Bangalore", "Indiranagar", "female", 29,
         [
             "Assistant Manager",
             "Inventory Audits",
@@ -306,6 +323,7 @@ _CANDIDATES = [
             "Escalation Handling",
             "Operations",
         ],
+        ["Retail"],
     ),
     (
         "Ananya Sen",
@@ -313,7 +331,9 @@ _CANDIDATES = [
         "+91 90000 99999",
         "F&B Marketing Agency",
         3.0,
+        "Delhi", "Hauz Khas", "female", 27,
         ["Instagram Marketing", "Content Creation", "Canva", "Brand Strategy", "Digital Ads"],
+        ["Premium Candidate"],
     ),
     (
         "Rahul Verma",
@@ -321,7 +341,9 @@ _CANDIDATES = [
         "+91 89999 88888",
         "Freelance Brand Specialist",
         2.0,
+        "Mumbai", "Goregaon", "male", 25,
         ["Digital Ads (Meta/Google)", "Graphic Design", "Video Reels Editing", "Analytics"],
+        ["Immediate Joiner"],
     ),
 ]
 
@@ -511,7 +533,7 @@ async def _seed_candidates(
 ) -> tuple[list[dict[str, Any]], dict[str, ObjectId]]:
     candidate_docs: list[dict[str, Any]] = []
     cand_email_to_id: dict[str, ObjectId] = {}
-    for idx, (full_name, email, phone, company, exp_years, skills) in enumerate(_CANDIDATES):
+    for idx, (full_name, email, phone, company, exp_years, city, area, gender, age, skills, tags) in enumerate(_CANDIDATES):
         cid = ObjectId()
         ed_level = [
             EducationLevel.bachelors.value,
@@ -530,10 +552,13 @@ async def _seed_candidates(
                 "previous_company": company,
                 "experience_years": exp_years,
                 "education_level": ed_level,
+                "city": city,
+                "area": area,
+                "gender": gender,
+                "age": age,
                 "skills": skills,
                 "skills_normalized": [s.lower() for s in skills],
-                "ai_tags": [],
-                "recruiter_tags": tags,
+                "tags": tags,
                 "preferred_train_line": train_line,
                 "resume_url": None,
                 "resume_public_id": None,

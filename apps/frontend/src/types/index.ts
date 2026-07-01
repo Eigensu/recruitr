@@ -91,8 +91,7 @@ export interface ApiTopCandidate {
   experience_years: number;
   education_level: string | null;
   skills: string[];
-  ai_tags: string[];
-  recruiter_tags: string[];
+  tags: string[];
   preferred_train_line: string | null;
   resume_url: string | null;
   match_score: number | null; // 0..1, null when position has no requirements
@@ -134,6 +133,8 @@ export interface CandidateFilters {
   tags?: string[];
   has_resume?: boolean;
   has_cv_link?: boolean;
+  city?: string;
+  gender?: string;
   page: number;
   limit: number;
 }
@@ -175,15 +176,22 @@ export interface ApiCandidate {
   previous_company: string | null;
   experience_years: number;
   education_level: string | null;
+  city: string | null;
+  area: string | null;
+  gender: string | null;
+  age: number | null;
   skills: string[];
-  ai_tags: string[];
-  recruiter_tags: string[];
+  tags: string[];
   preferred_train_line: string | null;
   cv_link: string | null;
   resume_url: string | null;
   current_stage: PipelineStage;
   mappings_count: number;
   current_role: string | null;
+  previous_role: string | null;
+  expected_salary: number | null;
+  notice_period: string | null;
+  source: string | null;
   salary: number | null;
   notes: string | null;
   created_at: string;

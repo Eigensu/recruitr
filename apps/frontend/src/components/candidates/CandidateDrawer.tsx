@@ -9,8 +9,6 @@ import {
   IconBriefcase,
   IconFileText,
   IconLink,
-  IconSparkles,
-  IconTag,
   IconCurrencyDollar,
   IconNotes,
   IconPencil,
@@ -19,7 +17,7 @@ import {
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
-import { clientConfirmResume, clientUpdateCandidate } from "@/lib/api/candidates.client";
+import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
@@ -251,10 +249,60 @@ function ViewBody({
                 <span>{candidate.current_role}</span>
               </div>
             )}
-            {candidate.salary != null && (
+            {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>{candidate.salary.toLocaleString()}</span>
+                <span>{candidate.expected_salary.toLocaleString()}</span>
+              </div>
+            )}
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
+
+      {/* Previous role / notice / source */}
+      {(candidate.previous_role != null ||
+        candidate.notice_period != null ||
+        candidate.source != null) && (
+        <>
+          <section className="flex flex-wrap gap-4">
+            {candidate.previous_role && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconBriefcase className="size-3.5 shrink-0 opacity-60" />
+                <span>Prev: {candidate.previous_role}</span>
+              </div>
+            )}
+            {candidate.notice_period && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <span>Notice: {candidate.notice_period}</span>
+              </div>
+            )}
+            {candidate.source && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>Source: {candidate.source}</span>
+              </div>
+            )}
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
+
+      {/* Demographics */}
+      {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
+        <>
+          <section className="flex flex-wrap gap-4">
+            {(candidate.city || candidate.area) && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>{[candidate.city, candidate.area].filter(Boolean).join(" • ")}</span>
+              </div>
+            )}
+            {(candidate.gender || candidate.age) && (
+              <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
+                <span>
+                  {[candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </span>
               </div>
             )}
           </section>
@@ -282,68 +330,12 @@ function ViewBody({
       <div className="h-px bg-border/50" />
 
       {/* Tags */}
-      {(candidate.ai_tags.length > 0 || candidate.recruiter_tags.length > 0) && (
+      {candidate.tags.length > 0 && (
         <>
           <section>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
               Tags
             </h3>
-            {candidate.ai_tags.length > 0 && (
-              <div className="mb-3">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <IconSparkles className="size-3 opacity-60" style={{ color: "#60a5fa" }} />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-widest"
-                    style={{ color: "#60a5fa" }}
-                  >
-                    Auto · Parsed
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {candidate.ai_tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
-                      style={{
-                        background: "rgba(96,165,250,0.1)",
-                        color: "#60a5fa",
-                        border: "1px solid rgba(96,165,250,0.25)",
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {candidate.recruiter_tags.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <IconTag className="size-3 opacity-60" style={{ color: "#fb923c" }} />
-                  <span
-                    className="text-[9px] font-bold uppercase tracking-widest"
-                    style={{ color: "#fb923c" }}
-                  >
-                    Manual · Recruiter
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {candidate.recruiter_tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] font-medium px-2.5 py-0.5 rounded-full"
-                      style={{
-                        background: "rgba(251,146,60,0.1)",
-                        color: "#fb923c",
-                        border: "1px solid rgba(251,146,60,0.25)",
-                      }}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </section>
           <div className="h-px bg-border/50" />
         </>
@@ -408,10 +400,17 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
-    salary: candidate.salary == null ? "" : String(candidate.salary),
+    previous_role: candidate.previous_role ?? "",
+    city: candidate.city ?? "",
+    area: candidate.area ?? "",
+    gender: candidate.gender ?? "",
+    age: candidate.age == null ? "" : String(candidate.age),
+    expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
+    notice_period: candidate.notice_period ?? "",
+    source: candidate.source ?? "internal",
     cv_link: candidate.cv_link ?? "",
     tagInput: "",
-    recruiter_tags: [...candidate.recruiter_tags],
+    tags: [...candidate.tags],
     notes: candidate.notes ?? "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -420,12 +419,12 @@ function EditForm({
 
   function addTag() {
     const raw = form.tagInput.trim().toLowerCase();
-    if (!raw || form.recruiter_tags.includes(raw)) return;
-    setForm((f) => ({ ...f, recruiter_tags: [...f.recruiter_tags, raw], tagInput: "" }));
+    if (!raw || form.tags.includes(raw)) return;
+    setForm((f) => ({ ...f, tags: [...f.tags, raw], tagInput: "" }));
   }
 
   function removeTag(tag: string) {
-    setForm((f) => ({ ...f, recruiter_tags: f.recruiter_tags.filter((t) => t !== tag) }));
+    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -443,12 +442,25 @@ function EditForm({
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
         current_role: form.current_role.trim() || undefined,
-        salary: form.salary ? Number(form.salary) : undefined,
+        previous_role: form.previous_role.trim() || undefined,
+        city: form.city.trim() || undefined,
+        area: form.area.trim() || undefined,
+        gender: form.gender.trim() || undefined,
+        age: form.age ? Number(form.age) : undefined,
+        expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
+        notice_period: form.notice_period.trim() || undefined,
+        source: form.source.trim() || undefined,
         cv_link: form.cv_link.trim() || undefined,
-        recruiter_tags: form.recruiter_tags,
+        tags: form.tags,
         notes: form.notes.trim() || undefined,
       };
-      const updated = await clientUpdateCandidate(candidate.id, payload);
+      let updated = await clientUpdateCandidate(candidate.id, payload);
+
+      if (form.source === "internal" && resumeFile) {
+        const uploaded = await uploadResumeToCloudinary(resumeFile);
+        updated = await clientConfirmResume(updated.id, uploaded);
+      }
+
       onSaved(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -498,6 +510,31 @@ function EditForm({
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Source
+        </label>
+        <div className="flex gap-4">
+          {(["internal", "external"] as const).map((s) => (
+            <label key={s} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="source"
+                value={s}
+                checked={form.source === s}
+                onChange={() => setForm((f) => ({ ...f, source: s }))}
+              />
+              <span
+                className="text-sm font-medium"
+                style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
+              >
+                ● {s === "internal" ? "Internal" : "External"}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Previous Company
         </label>
         <input
@@ -538,22 +575,128 @@ function EditForm({
 
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Salary
+          Previous Role
         </label>
         <input
-          type="number"
-          min="0"
           className={inputCls}
           style={inputStyle}
-          placeholder="e.g. 85000"
-          value={form.salary}
-          onChange={(e) => setForm((f) => ({ ...f, salary: e.target.value }))}
+          placeholder="e.g. Software Engineer"
+          value={form.previous_role}
+          onChange={(e) => setForm((f) => ({ ...f, previous_role: e.target.value }))}
         />
       </div>
 
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            City
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Mumbai"
+            value={form.city}
+            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Area
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. Andheri"
+            value={form.area}
+            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Gender
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.gender}
+            onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+          >
+            <option value="">Select...</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Age
+          </label>
+          <input
+            type="number"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 25"
+            value={form.age}
+            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Expected Salary
+          </label>
+          <input
+            type="number"
+            min="0"
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 85000"
+            value={form.expected_salary}
+            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Notice Period
+          </label>
+          <input
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g. 30 days"
+            value={form.notice_period}
+            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      {form.source === "internal" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Resume PDF
+          </label>
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            className="block w-full text-sm"
+            style={{ color: "var(--color-text-secondary)" }}
+            onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+          />
+          {resumeFile && (
+            <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
+              {resumeFile.name}
+            </p>
+          )}
+        </div>
+      )}
+
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          CV Link
+          CV Link{form.source === "external" ? " *" : ""}
         </label>
         <input
           type="url"
@@ -630,16 +773,16 @@ function EditForm({
             Add
           </button>
         </div>
-        {form.recruiter_tags.length > 0 && (
+        {form.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {form.recruiter_tags.map((tag) => (
+            {form.tags.map((tag) => (
               <span
                 key={tag}
                 className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                 style={{
-                  background: "rgba(251,146,60,0.1)",
-                  color: "#fb923c",
-                  border: "1px solid rgba(251,146,60,0.25)",
+                  background: "rgba(96,165,250,0.1)",
+                  color: "#60a5fa",
+                  border: "1px solid rgba(96,165,250,0.25)",
                 }}
               >
                 {tag}
@@ -652,36 +795,6 @@ function EditForm({
                 </button>
               </span>
             ))}
-          </div>
-        )}
-
-        {/* Auto tags — read-only display */}
-        {candidate.ai_tags.length > 0 && (
-          <div className="mt-3">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <IconSparkles className="size-3 opacity-50" style={{ color: "#60a5fa" }} />
-              <span
-                className="text-[9px] font-bold uppercase tracking-widest opacity-60"
-                style={{ color: "#60a5fa" }}
-              >
-                Auto · Parsed (read-only)
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {candidate.ai_tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="text-[10px] px-2 py-0.5 rounded-full opacity-60"
-                  style={{
-                    background: "rgba(96,165,250,0.08)",
-                    color: "#60a5fa",
-                    border: "1px solid rgba(96,165,250,0.18)",
-                  }}
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
           </div>
         )}
       </div>

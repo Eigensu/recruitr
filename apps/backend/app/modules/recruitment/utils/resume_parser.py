@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from app.modules.recruitment.enums import EducationLevel
+from app.modules.recruitment.enums import EducationLevel, Gender
 
 # ── Regex ──────────────────────────────────────────────────────────────────────
 
@@ -158,8 +158,11 @@ class ParsedResume:
     experience_years: float | None = None
     previous_company: str | None = None
     education_level: EducationLevel | None = None
+    city: str | None = None
+    age: int | None = None
+    gender: Gender | None = None
+    tags: list[str] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
-    ai_tags: list[str] = field(default_factory=list)
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -284,5 +287,5 @@ def parse_resume(text: str) -> ParsedResume:
         previous_company=_extract_previous_company(text),
         education_level=_extract_education_level(text),
         skills=skills,
-        ai_tags=skills[:5],  # Take top 5 extracted skills as AI tags
+        tags=skills[:5],  # Take top 5 extracted skills as AI tags
     )

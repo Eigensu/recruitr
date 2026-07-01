@@ -121,8 +121,8 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             update["experience_years"] = parsed.experience_years
         if parsed.education_level is not None and doc.education_level is None:
             update["education_level"] = parsed.education_level
-        if parsed.ai_tags:
-            update["ai_tags"] = parsed.ai_tags
+        if parsed.tags:
+            update["tags"] = parsed.tags
         if parsed.previous_company and not doc.previous_company:
             update["previous_company"] = parsed.previous_company
 
@@ -195,7 +195,7 @@ async def list_candidate_tags(tenant: _Tenant) -> list[str]:
     """Return all distinct recruiter tags for candidates in this brand."""
     collection = Candidate.get_motor_collection()
     tags = await collection.distinct(
-        "recruiter_tags", {"brand_id": tenant.brand_id, "is_active": True}
+        "tags", {"brand_id": tenant.brand_id, "is_active": True}
     )
     return sorted(t for t in tags if t)
 
@@ -213,6 +213,8 @@ async def list_candidates(
     tags: Annotated[list[str] | None, Query()] = None,
     has_resume: Annotated[bool | None, Query()] = None,
     has_cv_link: Annotated[bool | None, Query()] = None,
+    city: Annotated[str | None, Query()] = None,
+    gender: Annotated[str | None, Query()] = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
@@ -240,12 +242,14 @@ async def list_candidates(
     if source:
         match["source"] = source
 
+    if city:
+        match["city"] = city
+        
+    if gender:
+        match["gender"] = gender
+
     if tags:
-        # Stored tags keep their canonical casing (e.g. "Immediate Joiner"),
-        # so match case-insensitively rather than forcing lower-case.
-        match["recruiter_tags"] = {
-            "$in": [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
-        }
+        match["tags"] = {"$in": tags}
 
     if has_resume is True:
         match["resume_url"] = {"$exists": True, "$nin": [None, ""]}
@@ -295,10 +299,13 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         previous_company=data.previous_company,
         experience_years=data.experience_years,
         education_level=data.education_level,
+        city=data.city,
+        area=data.area,
+        gender=data.gender,
+        age=data.age,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
-        ai_tags=data.ai_tags,
-        recruiter_tags=data.recruiter_tags,
+        tags=data.tags,
         preferred_train_line=data.preferred_train_line,
         cv_link=data.cv_link,
         current_role=data.current_role,
@@ -320,9 +327,13 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -470,9 +481,13 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -507,10 +522,16 @@ async def update_candidate(
         update["skills_normalized"] = [s.lower() for s in data.skills]
     if data.education_level is not None:
         update["education_level"] = data.education_level
-    if data.ai_tags is not None:
-        update["ai_tags"] = data.ai_tags
-    if data.recruiter_tags is not None:
-        update["recruiter_tags"] = data.recruiter_tags
+    if data.city is not None:
+        update["city"] = data.city
+    if data.area is not None:
+        update["area"] = data.area
+    if data.gender is not None:
+        update["gender"] = data.gender
+    if data.age is not None:
+        update["age"] = data.age
+    if data.tags is not None:
+        update["tags"] = data.tags
     if data.preferred_train_line is not None:
         update["preferred_train_line"] = data.preferred_train_line
     if data.cv_link is not None:
@@ -533,9 +554,13 @@ async def update_candidate(
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -641,9 +666,13 @@ async def confirm_resume(
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
