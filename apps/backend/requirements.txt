@@ -1,7 +1,7 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 gunicorn>=23.0.0
-beanie>=1.27.0,<2.0.0
+beanie>=1.28.0,<2.0.0
 pymongo>=4.9  # native async driver (AsyncMongoClient); imported directly across the app
 pydantic[email]>=2.10.0
 pydantic-settings>=2.6.0

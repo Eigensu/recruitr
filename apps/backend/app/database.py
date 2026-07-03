@@ -1,5 +1,8 @@
 """MongoDB connection and Beanie ODM initialization."""
 
+import logging
+
+import pymongo.errors
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
@@ -31,9 +34,6 @@ from app.modules.recruitment.models import (
 # Module-level client reference for transaction access
 _client: AsyncMongoClient | None = None
 
-
-import logging
-import pymongo.errors
 
 async def init_db() -> None:
     """Initialize MongoDB connection and register Beanie document models."""
@@ -71,16 +71,21 @@ async def init_db() -> None:
             allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
         )
     except pymongo.errors.OperationFailure as e:
-        # Catch ANY OperationFailure during index creation (quota exceeded, index conflict, etc.)
-        # so that the application can still boot and serve requests gracefully.
-        logging.error(f"MongoDB OperationFailure during Beanie initialization (Index Sync): {e}")
-        logging.warning("Retrying Beanie initialization with skip_indexes=True to bypass the error...")
-        await init_beanie(
-            database=_client[settings.MONGODB_DB_NAME],
-            document_models=document_models,
-            allow_index_dropping=False,
-            skip_indexes=True,
-        )
+        # Catch known OperationFailure codes during index creation:
+        # 85: IndexOptionsConflict, 86: IndexKeySpecsConflict, 8000: QuotaExceeded
+        if e.code in (85, 86, 8000) or "quota" in str(e).lower():
+            logging.error(f"MongoDB known index-sync failure ({e.code}): {e}")
+            logging.warning("Retrying Beanie initialization with skip_indexes=True to bypass the error...")
+            await init_beanie(
+                database=_client[settings.MONGODB_DB_NAME],
+                document_models=document_models,
+                allow_index_dropping=False,
+                skip_indexes=True,
+            )
+        else:
+            # For unexpected failures, log them (could be metric/alert here) and fail fast
+            logging.critical(f"MongoDB unexpected OperationFailure during init_beanie: {e}")
+            raise
 
 
 def get_client() -> AsyncMongoClient:

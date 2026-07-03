@@ -10,6 +10,8 @@ async def main():
         print("Dropped google_id_1 index")
     except Exception as e:
         print("Failed to drop index:", e)
+    finally:
+        client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
