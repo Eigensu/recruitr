@@ -333,7 +333,6 @@ async def get_filtered_pipeline(
     client_id: _OptStr = None,
     tags: _OptStrList = None,
     stage: _OptStr = None,
-    source: _OptStr = None,
     mapped_after: _OptDt = None,
     mapped_before: _OptDt = None,
 ) -> list[FilteredCandidate]:
@@ -371,10 +370,7 @@ async def get_filtered_pipeline(
     if tags:
         # Stored tags keep their canonical casing, so match case-insensitively.
         patterns = [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
-        agg.append({_MATCH: {"candidate.recruiter_tags": {"$all": patterns}}})
-
-    if source:
-        agg.append({_MATCH: {"candidate.source": source}})
+        agg.append({_MATCH: {"candidate.tags": {"$all": patterns}}})
 
     agg.append(
         {
@@ -386,12 +382,7 @@ async def get_filtered_pipeline(
                 "phone": "$candidate.phone",
                 "resume_url": "$candidate.resume_url",
                 "extracted_skills": {"$ifNull": ["$candidate.skills", []]},
-                "tags": {
-                    "$concatArrays": [
-                        {"$ifNull": ["$candidate.recruiter_tags", []]},
-                        {"$ifNull": ["$candidate.ai_tags", []]},
-                    ]
-                },
+                "tags": {"$ifNull": ["$candidate.tags", []]},
                 "source": {"$ifNull": ["$candidate.source", "internal"]},
                 "cv_link": "$candidate.cv_link",
                 "status": {
@@ -473,12 +464,7 @@ async def get_top_candidates(
                 "email": 1,
                 "resume_url": 1,
                 "extracted_skills": {"$ifNull": ["$skills", []]},
-                "tags": {
-                    "$concatArrays": [
-                        {"$ifNull": ["$recruiter_tags", []]},
-                        {"$ifNull": ["$ai_tags", []]},
-                    ]
-                },
+                "tags": {"$ifNull": ["$tags", []]},
                 "source": "internal",
                 "cv_link": None,
                 "match_score": 1,
@@ -530,8 +516,22 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
             employee_id=tenant.employee_id,
             stage=target_stage,
         )
-        with contextlib.suppress(DuplicateKeyError):
+        try:
             await mapping.insert()
+        except DuplicateKeyError:
+            # Race condition: another request inserted between find_one and insert.
+            race_existing = await Mapping.find_one(
+                {"brand_id": tenant.brand_id, "candidate_id": cand_oid, "position_id": pos_oid}
+            )
+            if race_existing:
+                prev_stage = race_existing.stage
+                await race_existing.set(
+                    {"stage": target_stage.value, "updated_at": datetime.now(UTC)}
+                )
+            else:
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to create mapping"
+                ) from None
 
     if target_stage in TERMINAL_STAGES or prev_stage in TERMINAL_STAGES:
         await recompute_position_seats(pos_oid)

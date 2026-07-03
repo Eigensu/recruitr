@@ -7,6 +7,8 @@ never rolls back the domain write.
 
 from __future__ import annotations
 
+import logging
+
 from beanie import PydanticObjectId
 
 from app.modules.recruitment.enums import ActivityType, Decision, PipelineStage
@@ -26,6 +28,8 @@ from app.modules.recruitment.repository import (
 )
 from app.modules.recruitment.schemas import TenantScope
 
+logger = logging.getLogger(__name__)
+
 # ── Employee / login linking ───────────────────────────────────────────────────
 
 
@@ -43,12 +47,20 @@ async def ensure_employee_for_user(user: object) -> Employee:
     email: str = getattr(user, "email", "")
     name: str = getattr(user, "full_name", None) or email
     user_id: PydanticObjectId = user.id  # type: ignore[assignment]
+    role: str = getattr(user, "role", "employee")
 
     employee = await find_employee_by_email(email)
     if employee is None:
         employee = await create_employee(name=name, email=email, user_id=user_id)
     else:
         employee = await link_employee_user(employee, user_id)
+
+    # Keep role in sync so leaderboard queries can filter without joining users.
+    if employee.role != role:
+        await Employee.get_motor_collection().update_one(
+            {"_id": employee.id}, {"$set": {"role": role}}
+        )
+        employee.role = role
 
     if employee.brand_id is None:
         brand = await Brand.find_one({})
@@ -201,7 +213,15 @@ async def _credit_gamification(scope: TenantScope, mapping: Mapping, stage: Pipe
             description=f"Candidate pipeline: {stage.value}",
         )
     except Exception:  # noqa: BLE001
-        pass  # gamification failure must never roll back a domain write
+        # Gamification failure must never roll back a domain write — but log it,
+        # otherwise a systemic write failure stays invisible (as it did when the
+        # leaderboard write used an unsupported standalone-Mongo transaction).
+        logger.exception(
+            "Leaderboard credit failed for employee=%s mapping=%s stage=%s",
+            scope.employee_id,
+            mapping.id,
+            stage.value,
+        )
 
 
 async def _invalidate_caches(brand_id: PydanticObjectId) -> None:

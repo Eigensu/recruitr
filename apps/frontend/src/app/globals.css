@@ -112,6 +112,10 @@
 
   --color-toggle-bg: rgba(255, 255, 255, 0.1);
   --color-toggle-icon: #ffffff;
+
+  /* Mobile bottom nav — always against dark sidebar */
+  --color-nav-active: #f5c518;
+  --color-nav-inactive: rgba(255, 255, 255, 0.4);
 }
 
 /* ── Light mode ── */

@@ -21,6 +21,23 @@ export interface LeaderboardRecruiter {
   avatarColor: string;
 }
 
+// Level curve — mirrors backend ranking_calculator.level_for_xp:
+// cumulative XP to reach level L is XP_PER_LEVEL*(L-1)**2.
+export const XP_PER_LEVEL = 20;
+
+export function levelForXp(xp: number): number {
+  return 1 + Math.floor(Math.sqrt(Math.max(xp, 0) / XP_PER_LEVEL));
+}
+
+/** Percent (0–100) of progress toward the next level for a given total XP. */
+export function levelProgressPct(xp: number): number {
+  const safeXp = Number.isFinite(xp) ? Math.max(0, xp) : 0;
+  const level = levelForXp(safeXp);
+  const floor = XP_PER_LEVEL * (level - 1) ** 2;
+  const next = XP_PER_LEVEL * level ** 2;
+  return Math.max(0, Math.min(100, ((safeXp - floor) / (next - floor)) * 100));
+}
+
 export type LeaderboardBadgeKey =
   | "top_mapper"
   | "hiring_champion"

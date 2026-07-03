@@ -65,7 +65,7 @@ async def _hydrate_employee_stats(items: list[dict[str, Any]]) -> list[dict[str,
     employee_ids = [item["employee_id"] for item in items]
     employees = (
         await DashboardEmployee.get_motor_collection()
-        .find({"_id": {"$in": employee_ids}})
+        .find({"_id": {"$in": employee_ids}, **_RECRUITER_ONLY})
         .to_list(length=None)
     )
     employees_by_id = {employee["_id"]: employee for employee in employees}
@@ -141,7 +141,12 @@ async def fetch_rankings(
                 }
             },
             {"$unwind": "$employee"},
-            {"$match": {"employee.is_active": True}},
+            {
+                "$match": {
+                    "employee.is_active": True,
+                    "employee.role": {"$nin": ["admin", "maintainer"]},
+                }
+            },
         ]
         if search:
             escaped_search = re.escape(search)
@@ -246,7 +251,12 @@ async def fetch_rankings(
             }
         },
         {"$unwind": "$employee"},
-        {"$match": {"employee.is_active": True}},
+        {
+            "$match": {
+                "employee.is_active": True,
+                "employee.role": {"$nin": ["admin", "maintainer"]},
+            }
+        },
     ]
     if search:
         escaped_search = re.escape(search)
@@ -328,6 +338,9 @@ async def fetch_recruiter(employee_id: str) -> dict[str, Any] | None:
     return {"recruiter": items[0], "rank_percentile": round((1 - ((rank - 1) / total)) * 100, 2)}
 
 
+_RECRUITER_ONLY = {"role": {"$nin": ["admin", "maintainer"]}}
+
+
 async def fetch_monthly_growth() -> dict[str, Any]:
     stats = (
         await EmployeeStat.find(EmployeeStat.is_active == True)  # noqa: E712
@@ -339,7 +352,7 @@ async def fetch_monthly_growth() -> dict[str, Any]:
     monthly = await _monthly_totals_for_employees(ids)
     employees = (
         await DashboardEmployee.get_motor_collection()
-        .find({"_id": {"$in": ids}})
+        .find({"_id": {"$in": ids}, **_RECRUITER_ONLY})
         .to_list(length=None)
     )
     employee_by_id = {employee["_id"]: employee for employee in employees}

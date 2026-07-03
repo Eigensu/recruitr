@@ -13,6 +13,16 @@ export interface PositionCreatePayload {
   notes?: string;
 }
 
+export interface PositionUpdatePayload {
+  role?: string;
+  department?: string;
+  city?: string;
+  seniority?: string;
+  requirements?: string[];
+  total_seats?: number;
+  notes?: string;
+}
+
 export interface PositionListParams {
   search?: string;
   client_id?: string;
@@ -88,4 +98,15 @@ export function deletePosition(apiFetch: ApiFetch, positionId: string): Promise<
 
 export function reopenPosition(apiFetch: ApiFetch, positionId: string): Promise<ApiPosition> {
   return apiFetch(`/api/v1/positions/${positionId}/reopen`, { method: "POST" });
+}
+
+export function updatePosition(
+  apiFetch: ApiFetch,
+  positionId: string,
+  payload: PositionUpdatePayload,
+): Promise<ApiPosition> {
+  return apiFetch(`/api/v1/positions/${positionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }

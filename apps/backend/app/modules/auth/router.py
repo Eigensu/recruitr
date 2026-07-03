@@ -17,6 +17,7 @@ from app.modules.auth.schemas import (
     UserCreate,
     UserInfoResponse,
     UserLogin,
+    UserUpdate,
 )
 from app.modules.auth.security import (
     create_access_token,
@@ -126,6 +127,34 @@ async def read_user_me(
 
     employee = await Employee.find_one({"email": user.email.lower()})
 
+    return UserInfoResponse(
+        user_id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role.value,
+        employee_id=str(employee.id) if employee else None,
+        brand_id=str(employee.brand_id) if employee and employee.brand_id else None,
+    )
+
+
+@router.patch("/me")
+async def update_user_me(
+    body: UserUpdate,
+    current_user: Annotated[TokenPayload, Depends(get_current_user)],
+) -> UserInfoResponse:
+    from beanie import PydanticObjectId
+
+    from app.modules.recruitment.models import Employee
+
+    user = await User.get(PydanticObjectId(current_user.sub))
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+    if body.full_name is not None:
+        user.full_name = body.full_name.strip() or None
+    await user.save()
+
+    employee = await Employee.find_one({"email": user.email.lower()})
     return UserInfoResponse(
         user_id=str(user.id),
         email=user.email,

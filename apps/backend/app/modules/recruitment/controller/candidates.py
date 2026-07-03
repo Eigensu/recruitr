@@ -11,12 +11,22 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
@@ -26,6 +36,8 @@ from app.dependencies import get_tenant, require_maintainer
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.models import Candidate, Mapping
 from app.modules.recruitment.schemas import (
+    BulkUploadFailure,
+    BulkUploadResult,
     CandidateCreate,
     CandidateMappingItem,
     CandidatePage,
@@ -36,7 +48,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.utils.resume_parser import parse_resume
-from app.modules.storage.service import extract_text_from_pdf
+from app.modules.storage.service import extract_text_from_file, upload_bytes_to_cloudinary
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
@@ -85,7 +97,7 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(resume_url)
             resp.raise_for_status()
-        raw_text = extract_text_from_pdf(resp.content)
+        raw_text = extract_text_from_file(resp.content)
         parsed = parse_resume(raw_text)
     except Exception:
         _log.exception("Resume parse failed for candidate %s", candidate_id)
@@ -109,8 +121,8 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             update["experience_years"] = parsed.experience_years
         if parsed.education_level is not None and doc.education_level is None:
             update["education_level"] = parsed.education_level
-        if parsed.ai_tags:
-            update["ai_tags"] = parsed.ai_tags
+        if parsed.tags:
+            update["tags"] = parsed.tags
         if parsed.previous_company and not doc.previous_company:
             update["previous_company"] = parsed.previous_company
 
@@ -146,6 +158,27 @@ def _make_page(items: list, total: int, page: int, limit: int, model: type) -> C
     return CandidatePage(items=[model.model_validate(i) for i in items], meta=meta)
 
 
+_NOISE_RE = re.compile(
+    r"\b(resume|cv|curriculum|vitae|portfolio|application|profile|updated?)\b",
+    re.IGNORECASE,
+)
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+
+
+def _name_from_filename(filename: str) -> str:
+    """Derive a best-guess candidate name from a resume filename.
+
+    e.g. "john_doe_resume_2024.pdf" → "John Doe"
+         "CV - Jane Smith.docx"     → "Jane Smith"
+    """
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    name = stem.replace("_", " ").replace("-", " ").replace(".", " ")
+    name = _NOISE_RE.sub("", name)
+    name = _YEAR_RE.sub("", name)
+    words = [w.capitalize() for w in name.split() if w]
+    return " ".join(words) if words else stem
+
+
 async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
     oid = to_object_id(candidate_id, "candidate_id")
     doc = await Candidate.find_one({"_id": oid, "brand_id": scope.brand_id, "is_active": True})
@@ -162,7 +195,7 @@ async def list_candidate_tags(tenant: _Tenant) -> list[str]:
     """Return all distinct recruiter tags for candidates in this brand."""
     collection = Candidate.get_motor_collection()
     tags = await collection.distinct(
-        "recruiter_tags", {"brand_id": tenant.brand_id, "is_active": True}
+        "tags", {"brand_id": tenant.brand_id, "is_active": True}
     )
     return sorted(t for t in tags if t)
 
@@ -180,6 +213,8 @@ async def list_candidates(
     tags: Annotated[list[str] | None, Query()] = None,
     has_resume: Annotated[bool | None, Query()] = None,
     has_cv_link: Annotated[bool | None, Query()] = None,
+    city: Annotated[str | None, Query()] = None,
+    gender: Annotated[str | None, Query()] = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
@@ -207,12 +242,14 @@ async def list_candidates(
     if source:
         match["source"] = source
 
+    if city:
+        match["city"] = city
+        
+    if gender:
+        match["gender"] = gender
+
     if tags:
-        # Stored tags keep their canonical casing (e.g. "Immediate Joiner"),
-        # so match case-insensitively rather than forcing lower-case.
-        match["recruiter_tags"] = {
-            "$in": [re.compile(f"^{re.escape(t)}$", re.IGNORECASE) for t in tags]
-        }
+        match["tags"] = {"$in": tags}
 
     if has_resume is True:
         match["resume_url"] = {"$exists": True, "$nin": [None, ""]}
@@ -262,10 +299,13 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         previous_company=data.previous_company,
         experience_years=data.experience_years,
         education_level=data.education_level,
+        city=data.city,
+        area=data.area,
+        gender=data.gender,
+        age=data.age,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
-        ai_tags=data.ai_tags,
-        recruiter_tags=data.recruiter_tags,
+        tags=data.tags,
         preferred_train_line=data.preferred_train_line,
         cv_link=data.cv_link,
         current_role=data.current_role,
@@ -287,9 +327,13 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -300,6 +344,125 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         notes=doc.notes,
         created_at=doc.created_at,
     )
+
+
+# ── Bulk resume upload ─────────────────────────────────────────────────────────
+# Route must appear before /{candidate_id} so FastAPI doesn't treat "bulk-upload"
+# as a path parameter.
+
+_BULK_MAX = 50
+
+
+@router.post("/bulk-upload")
+async def bulk_upload_resumes(
+    tenant: _Tenant,
+    files: list[UploadFile] = File(..., description="PDF or DOCX resume files (max 50)"),
+) -> BulkUploadResult:
+    """Upload multiple resume files and create or update candidate records.
+
+    Per file:
+    - Extracts text (PDF or DOCX) and parses structured fields
+    - Requires an email address in the resume — files without one are skipped
+    - Upserts by email: creates a new Candidate or refreshes an existing one's
+      skills / resume URL without overwriting fields the recruiter has set
+    - Uploads the file to Cloudinary and stores resume_url on the candidate
+    """
+    if len(files) > _BULK_MAX:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Maximum {_BULK_MAX} files per upload")
+
+    created = 0
+    updated = 0
+    failed: list[BulkUploadFailure] = []
+
+    for upload in files:
+        filename = upload.filename or "unknown"
+        try:
+            file_bytes = await upload.read()
+
+            # 1. Extract text
+            try:
+                raw_text = extract_text_from_file(file_bytes)
+            except ValueError as exc:
+                failed.append(BulkUploadFailure(filename=filename, reason=str(exc)))
+                continue
+
+            # 2. Parse structured fields
+            parsed = parse_resume(raw_text)
+            if not parsed.email:
+                failed.append(
+                    BulkUploadFailure(filename=filename, reason="No email address found in resume")
+                )
+                continue
+
+            # 3. Upload to Cloudinary (blocking SDK call → thread pool)
+            try:
+                cld = await asyncio.to_thread(upload_bytes_to_cloudinary, file_bytes, filename)
+            except Exception as exc:
+                failed.append(
+                    BulkUploadFailure(filename=filename, reason=f"Storage upload failed: {exc}")
+                )
+                continue
+
+            resume_url: str = cld.get("secure_url", "")
+            resume_public_id: str = cld.get("public_id", "")
+
+            # 4. Upsert candidate by email
+            email_lower = parsed.email.lower()
+            existing = await Candidate.find_one({"email": email_lower, "brand_id": tenant.brand_id})
+
+            if existing:
+                patch: dict = {
+                    "resume_url": resume_url,
+                    "resume_public_id": resume_public_id,
+                    "resume_raw_text": raw_text,
+                }
+                if parsed.skills:
+                    patch["skills"] = parsed.skills
+                    patch["skills_normalized"] = [s.lower() for s in parsed.skills]
+                if parsed.ai_tags:
+                    patch["ai_tags"] = parsed.ai_tags
+                if parsed.phone and not existing.phone:
+                    patch["phone"] = parsed.phone
+                if parsed.experience_years is not None and existing.experience_years == 0:
+                    patch["experience_years"] = parsed.experience_years
+                if parsed.education_level is not None and existing.education_level is None:
+                    patch["education_level"] = parsed.education_level
+                if parsed.previous_company and not existing.previous_company:
+                    patch["previous_company"] = parsed.previous_company
+                await existing.set(patch)
+                updated += 1
+            else:
+                doc = Candidate(
+                    brand_id=tenant.brand_id,
+                    full_name=_name_from_filename(filename),
+                    email=email_lower,
+                    phone=parsed.phone,
+                    previous_company=parsed.previous_company,
+                    experience_years=parsed.experience_years or 0,
+                    education_level=parsed.education_level,
+                    skills=parsed.skills,
+                    skills_normalized=[s.lower() for s in parsed.skills],
+                    ai_tags=parsed.ai_tags,
+                    resume_url=resume_url,
+                    resume_public_id=resume_public_id,
+                    resume_raw_text=raw_text,
+                )
+                try:
+                    await doc.insert()
+                    created += 1
+                except DuplicateKeyError:
+                    failed.append(
+                        BulkUploadFailure(
+                            filename=filename,
+                            reason="Candidate with this email already exists",
+                        )
+                    )
+
+        except Exception:
+            _log.exception("Bulk upload: unexpected error for %s", filename)
+            failed.append(BulkUploadFailure(filename=filename, reason="Unexpected server error"))
+
+    return BulkUploadResult(created=created, updated=updated, failed=failed)
 
 
 # ── Detail ─────────────────────────────────────────────────────────────────────
@@ -318,9 +481,13 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -355,10 +522,16 @@ async def update_candidate(
         update["skills_normalized"] = [s.lower() for s in data.skills]
     if data.education_level is not None:
         update["education_level"] = data.education_level
-    if data.ai_tags is not None:
-        update["ai_tags"] = data.ai_tags
-    if data.recruiter_tags is not None:
-        update["recruiter_tags"] = data.recruiter_tags
+    if data.city is not None:
+        update["city"] = data.city
+    if data.area is not None:
+        update["area"] = data.area
+    if data.gender is not None:
+        update["gender"] = data.gender
+    if data.age is not None:
+        update["age"] = data.age
+    if data.tags is not None:
+        update["tags"] = data.tags
     if data.preferred_train_line is not None:
         update["preferred_train_line"] = data.preferred_train_line
     if data.cv_link is not None:
@@ -381,9 +554,13 @@ async def update_candidate(
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,
@@ -489,9 +666,13 @@ async def confirm_resume(
         previous_company=doc.previous_company,
         experience_years=doc.experience_years,
         education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
         skills=doc.skills,
-        ai_tags=doc.ai_tags,
-        recruiter_tags=doc.recruiter_tags,
+        tags=doc.tags,
+
         preferred_train_line=doc.preferred_train_line,
         cv_link=doc.cv_link,
         resume_url=doc.resume_url,

@@ -16,7 +16,7 @@ from app.modules.leaderboard.models import LeaderboardMappings
 from app.modules.leaderboard.repository.writes import recompute_ranks
 from app.modules.leaderboard.utils.badge_engine import evaluate_badges
 from app.modules.leaderboard.utils.growth_calculator import success_rate
-from app.modules.leaderboard.utils.ranking_calculator import calculate_score
+from app.modules.leaderboard.utils.ranking_calculator import calculate_score, level_for_xp
 
 RECRUITERS = [
     ("Manokamna Rao", "manokamna@binge.jobs", 67, 24, 19, 8, 34),
@@ -205,7 +205,7 @@ async def seed_leaderboard() -> None:
                 "leaderboard_rank": idx + 1,
                 "monthly_growth": growth,
                 "xp_points": score,
-                "level": max(1, score // 500 + 1),
+                "level": level_for_xp(score),
                 "streak_days": 35 - idx,
                 "badges": [
                     badge.value

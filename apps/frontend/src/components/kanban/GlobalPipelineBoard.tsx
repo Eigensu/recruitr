@@ -56,21 +56,25 @@ interface Filters {
 }
 
 const STAGE_LABELS: Record<KanbanStage, string> = {
+  sourced: "Sourced",
   sent_to_client: "Sent to Client",
   interview: "Interview",
   decision_pending: "Decision Pending",
   offer: "Offer",
   offer_accepted: "Offer Accepted",
   position_close: "Joined",
+  rejected: "Rejected",
 };
 
 const ALL_STAGES: KanbanStage[] = [
+  "sourced",
   "sent_to_client",
   "interview",
   "decision_pending",
   "offer",
   "offer_accepted",
   "position_close",
+  "rejected",
 ];
 
 const selectStyle = {

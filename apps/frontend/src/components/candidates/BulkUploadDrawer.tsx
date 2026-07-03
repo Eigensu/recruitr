@@ -32,9 +32,15 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
 
   function handleFileSelect(files: FileList | null) {
     if (!files) return;
-    const pdfs = Array.from(files).filter(
-      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
-    );
+    const pdfs = Array.from(files).filter((f) => {
+      const lower = f.name.toLowerCase();
+      return (
+        f.type === "application/pdf" ||
+        lower.endsWith(".pdf") ||
+        f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        lower.endsWith(".docx")
+      );
+    });
     if (pdfs.length + entries.length > 50) {
       alert("Maximum 50 files per upload.");
       return;
@@ -100,12 +106,12 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         }}
       >
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Drop PDF files here or click to browse (max 50)
+          Drop PDF or DOCX files here or click to browse (max 50)
         </p>
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,application/pdf"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           multiple
           className="hidden"
           onChange={(e) => handleFileSelect(e.target.files)}

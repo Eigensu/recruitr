@@ -34,6 +34,7 @@ class PositionListItem(BaseModel):
     mapped_preview: list[MappedPreview] = Field(default_factory=list)
     assigned_employee_id: str | None = None
     assigned_employee_name: str | None = None
+    requirements: list[str] = Field(default_factory=list)
     date_opened: datetime
     target_close: datetime | None = None
     notes: str | None = None
@@ -80,8 +81,7 @@ class TopCandidateItem(BaseModel):
     experience_years: float
     education_level: str | None = None
     skills: list[str]
-    ai_tags: list[str] = Field(default_factory=list)
-    recruiter_tags: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     resume_url: str | None = None
     match_score: float | None = None  # null when position has no requirements
