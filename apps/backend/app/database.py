@@ -32,37 +32,55 @@ from app.modules.recruitment.models import (
 _client: AsyncMongoClient | None = None
 
 
+import logging
+import pymongo.errors
+
 async def init_db() -> None:
     """Initialize MongoDB connection and register Beanie document models."""
     global _client
     _client = AsyncMongoClient(settings.MONGODB_URI)
-    await init_beanie(
-        database=_client[settings.MONGODB_DB_NAME],
-        document_models=[
-            # Auth
-            User,
-            Brand,
-            # Recruitment domain (unified, replaces old positions/candidates/pipeline modules)
-            Counter,
-            Client,
-            Position,
-            Candidate,
-            Mapping,
-            Employee,
-            Team,
-            RecruiterTag,
-            ActivityLog,
-            CandidateDocument,
-            # Gamification
-            RecruiterProfile,
-            # Leaderboard
-            EmployeeStat,
-            LeaderboardHistory,
-            Badge,
-            RecruiterActivity,
-        ],
-        allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
-    )
+    
+    document_models = [
+        # Auth
+        User,
+        Brand,
+        # Recruitment domain (unified, replaces old positions/candidates/pipeline modules)
+        Counter,
+        Client,
+        Position,
+        Candidate,
+        Mapping,
+        Employee,
+        Team,
+        RecruiterTag,
+        ActivityLog,
+        CandidateDocument,
+        # Gamification
+        RecruiterProfile,
+        # Leaderboard
+        EmployeeStat,
+        LeaderboardHistory,
+        Badge,
+        RecruiterActivity,
+    ]
+    
+    try:
+        await init_beanie(
+            database=_client[settings.MONGODB_DB_NAME],
+            document_models=document_models,
+            allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
+        )
+    except pymongo.errors.OperationFailure as e:
+        # Catch ANY OperationFailure during index creation (quota exceeded, index conflict, etc.)
+        # so that the application can still boot and serve requests gracefully.
+        logging.error(f"MongoDB OperationFailure during Beanie initialization (Index Sync): {e}")
+        logging.warning("Retrying Beanie initialization with skip_indexes=True to bypass the error...")
+        await init_beanie(
+            database=_client[settings.MONGODB_DB_NAME],
+            document_models=document_models,
+            allow_index_dropping=False,
+            skip_indexes=True,
+        )
 
 
 def get_client() -> AsyncMongoClient:

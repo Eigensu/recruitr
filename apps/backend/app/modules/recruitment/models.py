@@ -112,8 +112,6 @@ class Client(Document):
         indexes = [
             IndexModel([("brand_id", 1), ("code", 1)], unique=True),
             IndexModel([("brand_id", 1), ("name", 1)]),
-            IndexModel("brand_id"),
-            IndexModel("is_active"),
         ]
 
 
@@ -151,11 +149,9 @@ class Position(Document):
         name = "positions"
         indexes = [
             IndexModel([("brand_id", 1), ("code", 1)], unique=True),
-            IndexModel("brand_id"),
             IndexModel([("brand_id", 1), ("client_id", 1)]),
             IndexModel([("brand_id", 1), ("status", 1)]),
             IndexModel("assigned_employee_id"),
-            IndexModel("is_active"),
             IndexModel("created_at"),
         ]
 
@@ -209,11 +205,8 @@ class Candidate(Document):
         name = "candidates"
         indexes = [
             IndexModel([("brand_id", 1), ("email", 1)], unique=True),
-            IndexModel("brand_id"),
-            IndexModel("skills_normalized"),
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
-            IndexModel("is_active"),
             IndexModel("created_at"),
         ]
 
@@ -258,7 +251,6 @@ class Mapping(Document):
         name = "candidate_mappings"
         indexes = [
             IndexModel([("candidate_id", 1), ("position_id", 1)], unique=True),
-            IndexModel("brand_id"),
             IndexModel([("brand_id", 1), ("position_id", 1)]),
             IndexModel([("brand_id", 1), ("candidate_id", 1)]),
             IndexModel("client_id"),
@@ -299,8 +291,6 @@ class Employee(Document):
         indexes = [
             IndexModel("email", unique=True),
             IndexModel("user_id", sparse=True),
-            IndexModel("brand_id"),
-            IndexModel("is_active"),
             IndexModel([("brand_id", 1), ("is_active", 1), ("role", 1)]),
         ]
 
@@ -320,11 +310,10 @@ class ActivityLog(Document):
     class Settings:
         name = "activities"
         indexes = [
-            IndexModel("brand_id"),
             IndexModel([("brand_id", 1), ("created_at", -1)]),
             IndexModel("employee_id"),
-            IndexModel("activity_type"),
             IndexModel("target_entity_id"),
+            IndexModel("created_at", expireAfterSeconds=7776000),  # 90-day TTL
         ]
 
 
