@@ -50,7 +50,6 @@ class EmployeeStat(Document):
             IndexModel("employee_id", unique=True),
             IndexModel("total_score"),
             IndexModel("leaderboard_rank"),
-            IndexModel("is_active"),
             IndexModel("updated_at"),
         ]
 
@@ -72,7 +71,6 @@ class LeaderboardHistory(Document):
         name = "leaderboard_history"
         indexes = [
             IndexModel([("employee_id", 1), ("month", 1)], unique=True),
-            IndexModel("employee_id"),
             IndexModel("month"),
             IndexModel("leaderboard_rank"),
         ]
@@ -108,7 +106,6 @@ class RecruiterActivity(Document):
         name = "recruiter_activity"
         indexes = [
             IndexModel("employee_id"),
-            IndexModel("activity_type"),
-            IndexModel("created_at"),
+            IndexModel("created_at", expireAfterSeconds=7776000),  # 90-day TTL
             IndexModel("activity_reference_id", unique=True),
         ]
