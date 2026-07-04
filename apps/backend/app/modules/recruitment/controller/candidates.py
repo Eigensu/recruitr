@@ -27,7 +27,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
@@ -99,7 +99,7 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             resp.raise_for_status()
         raw_text = extract_text_from_file(resp.content)
         parsed = parse_resume(raw_text)
-    except Exception:
+    except Exception as exc:
         _log.exception("Resume parse failed for candidate %s", candidate_id)
         return
 
@@ -127,7 +127,7 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             update["previous_company"] = parsed.previous_company
 
         await doc.set(update)
-    except Exception:
+    except Exception as exc:
         _log.exception("Resume DB update failed for candidate %s", candidate_id)
 
 
@@ -419,8 +419,8 @@ async def bulk_upload_resumes(
                 if parsed.skills:
                     patch["skills"] = parsed.skills
                     patch["skills_normalized"] = [s.lower() for s in parsed.skills]
-                if parsed.ai_tags:
-                    patch["ai_tags"] = parsed.ai_tags
+                if parsed.tags:
+                    patch["ai_tags"] = parsed.tags
                 if parsed.phone and not existing.phone:
                     patch["phone"] = parsed.phone
                 if parsed.experience_years is not None and existing.experience_years == 0:
@@ -429,7 +429,7 @@ async def bulk_upload_resumes(
                     patch["education_level"] = parsed.education_level
                 if parsed.previous_company and not existing.previous_company:
                     patch["previous_company"] = parsed.previous_company
-                await existing.set(patch)
+                await existing.update(patch)
                 updated += 1
             else:
                 doc = Candidate(
@@ -442,7 +442,7 @@ async def bulk_upload_resumes(
                     education_level=parsed.education_level,
                     skills=parsed.skills,
                     skills_normalized=[s.lower() for s in parsed.skills],
-                    ai_tags=parsed.ai_tags,
+                    ai_tags=parsed.tags,
                     resume_url=resume_url,
                     resume_public_id=resume_public_id,
                     resume_raw_text=raw_text,
@@ -458,9 +458,12 @@ async def bulk_upload_resumes(
                         )
                     )
 
-        except Exception:
+        except OperationFailure as exc:
+            _log.exception("Bulk upload: MongoDB operation failed for %s", filename)
+            failed.append(BulkUploadFailure(filename=filename, reason=f"Database write failed (Quota Exceeded?): {exc.details.get('errmsg', str(exc)) if hasattr(exc, 'details') and isinstance(exc.details, dict) else str(exc)}"))
+        except Exception as exc:
             _log.exception("Bulk upload: unexpected error for %s", filename)
-            failed.append(BulkUploadFailure(filename=filename, reason="Unexpected server error"))
+            failed.append(BulkUploadFailure(filename=filename, reason=f"Unexpected server error: {exc}"))
 
     return BulkUploadResult(created=created, updated=updated, failed=failed)
 
