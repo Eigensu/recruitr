@@ -420,7 +420,7 @@ async def bulk_upload_resumes(
                     patch["skills"] = parsed.skills
                     patch["skills_normalized"] = [s.lower() for s in parsed.skills]
                 if parsed.tags:
-                    patch["ai_tags"] = parsed.tags
+                    patch["tags"] = parsed.tags
                 if parsed.phone and not existing.phone:
                     patch["phone"] = parsed.phone
                 if parsed.experience_years is not None and existing.experience_years == 0:
@@ -429,7 +429,7 @@ async def bulk_upload_resumes(
                     patch["education_level"] = parsed.education_level
                 if parsed.previous_company and not existing.previous_company:
                     patch["previous_company"] = parsed.previous_company
-                await existing.update(patch)
+                await existing.set(patch)
                 updated += 1
             else:
                 doc = Candidate(
@@ -442,7 +442,7 @@ async def bulk_upload_resumes(
                     education_level=parsed.education_level,
                     skills=parsed.skills,
                     skills_normalized=[s.lower() for s in parsed.skills],
-                    ai_tags=parsed.tags,
+                    tags=parsed.tags,
                     resume_url=resume_url,
                     resume_public_id=resume_public_id,
                     resume_raw_text=raw_text,
