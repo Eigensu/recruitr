@@ -72,8 +72,9 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
       );
       setResult(res);
       onComplete(res);
-    } catch {
-      setEntries((prev) => prev.map((e) => ({ ...e, status: "failed", error: "Upload failed" })));
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Upload failed";
+      setEntries((prev) => prev.map((e) => ({ ...e, status: "failed", error: errMsg })));
     } finally {
       setUploading(false);
     }
