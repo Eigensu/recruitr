@@ -7,6 +7,7 @@ import time
 
 import cloudinary
 import cloudinary.uploader
+import cloudinary.utils
 import fitz  # PyMuPDF
 
 from app.config import settings
@@ -32,17 +33,16 @@ def generate_upload_signature() -> dict:
         Dict with signature, timestamp, cloud_name, api_key, upload_preset, folder.
     """
     timestamp = int(time.time())
-    params_to_sign = (
-        f"folder={RESUME_FOLDER}"
-        f"&timestamp={timestamp}"
-        f"&upload_preset={settings.CLOUDINARY_UPLOAD_PRESET}"
-    )
+    params_to_sign = {
+        "folder": RESUME_FOLDER,
+        "timestamp": timestamp,
+        "upload_preset": settings.CLOUDINARY_UPLOAD_PRESET,
+    }
 
-    signature = hmac.new(
-        settings.CLOUDINARY_API_SECRET.encode(),
-        params_to_sign.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    # Cloudinary signatures are a plain hash (SHA-1 by default) of the sorted
+    # params concatenated with the API secret — NOT an HMAC. Reuse the SDK's
+    # own signer so this stays correct if Cloudinary's algorithm/version changes.
+    signature = cloudinary.utils.api_sign_request(params_to_sign, settings.CLOUDINARY_API_SECRET)
 
     return {
         "signature": signature,
