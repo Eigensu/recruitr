@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ApiCandidate, CandidateFilters } from "@/types";
 import { clientDeleteCandidate, clientFetchCandidates } from "@/lib/api/candidates.client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useToast } from "@/components/ui/Toast";
 import CandidateFilterBar from "./CandidateFilterBar";
 import CandidateCard from "./CandidateCard";
 import CandidateDrawer from "./CandidateDrawer";
@@ -30,6 +31,7 @@ export default function CandidatesClient({
   availableTags,
 }: Readonly<Props>) {
   const { isMaintainer } = useCurrentUser();
+  const toast = useToast();
   const [candidates, setCandidates] = useState<ApiCandidate[]>(initialCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
@@ -87,10 +89,14 @@ export default function CandidatesClient({
   }
 
   async function handleDeleteCandidate(id: string) {
-    await clientDeleteCandidate(id);
-    setCandidates((prev) => prev.filter((c) => c.id !== id));
-    setTotal((t) => t - 1);
-    if (selectedCandidate?.id === id) setSelectedCandidate(null);
+    try {
+      await clientDeleteCandidate(id);
+      setCandidates((prev) => prev.filter((c) => c.id !== id));
+      setTotal((t) => t - 1);
+      if (selectedCandidate?.id === id) setSelectedCandidate(null);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to delete candidate", "error");
+    }
   }
 
   function handleBulkComplete() {
