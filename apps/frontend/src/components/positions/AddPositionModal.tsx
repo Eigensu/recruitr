@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { IconX, IconBriefcase } from "@tabler/icons-react";
-import { useApiFetch } from "@/lib/api";
+import { IconX, IconBriefcase, IconPlus, IconCheck } from "@tabler/icons-react";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import {
   createPosition,
   updatePosition,
   type PositionCreatePayload,
   type PositionUpdatePayload,
 } from "@/lib/api/positions";
-import type { ApiPosition, ApiPositionFilters } from "@/types";
+import { createClient } from "@/lib/api/clients";
+import type { ApiClientOption, ApiPosition, ApiPositionFilters } from "@/types";
 
 interface Props {
   isOpen: boolean;
@@ -20,12 +21,15 @@ interface Props {
   /** When provided the modal operates in edit mode */
   position?: ApiPosition;
   onUpdated?: (position: ApiPosition) => void;
+  /** Lets the parent fold a newly added client into its cached filter options */
+  onClientCreated?: (client: ApiClientOption) => void;
 }
 
 const INPUT_CLS =
   "w-full px-3 py-2 text-sm rounded-lg bg-(--color-surface) border border-border" +
   " text-white placeholder-gray-500 focus:outline-none focus:border-yellow transition-all";
-const LABEL_CLS = "block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider";
+const LABEL_BASE = "block text-xs font-semibold text-gray-400 uppercase tracking-wider";
+const LABEL_CLS = `${LABEL_BASE} mb-1.5`;
 
 const EMPTY_FORM = {
   clientId: "",
@@ -58,6 +62,7 @@ export default function AddPositionModal({
   onCreated,
   position,
   onUpdated,
+  onClientCreated,
 }: Readonly<Props>) {
   const apiFetch = useApiFetch();
   const isEditing = Boolean(position);
@@ -66,10 +71,58 @@ export default function AddPositionModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Clients added from inside this modal. Kept separate from `filters` so the
+  // new option survives even if the parent hasn't refreshed its filter cache.
+  const [newClients, setNewClients] = useState<ApiClientOption[]>([]);
+  const [showClientForm, setShowClientForm] = useState(false);
+  const [clientForm, setClientForm] = useState({ name: "", city: "" });
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [clientError, setClientError] = useState<string | null>(null);
+
+  const clientOptions = useMemo(() => {
+    const known = filters?.clients ?? [];
+    const knownIds = new Set(known.map((c) => c.id));
+    return [...known, ...newClients.filter((c) => !knownIds.has(c.id))].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [filters, newClients]);
+
   function handleClose() {
-    if (submitting) return;
+    if (submitting || creatingClient) return;
     setError(null);
+    closeClientForm();
     onClose();
+  }
+
+  function closeClientForm() {
+    setShowClientForm(false);
+    setClientForm({ name: "", city: "" });
+    setClientError(null);
+  }
+
+  async function handleCreateClient() {
+    const name = clientForm.name.trim();
+    if (!name) {
+      setClientError("Client name is required.");
+      return;
+    }
+    setCreatingClient(true);
+    setClientError(null);
+    try {
+      const created = await createClient(apiFetch, {
+        name,
+        city: clientForm.city.trim() || undefined,
+      });
+      const option: ApiClientOption = { id: created.id, code: created.code, name: created.name };
+      setNewClients((prev) => [...prev, option]);
+      setForm((prev) => ({ ...prev, clientId: option.id }));
+      onClientCreated?.(option);
+      closeClientForm();
+    } catch (err) {
+      setClientError(apiErrorMessage(err, "Failed to add client."));
+    } finally {
+      setCreatingClient(false);
+    }
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -114,7 +167,7 @@ export default function AddPositionModal({
         onClose();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save position.");
+      setError(apiErrorMessage(err, "Failed to save position."));
     } finally {
       setSubmitting(false);
     }
@@ -170,9 +223,24 @@ export default function AddPositionModal({
 
               <form id="add-position-form" onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label htmlFor="pos-client" className={LABEL_CLS}>
-                    Client *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="pos-client" className={LABEL_BASE}>
+                      Client *
+                    </label>
+                    {!isEditing && !showClientForm && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowClientForm(true);
+                          setClientError(null);
+                        }}
+                        className="flex items-center gap-1 text-xs font-semibold text-yellow hover:text-yellow-dark transition-colors cursor-pointer"
+                      >
+                        <IconPlus className="size-3.5" /> New client
+                      </button>
+                    )}
+                  </div>
+
                   {isEditing ? (
                     <div className="px-3 py-2 text-sm rounded-lg bg-(--color-surface) border border-border text-gray-400">
                       {position?.client_name}
@@ -186,12 +254,76 @@ export default function AddPositionModal({
                       className={INPUT_CLS}
                     >
                       <option value="">Select client…</option>
-                      {filters?.clients.map((c) => (
+                      {clientOptions.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
                       ))}
                     </select>
+                  )}
+
+                  {/* Inline client creation — the new client is saved to the brand's
+                      list, so it stays in this dropdown for everyone afterwards. */}
+                  {!isEditing && showClientForm && (
+                    <div className="mt-2 p-3 rounded-lg bg-(--color-surface) border border-border space-y-2">
+                      <p className="text-xs text-gray-400">
+                        Adds a client to your brand&apos;s list permanently.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          autoFocus
+                          type="text"
+                          aria-label="New client name"
+                          placeholder="Client name *"
+                          value={clientForm.name}
+                          onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              // The wrapping <form> submits the position, not this.
+                              e.preventDefault();
+                              void handleCreateClient();
+                            }
+                            if (e.key === "Escape") closeClientForm();
+                          }}
+                          className={INPUT_CLS}
+                        />
+                        <input
+                          type="text"
+                          aria-label="New client city"
+                          placeholder="City (optional)"
+                          value={clientForm.city}
+                          onChange={(e) => setClientForm({ ...clientForm, city: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void handleCreateClient();
+                            }
+                            if (e.key === "Escape") closeClientForm();
+                          }}
+                          className={INPUT_CLS}
+                        />
+                      </div>
+                      {clientError && <p className="text-xs text-red-400">{clientError}</p>}
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={closeClientForm}
+                          disabled={creatingClient}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCreateClient}
+                          disabled={creatingClient || !clientForm.name.trim()}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-xs font-bold transition-all disabled:opacity-60 cursor-pointer"
+                        >
+                          <IconCheck className="size-3.5" />
+                          {creatingClient ? "Adding…" : "Add client"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
