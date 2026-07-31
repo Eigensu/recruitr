@@ -345,7 +345,11 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
     if not client_oid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _ERR_INVALID_CLIENT_ID)
 
-    client_doc = await Client.find_one(Client.id == client_oid, Client.brand_id == tenant.brand_id)
+    # is_active matters: an archived client is gone from the dropdowns, so it must
+    # not accept new positions either.
+    client_doc = await Client.find_one(
+        {"_id": client_oid, "brand_id": tenant.brand_id, "is_active": True}
+    )
     if not client_doc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or unauthorized client")
 

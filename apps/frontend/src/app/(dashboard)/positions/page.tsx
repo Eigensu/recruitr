@@ -30,7 +30,7 @@ import {
 } from "@/lib/api/positions";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { clientFetchCandidates } from "@/lib/api/candidates.client";
-import type { ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
+import type { ApiClientOption, ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
 import AddPositionModal from "@/components/positions/AddPositionModal";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -646,6 +646,19 @@ export default function PositionsPage() {
 
   const selectedPosition = positions.find((p) => p.id === selectedPositionId) ?? null;
 
+  /** Fold a client added from the position modal into the cached filter options
+   *  so it appears in the client filter dropdown too, without a refetch. */
+  function addClientToFilters(client: ApiClientOption) {
+    setFilters((prev) => {
+      if (!prev) return prev;
+      if (prev.clients.some((c) => c.id === client.id)) return prev;
+      return {
+        ...prev,
+        clients: [...prev.clients, client].sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    });
+  }
+
   function applyPositionMappingDelta(
     positionId: string,
     delta: 1 | -1,
@@ -1051,6 +1064,7 @@ export default function PositionsPage() {
           setPositions((prev) => [pos, ...prev]);
           toast(`Position "${pos.role}" created`, "success");
         }}
+        onClientCreated={addClientToFilters}
       />
 
       <AddPositionModal

@@ -16,6 +16,7 @@ from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
     activity_router,
     candidates_router,
+    clients_router,
     pipeline_router,
     positions_router,
     tags_router,
@@ -64,6 +65,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(brands_router, prefix="/api/v1/brands", tags=["Brands"])
 app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candidates"])
+app.include_router(clients_router, prefix="/api/v1/clients", tags=["Clients"])
 app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])

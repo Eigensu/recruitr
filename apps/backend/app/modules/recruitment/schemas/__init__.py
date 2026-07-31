@@ -10,6 +10,11 @@ from app.modules.recruitment.schemas.candidate import (
     CandidateUpdate,
     ExperienceFilter,
 )
+from app.modules.recruitment.schemas.client import (
+    ClientCreate,
+    ClientResponse,
+    ClientUpdate,
+)
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
     PipelineStageColumn,
@@ -62,6 +67,10 @@ __all__ = [
     "ClientOption",
     "PositionFiltersResponse",
     "PositionPage",
+    # Client DTOs
+    "ClientCreate",
+    "ClientUpdate",
+    "ClientResponse",
     # Pipeline DTOs
     "PipelineBoard",
     "PipelineStageColumn",

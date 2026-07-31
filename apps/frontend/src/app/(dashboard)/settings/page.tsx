@@ -14,6 +14,7 @@ import {
   IconMoon,
 } from "@tabler/icons-react";
 import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
+import ClientSettingsTab from "@/components/settings/ClientSettingsTab";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useApiFetch } from "@/lib/api";
 import { useTheme } from "@/context/ThemeContext";
@@ -25,7 +26,7 @@ export default function SettingsPage() {
   const apiFetch = useApiFetch();
   const { theme, toggleTheme } = useTheme();
 
-  const { user, isLoading: userLoading, isMaintainer } = useCurrentUser();
+  const { user, isLoading: userLoading, isMaintainer, isAdmin } = useCurrentUser();
 
   const [language, setLanguage] = React.useState<string>(() => {
     try {
@@ -117,7 +118,12 @@ export default function SettingsPage() {
     }
   }
 
-  const TABS = ["Preferences", ...(isMaintainer ? ["Team"] : []), "Account"];
+  const TABS = [
+    "Preferences",
+    ...(isMaintainer ? ["Team"] : []),
+    ...(isAdmin ? ["Clients"] : []),
+    "Account",
+  ];
   const [activeTab, setActiveTab] = useState("Preferences");
 
   async function handleLogout() {
@@ -425,6 +431,8 @@ export default function SettingsPage() {
         )}
 
         {activeTab === "Team" && <TeamSettingsTab />}
+
+        {activeTab === "Clients" && isAdmin && <ClientSettingsTab />}
       </div>
     </div>
   );
