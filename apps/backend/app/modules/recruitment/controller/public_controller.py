@@ -76,15 +76,12 @@ async def _process_resume_upload(resume: UploadFile | None) -> tuple[str | None,
         if len(file_bytes) > 10 * 1024 * 1024:
             raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)")
             
-        raw_text = extract_text_from_file(file_bytes)
-        parsed = parse_resume(raw_text)
+        from app.modules.recruitment.services.resume_service import process_resume_bytes
+        raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(file_bytes, filename)
+        
         parsed_skills = parsed.skills or []
         parsed_tags = parsed.tags or []
         parsed_exp = parsed.experience_years or 0.0
-        
-        cld = await asyncio.to_thread(upload_bytes_to_cloudinary, file_bytes, filename)
-        resume_url = cld.get("secure_url")
-        resume_public_id = cld.get("public_id")
         
         return raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp
     except ValueError as exc:

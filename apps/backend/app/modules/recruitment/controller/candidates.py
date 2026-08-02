@@ -111,21 +111,8 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
         if not doc:
             return
 
-        update: dict = {"resume_raw_text": raw_text}
-        if parsed.skills:
-            update["skills"] = parsed.skills
-            update["skills_normalized"] = [s.lower() for s in parsed.skills]
-        if parsed.phone and not doc.phone:
-            update["phone"] = parsed.phone
-        if parsed.experience_years is not None and doc.experience_years == 0:
-            update["experience_years"] = parsed.experience_years
-        if parsed.education_level is not None and doc.education_level is None:
-            update["education_level"] = parsed.education_level
-        if parsed.tags:
-            update["tags"] = parsed.tags
-        if parsed.previous_company and not doc.previous_company:
-            update["previous_company"] = parsed.previous_company
-
+        from app.modules.recruitment.services.resume_service import build_candidate_resume_update
+        update = build_candidate_resume_update(doc, parsed, raw_text)
         await doc.set(update)
     except Exception as exc:
         _log.exception("Resume DB update failed for candidate %s", candidate_id)
@@ -390,56 +377,36 @@ async def bulk_upload_resumes(
         try:
             file_bytes = await upload.read()
 
-            # 1. Extract text
+            from app.modules.recruitment.services.resume_service import process_resume_bytes
+
             try:
-                raw_text = extract_text_from_file(file_bytes)
+                raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(file_bytes, filename)
             except ValueError as exc:
                 failed.append(BulkUploadFailure(filename=filename, reason=str(exc)))
                 continue
+            except Exception as exc:
+                failed.append(BulkUploadFailure(filename=filename, reason=f"Storage upload failed: {exc}"))
+                continue
 
-            # 2. Parse structured fields
-            parsed = parse_resume(raw_text)
             if not parsed.email:
                 failed.append(
                     BulkUploadFailure(filename=filename, reason="No email address found in resume")
                 )
                 continue
 
-            # 3. Upload to Cloudinary (blocking SDK call → thread pool)
-            try:
-                cld = await asyncio.to_thread(upload_bytes_to_cloudinary, file_bytes, filename)
-            except Exception as exc:
-                failed.append(
-                    BulkUploadFailure(filename=filename, reason=f"Storage upload failed: {exc}")
-                )
-                continue
-
-            resume_url: str = cld.get("secure_url", "")
-            resume_public_id: str = cld.get("public_id", "")
-
             # 4. Upsert candidate by email
             email_lower = parsed.email.lower()
             existing = await Candidate.find_one({"email": email_lower, "brand_id": tenant.brand_id})
 
             if existing:
-                patch: dict = {
-                    "resume_url": resume_url,
-                    "resume_public_id": resume_public_id,
-                    "resume_raw_text": raw_text,
-                }
-                if parsed.skills:
-                    patch["skills"] = parsed.skills
-                    patch["skills_normalized"] = [s.lower() for s in parsed.skills]
-                if parsed.tags:
-                    patch["tags"] = parsed.tags
-                if parsed.phone and not existing.phone:
-                    patch["phone"] = parsed.phone
-                if parsed.experience_years is not None and existing.experience_years == 0:
-                    patch["experience_years"] = parsed.experience_years
-                if parsed.education_level is not None and existing.education_level is None:
-                    patch["education_level"] = parsed.education_level
-                if parsed.previous_company and not existing.previous_company:
-                    patch["previous_company"] = parsed.previous_company
+                from app.modules.recruitment.services.resume_service import build_candidate_resume_update
+                patch = build_candidate_resume_update(
+                    existing_doc=existing,
+                    parsed=parsed,
+                    raw_text=raw_text,
+                    resume_url=resume_url,
+                    resume_public_id=resume_public_id
+                )
                 await existing.set(patch)
                 updated += 1
             else:

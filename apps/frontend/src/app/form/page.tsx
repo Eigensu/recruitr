@@ -56,11 +56,11 @@ function PublicApplicationFormContent() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-        <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl border border-gray-100">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+      <div className="flex min-h-screen items-center justify-center bg-shell p-4 font-sans text-text-primary theme-transition">
+        <div className="w-full max-w-md rounded-2xl bg-surface-panel p-8 text-center shadow-xl border border-border">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
             <svg
-              className="h-8 w-8 text-green-600"
+              className="h-8 w-8 text-emerald-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -73,8 +73,10 @@ function PublicApplicationFormContent() {
               />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Submitted!</h2>
-          <p className="text-gray-600">
+          <h2 className="text-2xl font-heading font-bold text-text-primary mb-3">
+            Application Submitted!
+          </h2>
+          <p className="text-text-secondary text-sm">
             Thank you for applying. We have received your application and will be in touch soon.
           </p>
         </div>
@@ -83,38 +85,40 @@ function PublicApplicationFormContent() {
   }
 
   const inputCls =
-    "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors";
-  const labelCls = "mb-1.5 block text-sm font-medium text-gray-700";
+    "w-full rounded-xl border border-border bg-canvas px-4 py-3 sm:py-3.5 text-sm text-text-primary placeholder:text-text-muted/60 focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
+  const labelCls = "mb-1.5 block text-sm font-medium text-text-primary";
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-blue-100 relative">
+    <div className="min-h-screen bg-shell font-sans text-text-primary selection:bg-yellow selection:text-navy relative theme-transition">
       {/* Top right logo */}
       <div className="absolute top-6 right-6 lg:top-8 lg:right-8 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-yellow text-navy font-heading font-bold text-lg">
           R
         </div>
-        <span className="text-xl font-bold tracking-tight text-gray-900">Recruitr</span>
+        <span className="text-xl font-heading font-bold tracking-tight text-text-primary">
+          Recruitr
+        </span>
       </div>
 
-      <div className="flex min-h-screen items-center justify-center p-4 py-16">
-        <div className="w-full max-w-2xl rounded-2xl bg-white p-8 shadow-xl shadow-gray-200/50 border border-gray-100 lg:p-12">
+      <div className="flex min-h-screen items-center justify-center p-4 py-20 sm:p-6 lg:p-8">
+        <div className="w-full max-w-2xl rounded-3xl bg-surface-panel p-6 sm:p-10 lg:p-12 shadow-2xl shadow-black/10 border border-border">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
               Submit your application
             </h1>
-            <p className="mt-3 text-gray-500">
+            <p className="mt-3 text-text-secondary text-sm sm:text-base">
               Join our talent network. It only takes a few minutes.
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 rounded-xl bg-red-50 p-4 border border-red-100">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="mb-6 rounded-xl bg-red-500/10 p-4 border border-red-500/20">
+              <p className="text-sm text-red-500 font-medium">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="fullName" className={labelCls}>
                   Full Name *
@@ -145,7 +149,7 @@ function PublicApplicationFormContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="phone" className={labelCls}>
                   Phone Number
@@ -174,7 +178,7 @@ function PublicApplicationFormContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 sm:grid-cols-2">
               <div>
                 <label htmlFor="currentRole" className={labelCls}>
                   Current Role
@@ -209,10 +213,10 @@ function PublicApplicationFormContent() {
 
             <div>
               <label className={labelCls}>Resume / CV (PDF or DOCX)</label>
-              <div className="mt-1 flex justify-center rounded-xl border-2 border-dashed border-gray-300 px-6 py-8 transition-colors hover:border-blue-400">
+              <div className="mt-1.5 flex justify-center rounded-xl border-2 border-dashed border-border bg-canvas/30 px-6 py-10 sm:py-12 transition-all hover:border-yellow hover:bg-canvas/60">
                 <div className="text-center">
                   <svg
-                    className="mx-auto h-10 w-10 text-gray-300"
+                    className="mx-auto h-12 w-12 text-text-muted/60"
                     stroke="currentColor"
                     fill="none"
                     viewBox="0 0 48 48"
@@ -225,10 +229,10 @@ function PublicApplicationFormContent() {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  <div className="mt-4 flex text-sm leading-6 text-gray-600 justify-center">
+                  <div className="mt-4 flex text-sm leading-6 text-text-secondary justify-center">
                     <label
                       htmlFor="file-upload"
-                      className="relative cursor-pointer rounded-md bg-white font-semibold text-blue-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-600 focus-within:ring-offset-2 hover:text-blue-500"
+                      className="relative cursor-pointer rounded-md font-semibold text-yellow hover:text-yellow-dark focus-within:outline-none focus-within:ring-2 focus-within:ring-yellow focus-within:ring-offset-2 focus-within:ring-offset-surface-panel transition-colors"
                     >
                       <span>Upload a file</span>
                       <input
@@ -242,18 +246,18 @@ function PublicApplicationFormContent() {
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
-                  <p className="text-xs leading-5 text-gray-500 mt-1">
+                  <p className="text-xs leading-5 text-text-muted mt-1.5">
                     {resume ? resume.name : "PDF, DOCX up to 10MB"}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-4 sm:pt-6">
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-xl bg-blue-600 px-4 py-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 transition-all"
+                className="w-full rounded-xl bg-yellow px-4 py-4 text-sm sm:text-base font-bold text-navy shadow-sm hover:brightness-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-yellow disabled:opacity-50 transition-all"
               >
                 {loading ? "Submitting..." : "Submit Application"}
               </button>
@@ -269,7 +273,9 @@ export default function PublicApplicationForm() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>
+        <div className="min-h-screen bg-shell flex items-center justify-center font-sans text-text-secondary text-sm">
+          Loading...
+        </div>
       }
     >
       <PublicApplicationFormContent />
