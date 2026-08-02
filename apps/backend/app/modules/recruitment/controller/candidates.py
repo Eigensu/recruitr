@@ -33,7 +33,7 @@ from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.dependencies import get_tenant, require_maintainer
-from app.modules.recruitment.enums import PipelineStage
+from app.modules.recruitment.enums import PipelineStage, CandidateStatus
 from app.modules.recruitment.models import Candidate, Mapping
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
@@ -215,10 +215,13 @@ async def list_candidates(
     has_cv_link: Annotated[bool | None, Query()] = None,
     city: Annotated[str | None, Query()] = None,
     gender: Annotated[str | None, Query()] = None,
+    status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+    if status is not None:
+        match["status"] = status.value
 
     if search:
         rx = {"$regex": search, "$options": "i"}
@@ -342,6 +345,8 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
         current_role=doc.current_role,
         salary=doc.salary,
         notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
         created_at=doc.created_at,
     )
 
@@ -499,6 +504,8 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
         current_role=doc.current_role,
         salary=doc.salary,
         notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
         created_at=doc.created_at,
     )
 
@@ -572,6 +579,8 @@ async def update_candidate(
         current_role=doc.current_role,
         salary=doc.salary,
         notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
         created_at=doc.created_at,
     )
 
@@ -588,6 +597,80 @@ async def delete_candidate(
     """Soft-delete a candidate (sets is_active=False). Mappings are preserved."""
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"is_active": False})
+
+# ── Status Update ─────────────────────────────────────────────────────────────
+
+@router.post("/{candidate_id}/approve")
+async def approve_candidate(
+    tenant: _Tenant, candidate_id: str
+) -> CandidateResponse:
+    doc = await _get_or_404(tenant, candidate_id)
+    await doc.set({"status": CandidateStatus.approved})
+    
+    cand_oid = to_object_id(candidate_id, "candidate_id")
+    count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
+    return CandidateResponse(
+        id=str(doc.id),
+        full_name=doc.full_name,
+        email=doc.email,
+        phone=doc.phone,
+        previous_company=doc.previous_company,
+        experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
+        skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
+        resume_url=doc.resume_url,
+        current_stage=doc.current_stage,
+        mappings_count=count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
+        created_at=doc.created_at,
+    )
+
+@router.post("/{candidate_id}/reject")
+async def reject_candidate(
+    tenant: _Tenant, candidate_id: str
+) -> CandidateResponse:
+    doc = await _get_or_404(tenant, candidate_id)
+    await doc.set({"status": CandidateStatus.rejected})
+    
+    cand_oid = to_object_id(candidate_id, "candidate_id")
+    count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
+    return CandidateResponse(
+        id=str(doc.id),
+        full_name=doc.full_name,
+        email=doc.email,
+        phone=doc.phone,
+        previous_company=doc.previous_company,
+        experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
+        skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
+        resume_url=doc.resume_url,
+        current_stage=doc.current_stage,
+        mappings_count=count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
+        created_at=doc.created_at,
+    )
 
 
 # ── Mappings (for drawer) ──────────────────────────────────────────────────────
@@ -684,5 +767,7 @@ async def confirm_resume(
         current_role=doc.current_role,
         salary=doc.salary,
         notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
         created_at=doc.created_at,
     )

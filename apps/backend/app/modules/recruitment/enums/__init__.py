@@ -1,6 +1,7 @@
 """Recruitment domain enums."""
 
 from app.modules.recruitment.enums.activity_type import ActivityType
+from app.modules.recruitment.enums.candidate_status import CandidateStatus
 from app.modules.recruitment.enums.decision import Decision
 from app.modules.recruitment.enums.education_level import EducationLevel
 from app.modules.recruitment.enums.gender import Gender
@@ -23,6 +24,7 @@ __all__ = [
     "PositionStatus",
     "Seniority",
     "Decision",
+    "CandidateStatus",
     "ActivityType",
     "EducationLevel",
     "Gender",

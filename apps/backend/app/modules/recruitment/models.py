@@ -14,6 +14,7 @@ from pymongo import IndexModel
 
 from app.modules.recruitment.enums import (
     ActivityType,
+    CandidateStatus,
     Decision,
     EducationLevel,
     Gender,
@@ -193,6 +194,7 @@ class Candidate(Document):
     salary: float | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
+    status: CandidateStatus = CandidateStatus.approved
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

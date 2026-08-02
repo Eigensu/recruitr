@@ -7,6 +7,7 @@ from app.modules.recruitment.controller.pipeline import router as pipeline_route
 from app.modules.recruitment.controller.positions import router as positions_router
 from app.modules.recruitment.controller.tags import router as tags_router
 from app.modules.recruitment.controller.teams import router as teams_router
+from app.modules.recruitment.controller.public_controller import router as public_router
 
 __all__ = [
     "activity_router",
@@ -16,4 +17,5 @@ __all__ = [
     "pipeline_router",
     "tags_router",
     "teams_router",
+    "public_router",
 ]

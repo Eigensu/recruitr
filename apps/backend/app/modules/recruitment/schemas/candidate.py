@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field
 
 from app.common.dtos.pagination import PaginatedResponse
-from app.modules.recruitment.enums import PipelineStage, Gender
+from app.modules.recruitment.enums import CandidateStatus, PipelineStage, Gender
 
 
 class CandidateCreate(BaseModel):
@@ -54,6 +54,7 @@ class CandidateUpdate(BaseModel):
     source: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
+    status: CandidateStatus | None = None
 
 
 class CandidateResponse(BaseModel):
@@ -82,6 +83,7 @@ class CandidateResponse(BaseModel):
     source: str | None = None
     salary: float | None = None
     notes: str | None = None
+    status: CandidateStatus
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -10,6 +10,8 @@ interface CandidateCardProps {
   onClick: () => void;
   isMaintainer?: boolean;
   onDelete?: (id: string) => Promise<void>;
+  onApprove?: () => Promise<void>;
+  onReject?: () => Promise<void>;
 }
 
 const PALETTES = [
@@ -42,6 +44,8 @@ export default function CandidateCard({
   onClick,
   isMaintainer,
   onDelete,
+  onApprove,
+  onReject,
 }: Readonly<CandidateCardProps>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
@@ -148,21 +152,23 @@ export default function CandidateCard({
           </div>
 
           {/* Skills */}
-          <div className="flex flex-wrap gap-1.5">
-            {candidate.skills.slice(0, 4).map((skill) => (
-              <span
-                key={skill}
-                className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-              >
-                {skill}
-              </span>
-            ))}
-            {candidate.skills.length > 4 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
-                +{candidate.skills.length - 4}
-              </span>
-            )}
-          </div>
+          {candidate.status !== "PENDING" && candidate.status !== "pending" && (
+            <div className="flex flex-wrap gap-1.5">
+              {candidate.skills.slice(0, 4).map((skill) => (
+                <span
+                  key={skill}
+                  className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+                >
+                  {skill}
+                </span>
+              ))}
+              {candidate.skills.length > 4 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
+                  +{candidate.skills.length - 4}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Contact footer */}
           <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
@@ -195,6 +201,36 @@ export default function CandidateCard({
                 </span>
               ))}
           </div>
+
+          {/* Action buttons (for pending candidates) */}
+          {(onApprove || onReject) && (
+            <div className="mt-3 pt-3 border-t border-border/40 flex items-center gap-2">
+              {onApprove && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApprove();
+                  }}
+                  className="pointer-events-auto relative z-10 flex-1 rounded bg-green-500/10 py-1.5 text-xs font-semibold text-green-500 transition-colors hover:bg-green-500/20"
+                >
+                  Approve
+                </button>
+              )}
+              {onReject && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReject();
+                  }}
+                  className="pointer-events-auto relative z-10 flex-1 rounded bg-red-500/10 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20"
+                >
+                  Reject
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

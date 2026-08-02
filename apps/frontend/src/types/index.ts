@@ -135,6 +135,7 @@ export interface CandidateFilters {
   has_cv_link?: boolean;
   city?: string;
   gender?: string;
+  status?: string;
   page: number;
   limit: number;
 }
@@ -194,6 +195,7 @@ export interface ApiCandidate {
   source: string | null;
   salary: number | null;
   notes: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
   created_at: string;
 }
 

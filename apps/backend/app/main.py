@@ -19,6 +19,7 @@ from app.modules.recruitment.controller import (
     clients_router,
     pipeline_router,
     positions_router,
+    public_router,
     tags_router,
     teams_router,
 )
@@ -63,6 +64,7 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
+app.include_router(public_router, prefix="/api/v1/public", tags=["Public"])
 app.include_router(brands_router, prefix="/api/v1/brands", tags=["Brands"])
 app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candidates"])
 app.include_router(clients_router, prefix="/api/v1/clients", tags=["Clients"])

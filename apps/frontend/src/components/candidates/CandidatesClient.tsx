@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import type { ApiCandidate, CandidateFilters } from "@/types";
-import { clientDeleteCandidate, clientFetchCandidates } from "@/lib/api/candidates.client";
+import {
+  clientDeleteCandidate,
+  clientFetchCandidates,
+  clientApproveCandidate,
+  clientRejectCandidate,
+} from "@/lib/api/candidates.client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/components/ui/Toast";
 import CandidateFilterBar from "./CandidateFilterBar";
@@ -17,6 +22,7 @@ const PAGE_SIZE = 50;
 interface Props {
   initialCandidates: ApiCandidate[];
   initialTotal: number;
+  initialPendingCandidates?: ApiCandidate[];
   availableTags: string[];
 }
 
@@ -28,11 +34,14 @@ const drawerStyle = {
 export default function CandidatesClient({
   initialCandidates,
   initialTotal,
+  initialPendingCandidates = [],
   availableTags,
 }: Readonly<Props>) {
   const { isMaintainer } = useCurrentUser();
   const toast = useToast();
   const [candidates, setCandidates] = useState<ApiCandidate[]>(initialCandidates);
+  const [pendingCandidates, setPendingCandidates] =
+    useState<ApiCandidate[]>(initialPendingCandidates);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [activeFilters, setActiveFilters] = useState<Partial<CandidateFilters>>({});
@@ -92,10 +101,33 @@ export default function CandidatesClient({
     try {
       await clientDeleteCandidate(id);
       setCandidates((prev) => prev.filter((c) => c.id !== id));
-      setTotal((t) => t - 1);
+      setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+      setTotal((t) => Math.max(0, t - 1));
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to delete candidate", "error");
+    }
+  }
+
+  async function handleApproveCandidate(id: string) {
+    try {
+      const updated = await clientApproveCandidate(id);
+      setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+      setCandidates((prev) => [updated, ...prev]);
+      setTotal((t) => t + 1);
+      toast("Candidate approved successfully", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to approve candidate", "error");
+    }
+  }
+
+  async function handleRejectCandidate(id: string) {
+    try {
+      await clientRejectCandidate(id);
+      setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+      toast("Candidate rejected", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to reject candidate", "error");
     }
   }
 
@@ -167,6 +199,27 @@ export default function CandidatesClient({
             onComplete={handleBulkComplete}
             onClose={() => setShowBulkUpload(false)}
           />
+        </div>
+      )}
+
+      {pendingCandidates.length > 0 && !loading && (
+        <div className="mb-6">
+          <h2 className="mb-3 text-lg font-bold text-yellow-600">
+            Pending Applications ({pendingCandidates.length})
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {pendingCandidates.map((c) => (
+              <CandidateCard
+                key={c.id}
+                candidate={c}
+                onClick={() => setSelectedCandidate(c)}
+                isMaintainer={isMaintainer}
+                onDelete={handleDeleteCandidate}
+                onApprove={() => handleApproveCandidate(c.id)}
+                onReject={() => handleRejectCandidate(c.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 
