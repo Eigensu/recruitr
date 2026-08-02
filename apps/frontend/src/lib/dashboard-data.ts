@@ -53,15 +53,7 @@ const EMPTY_DATA: DashboardDemoData = {
   analytics: [],
 };
 
-const DASHBOARD_CACHE_TTL_MS = 60_000;
-
-type DashboardCacheEntry = {
-  data: DashboardDemoData;
-  expiresAt: number;
-};
-
-let dashboardCacheEntry: DashboardCacheEntry | null = null;
-let dashboardDataPromise: Promise<DashboardDemoData> | null = null;
+// Node.js global caching removed to prevent cross-tenant data leaks.
 
 function cloneDashboardDemoData(data: DashboardDemoData): DashboardDemoData {
   return {
@@ -384,24 +376,8 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
 }
 
 async function loadDashboardDemoData(): Promise<DashboardDemoData> {
-  const now = Date.now();
-
-  if (dashboardCacheEntry !== null && dashboardCacheEntry.expiresAt > now) {
-    return cloneDashboardDemoData(dashboardCacheEntry.data);
-  }
-
-  dashboardDataPromise ??= fetchDashboardDemoDataOnce();
-
-  try {
-    const data = await dashboardDataPromise;
-    dashboardCacheEntry = {
-      data,
-      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-    };
-    return cloneDashboardDemoData(data);
-  } finally {
-    dashboardDataPromise = null;
-  }
+  const data = await fetchDashboardDemoDataOnce();
+  return cloneDashboardDemoData(data);
 }
 
 export async function getDashboardDemoData() {

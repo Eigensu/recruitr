@@ -31,10 +31,14 @@ interface Props {
   stage: KanbanStage;
   label: string;
   cards: PipelineCard[];
+  readOnly?: boolean;
 }
 
-export default function KanbanColumn({ stage, label, cards }: Readonly<Props>) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage });
+export default function KanbanColumn({ stage, label, cards, readOnly }: Readonly<Props>) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage,
+    disabled: readOnly,
+  });
   const accent = STAGE_ACCENT[stage];
   const dot = STAGE_DOT[stage];
 
@@ -76,7 +80,9 @@ export default function KanbanColumn({ stage, label, cards }: Readonly<Props>) {
         ))}
         {cards.length === 0 && (
           <div className="flex items-center justify-center h-16">
-            <p className="text-[11px] text-text-muted/50 text-center">Drop cards here</p>
+            <p className="text-[11px] text-text-muted/50 text-center">
+              {readOnly ? "No candidates" : "Drop cards here"}
+            </p>
           </div>
         )}
       </div>

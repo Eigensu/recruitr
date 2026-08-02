@@ -192,10 +192,14 @@ export default function DashboardSidebar() {
   }, [router]);
 
   const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
+  const isClient = user?.role === "client";
 
-  const visibleConfigs: NavItemConfig[] = NAV_CONFIG.filter(
-    (item) => !item.maintainerOnly || isMaintainer,
-  );
+  const visibleConfigs: NavItemConfig[] = NAV_CONFIG.filter((item) => {
+    if (item.maintainerOnly && !isMaintainer) return false;
+    if (isClient && item.hideForClient) return false;
+    if (!isClient && item.clientOnly) return false;
+    return true;
+  });
 
   return (
     <>
