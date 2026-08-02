@@ -32,9 +32,11 @@ export default function ActivityFeed({ items }: ActivityFeedProps) {
       </div>
 
       <div className="mt-6 space-y-4">
-        {items.map((item, index) => (
-          <ActivityFeedItem key={item.id} item={item} index={index} />
-        ))}
+        {items.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">No recent activity.</p>
+        ) : (
+          items.map((item, index) => <ActivityFeedItem key={item.id} item={item} index={index} />)
+        )}
       </div>
     </motion.aside>
   );

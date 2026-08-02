@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import GlobalPipelineBoard from "@/components/kanban/GlobalPipelineBoard";
+import ClientPipelineBoard from "@/components/kanban/ClientPipelineBoard";
+import { getUserServer } from "@/lib/api/auth.server";
 import type { ApiPosition, PaginatedResponse } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -25,21 +27,22 @@ async function serverFetch<T>(path: string): Promise<T> {
 }
 
 export default async function PipelinePage() {
+  const user = await getUserServer();
+  const isClient = user?.role === "client";
+
   let employees: { id: string; name: string }[] = [];
   let positions: { id: string; label: string; client: string }[] = [];
 
   try {
-    // GET /api/v1/teams/employees — brand-scoped employee list
-    const data = await serverFetch<EmployeeItem[]>("/api/v1/teams/employees");
-    employees = data.map((e) => ({ id: e.id, name: e.name }));
+    if (!isClient) {
+      const data = await serverFetch<EmployeeItem[]>("/api/v1/teams/employees");
+      employees = data.map((e) => ({ id: e.id, name: e.name }));
+    }
   } catch {
-    /* non-critical — filter bar will just be empty */
+    /* non-critical */
   }
 
   try {
-    // GET /api/v1/positions — paginated; accumulate all pages (backend cap: 100/page).
-    // MAX_PAGE_ITER guards against an unbounded loop if the backend ever reports
-    // has_next incorrectly.
     const MAX_PAGE_ITER = 100;
     const collected: { id: string; label: string; client: string }[] = [];
     let page = 1;
@@ -53,11 +56,6 @@ export default async function PipelinePage() {
       }
       if (!data.meta.has_next) break;
     }
-    if (page > MAX_PAGE_ITER) {
-      console.warn(
-        `pipeline positions: hit MAX_PAGE_ITER (${MAX_PAGE_ITER}); list may be truncated`,
-      );
-    }
     positions = collected;
   } catch {
     /* non-critical */
@@ -67,15 +65,21 @@ export default async function PipelinePage() {
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
       <div className="shrink-0 border-b border-border px-6 pb-5 pt-6">
         <h1 className="font-heading text-3xl font-bold tracking-wide text-text-primary">
-          Recruitment Pipeline
+          {isClient ? "Hiring Pipeline" : "Recruitment Pipeline"}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          Drag candidates across stages to advance them through the pipeline.
+          {isClient
+            ? "Track candidates progressing through your open positions."
+            : "Drag candidates across stages to advance them through the pipeline."}
         </p>
       </div>
 
       <div className="flex-1 overflow-hidden p-5">
-        <GlobalPipelineBoard employees={employees} positions={positions} />
+        {isClient ? (
+          <ClientPipelineBoard positions={positions} />
+        ) : (
+          <GlobalPipelineBoard employees={employees} positions={positions} />
+        )}
       </div>
     </div>
   );

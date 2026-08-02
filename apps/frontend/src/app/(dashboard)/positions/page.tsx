@@ -538,7 +538,7 @@ function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
 
 export default function PositionsPage() {
   const apiFetch = useApiFetch();
-  const { isMaintainer } = useCurrentUser();
+  const { isMaintainer, isClient } = useCurrentUser();
 
   const [positions, setPositions] = useState<ApiPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
@@ -818,26 +818,28 @@ export default function PositionsPage() {
                   className="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-surface-2 border border-border text-text-primary placeholder:text-text-muted focus:outline-none focus:border-yellow transition-all"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-text-muted font-semibold uppercase tracking-wider shrink-0">
-                  Client
-                </span>
-                <select
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
-                  className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-surface-2 border border-border text-text-primary focus:outline-none focus:border-yellow"
-                >
-                  <option value="">All</option>
-                  {filters?.clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-[11px] text-text-muted shrink-0 font-medium">
-                  {positions.length}
-                </span>
-              </div>
+              {!isClient && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-text-muted font-semibold uppercase tracking-wider shrink-0">
+                    Client
+                  </span>
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg bg-surface-2 border border-border text-text-primary focus:outline-none focus:border-yellow"
+                  >
+                    <option value="">All</option>
+                    {filters?.clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-[11px] text-text-muted shrink-0 font-medium">
+                    {positions.length}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Position card list */}

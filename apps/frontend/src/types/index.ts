@@ -5,7 +5,7 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export type UserRole = "employee" | "maintainer" | "admin";
+export type UserRole = "employee" | "maintainer" | "admin" | "client";
 
 export interface UserInfo {
   user_id: string;
@@ -14,6 +14,7 @@ export interface UserInfo {
   role: UserRole;
   employee_id: string | null;
   brand_id: string | null;
+  notification_preferences?: Record<string, boolean>;
 }
 
 // ── Brands ───────────────────────────────────────────────────────────────────

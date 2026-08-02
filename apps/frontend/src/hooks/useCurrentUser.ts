@@ -11,6 +11,7 @@ interface CurrentUserState {
   /** True for maintainers and admins (admin ⊇ maintainer). */
   isMaintainer: boolean;
   isAdmin: boolean;
+  isClient: boolean;
 }
 
 /**
@@ -48,5 +49,6 @@ export function useCurrentUser(): CurrentUserState {
     isLoading,
     isMaintainer: role === "maintainer" || role === "admin",
     isAdmin: role === "admin",
+    isClient: role === "client",
   };
 }
