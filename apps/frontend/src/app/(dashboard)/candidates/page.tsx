@@ -9,14 +9,27 @@ export default async function CandidatesPage() {
   let availableTags: string[] = [];
 
   try {
-    const [candidatePage, pendingPage, tags] = await Promise.all([
+    const [candidatePage, pendingPage1, tags] = await Promise.all([
       getCandidates({ page: 1, limit: 50 }),
       getCandidates({ page: 1, limit: 50, status: "PENDING" }),
       getCandidateTags(),
     ]);
     initialCandidates = candidatePage.items ?? [];
     initialTotal = candidatePage.meta?.total ?? initialCandidates.length;
-    initialPendingCandidates = pendingPage.items ?? [];
+
+    let allPending = pendingPage1.items ?? [];
+    const pendingMeta = pendingPage1.meta;
+    if (pendingMeta && pendingMeta.pages > 1) {
+      const promises = [];
+      for (let p = 2; p <= pendingMeta.pages; p++) {
+        promises.push(getCandidates({ page: p, limit: 50, status: "PENDING" }));
+      }
+      const restPages = await Promise.all(promises);
+      for (const rp of restPages) {
+        allPending = allPending.concat(rp.items ?? []);
+      }
+    }
+    initialPendingCandidates = allPending;
     availableTags = tags;
   } catch (err) {
     console.error("Failed to load candidates page data during SSR:", err);

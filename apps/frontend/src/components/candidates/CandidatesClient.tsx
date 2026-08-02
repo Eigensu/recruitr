@@ -87,8 +87,19 @@ export default function CandidatesClient({
   }
 
   function handleCandidateAdded(candidate: ApiCandidate) {
-    setCandidates((prev) => [candidate, ...prev]);
-    setTotal((t) => t + 1);
+    const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
+    if (!hasFilters && page === 1) {
+      setCandidates((prev) => [candidate, ...prev]);
+      setTotal((t) => t + 1);
+    } else {
+      clientFetchCandidates({ ...activeFilters, page: 1, limit: PAGE_SIZE })
+        .then((data) => {
+          setCandidates(data.items ?? []);
+          setTotal(data.meta?.total ?? 0);
+          setPage(1);
+        })
+        .catch(() => undefined);
+    }
     setShowAddForm(false);
   }
 
@@ -100,9 +111,14 @@ export default function CandidatesClient({
   async function handleDeleteCandidate(id: string) {
     try {
       await clientDeleteCandidate(id);
-      setCandidates((prev) => prev.filter((c) => c.id !== id));
+
+      const isApproved = candidates.some((c) => c.id === id);
+      if (isApproved) {
+        setCandidates((prev) => prev.filter((c) => c.id !== id));
+        setTotal((t) => Math.max(0, t - 1));
+      }
+
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
-      setTotal((t) => Math.max(0, t - 1));
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to delete candidate", "error");
@@ -113,8 +129,17 @@ export default function CandidatesClient({
     try {
       const updated = await clientApproveCandidate(id);
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
-      setCandidates((prev) => [updated, ...prev]);
-      setTotal((t) => t + 1);
+
+      const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
+      if (!hasFilters && page === 1) {
+        setCandidates((prev) => [updated, ...prev]);
+        setTotal((t) => t + 1);
+      } else {
+        const data = await clientFetchCandidates({ ...activeFilters, page: 1, limit: PAGE_SIZE });
+        setCandidates(data.items ?? []);
+        setTotal(data.meta?.total ?? 0);
+        setPage(1);
+      }
       toast("Candidate approved successfully", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to approve candidate", "error");

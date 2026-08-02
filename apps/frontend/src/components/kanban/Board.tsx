@@ -12,7 +12,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { CandidateCard, CandidateStatus } from "@/types";
+import type { CandidateCard, LegacyCandidateStatus } from "@/types";
 import { usePipelineStore, type KanbanFilters } from "@/stores/usePipelineStore";
 import { useApiFetch } from "@/lib/api";
 import { fetchFilteredPipeline } from "@/lib/api/pipeline";
@@ -21,7 +21,7 @@ import TriageCardComponent from "./TriageCard";
 import KanbanFilterBar from "./KanbanFilterBar";
 import AddCandidatesPanel from "./AddCandidatesPanel";
 
-const COLUMNS: { id: CandidateStatus; label: string; color: string }[] = [
+const COLUMNS: { id: LegacyCandidateStatus; label: string; color: string }[] = [
   { id: "pending", label: "Pending Review", color: "shadow-amber-500/20" },
   { id: "accepted", label: "Accepted", color: "shadow-emerald-500/20" },
   { id: "rejected", label: "Rejected", color: "shadow-red-500/20" },
@@ -55,7 +55,7 @@ export default function KanbanBoard({
   const [boardLoading, setBoardLoading] = useState(true);
   const [boardError, setBoardError] = useState<string | null>(null);
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const dragOriginColumn = useRef<CandidateStatus | null>(null);
+  const dragOriginColumn = useRef<LegacyCandidateStatus | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -65,9 +65,9 @@ export default function KanbanBoard({
     : null;
 
   const findCardColumn = useCallback(
-    (cardId: string): CandidateStatus | null => {
+    (cardId: string): LegacyCandidateStatus | null => {
       for (const [colId, cards] of Object.entries(columns)) {
-        if (cards.some((c) => c.id === cardId)) return colId as CandidateStatus;
+        if (cards.some((c) => c.id === cardId)) return colId as LegacyCandidateStatus;
       }
       return null;
     },
@@ -110,7 +110,7 @@ export default function KanbanBoard({
     const { active, over } = event;
     if (!over) return;
     const from = findCardColumn(active.id as string);
-    const to = over.id as CandidateStatus;
+    const to = over.id as LegacyCandidateStatus;
     if (from && from !== to && COLUMNS.some((c) => c.id === to)) {
       dragOriginColumn.current ??= from;
       moveCard(active.id as string, from, to);
@@ -131,7 +131,7 @@ export default function KanbanBoard({
     }
 
     const cardId = active.id as string;
-    const to = over.id as CandidateStatus;
+    const to = over.id as LegacyCandidateStatus;
     if (!COLUMNS.some((c) => c.id === to)) return;
 
     try {

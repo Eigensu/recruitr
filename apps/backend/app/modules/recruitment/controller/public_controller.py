@@ -10,10 +10,8 @@ import asyncio
 import logging
 from typing import Annotated
 
-import httpx
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -22,8 +20,9 @@ from fastapi import (
     UploadFile,
     status,
 )
-from pymongo.errors import DuplicateKeyError, OperationFailure
+from pymongo.errors import DuplicateKeyError
 from beanie import PydanticObjectId
+from pydantic import ValidationError
 
 from app.common.utils.object_id import to_object_id
 from app.config import settings
@@ -32,12 +31,70 @@ from app.modules.recruitment.enums import CandidateStatus
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import CandidateResponse
 from app.modules.recruitment.utils.resume_parser import parse_resume
-from app.modules.storage.service import extract_text_from_file, upload_bytes_to_cloudinary
+from app.modules.storage.service import (
+    extract_text_from_file, 
+    upload_bytes_to_cloudinary,
+    delete_cloudinary_asset
+)
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
 router = APIRouter()
 _log = logging.getLogger(__name__)
+
+async def _resolve_target_brand(brand_id: str | None) -> PydanticObjectId:
+    """Resolve the target brand ID for the application."""
+    if brand_id:
+        try:
+            return to_object_id(brand_id, "brand_id")
+        except Exception as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid brand_id format") from exc
+            
+    brands = await Brand.find_all().to_list()
+    if len(brands) == 1:
+        return brands[0].id
+    if not brands:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "No brands configured in the system")
+    raise HTTPException(status.HTTP_400_BAD_REQUEST, "brand_id is required because multiple brands exist")
+
+async def _process_resume_upload(resume: UploadFile | None) -> tuple[str | None, str | None, str | None, list[str], list[str], float]:
+    """Process the resume upload, parse it, and upload to Cloudinary."""
+    if not resume:
+        return None, None, None, [], [], 0.0
+        
+    filename = resume.filename or "unknown"
+    if not filename.lower().endswith((".pdf", ".docx")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only PDF and DOCX files are accepted")
+        
+    if resume.size is not None and resume.size > 10 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)")
+
+    try:
+        file_bytes = await resume.read()
+        
+        # Manually check size if resume.size was not provided by the server
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)")
+            
+        raw_text = extract_text_from_file(file_bytes)
+        parsed = parse_resume(raw_text)
+        parsed_skills = parsed.skills or []
+        parsed_tags = parsed.tags or []
+        parsed_exp = parsed.experience_years or 0.0
+        
+        cld = await asyncio.to_thread(upload_bytes_to_cloudinary, file_bytes, filename)
+        resume_url = cld.get("secure_url")
+        resume_public_id = cld.get("public_id")
+        
+        return raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Resume extraction failed due to invalid file content") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _log.exception("Upload failed for public form")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected error occurred during upload") from exc
+
 
 @router.post("/apply", status_code=status.HTTP_201_CREATED)
 async def public_apply(
@@ -48,55 +105,13 @@ async def public_apply(
     current_role: Annotated[str | None, Form()] = None,
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
-    resume: UploadFile | None = File(None, description="PDF or DOCX resume file"),
+    resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
     
-    # Resolve brand
-    target_brand_id: PydanticObjectId
-    if brand_id:
-        try:
-            target_brand_id = to_object_id(brand_id, "brand_id")
-        except Exception:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid brand_id format")
-    else:
-        # Default to first brand if none provided
-        first_brand = await Brand.find_one({})
-        if not first_brand:
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "No brands configured in the system")
-        target_brand_id = first_brand.id
+    target_brand_id = await _resolve_target_brand(brand_id)
+    raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp = await _process_resume_upload(resume)
 
-    raw_text = None
-    resume_url = None
-    resume_public_id = None
-    parsed_skills = []
-    parsed_tags = []
-    parsed_exp = 0.0
-
-    if resume:
-        filename = resume.filename or "unknown"
-        if not filename.lower().endswith((".pdf", ".docx")):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only PDF and DOCX files are accepted")
-            
-        try:
-            file_bytes = await resume.read()
-            raw_text = extract_text_from_file(file_bytes)
-            parsed = parse_resume(raw_text)
-            parsed_skills = parsed.skills or []
-            parsed_tags = parsed.tags or []
-            parsed_exp = parsed.experience_years or 0.0
-            
-            cld = await asyncio.to_thread(upload_bytes_to_cloudinary, file_bytes, filename)
-            resume_url = cld.get("secure_url")
-            resume_public_id = cld.get("public_id")
-        except ValueError as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Resume extraction failed: {str(exc)}")
-        except Exception as exc:
-            _log.exception("Upload failed for public form")
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Upload failed: {str(exc)}")
-
-    from pydantic import ValidationError
-    
     try:
         doc = Candidate(
             brand_id=target_brand_id,
@@ -117,15 +132,19 @@ async def public_apply(
             status=CandidateStatus.pending
         )
     except ValidationError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Invalid application data: {str(e)}")
+        if resume_public_id:
+            await asyncio.to_thread(delete_cloudinary_asset, resume_public_id)
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid application data format provided") from e
     
     try:
         await doc.insert()
-    except DuplicateKeyError:
+    except DuplicateKeyError as exc:
+        if resume_public_id:
+            await asyncio.to_thread(delete_cloudinary_asset, resume_public_id)
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "An application with this email already exists"
-        ) from None
+        ) from exc
         
     return CandidateResponse(
         id=str(doc.id),

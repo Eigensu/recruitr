@@ -1,9 +1,9 @@
-import type { CandidateCard, CandidateSource, CandidateStatus } from "@/types";
+import type { CandidateCard, CandidateSource, LegacyCandidateStatus } from "@/types";
 import type { KanbanFilters } from "@/stores/usePipelineStore";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-type FilteredCard = CandidateCard & { status: CandidateStatus };
+type FilteredCard = CandidateCard & { status: LegacyCandidateStatus };
 
 export interface SuggestedCandidate {
   id: string;
@@ -48,7 +48,7 @@ export async function assignCandidate(positionId: string, candidateId: string): 
 export async function fetchFilteredPipeline(
   positionId: string,
   filters: KanbanFilters,
-): Promise<Record<CandidateStatus, CandidateCard[]>> {
+): Promise<Record<LegacyCandidateStatus, CandidateCard[]>> {
   const params = new URLSearchParams({ position_id: positionId });
   if (filters.recruiter_id) params.set("recruiter_id", filters.recruiter_id);
   if (filters.client_id) params.set("client_id", filters.client_id);

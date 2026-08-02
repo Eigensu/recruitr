@@ -187,6 +187,35 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
     return doc
 
 
+def _build_candidate_response(doc: Candidate, mappings_count: int = 0) -> CandidateResponse:
+    return CandidateResponse(
+        id=str(doc.id),
+        full_name=doc.full_name,
+        email=doc.email,
+        phone=doc.phone,
+        previous_company=doc.previous_company,
+        experience_years=doc.experience_years,
+        education_level=doc.education_level,
+        city=doc.city,
+        area=doc.area,
+        gender=doc.gender,
+        age=doc.age,
+        skills=doc.skills,
+        tags=doc.tags,
+        preferred_train_line=doc.preferred_train_line,
+        cv_link=doc.cv_link,
+        resume_url=doc.resume_url,
+        current_stage=doc.current_stage,
+        mappings_count=mappings_count,
+        current_role=doc.current_role,
+        salary=doc.salary,
+        notes=doc.notes,
+        source=doc.source,
+        status=doc.status,
+        created_at=doc.created_at,
+    )
+
+
 # ── Tags (must be before /{candidate_id} to avoid route conflict) ─────────────
 
 
@@ -221,7 +250,10 @@ async def list_candidates(
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
     if status is not None:
-        match["status"] = status.value
+        if status == CandidateStatus.approved:
+            match["$or"] = [{"status": status.value}, {"status": {"$exists": False}}]
+        else:
+            match["status"] = status.value
 
     if search:
         rx = {"$regex": search, "$options": "i"}
@@ -322,33 +354,7 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateR
             status.HTTP_409_CONFLICT,
             "A candidate with this email already exists in this brand",
         ) from None
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=0,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, 0)
 
 
 # ── Bulk resume upload ─────────────────────────────────────────────────────────
@@ -481,33 +487,7 @@ async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse
     doc = await _get_or_404(tenant, candidate_id)
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, count)
 
 
 # ── Update ─────────────────────────────────────────────────────────────────────
@@ -552,37 +532,13 @@ async def update_candidate(
         update["salary"] = data.salary
     if data.notes is not None:
         update["notes"] = data.notes
+    if data.status is not None:
+        update["status"] = data.status
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, count)
 
 
 # ── Delete (soft) ─────────────────────────────────────────────────────────────
@@ -602,75 +558,25 @@ async def delete_candidate(
 
 @router.post("/{candidate_id}/approve")
 async def approve_candidate(
-    tenant: _Tenant, candidate_id: str
+    tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"status": CandidateStatus.approved})
     
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, count)
 
 @router.post("/{candidate_id}/reject")
 async def reject_candidate(
-    tenant: _Tenant, candidate_id: str
+    tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"status": CandidateStatus.rejected})
     
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, count)
 
 
 # ── Mappings (for drawer) ──────────────────────────────────────────────────────
@@ -744,30 +650,4 @@ async def confirm_resume(
     background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return _build_candidate_response(doc, count)

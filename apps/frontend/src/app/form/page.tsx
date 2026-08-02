@@ -116,8 +116,11 @@ function PublicApplicationFormContent() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <label className={labelCls}>Full Name *</label>
+                <label htmlFor="fullName" className={labelCls}>
+                  Full Name *
+                </label>
                 <input
+                  id="fullName"
                   type="text"
                   required
                   className={inputCls}
@@ -127,8 +130,11 @@ function PublicApplicationFormContent() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Email Address *</label>
+                <label htmlFor="email" className={labelCls}>
+                  Email Address *
+                </label>
                 <input
+                  id="email"
                   type="email"
                   required
                   className={inputCls}
@@ -141,8 +147,11 @@ function PublicApplicationFormContent() {
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <label className={labelCls}>Phone Number</label>
+                <label htmlFor="phone" className={labelCls}>
+                  Phone Number
+                </label>
                 <input
+                  id="phone"
                   type="tel"
                   className={inputCls}
                   placeholder="+1 (555) 000-0000"
@@ -151,8 +160,11 @@ function PublicApplicationFormContent() {
                 />
               </div>
               <div>
-                <label className={labelCls}>City</label>
+                <label htmlFor="city" className={labelCls}>
+                  City
+                </label>
                 <input
+                  id="city"
                   type="text"
                   className={inputCls}
                   placeholder="e.g. New York, London"
@@ -164,8 +176,11 @@ function PublicApplicationFormContent() {
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
-                <label className={labelCls}>Current Role</label>
+                <label htmlFor="currentRole" className={labelCls}>
+                  Current Role
+                </label>
                 <input
+                  id="currentRole"
                   type="text"
                   className={inputCls}
                   placeholder="e.g. Software Engineer"
@@ -174,8 +189,11 @@ function PublicApplicationFormContent() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Highest Education</label>
+                <label htmlFor="educationLevel" className={labelCls}>
+                  Highest Education
+                </label>
                 <select
+                  id="educationLevel"
                   className={inputCls}
                   value={form.educationLevel}
                   onChange={(e) => setForm({ ...form, educationLevel: e.target.value })}

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CandidateCard, CandidateStatus } from "@/types";
+import type { CandidateCard, LegacyCandidateStatus } from "@/types";
 
 export interface KanbanFilters {
   recruiter_id?: string;
@@ -11,9 +11,9 @@ export interface KanbanFilters {
 }
 
 interface PipelineState {
-  columns: Record<CandidateStatus, CandidateCard[]>;
-  setColumns: (columns: Record<CandidateStatus, CandidateCard[]>) => void;
-  moveCard: (cardId: string, from: CandidateStatus, to: CandidateStatus) => void;
+  columns: Record<LegacyCandidateStatus, CandidateCard[]>;
+  setColumns: (columns: Record<LegacyCandidateStatus, CandidateCard[]>) => void;
+  moveCard: (cardId: string, from: LegacyCandidateStatus, to: LegacyCandidateStatus) => void;
   activeCardId: string | null;
   setActiveCardId: (id: string | null) => void;
   // Filter state
@@ -22,7 +22,7 @@ interface PipelineState {
   setActiveFilters: (filters: KanbanFilters) => void;
 }
 
-const MOCK_COLUMNS: Record<CandidateStatus, CandidateCard[]> = {
+const MOCK_COLUMNS: Record<LegacyCandidateStatus, CandidateCard[]> = {
   pending: [
     {
       id: "c1",
@@ -96,7 +96,7 @@ export const usePipelineStore = create<PipelineState>((set) => ({
 }));
 
 // Selector helpers
-export const selectColumn = (status: CandidateStatus) => (state: PipelineState) =>
+export const selectColumn = (status: LegacyCandidateStatus) => (state: PipelineState) =>
   state.columns[status];
 
 export const selectAllCards = (state: PipelineState) => Object.values(state.columns).flat();
