@@ -152,7 +152,7 @@ export default function CandidateCard({
           </div>
 
           {/* Skills */}
-          {candidate.status !== "PENDING" && candidate.status !== "pending" && (
+          {candidate.status !== "PENDING" && (
             <div className="flex flex-wrap gap-1.5">
               {candidate.skills.slice(0, 4).map((skill) => (
                 <span
