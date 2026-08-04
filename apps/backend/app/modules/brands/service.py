@@ -49,6 +49,14 @@ async def get_all_brands() -> list[Brand]:
 
 
 async def create_brand(data: BrandCreate, owner_id: str) -> Brand:
+    # One workspace per owner. Re-running onboarding returns the existing brand
+    # rather than minting a second tenant — unbounded brand creation is what
+    # broke the public application form, which can only infer the agency when
+    # exactly one exists.
+    existing = await Brand.find_one(Brand.owner_id == owner_id)
+    if existing:
+        return existing
+
     # Check if a brand with this domain already exists
     existing_domain = await Brand.find_one(Brand.domain == data.domain)
     if existing_domain:

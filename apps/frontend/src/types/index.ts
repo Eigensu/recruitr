@@ -14,6 +14,8 @@ export interface UserInfo {
   role: UserRole;
   employee_id: string | null;
   brand_id: string | null;
+  brand_name?: string | null;
+  brand_domain?: string | null;
   notification_preferences?: Record<string, boolean>;
 }
 

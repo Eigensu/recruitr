@@ -127,6 +127,14 @@ async def read_user_me(
 
     employee = await Employee.find_one({"email": user.email.lower()})
 
+    # Brand identity ships with the user so callers don't need a second request
+    # (the public application link is built from brand_domain).
+    brand = None
+    if employee and employee.brand_id:
+        from app.modules.brands.models import Brand
+
+        brand = await Brand.get(employee.brand_id)
+
     return UserInfoResponse(
         user_id=str(user.id),
         email=user.email,
@@ -134,6 +142,8 @@ async def read_user_me(
         role=user.role.value,
         employee_id=str(employee.id) if employee else None,
         brand_id=str(employee.brand_id) if employee and employee.brand_id else None,
+        brand_name=brand.name if brand else None,
+        brand_domain=brand.domain if brand else None,
     )
 
 

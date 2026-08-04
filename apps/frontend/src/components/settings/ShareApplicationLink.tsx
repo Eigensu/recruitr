@@ -1,42 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { IconCheck, IconCopy, IconExternalLink } from "@tabler/icons-react";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 /**
  * Shows the public application link for the signed-in user's agency, so it can
  * be copied and shared without anyone having to remember the domain or
  * hand-assemble the URL.
+ *
+ * The domain rides along on /auth/me, which is already fetched on every page
+ * load — no extra request, and no brands endpoint to keep alive for it.
  */
 export default function ShareApplicationLink() {
-  const [link, setLink] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { user, isLoading } = useCurrentUser();
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_URL}/api/v1/brands/me`, { credentials: "include" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(String(res.status));
-        return res.json();
-      })
-      .then((brand: { domain?: string }) => {
-        if (cancelled) return;
-        if (!brand.domain) {
-          setError("Your workspace has no domain set, so the link can't be built yet.");
-          return;
-        }
-        setLink(`${window.location.origin}/form/${encodeURIComponent(brand.domain)}`);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Couldn't load your application link. Try reloading.");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const domain = user?.brand_domain;
+  // window is unavailable during SSR; this component only renders client-side
+  // content once the user has loaded, so guard rather than assume.
+  const link =
+    domain && typeof window !== "undefined"
+      ? `${window.location.origin}/form/${encodeURIComponent(domain)}`
+      : null;
 
   async function copy() {
     if (!link) return;
@@ -45,7 +32,7 @@ export default function ShareApplicationLink() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("Couldn't copy automatically — select the link and copy it manually.");
+      setCopyError("Couldn't copy automatically — select the link and copy it manually.");
     }
   }
 
@@ -57,7 +44,15 @@ export default function ShareApplicationLink() {
         application arrives in Candidates as Pending.
       </p>
 
-      {error && <p className="mt-3 text-xs font-medium text-red-500">{error}</p>}
+      {isLoading && <p className="mt-4 text-xs text-text-muted">Loading…</p>}
+
+      {!isLoading && !domain && (
+        <p className="mt-3 text-xs font-medium text-red-500">
+          Your workspace has no domain set, so the link can&apos;t be built yet.
+        </p>
+      )}
+
+      {copyError && <p className="mt-3 text-xs font-medium text-red-500">{copyError}</p>}
 
       {link && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -90,8 +85,6 @@ export default function ShareApplicationLink() {
           </div>
         </div>
       )}
-
-      {!link && !error && <p className="mt-4 text-xs text-text-muted">Loading…</p>}
     </div>
   );
 }

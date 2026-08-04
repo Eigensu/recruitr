@@ -38,6 +38,8 @@ class UserInfoResponse(BaseModel):
     # Employee / tenant context — null until ensure_employee_for_user runs
     employee_id: str | None = None
     brand_id: str | None = None
+    brand_name: str | None = None
+    brand_domain: str | None = None
 
 
 class UserUpdate(BaseModel):
