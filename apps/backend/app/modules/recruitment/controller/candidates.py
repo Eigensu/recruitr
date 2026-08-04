@@ -235,20 +235,32 @@ async def list_candidates(
     limit: _Limit = 30,
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+    # Status and search each need their own $or, so they are collected as $and
+    # clauses. Assigning both to match["$or"] let search overwrite status,
+    # leaking unapproved candidates into the directory whenever anyone searched.
+    and_clauses: list[dict] = []
+
     if status is not None:
         if status == CandidateStatus.approved:
-            match["$or"] = [{"status": status.value}, {"status": {"$exists": False}}]
+            # Candidates created before `status` existed have no such field.
+            and_clauses.append({"$or": [{"status": status.value}, {"status": {"$exists": False}}]})
         else:
             match["status"] = status.value
 
     if search:
-        rx = {"$regex": search, "$options": "i"}
-        match["$or"] = [
-            {"full_name": rx},
-            {"email": rx},
-            {"previous_company": rx},
-            {"skills": rx},
-        ]
+        # Escaped: an unbalanced "(" or "[" typed into the search box would
+        # otherwise be an invalid regex and fail the whole query.
+        rx = {"$regex": re.escape(search), "$options": "i"}
+        and_clauses.append(
+            {
+                "$or": [
+                    {"full_name": rx},
+                    {"email": rx},
+                    {"previous_company": rx},
+                    {"skills": rx},
+                ]
+            }
+        )
 
     if stage:
         match["current_stage"] = stage.value
@@ -284,6 +296,9 @@ async def list_candidates(
         match["cv_link"] = {"$exists": True, "$nin": [None, ""]}
     elif has_cv_link is False:
         match["cv_link"] = {"$in": [None, ""]}
+
+    if and_clauses:
+        match["$and"] = and_clauses
 
     pipeline = [
         {_MATCH: match},

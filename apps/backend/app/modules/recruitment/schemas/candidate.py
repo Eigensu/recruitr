@@ -86,7 +86,12 @@ class CandidateResponse(BaseModel):
     source_channel: str | None = None
     salary: float | None = None
     notes: str | None = None
-    status: CandidateStatus
+    # Defaulted, not required: candidates created before `status` existed have no
+    # such field, and the list endpoint validates raw aggregation output rather
+    # than Beanie documents — so a required field here 500s the whole directory.
+    # Mirrors Candidate.status, and matches the query's treatment of a missing
+    # status as approved.
+    status: CandidateStatus = CandidateStatus.approved
     created_at: datetime
 
     model_config = {"from_attributes": True}
