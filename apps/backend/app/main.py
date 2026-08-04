@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from app import database
 from app.common.extras.redis_cache import dashboard_cache, leaderboard_cache
 from app.config import settings
 from app.database import init_db
@@ -80,4 +81,14 @@ app.include_router(activity_router, prefix="/api/v1/activity", tags=["Activity"]
 
 @app.get("/health", tags=["Health"])
 async def health() -> dict:
-    return {"status": "ok", "version": settings.APP_VERSION}
+    # index_sync_degraded means no index — including unique constraints — is
+    # being synced. The app serves fine, so this is "degraded", not "down".
+    body: dict = {"status": "ok", "version": settings.APP_VERSION}
+    if database.index_sync_degraded:
+        body["status"] = "degraded"
+        body["index_sync"] = {
+            "synced": False,
+            "detail": "Index sync disabled for all models after a startup failure.",
+            "error": database.index_sync_error,
+        }
+    return body
