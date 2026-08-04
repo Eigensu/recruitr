@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
+import { SOURCE_CHANNELS } from "@/lib/constants/candidate";
 import type { CandidateFilters, CandidateSource } from "@/types";
 
 interface Props {
@@ -18,6 +19,7 @@ const inputStyle = {
 export default function CandidateFilterBar({ availableTags, onFilterChange }: Props) {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<CandidateSource | "">("");
+  const [sourceChannel, setSourceChannel] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [hasResume, setHasResume] = useState<boolean | undefined>(undefined);
   const [hasCvLink, setHasCvLink] = useState<boolean | undefined>(undefined);
@@ -29,6 +31,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     over: Partial<{
       search: string;
       source: CandidateSource | "";
+      sourceChannel: string;
       selectedTags: string[];
       hasResume: boolean | undefined;
       hasCvLink: boolean | undefined;
@@ -38,6 +41,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
   ) {
     const s = over.search ?? search;
     const src = over.source ?? source;
+    const chan = over.sourceChannel ?? sourceChannel;
     const tags = over.selectedTags ?? selectedTags;
     const resume = "hasResume" in over ? over.hasResume : hasResume;
     const cv = "hasCvLink" in over ? over.hasCvLink : hasCvLink;
@@ -46,6 +50,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     onFilterChange({
       search: s || undefined,
       source: (src as CandidateSource) || undefined,
+      source_channel: chan || undefined,
       tags: tags.length > 0 ? tags : undefined,
       has_resume: resume,
       has_cv_link: cv,
@@ -67,6 +72,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
   function clearAll() {
     setSearch("");
     setSource("");
+    setSourceChannel("");
     setSelectedTags([]);
     setHasResume(undefined);
     setHasCvLink(undefined);
@@ -78,6 +84,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
   const hasActive =
     !!search ||
     !!source ||
+    !!sourceChannel ||
     selectedTags.length > 0 ||
     hasResume !== undefined ||
     hasCvLink !== undefined ||
@@ -117,6 +124,25 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
         <option value="">All Sources</option>
         <option value="internal">Internal</option>
         <option value="external">External</option>
+      </select>
+
+      <select
+        value={sourceChannel}
+        onChange={(e) => {
+          const v = e.target.value;
+          setSourceChannel(v);
+          emit({ sourceChannel: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+        aria-label="Filter by source channel"
+      >
+        <option value="">All Channels</option>
+        {SOURCE_CHANNELS.map((channel) => (
+          <option key={channel} value={channel}>
+            {channel}
+          </option>
+        ))}
       </select>
 
       <input

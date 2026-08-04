@@ -4,6 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { clientConfirmResume, clientCreateCandidate } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
+import { CITIES, SOURCE_CHANNEL_OTHER, SOURCE_CHANNELS } from "@/lib/constants/candidate";
 import type { ApiCandidate } from "@/types";
 
 const schema = z.object({
@@ -11,6 +12,7 @@ const schema = z.object({
   email: z.string().email("Valid email required"),
   phone: z.string().optional(),
   source: z.enum(["internal", "external"]),
+  source_channel: z.string().optional(),
   tags: z.array(z.string()),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
@@ -49,6 +51,8 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     email: "",
     phone: "",
     source: "internal" as "internal" | "external",
+    source_channel: "",
+    source_channel_other: "",
     tagInput: "",
     tags: [] as string[],
     cv_link: "",
@@ -76,6 +80,14 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   }
 
+  // Channels only classify external candidates; "Other" carries the typed value.
+  function resolvedChannel(): string {
+    if (form.source !== "external") return "";
+    return form.source_channel === SOURCE_CHANNEL_OTHER
+      ? form.source_channel_other.trim()
+      : form.source_channel;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = schema.safeParse({
@@ -83,6 +95,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       email: form.email,
       phone: form.phone || undefined,
       source: form.source,
+      source_channel: resolvedChannel() || undefined,
       tags: form.tags,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
@@ -123,6 +136,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         expected_salary: parsed.data.expected_salary,
         notice_period: parsed.data.notice_period,
         source: parsed.data.source,
+        source_channel: parsed.data.source_channel,
         notes: parsed.data.notes,
       });
 
@@ -227,6 +241,36 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         </div>
       </div>
 
+      {form.source === "external" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Source Channel
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.source_channel}
+            onChange={(e) => setForm((f) => ({ ...f, source_channel: e.target.value }))}
+          >
+            <option value="">Select...</option>
+            {SOURCE_CHANNELS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {form.source_channel === SOURCE_CHANNEL_OTHER && (
+            <input
+              className={`${inputCls} mt-2`}
+              style={inputStyle}
+              placeholder="Where did they come from?"
+              value={form.source_channel_other}
+              onChange={(e) => setForm((f) => ({ ...f, source_channel_other: e.target.value }))}
+            />
+          )}
+        </div>
+      )}
+
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Current Role
@@ -258,13 +302,19 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
             City
           </label>
-          <input
+          <select
             className={inputCls}
             style={inputStyle}
-            placeholder="e.g. Mumbai"
             value={form.city}
             onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          />
+          >
+            <option value="">Select...</option>
+            {CITIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex-1">
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
