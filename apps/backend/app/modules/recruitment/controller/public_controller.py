@@ -31,6 +31,7 @@ from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.recruitment.enums import CandidateStatus
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import CandidateResponse
+from app.modules.recruitment.services.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
 )
@@ -122,8 +123,6 @@ async def _process_resume_upload(
             raise HTTPException(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)"
             )
-
-        from app.modules.recruitment.services.resume_service import process_resume_bytes
 
         raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
             file_bytes, filename
