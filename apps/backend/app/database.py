@@ -23,6 +23,7 @@ from app.modules.recruitment.models import (
     Candidate,
     CandidateDocument,
     Client,
+    ClientUser,
     Counter,
     Employee,
     Mapping,
@@ -54,6 +55,7 @@ async def init_db() -> None:
         # Recruitment domain (unified, replaces old positions/candidates/pipeline modules)
         Counter,
         Client,
+        ClientUser,
         Position,
         Candidate,
         Mapping,
