@@ -149,6 +149,13 @@ export async function clientPublicApply(formData: FormData): Promise<ApiCandidat
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    // Surface FastAPI's `detail` string rather than the raw JSON envelope,
+    // which would otherwise be rendered verbatim to the applicant.
+    const data = await res.json().catch(() => null);
+    throw new Error(
+      typeof data?.detail === "string" ? data.detail : "Could not submit your application.",
+    );
+  }
   return res.json();
 }

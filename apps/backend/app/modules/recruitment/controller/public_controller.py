@@ -1,6 +1,7 @@
 """Public APIs for Candidate Application Form.
 
 Endpoints:
+  GET    /brands/{domain}             Resolve an agency by its public domain (unauthenticated)
   POST   /apply                       Submit a candidate application (unauthenticated)
 """
 
@@ -8,33 +9,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Annotated
 
+from beanie import PydanticObjectId
 from fastapi import (
     APIRouter,
-    Depends,
     File,
     Form,
     HTTPException,
-    Query,
     UploadFile,
     status,
 )
-from pymongo.errors import DuplicateKeyError
-from beanie import PydanticObjectId
 from pydantic import ValidationError
+from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.modules.brands.models import Brand
+from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.recruitment.enums import CandidateStatus
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import CandidateResponse
-from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import (
-    extract_text_from_file, 
-    upload_bytes_to_cloudinary,
-    delete_cloudinary_asset
+    delete_cloudinary_asset,
 )
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
@@ -42,62 +40,122 @@ _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}
 router = APIRouter()
 _log = logging.getLogger(__name__)
 
+
+async def _find_brand_by_domain(domain: str) -> Brand | None:
+    """Look up an agency by its public domain.
+
+    Tries the exact stored value first so the unique index is used, then falls
+    back to a case-insensitive match because domains are case-insensitive in
+    practice and onboarding stores whatever casing the agency typed.
+    """
+    brand = await Brand.find_one(Brand.domain == domain)
+    if brand is None:
+        brand = await Brand.find_one(
+            {"domain": {"$regex": f"^{re.escape(domain)}$", "$options": "i"}}
+        )
+    return brand
+
+
 async def _resolve_target_brand(brand_id: str | None) -> PydanticObjectId:
-    """Resolve the target brand ID for the application."""
+    """Resolve which agency (tenant) an application belongs to."""
     if brand_id:
         try:
-            return to_object_id(brand_id, "brand_id")
+            target = to_object_id(brand_id, "brand_id")
         except Exception as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid brand_id format") from exc
-            
+        if not await Brand.find_one(Brand.id == target):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown brand")
+        return target
+
+    # No brand supplied: only safe to infer when the deployment has exactly one.
     brands = await Brand.find_all().to_list()
     if len(brands) == 1:
         return brands[0].id
     if not brands:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "No brands configured in the system")
-    raise HTTPException(status.HTTP_400_BAD_REQUEST, "brand_id is required because multiple brands exist")
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, "No brands configured in the system"
+        )
+    raise HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        "This application link is missing its agency. Please use the full link you were given.",
+    )
 
-async def _process_resume_upload(resume: UploadFile | None) -> tuple[str | None, str | None, str | None, list[str], list[str], float]:
+
+@router.get("/brands/{domain}")
+async def public_brand_by_domain(domain: str) -> PublicBrandResponse:
+    """Resolve an agency by domain so the public form can brand and target itself.
+
+    Intentionally a single-item lookup with no list counterpart: enumerating
+    agencies on an unauthenticated endpoint would expose the customer roster.
+    """
+    brand = await _find_brand_by_domain(domain)
+    if brand is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown brand")
+    return PublicBrandResponse(
+        id=str(brand.id),
+        name=brand.name,
+        logo_url=brand.branding.logo_url,
+    )
+
+
+async def _process_resume_upload(
+    resume: UploadFile | None,
+) -> tuple[str | None, str | None, str | None, list[str], list[str], float]:
     """Process the resume upload, parse it, and upload to Cloudinary."""
     if not resume:
         return None, None, None, [], [], 0.0
-        
+
     filename = resume.filename or "unknown"
     if not filename.lower().endswith((".pdf", ".docx")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only PDF and DOCX files are accepted")
-        
+
     if resume.size is not None and resume.size > 10 * 1024 * 1024:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)")
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)"
+        )
 
     try:
         file_bytes = await resume.read()
-        
+
         # Manually check size if resume.size was not provided by the server
         if len(file_bytes) > 10 * 1024 * 1024:
-            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)")
-            
+            raise HTTPException(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)"
+            )
+
         from app.modules.recruitment.services.resume_service import process_resume_bytes
-        raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(file_bytes, filename)
-        
+
+        raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
+            file_bytes, filename
+        )
+
         parsed_skills = parsed.skills or []
         parsed_tags = parsed.tags or []
         parsed_exp = parsed.experience_years or 0.0
-        
+
         return raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Resume extraction failed due to invalid file content") from exc
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Resume extraction failed due to invalid file content"
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         _log.exception("Upload failed for public form")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected error occurred during upload") from exc
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected error occurred during upload"
+        ) from exc
 
 
 @router.post("/apply", status_code=status.HTTP_201_CREATED)
 async def public_apply(
     full_name: Annotated[str, Form()],
     email: Annotated[str, Form()],
-    brand_id: Annotated[str | None, Query(description="Brand ID to apply to (optional if only one brand exists)")] = None,
+    # Must stay a Form field: the client submits multipart/form-data, and a
+    # Query-declared param would be read from the URL only and silently ignored.
+    brand_id: Annotated[
+        str | None, Form(description="Agency to apply to (optional if only one exists)")
+    ] = None,
     phone: Annotated[str | None, Form()] = None,
     current_role: Annotated[str | None, Form()] = None,
     city: Annotated[str | None, Form()] = None,
@@ -105,9 +163,16 @@ async def public_apply(
     resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
-    
+
     target_brand_id = await _resolve_target_brand(brand_id)
-    raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp = await _process_resume_upload(resume)
+    (
+        raw_text,
+        resume_url,
+        resume_public_id,
+        parsed_skills,
+        parsed_tags,
+        parsed_exp,
+    ) = await _process_resume_upload(resume)
 
     try:
         doc = Candidate(
@@ -126,23 +191,24 @@ async def public_apply(
             resume_public_id=resume_public_id,
             resume_raw_text=raw_text,
             source="External",
-            status=CandidateStatus.pending
+            status=CandidateStatus.pending,
         )
     except ValidationError as e:
         if resume_public_id:
             await asyncio.to_thread(delete_cloudinary_asset, resume_public_id)
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid application data format provided") from e
-    
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Invalid application data format provided"
+        ) from e
+
     try:
         await doc.insert()
     except DuplicateKeyError as exc:
         if resume_public_id:
             await asyncio.to_thread(delete_cloudinary_asset, resume_public_id)
         raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "An application with this email already exists"
+            status.HTTP_409_CONFLICT, "An application with this email already exists"
         ) from exc
-        
+
     return CandidateResponse(
         id=str(doc.id),
         full_name=doc.full_name,

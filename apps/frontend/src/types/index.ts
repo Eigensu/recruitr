@@ -328,3 +328,10 @@ export interface PipelineColumn {
 export interface PipelineBoardData {
   stages: PipelineColumn[];
 }
+
+/** Minimal agency identity exposed on unauthenticated surfaces (public form). */
+export interface PublicBrand {
+  id: string;
+  name: string;
+  logo_url: string | null;
+}
