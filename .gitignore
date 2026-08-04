@@ -46,3 +46,4 @@ docker-compose.override.yml
 specs/data/Database CV_s FY26-27/
 specs/data/pdfs/
 apps/backend/backup_*/
+brand-delete-backup-*.json
