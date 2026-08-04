@@ -12,6 +12,7 @@ from typing import Any
 from bson import ObjectId
 from pymongo import AsyncMongoClient
 
+from app.common.utils.seed_guard import assert_local_database
 from app.config import settings
 from app.modules.dashboard.enums import (
     ActivityType,
@@ -128,6 +129,8 @@ def _rand_time(rng: random.Random, *, min_days: int, max_days: int) -> datetime:
 
 
 async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
+    assert_local_database(settings.MONGODB_URI, action="seed dashboard data")
+
     rng = random.Random(seed)
     client = AsyncMongoClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB_NAME]
