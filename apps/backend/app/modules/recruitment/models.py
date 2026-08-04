@@ -190,7 +190,8 @@ class Candidate(Document):
     previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
-    source: str | None = None
+    source: str | None = None  # internal | external — how the candidate entered the system
+    source_channel: str | None = None  # where they came from: LinkedIn, Naukri, referral, …
     salary: float | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage

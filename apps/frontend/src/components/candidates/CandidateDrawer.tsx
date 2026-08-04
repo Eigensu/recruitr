@@ -279,7 +279,13 @@ function ViewBody({
             )}
             {candidate.source && (
               <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
-                <span>Source: {candidate.source}</span>
+                <span>
+                  Source: {candidate.source}
+                  {/* Not capitalized — channel names carry their own casing (LinkedIn). */}
+                  {candidate.source_channel && (
+                    <span className="normal-case"> · {candidate.source_channel}</span>
+                  )}
+                </span>
               </div>
             )}
           </section>

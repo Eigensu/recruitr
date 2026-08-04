@@ -6,14 +6,36 @@ import { z } from "zod";
 import { IconAlertCircle, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { clientPublicApply } from "@/lib/api/candidates.client";
 import ResumeDropzone from "@/components/public/ResumeDropzone";
+import {
+  CITIES,
+  SOURCE_CHANNEL_OTHER,
+  SOURCE_CHANNELS,
+} from "@/lib/constants/candidate";
 import type { PublicBrand } from "@/types";
+
+// Values must match the backend EducationLevel enum exactly; only labels differ.
+const EDUCATION_LEVELS = [
+  { value: "High School", label: "High School" },
+  { value: "Bachelors", label: "Bachelors (Undergraduate)" },
+  { value: "Masters", label: "Masters (Postgraduate)" },
+  { value: "PhD", label: "PhD / Doctorate" },
+] as const;
 
 // The API stores email as a plain string with no format check, so a typo here
 // is stored silently and the applicant simply never hears back. Validate it.
-const schema = z.object({
-  fullName: z.string().trim().min(1, "Enter your name."),
-  email: z.string().trim().email("Enter a valid email address."),
-});
+const schema = z
+  .object({
+    fullName: z.string().trim().min(1, "Enter your name."),
+    email: z.string().trim().email("Enter a valid email address."),
+    phone: z.string().trim().min(6, "Enter a phone number we can reach you on."),
+    sourceChannel: z.string(),
+    sourceChannelOther: z.string().trim(),
+  })
+  // "Other" is only meaningful with the free-text value that explains it.
+  .refine((v) => v.sourceChannel !== SOURCE_CHANNEL_OTHER || v.sourceChannelOther.length > 0, {
+    path: ["sourceChannelOther"],
+    message: "Tell us where you heard about us.",
+  });
 
 interface ApplicationFormProps {
   /** Resolved agency — drives both the submitted brand_id and the page chrome. */
@@ -34,6 +56,51 @@ function FieldError({ id, message }: Readonly<{ id: string; message?: string }>)
     <p id={id} className="mt-1.5 text-xs font-medium text-red-500">
       {message}
     </p>
+  );
+}
+
+/** Native select styled to match the text inputs, with a token-coloured chevron. */
+function Select({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+}: Readonly<{
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly (string | { value: string; label: string })[];
+  placeholder: string;
+  required?: boolean;
+}>) {
+  const items = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  return (
+    <div>
+      <label htmlFor={id} className={labelCls}>
+        {label} {required && <span className="text-yellow">*</span>}
+      </label>
+      <div className="relative">
+        <select
+          id={id}
+          name={id}
+          className={`${inputCls} appearance-none pr-10`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">{placeholder}</option>
+          {items.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+      </div>
+    </div>
   );
 }
 
@@ -69,6 +136,8 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     city: "",
     currentRole: "",
     educationLevel: "",
+    sourceChannel: "",
+    sourceChannelOther: "",
   });
   const [resume, setResume] = useState<File | null>(null);
 
@@ -79,7 +148,13 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const parsed = schema.safeParse({ fullName: form.fullName, email: form.email });
+    const parsed = schema.safeParse({
+      fullName: form.fullName,
+      email: form.email,
+      phone: form.phone,
+      sourceChannel: form.sourceChannel,
+      sourceChannelOther: form.sourceChannelOther,
+    });
     if (!parsed.success) {
       const next: Record<string, string> = {};
       parsed.error.issues.forEach((issue) => {
@@ -98,10 +173,16 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     if (targetBrandId) formData.append("brand_id", targetBrandId);
     formData.append("full_name", parsed.data.fullName);
     formData.append("email", parsed.data.email);
-    if (form.phone) formData.append("phone", form.phone);
+    formData.append("phone", parsed.data.phone);
     if (form.city) formData.append("city", form.city);
     if (form.currentRole) formData.append("current_role", form.currentRole);
     if (form.educationLevel) formData.append("education_level", form.educationLevel);
+    // "Other" carries no information on its own — send what they typed instead.
+    const channel =
+      form.sourceChannel === SOURCE_CHANNEL_OTHER
+        ? parsed.data.sourceChannelOther
+        : form.sourceChannel;
+    if (channel) formData.append("source_channel", channel);
     if (resume) formData.append("resume", resume);
 
     try {
@@ -174,8 +255,8 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
               Join {agency}
             </h1>
             <p className="mt-2.5 text-sm text-text-secondary sm:text-base">
-              Share your details and CV. Takes about two minutes — every field but your name and
-              email is optional.
+              Share your details and CV. Takes about two minutes — fields marked{" "}
+              <span className="text-yellow">*</span> are required.
             </p>
           </div>
 
@@ -235,33 +316,31 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
                 </div>
                 <div>
                   <label htmlFor="phone" className={labelCls}>
-                    Phone
+                    Phone <span className="text-yellow">*</span>
                   </label>
                   <input
                     id="phone"
                     name="phone"
                     type="tel"
                     autoComplete="tel"
-                    className={inputCls}
+                    required
+                    aria-invalid={!!fieldErrors.phone}
+                    aria-describedby={fieldErrors.phone ? "phone-error" : undefined}
+                    className={fieldErrors.phone ? inputErrorCls : inputCls}
                     placeholder="+91 98765 43210"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   />
+                  <FieldError id="phone-error" message={fieldErrors.phone} />
                 </div>
-                <div>
-                  <label htmlFor="city" className={labelCls}>
-                    City
-                  </label>
-                  <input
-                    id="city"
-                    name="city"
-                    autoComplete="address-level2"
-                    className={inputCls}
-                    placeholder="Mumbai"
-                    value={form.city}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  />
-                </div>
+                <Select
+                  id="city"
+                  label="City"
+                  value={form.city}
+                  onChange={(city) => setForm({ ...form, city })}
+                  options={CITIES}
+                  placeholder="Select your city..."
+                />
               </div>
             </Section>
 
@@ -281,26 +360,50 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
                     onChange={(e) => setForm({ ...form, currentRole: e.target.value })}
                   />
                 </div>
-                <div>
-                  <label htmlFor="educationLevel" className={labelCls}>
-                    Highest education
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="educationLevel"
-                      className={`${inputCls} appearance-none pr-10`}
-                      value={form.educationLevel}
-                      onChange={(e) => setForm({ ...form, educationLevel: e.target.value })}
-                    >
-                      <option value="">Select...</option>
-                      <option value="High School">High School</option>
-                      <option value="Bachelors">Bachelors (Undergraduate)</option>
-                      <option value="Masters">Masters (Postgraduate)</option>
-                      <option value="PhD">PhD / Doctorate</option>
-                    </select>
-                    <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+                <Select
+                  id="educationLevel"
+                  label="Highest education"
+                  value={form.educationLevel}
+                  onChange={(educationLevel) => setForm({ ...form, educationLevel })}
+                  options={EDUCATION_LEVELS}
+                  placeholder="Select..."
+                />
+              </div>
+            </Section>
+
+            <Section title="How you found us" hint="Tells the team which channels are working.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Select
+                  id="sourceChannel"
+                  label="Where you heard about us"
+                  value={form.sourceChannel}
+                  onChange={(sourceChannel) => setForm({ ...form, sourceChannel })}
+                  options={SOURCE_CHANNELS}
+                  placeholder="Select..."
+                />
+                {form.sourceChannel === SOURCE_CHANNEL_OTHER && (
+                  <div>
+                    <label htmlFor="sourceChannelOther" className={labelCls}>
+                      Tell us where <span className="text-yellow">*</span>
+                    </label>
+                    <input
+                      id="sourceChannelOther"
+                      name="sourceChannelOther"
+                      aria-invalid={!!fieldErrors.sourceChannelOther}
+                      aria-describedby={
+                        fieldErrors.sourceChannelOther ? "sourceChannelOther-error" : undefined
+                      }
+                      className={fieldErrors.sourceChannelOther ? inputErrorCls : inputCls}
+                      placeholder="e.g. College placement cell"
+                      value={form.sourceChannelOther}
+                      onChange={(e) => setForm({ ...form, sourceChannelOther: e.target.value })}
+                    />
+                    <FieldError
+                      id="sourceChannelOther-error"
+                      message={fieldErrors.sourceChannelOther}
+                    />
                   </div>
-                </div>
+                )}
               </div>
             </Section>
 

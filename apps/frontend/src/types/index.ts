@@ -195,6 +195,8 @@ export interface ApiCandidate {
   expected_salary: number | null;
   notice_period: string | null;
   source: string | null;
+  /** Which external channel the candidate came from (LinkedIn, Naukri, …). */
+  source_channel: string | null;
   salary: number | null;
   notes: string | null;
   status: CandidateStatus;

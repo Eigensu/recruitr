@@ -151,15 +151,16 @@ async def _process_resume_upload(
 async def public_apply(
     full_name: Annotated[str, Form()],
     email: Annotated[str, Form()],
+    phone: Annotated[str, Form(min_length=1)],
     # Must stay a Form field: the client submits multipart/form-data, and a
     # Query-declared param would be read from the URL only and silently ignored.
     brand_id: Annotated[
         str | None, Form(description="Agency to apply to (optional if only one exists)")
     ] = None,
-    phone: Annotated[str | None, Form()] = None,
     current_role: Annotated[str | None, Form()] = None,
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
+    source_channel: Annotated[str | None, Form(description="How the applicant found us")] = None,
     resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
@@ -191,6 +192,7 @@ async def public_apply(
             resume_public_id=resume_public_id,
             resume_raw_text=raw_text,
             source="External",
+            source_channel=source_channel,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:
@@ -232,6 +234,7 @@ async def public_apply(
         salary=doc.salary,
         notes=doc.notes,
         source=doc.source,
+        source_channel=doc.source_channel,
         status=doc.status,
         created_at=doc.created_at,
     )
