@@ -11,7 +11,6 @@ Endpoints:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Annotated
@@ -33,7 +32,7 @@ from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.dependencies import get_tenant, require_maintainer
-from app.modules.recruitment.enums import PipelineStage, CandidateStatus
+from app.modules.recruitment.enums import CandidateStatus, PipelineStage
 from app.modules.recruitment.models import Candidate, Mapping
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
@@ -48,7 +47,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.utils.resume_parser import parse_resume
-from app.modules.storage.service import extract_text_from_file, upload_bytes_to_cloudinary
+from app.modules.storage.service import extract_text_from_file
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
 
@@ -99,7 +98,7 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             resp.raise_for_status()
         raw_text = extract_text_from_file(resp.content)
         parsed = parse_resume(raw_text)
-    except Exception as exc:
+    except Exception:
         _log.exception("Resume parse failed for candidate %s", candidate_id)
         return
 
@@ -112,9 +111,10 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
             return
 
         from app.modules.recruitment.services.resume_service import build_candidate_resume_update
+
         update = build_candidate_resume_update(doc, parsed, raw_text)
         await doc.set(update)
-    except Exception as exc:
+    except Exception:
         _log.exception("Resume DB update failed for candidate %s", candidate_id)
 
 
@@ -175,32 +175,8 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
 
 
 def _build_candidate_response(doc: Candidate, mappings_count: int = 0) -> CandidateResponse:
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=mappings_count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    """Thin alias for the shared builder, kept for the call sites below."""
+    return CandidateResponse.from_document(doc, mappings_count)
 
 
 # ── Tags (must be before /{candidate_id} to avoid route conflict) ─────────────
@@ -210,9 +186,7 @@ def _build_candidate_response(doc: Candidate, mappings_count: int = 0) -> Candid
 async def list_candidate_tags(tenant: _Tenant) -> list[str]:
     """Return all distinct recruiter tags for candidates in this brand."""
     collection = Candidate.get_motor_collection()
-    tags = await collection.distinct(
-        "tags", {"brand_id": tenant.brand_id, "is_active": True}
-    )
+    tags = await collection.distinct("tags", {"brand_id": tenant.brand_id, "is_active": True})
     return sorted(t for t in tags if t)
 
 
@@ -266,7 +240,7 @@ async def list_candidates(
 
     if city:
         match["city"] = city
-        
+
     if gender:
         match["gender"] = gender
 
@@ -380,12 +354,16 @@ async def bulk_upload_resumes(
             from app.modules.recruitment.services.resume_service import process_resume_bytes
 
             try:
-                raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(file_bytes, filename)
+                raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
+                    file_bytes, filename
+                )
             except ValueError as exc:
                 failed.append(BulkUploadFailure(filename=filename, reason=str(exc)))
                 continue
             except Exception as exc:
-                failed.append(BulkUploadFailure(filename=filename, reason=f"Storage upload failed: {exc}"))
+                failed.append(
+                    BulkUploadFailure(filename=filename, reason=f"Storage upload failed: {exc}")
+                )
                 continue
 
             if not parsed.email:
@@ -399,13 +377,16 @@ async def bulk_upload_resumes(
             existing = await Candidate.find_one({"email": email_lower, "brand_id": tenant.brand_id})
 
             if existing:
-                from app.modules.recruitment.services.resume_service import build_candidate_resume_update
+                from app.modules.recruitment.services.resume_service import (
+                    build_candidate_resume_update,
+                )
+
                 patch = build_candidate_resume_update(
                     existing_doc=existing,
                     parsed=parsed,
                     raw_text=raw_text,
                     resume_url=resume_url,
-                    resume_public_id=resume_public_id
+                    resume_public_id=resume_public_id,
                 )
                 await existing.set(patch)
                 updated += 1
@@ -438,10 +419,17 @@ async def bulk_upload_resumes(
 
         except OperationFailure as exc:
             _log.exception("Bulk upload: MongoDB operation failed for %s", filename)
-            failed.append(BulkUploadFailure(filename=filename, reason=f"Database write failed (Quota Exceeded?): {exc.details.get('errmsg', str(exc)) if hasattr(exc, 'details') and isinstance(exc.details, dict) else str(exc)}"))
+            failed.append(
+                BulkUploadFailure(
+                    filename=filename,
+                    reason=f"Database write failed (Quota Exceeded?): {exc.details.get('errmsg', str(exc)) if hasattr(exc, 'details') and isinstance(exc.details, dict) else str(exc)}",
+                )
+            )
         except Exception as exc:
             _log.exception("Bulk upload: unexpected error for %s", filename)
-            failed.append(BulkUploadFailure(filename=filename, reason=f"Unexpected server error: {exc}"))
+            failed.append(
+                BulkUploadFailure(filename=filename, reason=f"Unexpected server error: {exc}")
+            )
 
     return BulkUploadResult(created=created, updated=updated, failed=failed)
 
@@ -521,7 +509,9 @@ async def delete_candidate(
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"is_active": False})
 
+
 # ── Status Update ─────────────────────────────────────────────────────────────
+
 
 @router.post("/{candidate_id}/approve")
 async def approve_candidate(
@@ -529,10 +519,11 @@ async def approve_candidate(
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"status": CandidateStatus.approved})
-    
+
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
     return _build_candidate_response(doc, count)
+
 
 @router.post("/{candidate_id}/reject")
 async def reject_candidate(
@@ -540,7 +531,7 @@ async def reject_candidate(
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     await doc.set({"status": CandidateStatus.rejected})
-    
+
     cand_oid = to_object_id(candidate_id, "candidate_id")
     count = await Mapping.find({"candidate_id": cand_oid, "brand_id": tenant.brand_id}).count()
     return _build_candidate_response(doc, count)

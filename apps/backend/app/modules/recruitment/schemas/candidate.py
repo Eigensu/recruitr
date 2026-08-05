@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field
 
 from app.common.dtos.pagination import PaginatedResponse
-from app.modules.recruitment.enums import CandidateStatus, PipelineStage, Gender
+from app.modules.recruitment.enums import CandidateStatus, Gender, PipelineStage
 
 
 class CandidateCreate(BaseModel):
@@ -87,6 +87,45 @@ class CandidateResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_document(cls, doc, mappings_count: int = 0) -> "CandidateResponse":
+        """Build the response from a Candidate document.
+
+        Lives on the DTO because both the authenticated candidate endpoints and
+        the public application form return this shape. They each spelled the
+        same field list out by hand, so the two copies could drift and every new
+        field had to be remembered twice.
+
+        Not model_validate(doc): `id` needs str() from an ObjectId, and
+        mappings_count is a per-request count that is not on the document.
+        """
+        return cls(
+            id=str(doc.id),
+            full_name=doc.full_name,
+            email=doc.email,
+            phone=doc.phone,
+            previous_company=doc.previous_company,
+            experience_years=doc.experience_years,
+            education_level=doc.education_level,
+            city=doc.city,
+            area=doc.area,
+            gender=doc.gender,
+            age=doc.age,
+            skills=doc.skills,
+            tags=doc.tags,
+            preferred_train_line=doc.preferred_train_line,
+            cv_link=doc.cv_link,
+            resume_url=doc.resume_url,
+            current_stage=doc.current_stage,
+            mappings_count=mappings_count,
+            current_role=doc.current_role,
+            salary=doc.salary,
+            notes=doc.notes,
+            source=doc.source,
+            status=doc.status,
+            created_at=doc.created_at,
+        )
 
 
 class CandidateMappingItem(BaseModel):
