@@ -4,6 +4,16 @@
    skipping directories with special characters like (auth), (dashboard), etc. */
 @source "../../src/**/*.{ts,tsx,js,jsx}";
 
+/* Point Tailwind's `dark:` variant at this app's theme attribute.
+
+   Without this, v4 resolves `dark:` to @media (prefers-color-scheme: dark) —
+   the operating system's setting — while the theme toggle writes
+   [data-theme] on <html>. The two disagree whenever they differ, so
+   `text-navy dark:text-yellow` rendered navy-on-navy for anyone running the
+   app in dark mode with a light OS. The pre-paint script in layout.tsx always
+   sets the attribute before first paint, so there is no unstyled flash. */
+@custom-variant dark ([data-theme="dark"] &);
+
 /* ==========================================================================
    BINGE CONSULTING — Brand Design System
    ========================================================================== */
