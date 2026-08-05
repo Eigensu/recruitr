@@ -14,6 +14,8 @@ export interface UserInfo {
   role: UserRole;
   employee_id: string | null;
   brand_id: string | null;
+  brand_name?: string | null;
+  brand_domain?: string | null;
   notification_preferences?: Record<string, boolean>;
 }
 
@@ -132,6 +134,8 @@ export interface Candidate {
 export interface CandidateFilters {
   search?: string;
   source?: CandidateSource;
+  /** External channel the candidate came from (LinkedIn, Naukri, …). */
+  source_channel?: string;
   tags?: string[];
   has_resume?: boolean;
   has_cv_link?: boolean;
@@ -195,6 +199,8 @@ export interface ApiCandidate {
   expected_salary: number | null;
   notice_period: string | null;
   source: string | null;
+  /** Which external channel the candidate came from (LinkedIn, Naukri, …). */
+  source_channel: string | null;
   salary: number | null;
   notes: string | null;
   status: CandidateStatus;
@@ -327,4 +333,11 @@ export interface PipelineColumn {
 
 export interface PipelineBoardData {
   stages: PipelineColumn[];
+}
+
+/** Minimal agency identity exposed on unauthenticated surfaces (public form). */
+export interface PublicBrand {
+  id: string;
+  name: string;
+  logo_url: string | null;
 }

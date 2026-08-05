@@ -101,8 +101,17 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     """
     if not file_bytes.startswith(b"%PDF-"):
         raise ValueError("Input is not a PDF file")
-    with fitz.open(stream=file_bytes, filetype="pdf") as doc:
-        return "\n".join(page.get_text() for page in doc)
+    try:
+        with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+            return "\n".join(page.get_text() for page in doc)
+    except ValueError:
+        raise
+    except Exception as exc:
+        # PyMuPDF raises its own FileDataError for truncated, corrupt or
+        # password-protected files. Callers (and this module's contract) expect
+        # ValueError for anything wrong with the file, so a bad upload is a 400
+        # rather than a 500 — matching how the DOCX branch already behaves.
+        raise ValueError(f"Could not parse PDF file: {exc}") from exc
 
 
 def extract_text_from_docx(file_bytes: bytes) -> str:

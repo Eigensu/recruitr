@@ -1,6 +1,7 @@
 """Public APIs for Candidate Application Form.
 
 Endpoints:
+  GET    /brands/{domain}             Resolve an agency by its public domain (unauthenticated)
   POST   /apply                       Submit a candidate application (unauthenticated)
 """
 
@@ -8,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Annotated
 
 from beanie import PydanticObjectId
@@ -16,7 +18,6 @@ from fastapi import (
     File,
     Form,
     HTTPException,
-    Query,
     UploadFile,
     status,
 )
@@ -26,9 +27,11 @@ from pymongo.errors import DuplicateKeyError
 from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.modules.brands.models import Brand
+from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.recruitment.enums import CandidateStatus
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import CandidateResponse
+from app.modules.recruitment.services.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
 )
@@ -39,14 +42,33 @@ router = APIRouter()
 _log = logging.getLogger(__name__)
 
 
+async def _find_brand_by_domain(domain: str) -> Brand | None:
+    """Look up an agency by its public domain.
+
+    Tries the exact stored value first so the unique index is used, then falls
+    back to a case-insensitive match because domains are case-insensitive in
+    practice and onboarding stores whatever casing the agency typed.
+    """
+    brand = await Brand.find_one(Brand.domain == domain)
+    if brand is None:
+        brand = await Brand.find_one(
+            {"domain": {"$regex": f"^{re.escape(domain)}$", "$options": "i"}}
+        )
+    return brand
+
+
 async def _resolve_target_brand(brand_id: str | None) -> PydanticObjectId:
-    """Resolve the target brand ID for the application."""
+    """Resolve which agency (tenant) an application belongs to."""
     if brand_id:
         try:
-            return to_object_id(brand_id, "brand_id")
+            target = to_object_id(brand_id, "brand_id")
         except Exception as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid brand_id format") from exc
+        if not await Brand.find_one(Brand.id == target):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown brand")
+        return target
 
+    # No brand supplied: only safe to infer when the deployment has exactly one.
     brands = await Brand.find_all().to_list()
     if len(brands) == 1:
         return brands[0].id
@@ -55,7 +77,25 @@ async def _resolve_target_brand(brand_id: str | None) -> PydanticObjectId:
             status.HTTP_500_INTERNAL_SERVER_ERROR, "No brands configured in the system"
         )
     raise HTTPException(
-        status.HTTP_400_BAD_REQUEST, "brand_id is required because multiple brands exist"
+        status.HTTP_400_BAD_REQUEST,
+        "This application link is missing its agency. Please use the full link you were given.",
+    )
+
+
+@router.get("/brands/{domain}")
+async def public_brand_by_domain(domain: str) -> PublicBrandResponse:
+    """Resolve an agency by domain so the public form can brand and target itself.
+
+    Intentionally a single-item lookup with no list counterpart: enumerating
+    agencies on an unauthenticated endpoint would expose the customer roster.
+    """
+    brand = await _find_brand_by_domain(domain)
+    if brand is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown brand")
+    return PublicBrandResponse(
+        id=str(brand.id),
+        name=brand.name,
+        logo_url=brand.branding.logo_url,
     )
 
 
@@ -84,8 +124,6 @@ async def _process_resume_upload(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)"
             )
 
-        from app.modules.recruitment.services.resume_service import process_resume_bytes
-
         raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
             file_bytes, filename
         )
@@ -112,13 +150,16 @@ async def _process_resume_upload(
 async def public_apply(
     full_name: Annotated[str, Form()],
     email: Annotated[str, Form()],
+    phone: Annotated[str, Form(min_length=1)],
+    # Must stay a Form field: the client submits multipart/form-data, and a
+    # Query-declared param would be read from the URL only and silently ignored.
     brand_id: Annotated[
-        str | None, Query(description="Brand ID to apply to (optional if only one brand exists)")
+        str | None, Form(description="Agency to apply to (optional if only one exists)")
     ] = None,
-    phone: Annotated[str | None, Form()] = None,
     current_role: Annotated[str | None, Form()] = None,
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
+    source_channel: Annotated[str | None, Form(description="How the applicant found us")] = None,
     resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
@@ -150,6 +191,7 @@ async def public_apply(
             resume_public_id=resume_public_id,
             resume_raw_text=raw_text,
             source="External",
+            source_channel=source_channel,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:

@@ -21,6 +21,7 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
+from app.common.utils.seed_guard import assert_local_database
 from app.config import settings
 from app.modules.recruitment.enums import (
     ActivityType,
@@ -229,7 +230,10 @@ _CANDIDATES = [
         "+91 98765 43210",
         "The Taj Mahal Palace",
         2.0,
-        "Mumbai", "Andheri", "female", 24,
+        "Mumbai",
+        "Andheri",
+        "female",
+        24,
         ["Guest Relations", "Table Service", "POS Systems", "Order Taking", "Billing"],
         ["Immediate Joiner", "Hospitality"],
     ),
@@ -239,7 +243,10 @@ _CANDIDATES = [
         "+91 98123 45678",
         "JW Marriott Mumbai",
         3.0,
-        "Mumbai", "Malad", "male", 28,
+        "Mumbai",
+        "Malad",
+        "male",
+        28,
         ["F&B Service", "Fine Dining", "Banquets", "Team Leadership", "Service"],
         ["Hospitality", "Premium Candidate"],
     ),
@@ -249,7 +256,10 @@ _CANDIDATES = [
         "+91 97654 32109",
         "Leela Palace",
         1.5,
-        "Mumbai", "Bandra", "female", 22,
+        "Mumbai",
+        "Bandra",
+        "female",
+        22,
         ["Hostess", "Table Reservation", "Billing", "Guest Relations", "POS"],
         ["Immediate Joiner"],
     ),
@@ -259,7 +269,10 @@ _CANDIDATES = [
         "+91 99887 76655",
         "Trident Nariman Point",
         4.0,
-        "Mumbai", "Powai", "male", 30,
+        "Mumbai",
+        "Powai",
+        "male",
+        30,
         ["Mixology", "Classic Cocktails", "Inventory Management", "Speed Pouring", "Bar"],
         ["Bartender"],
     ),
@@ -269,7 +282,10 @@ _CANDIDATES = [
         "+91 95555 44444",
         "Pizza Express Mumbai",
         6.0,
-        "Mumbai", "Borivali", "male", 35,
+        "Mumbai",
+        "Borivali",
+        "male",
+        35,
         ["Pizza Dough Crafting", "Wood-fired Oven", "Italian Cuisine", "Food Safety", "Cooking"],
         ["Chef"],
     ),
@@ -279,7 +295,10 @@ _CANDIDATES = [
         "+91 94444 33333",
         "Oberoi Hotels",
         5.0,
-        "Mumbai", "Colaba", "male", 32,
+        "Mumbai",
+        "Colaba",
+        "male",
+        32,
         ["Sous Chef", "Kitchen Management", "Continental Cuisine", "Plating", "Food Safety"],
         ["Chef", "Premium Candidate"],
     ),
@@ -289,7 +308,10 @@ _CANDIDATES = [
         "+91 93333 22222",
         "Local Dhaba Elite",
         3.0,
-        "Pune", "Viman Nagar", "male", 26,
+        "Pune",
+        "Viman Nagar",
+        "male",
+        26,
         ["Tandoor Cook", "Indian Curry", "Bulk Cooking", "Prep Work", "Cooking"],
         ["Immediate Joiner"],
     ),
@@ -299,7 +321,10 @@ _CANDIDATES = [
         "+91 92222 11111",
         "Olive Bar & Kitchen",
         8.0,
-        "Mumbai", "Juhu", "male", 38,
+        "Mumbai",
+        "Juhu",
+        "male",
+        38,
         [
             "Restaurant Operations",
             "P&L Management",
@@ -315,7 +340,10 @@ _CANDIDATES = [
         "+91 91111 00000",
         "Social Offline",
         4.5,
-        "Bangalore", "Indiranagar", "female", 29,
+        "Bangalore",
+        "Indiranagar",
+        "female",
+        29,
         [
             "Assistant Manager",
             "Inventory Audits",
@@ -331,7 +359,10 @@ _CANDIDATES = [
         "+91 90000 99999",
         "F&B Marketing Agency",
         3.0,
-        "Delhi", "Hauz Khas", "female", 27,
+        "Delhi",
+        "Hauz Khas",
+        "female",
+        27,
         ["Instagram Marketing", "Content Creation", "Canva", "Brand Strategy", "Digital Ads"],
         ["Premium Candidate"],
     ),
@@ -341,7 +372,10 @@ _CANDIDATES = [
         "+91 89999 88888",
         "Freelance Brand Specialist",
         2.0,
-        "Mumbai", "Goregaon", "male", 25,
+        "Mumbai",
+        "Goregaon",
+        "male",
+        25,
         ["Digital Ads (Meta/Google)", "Graphic Design", "Video Reels Editing", "Analytics"],
         ["Immediate Joiner"],
     ),
@@ -533,7 +567,19 @@ async def _seed_candidates(
 ) -> tuple[list[dict[str, Any]], dict[str, ObjectId]]:
     candidate_docs: list[dict[str, Any]] = []
     cand_email_to_id: dict[str, ObjectId] = {}
-    for idx, (full_name, email, phone, company, exp_years, city, area, gender, age, skills, tags) in enumerate(_CANDIDATES):
+    for idx, (
+        full_name,
+        email,
+        phone,
+        company,
+        exp_years,
+        city,
+        area,
+        gender,
+        age,
+        skills,
+        tags,
+    ) in enumerate(_CANDIDATES):
         cid = ObjectId()
         ed_level = [
             EducationLevel.bachelors.value,
@@ -673,7 +719,9 @@ async def _seed_counters(
 
 
 async def seed(*, reset: bool = True) -> None:
+    assert_local_database(settings.MONGODB_URI, action="seed recruitment data")
     mongo = AsyncMongoClient(settings.MONGODB_URI)
+
     db = mongo[settings.MONGODB_DB_NAME]
 
     if reset:

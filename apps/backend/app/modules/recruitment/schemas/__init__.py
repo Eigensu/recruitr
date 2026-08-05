@@ -14,6 +14,8 @@ from app.modules.recruitment.schemas.client import (
     ClientCreate,
     ClientResponse,
     ClientUpdate,
+    ClientUserInvite,
+    ClientUserResponse,
 )
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
@@ -71,6 +73,8 @@ __all__ = [
     "ClientCreate",
     "ClientUpdate",
     "ClientResponse",
+    "ClientUserInvite",
+    "ClientUserResponse",
     # Pipeline DTOs
     "PipelineBoard",
     "PipelineStageColumn",

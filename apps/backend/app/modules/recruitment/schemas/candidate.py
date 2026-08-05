@@ -29,6 +29,7 @@ class CandidateCreate(BaseModel):
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
+    source_channel: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
@@ -52,6 +53,7 @@ class CandidateUpdate(BaseModel):
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
+    source_channel: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
     status: CandidateStatus | None = None
@@ -81,9 +83,15 @@ class CandidateResponse(BaseModel):
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None
+    source_channel: str | None = None
     salary: float | None = None
     notes: str | None = None
-    status: CandidateStatus
+    # Defaulted, not required: candidates created before `status` existed have no
+    # such field, and the list endpoint validates raw aggregation output rather
+    # than Beanie documents — so a required field here 500s the whole directory.
+    # Mirrors Candidate.status, and matches the query's treatment of a missing
+    # status as approved.
+    status: CandidateStatus = CandidateStatus.approved
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -123,6 +131,7 @@ class CandidateResponse(BaseModel):
             salary=doc.salary,
             notes=doc.notes,
             source=doc.source,
+            source_channel=doc.source_channel,
             status=doc.status,
             created_at=doc.created_at,
         )

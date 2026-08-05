@@ -72,6 +72,31 @@ class Settings(BaseSettings):
     # ── Frontend ──
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # ── Agency access ──
+    # Comma-separated email domains whose addresses may hold a staff account,
+    # e.g. "bingeconsulting.in,binge.co". Anyone signing up outside this list is
+    # refused rather than being handed the agency workspace.
+    #
+    # Empty means no NEW account can be provisioned. That is deliberate: an
+    # unset value used to mean "admit everyone", which let any address that
+    # reached the sign-up page read the whole candidate database. Accounts that
+    # already have an Employee row with a brand keep working either way, so an
+    # empty value locks nobody out of a workspace they already had.
+    AGENCY_EMAIL_DOMAINS: str = ""
+
+    # Named for what it returns rather than for the setting it parses: a
+    # property differing from AGENCY_EMAIL_DOMAINS only by case reads as a typo
+    # at the call site, and picking the wrong one is a silent bug — the raw
+    # string is truthy whenever it is non-empty, including "  ".
+    @property
+    def staff_domains(self) -> frozenset[str]:
+        """AGENCY_EMAIL_DOMAINS parsed into bare, lowercased domains."""
+        return frozenset(
+            part.strip().lower().lstrip("@")
+            for part in self.AGENCY_EMAIL_DOMAINS.split(",")
+            if part.strip()
+        )
+
     # ── Cookie ──
     # Set to ".eigensu.in" in production so the HttpOnly session cookie is sent
     # to all *.eigensu.in subdomains (frontend + backend share the same parent

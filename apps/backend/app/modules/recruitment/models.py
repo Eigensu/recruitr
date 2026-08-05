@@ -100,7 +100,19 @@ class Client(Document):
     name: str  # "Hunger Inc"
     city: str | None = None
     logo_url: str | None = None
+    # Contact/CRM detail — all optional, all shown on the client detail page.
+    industry: str | None = None
+    website: str | None = None
+    contact_person: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    # Who may be authorized against this client. A domain entry ("@acme.com")
+    # admits any address under it; an email entry admits exactly one address.
+    allowed_domains: list[str] = Field(default_factory=list)
+    allowed_emails: list[str] = Field(default_factory=list)
     is_active: bool = True
+    created_by_id: PydanticObjectId | None = None  # FK → employees._id
+    updated_by_id: PydanticObjectId | None = None
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -113,6 +125,43 @@ class Client(Document):
         indexes = [
             IndexModel([("brand_id", 1), ("code", 1)], unique=True),
             IndexModel([("brand_id", 1), ("name", 1)]),
+        ]
+
+
+class ClientUser(Document):
+    """An email authorized to see one client's pipeline, once a client portal exists.
+
+    Deliberately NOT a login account. Creating a `User` here would be unsafe:
+    `ensure_employee_for_user` assigns the sole existing brand to any user who
+    has none, so a client contact would sign in with full agency access to every
+    candidate and position. This row records the authorization only — a future
+    portal login checks it before granting scoped access.
+
+    `user_id` and `last_login` stay null until that portal exists; a row with no
+    `user_id` is reported as "Pending".
+    """
+
+    brand_id: PydanticObjectId
+    client_id: PydanticObjectId  # FK → clients._id
+    email: str  # lowercased; unique per client
+    name: str | None = None  # filled in when the person actually signs up
+    role: str = "client"
+    user_id: PydanticObjectId | None = None  # FK → users._id, once they sign up
+    last_login: datetime | None = None
+    is_active: bool = True
+    invited_by_id: PydanticObjectId | None = None  # FK → employees._id
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "client_users"
+        indexes = [
+            IndexModel([("client_id", 1), ("email", 1)], unique=True),
+            IndexModel([("brand_id", 1), ("client_id", 1)]),
         ]
 
 
@@ -190,7 +239,8 @@ class Candidate(Document):
     previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
-    source: str | None = None
+    source: str | None = None  # internal | external — how the candidate entered the system
+    source_channel: str | None = None  # where they came from: LinkedIn, Naukri, referral, …
     salary: float | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage

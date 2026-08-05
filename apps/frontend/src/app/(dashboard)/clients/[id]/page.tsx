@@ -28,6 +28,71 @@ import {
 
 // Chip colours per authorization state. A lookup beats a nested ternary:
 // adding a state is one line and cannot reorder the existing branches.
+// The app's standard field styling. text-text-primary is not optional: without
+// it an input falls back to the browser's default black, which is unreadable on
+// the dark surface these cards sit on.
+const INPUT_CLASS =
+  "w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary " +
+  "placeholder:text-text-muted focus:ring-2 focus:ring-navy dark:focus:ring-yellow focus:outline-none";
+
+const splitList = (value: string) =>
+  value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+/** One label + value pair that swaps between reading and editing.
+ *
+ * Declared at module scope so React keeps the same input instance across
+ * renders — nesting it in the page would remount on every keystroke and drop
+ * focus after the first character. Collapsing eight hand-written label/input
+ * pairs into one component also keeps the panel's branching in a single place.
+ */
+function Field({
+  id,
+  label,
+  value,
+  editing,
+  onChange,
+  type = "text",
+  placeholder,
+  hint,
+  className = "",
+}: Readonly<{
+  id: string;
+  label: string;
+  value: string;
+  editing: boolean;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  hint?: string;
+  className?: string;
+}>) {
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      <label htmlFor={id} className="block text-sm font-medium text-text-secondary">
+        {label}
+      </label>
+      {editing ? (
+        <>
+          <input
+            id={id}
+            type={type}
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            className={INPUT_CLASS}
+          />
+          {hint && <p className="text-xs text-text-muted">{hint}</p>}
+        </>
+      ) : (
+        <p className="text-text-primary break-words">{value || "—"}</p>
+      )}
+    </div>
+  );
+}
+
 const USER_STATUS_STYLES: Record<string, string> = {
   Active: "bg-green-100 text-green-700",
   Inactive: "bg-red-100 text-red-700",
@@ -163,178 +228,92 @@ function CompanyInfoPanel({
   onSave: () => void;
   userCount: number;
 }>) {
+  // startEdit seeds editForm from the client, so the draft is the source of
+  // truth while editing and the saved record is the rest of the time.
+  const shown: Partial<Client> = isEditing ? editForm : client;
+
   return (
     <div className="p-6">
       <h3 className="text-lg font-bold text-text-primary mb-4">Company Details</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-        {/* Field pairs */}
-        <div className="space-y-1">
-          <label htmlFor="client-name" className="text-sm font-medium text-text-secondary">
-            Company Name
-          </label>
-          {isEditing ? (
-            <input
-              id="client-name"
-              type="text"
-              value={editForm.name}
-              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary font-medium">{client.name}</p>
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="client-city" className="text-sm font-medium text-text-secondary">
-            City
-          </label>
-          {isEditing ? (
-            <input
-              id="client-city"
-              type="text"
-              value={editForm.city ?? ""}
-              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">{client.city || "—"}</p>
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="client-industry" className="text-sm font-medium text-text-secondary">
-            Industry
-          </label>
-          {isEditing ? (
-            <input
-              id="client-industry"
-              type="text"
-              value={editForm.industry ?? ""}
-              onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">{client.industry || "—"}</p>
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="client-website" className="text-sm font-medium text-text-secondary">
-            Website
-          </label>
-          {isEditing ? (
-            <input
-              id="client-website"
-              type="text"
-              value={editForm.website ?? ""}
-              onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">{client.website || "—"}</p>
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <label
-            htmlFor="client-contact_person"
-            className="text-sm font-medium text-text-secondary"
-          >
-            Contact Person
-          </label>
-          {isEditing ? (
-            <input
-              id="client-contact_person"
-              type="text"
-              value={editForm.contact_person ?? ""}
-              onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">{client.contact_person || "—"}</p>
-          )}
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="client-contact_email" className="text-sm font-medium text-text-secondary">
-            Contact Email
-          </label>
-          {isEditing ? (
-            <input
-              id="client-contact_email"
-              type="email"
-              value={editForm.contact_email ?? ""}
-              onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">{client.contact_email || "—"}</p>
-          )}
-        </div>
-
-        <div className="space-y-1 md:col-span-2">
-          <label
-            htmlFor="client-allowed_domains"
-            className="text-sm font-medium text-text-secondary"
-          >
-            Authorized Domains
-          </label>
-          {isEditing ? (
-            <input
-              id="client-allowed_domains"
-              type="text"
-              value={editForm.allowed_domains?.join(", ") || ""}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  allowed_domains: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="@company.com, @subsidiary.com"
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">
-              {client.allowed_domains?.length ? client.allowed_domains.join(", ") : "—"}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-1 md:col-span-2">
-          <label
-            htmlFor="client-allowed_emails"
-            className="text-sm font-medium text-text-secondary"
-          >
-            Authorized Emails
-          </label>
-          {isEditing ? (
-            <input
-              id="client-allowed_emails"
-              type="text"
-              value={editForm.allowed_emails?.join(", ") || ""}
-              onChange={(e) =>
-                setEditForm({
-                  ...editForm,
-                  allowed_emails: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="ceo@other.com, hr@company.com"
-              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-            />
-          ) : (
-            <p className="text-text-primary">
-              {client.allowed_emails?.length ? client.allowed_emails.join(", ") : "—"}
-            </p>
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+        <Field
+          id="client-name"
+          label="Company Name"
+          value={shown.name ?? ""}
+          editing={isEditing}
+          onChange={(v) => setEditForm({ ...editForm, name: v })}
+        />
+        <Field
+          id="client-city"
+          label="City"
+          value={shown.city ?? ""}
+          editing={isEditing}
+          placeholder="Mumbai"
+          onChange={(v) => setEditForm({ ...editForm, city: v })}
+        />
+        <Field
+          id="client-industry"
+          label="Industry"
+          value={shown.industry ?? ""}
+          editing={isEditing}
+          placeholder="Hospitality"
+          onChange={(v) => setEditForm({ ...editForm, industry: v })}
+        />
+        <Field
+          id="client-website"
+          label="Website"
+          value={shown.website ?? ""}
+          editing={isEditing}
+          placeholder="acme.com"
+          onChange={(v) => setEditForm({ ...editForm, website: v })}
+        />
+        <Field
+          id="client-contact-person"
+          label="Contact Person"
+          value={shown.contact_person ?? ""}
+          editing={isEditing}
+          placeholder="Dana Rao"
+          onChange={(v) => setEditForm({ ...editForm, contact_person: v })}
+        />
+        <Field
+          id="client-contact-email"
+          label="Contact Email"
+          type="email"
+          value={shown.contact_email ?? ""}
+          editing={isEditing}
+          placeholder="dana@acme.com"
+          onChange={(v) => setEditForm({ ...editForm, contact_email: v })}
+        />
+        <Field
+          id="client-contact-phone"
+          label="Contact Phone"
+          type="tel"
+          value={shown.contact_phone ?? ""}
+          editing={isEditing}
+          placeholder="+91 98765 43210"
+          onChange={(v) => setEditForm({ ...editForm, contact_phone: v })}
+        />
+        <Field
+          id="client-allowed-domains"
+          label="Authorized Domains"
+          className="md:col-span-2"
+          value={(shown.allowed_domains ?? []).join(", ")}
+          editing={isEditing}
+          placeholder="@company.com, @subsidiary.com"
+          hint="Anyone at these domains can be given access to this company."
+          onChange={(v) => setEditForm({ ...editForm, allowed_domains: splitList(v) })}
+        />
+        <Field
+          id="client-allowed-emails"
+          label="Authorized Emails"
+          className="md:col-span-2"
+          value={(shown.allowed_emails ?? []).join(", ")}
+          editing={isEditing}
+          placeholder="ceo@other.com, hr@company.com"
+          hint="Individual addresses to allow on top of the domains above."
+          onChange={(v) => setEditForm({ ...editForm, allowed_emails: splitList(v) })}
+        />
       </div>
 
       {isEditing && (
@@ -342,7 +321,7 @@ function CompanyInfoPanel({
           <button
             type="button"
             onClick={() => onCancel()}
-            className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-surface-2 cursor-pointer"
+            className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-text-primary hover:bg-surface-2 transition-colors cursor-pointer"
           >
             Cancel
           </button>

@@ -2,7 +2,7 @@
 
 import secrets
 import urllib.parse
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import httpx
@@ -11,7 +11,12 @@ from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_current_user
-from app.modules.auth.models import User
+from app.modules.auth.access import (
+    NOT_AUTHORIZED,
+    find_client_authorization,
+    may_sign_in,
+)
+from app.modules.auth.models import User, UserRole
 from app.modules.auth.schemas import (
     TokenPayload,
     UserCreate,
@@ -54,7 +59,15 @@ def _set_auth_cookie(response: Response, user_id: str) -> None:
 
 
 async def _ensure_employee(user: User) -> bool:
-    """Ensure an Employee record exists for the user. Returns True if brand is assigned."""
+    """Ensure an Employee record exists for the user. Returns True if brand is assigned.
+
+    Skipped for client accounts: they are not recruiters, and an Employee row
+    would put an outsider in the team roster, the leaderboard and every
+    employee picker.
+    """
+    if user.role == UserRole.client:
+        return await _link_client_login(user)
+
     try:
         from app.modules.recruitment.service import ensure_employee_for_user
 
@@ -64,18 +77,44 @@ async def _ensure_employee(user: User) -> bool:
         return False
 
 
+async def _link_client_login(user: User) -> bool:
+    """Attach the login to its ClientUser grant and stamp the sign-in.
+
+    Returns whether a live grant exists — a revoked one leaves the account able
+    to authenticate but scoped to nothing, which get_client_scope then refuses.
+    """
+    grant = await find_client_authorization(user.email)
+    if grant is None:
+        return False
+    await grant.set(
+        {
+            "user_id": user.id,
+            "name": grant.name or user.full_name,
+            "last_login": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    return True
+
+
 # ── Standard email/password endpoints ────────────────────────────────────────
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 async def signup(user_in: UserCreate) -> dict:
     email = user_in.email.lower()
+    # Checked before the existence probe so an outsider cannot use the differing
+    # replies to work out which addresses are registered.
+    allowed, is_client = await may_sign_in(email)
+    if not allowed:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_AUTHORIZED)
     if await User.find_one(User.email == email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered.")
     user = User(
         email=email,
         hashed_password=get_password_hash(user_in.password),
         full_name=user_in.full_name,
+        role=UserRole.client if is_client else UserRole.employee,
     )
     await user.insert()
     await _ensure_employee(user)
@@ -125,7 +164,39 @@ async def read_user_me(
     if not user:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 
+    from app.modules.brands.models import Brand
+
+    # A client has no Employee row — their tenant comes from the grant instead.
+    if user.role == UserRole.client:
+        from app.modules.recruitment.models import Client
+
+        grant = await find_client_authorization(user.email)
+        if grant is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "This account is no longer authorized for any company.",
+            )
+        brand = await Brand.get(grant.brand_id)
+        employer = await Client.get(grant.client_id)
+        return UserInfoResponse(
+            user_id=str(user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role.value,
+            brand_id=str(grant.brand_id),
+            brand_name=brand.name if brand else None,
+            brand_domain=brand.domain if brand else None,
+            client_id=str(grant.client_id),
+            client_name=employer.name if employer else None,
+        )
+
     employee = await Employee.find_one({"email": user.email.lower()})
+
+    # Brand identity ships with the user so callers don't need a second request
+    # (the public application link is built from brand_domain).
+    brand = None
+    if employee and employee.brand_id:
+        brand = await Brand.get(employee.brand_id)
 
     return UserInfoResponse(
         user_id=str(user.id),
@@ -134,6 +205,8 @@ async def read_user_me(
         role=user.role.value,
         employee_id=str(employee.id) if employee else None,
         brand_id=str(employee.brand_id) if employee and employee.brand_id else None,
+        brand_name=brand.name if brand else None,
+        brand_domain=brand.domain if brand else None,
     )
 
 
@@ -266,10 +339,24 @@ async def google_callback(
     if not google_id or not email:
         return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
 
+    # Gate before _find_or_create_google_user: a refused address must not leave
+    # a User row behind. Anyone already provisioned passes regardless of domain,
+    # which is what keeps staff on personal addresses signing in.
+    # "not_registered" is the code the sign-in page already renders friendly
+    # copy for ("Your organization is not registered with Binge Consulting").
+    allowed, is_client = await may_sign_in(email)
+    if not allowed:
+        return RedirectResponse(f"{frontend}/sign-in?error=not_registered")
+
     user, _ = await _find_or_create_google_user(google_id, email, profile.get("name"))
+    if is_client and user.role != UserRole.client:
+        user.role = UserRole.client
+        await user.save()
     has_brand = await _ensure_employee(user)
 
-    redirect_path = "/" if has_brand else "/onboarding"
+    # A client never onboards a workspace — they either have a live grant or
+    # they are refused, so there is nothing for them to set up.
+    redirect_path = "/" if (has_brand or user.role == UserRole.client) else "/onboarding"
     redirect = RedirectResponse(f"{frontend}{redirect_path}")
     _set_auth_cookie(redirect, str(user.id))
     return redirect

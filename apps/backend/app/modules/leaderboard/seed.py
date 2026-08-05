@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from bson import ObjectId
 from pymongo import AsyncMongoClient
 
+from app.common.utils.seed_guard import assert_local_database
 from app.config import settings
 from app.database import init_db
 from app.modules.dashboard.enums import JobStatus, PipelineStage
@@ -133,6 +134,8 @@ def compute_monthly_growth(total: int, mappings: int, month_idx: int, months: li
 
 
 async def seed_leaderboard() -> None:
+    assert_local_database(settings.MONGODB_URI, action="seed leaderboard data")
+
     await init_db()
     async with AsyncMongoClient(settings.MONGODB_URI) as client:
         db = client[settings.MONGODB_DB_NAME]

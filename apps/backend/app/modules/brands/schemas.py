@@ -15,6 +15,18 @@ class BrandCreate(BaseModel):
     domain: str
 
 
+class PublicBrandResponse(BaseModel):
+    """Minimal brand fields safe to expose on unauthenticated surfaces.
+
+    Deliberately excludes owner_id, domain and created_at: the public
+    application form only needs enough to identify and visually brand itself.
+    """
+
+    id: str
+    name: str
+    logo_url: str | None = None
+
+
 class BrandResponse(BaseModel):
     id: str
     owner_id: str

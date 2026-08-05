@@ -38,6 +38,13 @@ class UserInfoResponse(BaseModel):
     # Employee / tenant context — null until ensure_employee_for_user runs
     employee_id: str | None = None
     brand_id: str | None = None
+    brand_name: str | None = None
+    brand_domain: str | None = None
+    # Client context — set only for the client role, which has no Employee row.
+    # The frontend needs brand_id populated for both roles, or it treats a
+    # signed-in client as someone who never finished onboarding.
+    client_id: str | None = None
+    client_name: str | None = None
 
 
 class UserUpdate(BaseModel):

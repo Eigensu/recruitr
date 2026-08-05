@@ -116,7 +116,9 @@ class CandidateAnalyticsItem(BaseModel):
             if not data.get("skills") and data.get("extracted_skills"):
                 data["skills"] = data["extracted_skills"]
             if not data.get("resume_url"):
-                data["resume_url"] = data.get("resume_url") or data.get("cv_link") or data.get("resume_link")
+                data["resume_url"] = (
+                    data.get("resume_url") or data.get("cv_link") or data.get("resume_link")
+                )
             if not data.get("current_stage"):
                 data["current_stage"] = PipelineStage.sourced.value
         return data

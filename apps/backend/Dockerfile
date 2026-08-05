@@ -8,12 +8,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ app/
+COPY gunicorn.conf.py .
 
 EXPOSE 8000
 
-# Gunicorn with 4 Uvicorn workers for production
-CMD ["gunicorn", "app.main:app", \
-     "--workers", "4", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--access-logfile", "-"]
+# Bind, workers, worker class and log routing all live in gunicorn.conf.py so
+# that INFO goes to stdout and WARNING+ to stderr — otherwise every startup
+# line lands on stderr and log platforms flag it as an error.
+CMD ["gunicorn", "app.main:app", "-c", "gunicorn.conf.py"]

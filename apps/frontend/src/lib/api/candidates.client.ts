@@ -8,6 +8,7 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
   if (filters.source) params.set("source", filters.source);
+  if (filters.source_channel) params.set("source_channel", filters.source_channel);
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
@@ -41,6 +42,7 @@ export async function clientCreateCandidate(data: {
   expected_salary?: number;
   notice_period?: string;
   source?: string;
+  source_channel?: string;
   city?: string;
   area?: string;
   gender?: string;
@@ -72,6 +74,7 @@ export async function clientUpdateCandidate(
     expected_salary: number;
     notice_period: string;
     source: string;
+    source_channel: string;
     city: string;
     area: string;
     gender: string;
@@ -149,6 +152,13 @@ export async function clientPublicApply(formData: FormData): Promise<ApiCandidat
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    // Surface FastAPI's `detail` string rather than the raw JSON envelope,
+    // which would otherwise be rendered verbatim to the applicant.
+    const data = await res.json().catch(() => null);
+    throw new Error(
+      typeof data?.detail === "string" ? data.detail : "Could not submit your application.",
+    );
+  }
   return res.json();
 }

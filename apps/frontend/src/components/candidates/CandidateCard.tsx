@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { IconMail, IconBriefcase, IconFileText, IconLink, IconTrash } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
 import { resolveCvRef } from "@/lib/api/candidates";
@@ -167,6 +167,29 @@ export default function CandidateCard({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isActioning, setIsActioning] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Click-away cancel is a document listener rather than a rendered overlay:
+  // hovering the card applies a translate to the card body, which makes it a
+  // stacking context and traps the Confirm button's z-index underneath any
+  // sibling overlay — the overlay then swallows the click meant for Confirm.
+  useEffect(() => {
+    if (!confirmDelete) return;
+    function handlePointerDown(e: PointerEvent) {
+      if (!wrapperRef.current?.contains(e.target as Node)) setConfirmDelete(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [confirmDelete]);
+
+  function handleCardClick() {
+    // While confirming, a click elsewhere on the card cancels instead of opening.
+    if (confirmDelete) {
+      setConfirmDelete(false);
+      return;
+    }
+    onClick();
+  }
 
   async function handleDeleteClick(e: React.MouseEvent) {
     e.stopPropagation();
@@ -207,10 +230,10 @@ export default function CandidateCard({
   }
 
   return (
-    <div className="group relative w-full h-full">
+    <div ref={wrapperRef} className="group relative w-full h-full">
       <button
         type="button"
-        onClick={onClick}
+        onClick={handleCardClick}
         aria-label={`View details for ${candidate.full_name}`}
         className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
       />
@@ -277,18 +300,6 @@ export default function CandidateCard({
           )}
         </div>
       </div>
-
-      {confirmDelete && (
-        <button
-          type="button"
-          aria-label="Cancel delete"
-          className="fixed inset-0 z-0 cursor-default"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmDelete(false);
-          }}
-        />
-      )}
     </div>
   );
 }

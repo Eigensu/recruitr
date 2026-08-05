@@ -14,6 +14,7 @@ import {
   IconMoon,
 } from "@tabler/icons-react";
 import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
+import ShareApplicationLink from "@/components/settings/ShareApplicationLink";
 import PasswordChange from "@/components/settings/PasswordChange";
 import NotificationPreferences from "@/components/settings/NotificationPreferences";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -180,6 +181,8 @@ export default function SettingsPage() {
                 Customize how the app looks and feels for you.
               </p>
             </div>
+
+            <ShareApplicationLink />
 
             <div className="divide-y divide-border border-y border-border">
               {/* Appearance */}

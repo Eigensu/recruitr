@@ -19,12 +19,19 @@ import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
+import { CITIES, SOURCE_CHANNEL_OTHER, SOURCE_CHANNELS } from "@/lib/constants/candidate";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
 interface CandidateDrawerProps {
   candidate: ApiCandidate | null;
   onClose: () => void;
   onUpdate?: (updated: ApiCandidate) => void;
+}
+
+/** Existing records may hold values outside the canonical list (legacy imports).
+ *  Keep the stored value selectable so opening and saving never erases it. */
+function withExisting(options: readonly string[], current: string): string[] {
+  return current && !options.includes(current) ? [...options, current] : [...options];
 }
 
 export default function CandidateDrawer({
@@ -279,7 +286,13 @@ function ViewBody({
             )}
             {candidate.source && (
               <div className="flex items-center gap-2 text-sm text-text-muted capitalize">
-                <span>Source: {candidate.source}</span>
+                <span>
+                  Source: {candidate.source}
+                  {/* Not capitalized — channel names carry their own casing (LinkedIn). */}
+                  {candidate.source_channel && (
+                    <span className="normal-case"> · {candidate.source_channel}</span>
+                  )}
+                </span>
               </div>
             )}
           </section>
@@ -408,6 +421,8 @@ function EditForm({
     expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
     notice_period: candidate.notice_period ?? "",
     source: candidate.source ?? "internal",
+    source_channel: candidate.source_channel ?? "",
+    source_channel_other: "",
     cv_link: candidate.cv_link ?? "",
     tagInput: "",
     tags: [...candidate.tags],
@@ -425,6 +440,14 @@ function EditForm({
 
   function removeTag(tag: string) {
     setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
+  }
+
+  // Channels only classify external candidates; "Other" carries the typed value.
+  function resolvedChannel(): string {
+    if (form.source !== "external") return "";
+    return form.source_channel === SOURCE_CHANNEL_OTHER
+      ? form.source_channel_other.trim()
+      : form.source_channel;
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -450,6 +473,7 @@ function EditForm({
         expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
         notice_period: form.notice_period.trim() || undefined,
         source: form.source.trim() || undefined,
+        source_channel: resolvedChannel() || undefined,
         cv_link: form.cv_link.trim() || undefined,
         tags: form.tags,
         notes: form.notes.trim() || undefined,
@@ -533,6 +557,36 @@ function EditForm({
         </div>
       </div>
 
+      {form.source === "external" && (
+        <div>
+          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+            Source Channel
+          </label>
+          <select
+            className={inputCls}
+            style={inputStyle}
+            value={form.source_channel}
+            onChange={(e) => setForm((f) => ({ ...f, source_channel: e.target.value }))}
+          >
+            <option value="">Select...</option>
+            {withExisting(SOURCE_CHANNELS, form.source_channel).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          {form.source_channel === SOURCE_CHANNEL_OTHER && (
+            <input
+              className={`${inputCls} mt-2`}
+              style={inputStyle}
+              placeholder="Where did they come from?"
+              value={form.source_channel_other}
+              onChange={(e) => setForm((f) => ({ ...f, source_channel_other: e.target.value }))}
+            />
+          )}
+        </div>
+      )}
+
       <div>
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Previous Company
@@ -591,13 +645,19 @@ function EditForm({
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
             City
           </label>
-          <input
+          <select
             className={inputCls}
             style={inputStyle}
-            placeholder="e.g. Mumbai"
             value={form.city}
             onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          />
+          >
+            <option value="">Select...</option>
+            {withExisting(CITIES, form.city).map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex-1">
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>

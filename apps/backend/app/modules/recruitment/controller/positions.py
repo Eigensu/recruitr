@@ -22,7 +22,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, require_maintainer
+from app.dependencies import get_tenant, get_viewer, require_maintainer
 from app.modules.recruitment.enums import PositionStatus, Seniority
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.repository import generate_position_code
@@ -47,6 +47,8 @@ router = APIRouter()
 # ── Annotated aliases ──────────────────────────────────────────────────────────
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
+# Staff or client. Only for reads that call scope.scoped() on their query.
+_Viewer = Annotated[TenantScope, Depends(get_viewer)]
 _Page = Annotated[int, Query(ge=1)]
 _Limit = Annotated[int, Query(ge=1, le=100)]
 _ClientId = Annotated[str | None, Query()]
@@ -233,7 +235,11 @@ def _make_page(items: list, total: int, page: int, limit: int, model: type) -> P
 
 async def _get_or_404(scope: TenantScope, position_id: str) -> Position:
     oid = to_object_id(position_id, "position_id")
-    doc = await Position.find_one({"_id": oid, "brand_id": scope.brand_id, "is_active": True})
+    # scoped() is the client restriction: for a client viewer this makes a
+    # position belonging to another employer read as 404, which is also the
+    # right answer — they should not learn that it exists.
+    query = scope.scoped({"_id": oid, "brand_id": scope.brand_id, "is_active": True})
+    doc = await Position.find_one(query)
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
     return doc
@@ -243,10 +249,13 @@ async def _get_or_404(scope: TenantScope, position_id: str) -> Position:
 
 
 @router.get("/filters")
-async def get_position_filters(tenant: _Tenant) -> PositionFiltersResponse:
-    clients = (
-        await Client.find({"brand_id": tenant.brand_id, "is_active": True}).sort("name").to_list()
-    )
+async def get_position_filters(viewer: _Viewer) -> PositionFiltersResponse:
+    match = viewer.scoped({"brand_id": viewer.brand_id, "is_active": True})
+    # A client filters by their own company only, so the dropdown is the one
+    # row rather than the agency's whole client list.
+    if viewer.client_id is not None:
+        match = {"_id": viewer.client_id, "brand_id": viewer.brand_id}
+    clients = await Client.find(match).sort("name").to_list()
     client_options = [ClientOption(id=str(c.id), code=c.code, name=c.name) for c in clients]
     return PositionFiltersResponse(clients=client_options, statuses=["open", "on_hold", "closed"])
 
@@ -256,14 +265,14 @@ async def get_position_filters(tenant: _Tenant) -> PositionFiltersResponse:
 
 @router.get("")
 async def list_positions(
-    tenant: _Tenant,
+    viewer: _Viewer,
     search: _Search = None,
     client_id: _ClientId = None,
     status_filter: _Status = None,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> PositionPage:
-    match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+    match: dict = {"brand_id": viewer.brand_id, "is_active": True}
 
     if search:
         rx = {"$regex": search, "$options": "i"}
@@ -276,6 +285,10 @@ async def list_positions(
 
     if status_filter:
         match["status"] = status_filter
+
+    # Applied last so it overwrites any client_id the caller passed: a client
+    # asking for another employer's positions gets their own, not that one.
+    match = viewer.scoped(match)
 
     pipeline = [
         {_MATCH: match},
@@ -419,10 +432,10 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
 
 
 @router.get("/{position_id}")
-async def get_position(tenant: _Tenant, position_id: str) -> PositionListItem:
-    doc = await _get_or_404(tenant, position_id)
+async def get_position(viewer: _Viewer, position_id: str) -> PositionListItem:
+    doc = await _get_or_404(viewer, position_id)
     pos_oid = to_object_id(position_id, "position_id")
-    count = await Mapping.find({"position_id": pos_oid, "brand_id": tenant.brand_id}).count()
+    count = await Mapping.find({"position_id": pos_oid, "brand_id": viewer.brand_id}).count()
 
     return PositionListItem(
         id=str(doc.id),
@@ -699,12 +712,17 @@ async def get_top_candidates(
 
 @router.get("/{position_id}/candidates")
 async def get_position_candidates(
-    tenant: _Tenant, position_id: str
+    viewer: _Viewer, position_id: str
 ) -> list[PositionMappedCandidate]:
-    """Return all candidates mapped to this position."""
+    """Return all candidates mapped to this position.
+
+    Readable by the employer whose position it is: scoped() makes any other
+    client's position 404 before a single candidate is looked up.
+    """
+    tenant = viewer
     pos_oid = to_object_id(position_id, "position_id")
     exists = await Position.find_one(
-        {"_id": pos_oid, "brand_id": tenant.brand_id, "is_active": True}
+        viewer.scoped({"_id": pos_oid, "brand_id": viewer.brand_id, "is_active": True})
     )
     if not exists:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
