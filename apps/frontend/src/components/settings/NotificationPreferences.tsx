@@ -15,9 +15,9 @@ export default function NotificationPreferences() {
   };
   const [localPrefs, setLocalPrefs] = useState<{ [key: string]: boolean } | null>(null);
 
-  const preferences = localPrefs || {
+  const preferences = localPrefs ?? {
     ...defaultPrefs,
-    ...(user?.notification_preferences || {}),
+    ...user?.notification_preferences,
   };
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -53,7 +53,10 @@ export default function NotificationPreferences() {
         <p className="text-sm text-text-secondary mt-1">Manage what alerts you receive.</p>
       </div>
       <div className="md:col-span-2 max-w-md flex flex-col gap-4">
-        <label className="flex items-center justify-between cursor-pointer group">
+        <label
+          htmlFor="pref-email_alerts"
+          className="flex items-center justify-between cursor-pointer group"
+        >
           <div>
             <p className="text-sm font-medium text-text-primary">Email Alerts</p>
             <p className="text-xs text-text-muted mt-0.5">Receive general alerts to your inbox.</p>
@@ -61,6 +64,7 @@ export default function NotificationPreferences() {
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-email_alerts"
               name="email_alerts"
               checked={preferences.email_alerts}
               onChange={() => handleToggle("email_alerts")}
@@ -80,7 +84,10 @@ export default function NotificationPreferences() {
           </div>
         </label>
 
-        <label className="flex items-center justify-between cursor-pointer group">
+        <label
+          htmlFor="pref-new_candidate"
+          className="flex items-center justify-between cursor-pointer group"
+        >
           <div>
             <p className="text-sm font-medium text-text-primary">New Candidate Activity</p>
             <p className="text-xs text-text-muted mt-0.5">Alerts when a candidate changes stage.</p>
@@ -88,6 +95,7 @@ export default function NotificationPreferences() {
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-new_candidate"
               name="new_candidate"
               checked={preferences.new_candidate}
               onChange={() => handleToggle("new_candidate")}
@@ -109,7 +117,10 @@ export default function NotificationPreferences() {
           </div>
         </label>
 
-        <label className="flex items-center justify-between cursor-pointer group">
+        <label
+          htmlFor="pref-weekly_digest"
+          className="flex items-center justify-between cursor-pointer group"
+        >
           <div>
             <p className="text-sm font-medium text-text-primary">Weekly Digest</p>
             <p className="text-xs text-text-muted mt-0.5">
@@ -119,6 +130,7 @@ export default function NotificationPreferences() {
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-weekly_digest"
               name="weekly_digest"
               checked={preferences.weekly_digest}
               onChange={() => handleToggle("weekly_digest")}

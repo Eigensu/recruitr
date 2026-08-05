@@ -26,6 +26,117 @@ import {
   type ClientUser,
 } from "@/lib/api/clients";
 
+// Chip colours per authorization state. A lookup beats a nested ternary:
+// adding a state is one line and cannot reorder the existing branches.
+const USER_STATUS_STYLES: Record<string, string> = {
+  Active: "bg-green-100 text-green-700",
+  Inactive: "bg-red-100 text-red-700",
+  Pending: "bg-yellow-100 text-yellow-800",
+};
+
+/** The Authorized Users tab.
+ *
+ * Split out of ClientDetailsPage purely to keep that component's cognitive
+ * complexity in range — the page already branched on loading, load failure,
+ * edit mode, active tab and maintainer rights before reaching this table.
+ */
+function AuthorizedUsersPanel({
+  users,
+  isMaintainer,
+  onInvite,
+  onRemove,
+}: Readonly<{
+  users: ClientUser[];
+  isMaintainer: boolean;
+  onInvite: () => void;
+  onRemove: (userId: string) => void;
+}>) {
+  return (
+    <div>
+      <div className="flex items-center justify-between p-4 border-b border-border bg-surface-2">
+        <h3 className="font-bold text-text-primary">Authorized Users</h3>
+        {isMaintainer && (
+          <button
+            type="button"
+            onClick={() => onInvite()}
+            className="flex items-center gap-2 px-3 py-1.5 bg-navy dark:bg-yellow dark:text-navy text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+          >
+            <IconPlus className="size-4" /> Invite User
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-surface-2 border-b border-border text-xs uppercase text-text-secondary font-semibold">
+            <tr>
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Last Login</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {users.map((u) => (
+              <tr key={u.id} className="hover:bg-surface-2/50 transition-colors">
+                <td className="px-4 py-3 font-medium text-text-primary">
+                  {u.name || <span className="text-text-muted italic">Pending</span>}
+                </td>
+                <td className="px-4 py-3 text-text-secondary">{u.email}</td>
+                <td className="px-4 py-3">
+                  <span className="px-2 py-0.5 bg-surface-3 rounded text-xs font-mono">
+                    {u.role}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${USER_STATUS_STYLES[u.status] ?? USER_STATUS_STYLES.Pending}`}
+                  >
+                    {u.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-text-muted text-xs">
+                  {u.last_login
+                    ? new Date(u.last_login).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      })
+                    : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {u.status !== "Inactive" && isMaintainer && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(u.id)}
+                      className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                      title="Remove Access"
+                    >
+                      <IconTrash className="size-4" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-text-muted">
+                  No users authorized for this client yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientDetailsPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
@@ -188,6 +299,7 @@ export default function ClientDetailsPage() {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
+            type="button"
             onClick={() => router.push("/clients")}
             className="p-2 rounded-full hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
           >
@@ -208,6 +320,7 @@ export default function ClientDetailsPage() {
         <div className="flex items-center gap-2">
           {!isEditing && client.is_active && isMaintainer && (
             <button
+              type="button"
               onClick={startEdit}
               className="flex items-center gap-2 px-4 py-2 bg-surface-2 border border-border text-text-primary rounded-lg hover:bg-surface-3 transition-colors text-sm font-medium cursor-pointer"
             >
@@ -216,6 +329,7 @@ export default function ClientDetailsPage() {
           )}
           {isMaintainer && (
             <button
+              type="button"
               onClick={handleArchiveToggle}
               disabled={saving}
               className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 ${
@@ -238,6 +352,7 @@ export default function ClientDetailsPage() {
       {/* Tabs */}
       <div className="flex gap-6 border-b border-border mb-6">
         <button
+          type="button"
           onClick={() => setActiveTab("info")}
           className={`pb-3 text-sm font-medium transition-colors border-b-2 cursor-pointer ${
             activeTab === "info"
@@ -248,6 +363,7 @@ export default function ClientDetailsPage() {
           Company Info
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("users")}
           className={`pb-3 text-sm font-medium transition-colors border-b-2 cursor-pointer ${
             activeTab === "users"
@@ -268,9 +384,12 @@ export default function ClientDetailsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
               {/* Field pairs */}
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">Company Name</label>
+                <label htmlFor="client-name" className="text-sm font-medium text-text-secondary">
+                  Company Name
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-name"
                     type="text"
                     value={editForm.name}
                     onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
@@ -282,9 +401,12 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">City</label>
+                <label htmlFor="client-city" className="text-sm font-medium text-text-secondary">
+                  City
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-city"
                     type="text"
                     value={editForm.city ?? ""}
                     onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
@@ -296,9 +418,15 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">Industry</label>
+                <label
+                  htmlFor="client-industry"
+                  className="text-sm font-medium text-text-secondary"
+                >
+                  Industry
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-industry"
                     type="text"
                     value={editForm.industry ?? ""}
                     onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
@@ -310,9 +438,12 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">Website</label>
+                <label htmlFor="client-website" className="text-sm font-medium text-text-secondary">
+                  Website
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-website"
                     type="text"
                     value={editForm.website ?? ""}
                     onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
@@ -324,9 +455,15 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">Contact Person</label>
+                <label
+                  htmlFor="client-contact_person"
+                  className="text-sm font-medium text-text-secondary"
+                >
+                  Contact Person
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-contact_person"
                     type="text"
                     value={editForm.contact_person ?? ""}
                     onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
@@ -338,9 +475,15 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-text-secondary">Contact Email</label>
+                <label
+                  htmlFor="client-contact_email"
+                  className="text-sm font-medium text-text-secondary"
+                >
+                  Contact Email
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-contact_email"
                     type="email"
                     value={editForm.contact_email ?? ""}
                     onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
@@ -352,11 +495,15 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium text-text-secondary">
+                <label
+                  htmlFor="client-allowed_domains"
+                  className="text-sm font-medium text-text-secondary"
+                >
                   Authorized Domains
                 </label>
                 {isEditing ? (
                   <input
+                    id="client-allowed_domains"
                     type="text"
                     value={editForm.allowed_domains?.join(", ") || ""}
                     onChange={(e) =>
@@ -379,9 +526,15 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="space-y-1 md:col-span-2">
-                <label className="text-sm font-medium text-text-secondary">Authorized Emails</label>
+                <label
+                  htmlFor="client-allowed_emails"
+                  className="text-sm font-medium text-text-secondary"
+                >
+                  Authorized Emails
+                </label>
                 {isEditing ? (
                   <input
+                    id="client-allowed_emails"
                     type="text"
                     value={editForm.allowed_emails?.join(", ") || ""}
                     onChange={(e) =>
@@ -486,92 +639,12 @@ export default function ClientDetailsPage() {
         )}
 
         {activeTab === "users" && (
-          <div>
-            <div className="flex items-center justify-between p-4 border-b border-border bg-surface-2">
-              <h3 className="font-bold text-text-primary">Authorized Users</h3>
-              {isMaintainer && (
-                <button
-                  onClick={() => setIsInviteModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-navy dark:bg-yellow dark:text-navy text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
-                >
-                  <IconPlus className="size-4" /> Invite User
-                </button>
-              )}
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-surface-2 border-b border-border text-xs uppercase text-text-secondary font-semibold">
-                  <tr>
-                    <th className="px-4 py-3">Name</th>
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Role</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Last Login</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-surface-2/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-text-primary">
-                        {u.name || <span className="text-text-muted italic">Pending</span>}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">{u.email}</td>
-                      <td className="px-4 py-3">
-                        <span className="px-2 py-0.5 bg-surface-3 rounded text-xs font-mono">
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                            u.status === "Active"
-                              ? "bg-green-100 text-green-700"
-                              : u.status === "Inactive"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-text-muted text-xs">
-                        {u.last_login
-                          ? new Date(u.last_login).toLocaleString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: false,
-                            })
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {u.status !== "Inactive" && isMaintainer && (
-                          <button
-                            onClick={() => handleRemoveUser(u.id)}
-                            className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
-                            title="Remove Access"
-                          >
-                            <IconTrash className="size-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {users.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-text-muted">
-                        No users authorized for this client yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AuthorizedUsersPanel
+            users={users}
+            isMaintainer={isMaintainer}
+            onInvite={() => setIsInviteModalOpen(true)}
+            onRemove={handleRemoveUser}
+          />
         )}
       </div>
 
@@ -590,10 +663,14 @@ export default function ClientDetailsPage() {
             </div>
             <form onSubmit={handleInviteUser} className="p-4 flex flex-col gap-4">
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">
+                <label
+                  htmlFor="invite-email"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
                   User Email
                 </label>
                 <input
+                  id="invite-email"
                   autoFocus
                   type="email"
                   required
@@ -607,8 +684,14 @@ export default function ClientDetailsPage() {
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-primary mb-1">Role</label>
+                <label
+                  htmlFor="invite-role"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
+                  Role
+                </label>
                 <select
+                  id="invite-role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
                   className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-navy dark:focus:ring-yellow focus:outline-none"

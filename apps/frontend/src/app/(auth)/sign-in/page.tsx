@@ -6,18 +6,21 @@ import Image from "next/image";
 import { useApiFetch } from "@/lib/api";
 import "../auth.css";
 
+/** Turn an ?error= code from the OAuth callback into something readable. */
+function describeAuthError(code: string | null): string {
+  if (code === "not_registered") {
+    return "Your organization is not registered with Binge Consulting. Please contact Binge Consulting to request access.";
+  }
+  return code ? `Authentication error: ${code}` : "";
+}
+
 function SignInContent() {
   const router = useRouter();
   const apiFetch = useApiFetch();
   const searchParams = useSearchParams();
 
   const initErr = searchParams.get("error");
-  const initialErrorState =
-    initErr === "not_registered"
-      ? "Your organization is not registered with Binge Consulting. Please contact Binge Consulting to request access."
-      : initErr
-        ? `Authentication error: ${initErr}`
-        : "";
+  const initialErrorState = describeAuthError(initErr);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
