@@ -39,7 +39,14 @@ class User(Document):
         name = "users"
         indexes = [
             IndexModel("email", unique=True),
+            # Partial, not sparse. A sparse index skips documents where the
+            # field is *absent*, but Beanie always serialises google_id — so
+            # every password-only account stored an explicit null, the first
+            # one claimed it, and the next signup died on a duplicate key.
+            # Matching on $type string indexes real Google IDs and nothing else.
             IndexModel(
-                "google_id", unique=True, sparse=True
-            ),  # sparse: allows multiple null values
+                "google_id",
+                unique=True,
+                partialFilterExpression={"google_id": {"$type": "string"}},
+            ),
         ]

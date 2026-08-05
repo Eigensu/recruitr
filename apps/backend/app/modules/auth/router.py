@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 
 from app.config import settings
 from app.dependencies import get_current_user
+from app.modules.auth.access import NOT_AUTHORIZED, may_hold_staff_account
 from app.modules.auth.models import User
 from app.modules.auth.schemas import (
     TokenPayload,
@@ -70,6 +71,10 @@ async def _ensure_employee(user: User) -> bool:
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 async def signup(user_in: UserCreate) -> dict:
     email = user_in.email.lower()
+    # Checked before the existence probe so an outsider cannot use the differing
+    # replies to work out which addresses are registered.
+    if not await may_hold_staff_account(email):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_AUTHORIZED)
     if await User.find_one(User.email == email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered.")
     user = User(
@@ -275,6 +280,14 @@ async def google_callback(
     email = (profile.get("email") or "").lower()
     if not google_id or not email:
         return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
+
+    # Gate before _find_or_create_google_user: a refused address must not leave
+    # a User row behind. Anyone already provisioned passes regardless of domain,
+    # which is what keeps staff on personal addresses signing in.
+    # "not_registered" is the code the sign-in page already renders friendly
+    # copy for ("Your organization is not registered with Binge Consulting").
+    if not await may_hold_staff_account(email):
+        return RedirectResponse(f"{frontend}/sign-in?error=not_registered")
 
     user, _ = await _find_or_create_google_user(google_id, email, profile.get("name"))
     has_brand = await _ensure_employee(user)

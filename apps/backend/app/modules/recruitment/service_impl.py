@@ -39,9 +39,13 @@ async def ensure_employee_for_user(user: object) -> Employee:
     Called on every login and Google OAuth callback so that the Employee
     always exists before the session cookie is issued.
 
-    If the employee has no brand yet and exactly one brand exists in the DB,
-    it is auto-assigned so the user can access the app without manual onboarding.
+    An employee with no brand yet is auto-assigned the sole existing brand, so
+    staff do not have to be onboarded by hand — but only when the address is on
+    a configured agency domain. Without that condition this was the whole
+    security model: any address that could sign up was handed the workspace and
+    read every candidate, position and client in it.
     """
+    from app.modules.auth.access import is_agency_email
     from app.modules.brands.models import Brand
 
     email: str = getattr(user, "email", "")
@@ -62,7 +66,7 @@ async def ensure_employee_for_user(user: object) -> Employee:
         )
         employee.role = role
 
-    if employee.brand_id is None:
+    if employee.brand_id is None and is_agency_email(email):
         brand = await Brand.find_one({})
         if brand is not None:
             await Employee.get_motor_collection().update_one(
