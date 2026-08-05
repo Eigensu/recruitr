@@ -38,6 +38,17 @@ def main() -> int:
 
     employees = list(db.employees.find({}, {"email": 1, "brand_id": 1, "role": 1, "is_active": 1}))
     users_by_email = {u.get("email", "").lower(): u for u in db.users.find({}, {"email": 1})}
+    brands = {b["_id"]: b.get("name", "?") for b in db.brands.find({}, {"name": 1})}
+
+    # An Employee can carry a brand_id pointing at a brand that no longer exists
+    # — seed data leaves rows on a sentinel id. Those hold no real access, so
+    # reporting them next to genuine staff overstates the exposure.
+    def _brand_label(brand_id) -> str:
+        if brand_id is None:
+            return ""
+        if brand_id in brands:
+            return brands[brand_id]
+        return f"ORPHAN brand {brand_id}"
 
     with_brand: dict[str, list] = defaultdict(list)
     without_brand: dict[str, list] = defaultdict(list)
@@ -50,7 +61,10 @@ def main() -> int:
     print("=" * 72)
     for domain in sorted(with_brand, key=lambda d: (-len(with_brand[d]), d)):
         rows = with_brand[domain]
+        real = [e for e in rows if e.get("brand_id") in brands]
         verdict = "allowed by domain" if domain in allowed else "kept via existing Employee row"
+        if not real:
+            verdict = "no real access — every row points at a missing brand"
         print(f"\n  @{domain}  — {len(rows)} account(s)  [{verdict}]")
         for e in sorted(rows, key=lambda r: r.get("email", "")):
             email = e.get("email", "")
@@ -60,7 +74,10 @@ def main() -> int:
             if email.lower() not in users_by_email:
                 flags.append("no login user")
             suffix = f"  ({', '.join(flags)})" if flags else ""
-            print(f"      {email:45} role={e.get('role', '?'):11}{suffix}")
+            print(
+                f"      {email:45} role={e.get('role', '?'):11}"
+                f"brand={_brand_label(e.get('brand_id')):24}{suffix}"
+            )
 
     if without_brand:
         print("\n" + "=" * 72)
@@ -75,7 +92,9 @@ def main() -> int:
     outside = {d: v for d, v in with_brand.items() if d not in allowed}
     print("\n" + "=" * 72)
     total = sum(len(v) for v in with_brand.values())
-    print(f"{total} account(s) hold the workspace across {len(with_brand)} domain(s).")
+    real_total = sum(1 for v in with_brand.values() for e in v if e.get("brand_id") in brands)
+    print(f"{total} account(s) carry a brand_id across {len(with_brand)} domain(s).")
+    print(f"{real_total} of them point at a brand that exists — the rest hold no real access.")
     if not allowed:
         print(
             "\nAGENCY_EMAIL_DOMAINS is not set, so NO new account can be provisioned.\n"
