@@ -38,7 +38,7 @@ def email_domain(email: str) -> str:
 
 def is_agency_email(email: str) -> bool:
     """True if the address belongs to a configured staff domain."""
-    domains = settings.agency_email_domains
+    domains = settings.staff_domains
     if not domains:
         return False
     return email_domain(email) in domains
@@ -92,7 +92,7 @@ def warn_if_unconfigured() -> None:
     Worth shouting about: the deployment is secure but cannot onboard anyone,
     and the failure otherwise shows up as a confusing refusal at sign-up.
     """
-    if not settings.agency_email_domains:
+    if not settings.staff_domains:
         logger.warning(
             "AGENCY_EMAIL_DOMAINS is not set. No new staff account can be "
             "created — sign-up and Google OAuth will refuse every address that "

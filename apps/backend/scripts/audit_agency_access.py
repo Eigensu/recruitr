@@ -32,7 +32,7 @@ def main() -> int:
     client = MongoClient(settings.MONGODB_URI)
     db = client[settings.MONGODB_DB_NAME]
 
-    allowed = settings.agency_email_domains
+    allowed = settings.staff_domains
     print(f"Database : {settings.MONGODB_DB_NAME}")
     print(f"Configured staff domains: {', '.join(sorted(allowed)) or '(none set)'}\n")
 

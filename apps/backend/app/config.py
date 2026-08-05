@@ -84,8 +84,12 @@ class Settings(BaseSettings):
     # empty value locks nobody out of a workspace they already had.
     AGENCY_EMAIL_DOMAINS: str = ""
 
+    # Named for what it returns rather than for the setting it parses: a
+    # property differing from AGENCY_EMAIL_DOMAINS only by case reads as a typo
+    # at the call site, and picking the wrong one is a silent bug — the raw
+    # string is truthy whenever it is non-empty, including "  ".
     @property
-    def agency_email_domains(self) -> frozenset[str]:
+    def staff_domains(self) -> frozenset[str]:
         """AGENCY_EMAIL_DOMAINS parsed into bare, lowercased domains."""
         return frozenset(
             part.strip().lower().lstrip("@")
