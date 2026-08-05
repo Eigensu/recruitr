@@ -32,12 +32,13 @@ export interface Brand {
 
 // ── Positions ────────────────────────────────────────────────────────────────
 
-export type CandidateStatus = "pending" | "accepted" | "rejected";
+export type CandidateStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type LegacyCandidateStatus = "pending" | "accepted" | "rejected";
 export type PositionStatus = "open" | "filled" | "archived";
 
 export interface MatchedCandidate {
   candidate_id: string;
-  status: CandidateStatus;
+  status: LegacyCandidateStatus;
   feedback: string | null;
 }
 
@@ -135,6 +136,7 @@ export interface CandidateFilters {
   has_cv_link?: boolean;
   city?: string;
   gender?: string;
+  status?: string;
   page: number;
   limit: number;
 }
@@ -194,6 +196,7 @@ export interface ApiCandidate {
   source: string | null;
   salary: number | null;
   notes: string | null;
+  status: CandidateStatus;
   created_at: string;
 }
 
@@ -247,7 +250,7 @@ export interface RecruiterStats {
 export interface MatchRequest {
   position_id: string;
   candidate_id: string;
-  target_status: CandidateStatus;
+  target_status: LegacyCandidateStatus;
 }
 
 export interface MatchResponse {
@@ -271,7 +274,7 @@ export interface CloudinarySignature {
 // ── Kanban (legacy — kept for backward compat with old components) ────────────
 
 export interface KanbanColumn {
-  id: CandidateStatus;
+  id: LegacyCandidateStatus;
   title: string;
   cards: CandidateCard[];
 }
@@ -283,7 +286,7 @@ export interface CandidateCard {
   extracted_skills: string[];
   resume_url: string | null;
   match_score?: number;
-  status: CandidateStatus;
+  status: LegacyCandidateStatus;
 }
 
 // ── Pipeline Kanban (Phase D — real API types) ────────────────────────────────

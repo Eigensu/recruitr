@@ -74,6 +74,11 @@ def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
     )
 
 
+def delete_cloudinary_asset(public_id: str) -> None:
+    """Delete a Cloudinary asset by its public_id."""
+    cloudinary.uploader.destroy(public_id)
+
+
 def verify_cloudinary_webhook(payload: bytes, signature_header: str) -> bool:
     """Verify Cloudinary's webhook notification signature.
 

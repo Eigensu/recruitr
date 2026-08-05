@@ -10,13 +10,16 @@ export function middleware(request: NextRequest) {
   // Onboarding: requires a cookie but should not bounce authenticated users away.
   const isOnboarding = pathname.startsWith("/onboarding");
 
+  // Public form: requires no authentication
+  const isPublicForm = pathname.startsWith("/form");
+
   // Already logged in → don't show auth pages again
   if (token && isAuthPage) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // Not logged in → block all non-auth, non-onboarding pages
-  if (!token && !isAuthPage && !isOnboarding) {
+  // Not logged in → block all non-auth, non-onboarding, non-public pages
+  if (!token && !isAuthPage && !isOnboarding && !isPublicForm) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 

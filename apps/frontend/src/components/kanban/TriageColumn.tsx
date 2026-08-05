@@ -2,23 +2,23 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import type { CandidateCard, CandidateStatus } from "@/types";
+import type { CandidateCard, LegacyCandidateStatus } from "@/types";
 import TriageCard from "./TriageCard";
 
 interface Props {
-  readonly id: CandidateStatus;
+  readonly id: LegacyCandidateStatus;
   readonly label: string;
   readonly color: string;
   readonly cards: CandidateCard[];
 }
 
-const HEADER_ACCENT: Record<CandidateStatus, string> = {
+const HEADER_ACCENT: Record<LegacyCandidateStatus, string> = {
   pending: "text-amber-400 border-amber-500/30 bg-amber-500/5",
   accepted: "text-emerald-400 border-emerald-500/30 bg-emerald-500/5",
   rejected: "text-red-400 border-red-500/30 bg-red-500/5",
 };
 
-const HEADER_DOT: Record<CandidateStatus, string> = {
+const HEADER_DOT: Record<LegacyCandidateStatus, string> = {
   pending: "bg-amber-400",
   accepted: "bg-emerald-400",
   rejected: "bg-red-400",

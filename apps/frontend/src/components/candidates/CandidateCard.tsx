@@ -10,6 +10,8 @@ interface CandidateCardProps {
   onClick: () => void;
   isMaintainer?: boolean;
   onDelete?: (id: string) => Promise<void>;
+  onApprove?: () => Promise<void>;
+  onReject?: () => Promise<void>;
 }
 
 const PALETTES = [
@@ -37,17 +39,134 @@ export function getInitials(name: string) {
     .toUpperCase();
 }
 
+function CandidateAvatar({
+  palette,
+  initials,
+}: {
+  palette: { bg: string; text: string; border: string };
+  initials: string;
+}) {
+  return (
+    <div
+      className="size-10 rounded-xl shrink-0 flex items-center justify-center font-heading font-bold text-sm"
+      style={{
+        backgroundColor: palette.bg,
+        color: palette.text,
+        border: `1px solid ${palette.border}`,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
+  return (
+    <div className="flex-1 min-w-0 pt-0.5">
+      <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
+        {candidate.full_name}
+      </h3>
+      <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1.5 truncate">
+        <IconBriefcase className="size-3 shrink-0" />
+        <span className="truncate">
+          {candidate.current_role
+            ? `${candidate.current_role} · ${candidate.experience_years}y`
+            : candidate.previous_role
+              ? `${candidate.previous_role} · ${candidate.experience_years}y`
+              : candidate.previous_company
+                ? candidate.previous_company
+                : `Independent · ${candidate.experience_years}y`}
+        </span>
+      </p>
+      {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
+        <p className="text-[10px] text-text-muted mt-0.5 capitalize truncate">
+          {[
+            [candidate.city, candidate.area].filter(Boolean).join(" • "),
+            [candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
+              .filter(Boolean)
+              .join(" • "),
+          ]
+            .filter(Boolean)
+            .join(" | ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CandidateSkills({ skills }: { skills: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {skills.slice(0, 4).map((skill) => (
+        <span
+          key={skill}
+          className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+        >
+          {skill}
+        </span>
+      ))}
+      {skills.length > 4 && (
+        <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
+          +{skills.length - 4}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CandidateFooter({
+  email,
+  cvRef,
+  hasCvLink,
+}: {
+  email: string;
+  cvRef: { href?: string | null } | null;
+  hasCvLink: boolean;
+}) {
+  return (
+    <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <IconMail className="size-3.5 shrink-0 opacity-50" />
+        <span className="truncate">{email}</span>
+      </div>
+      {cvRef &&
+        (cvRef.href ? (
+          <a
+            href={cvRef.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-semibold text-yellow hover:opacity-80 transition-opacity"
+          >
+            {hasCvLink ? <IconLink className="size-3.5" /> : <IconFileText className="size-3.5" />}
+            CV
+          </a>
+        ) : (
+          <span
+            className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-medium opacity-40 cursor-default"
+            title="CV on file — not yet uploaded"
+          >
+            <IconFileText className="size-3.5" />
+            CV
+          </span>
+        ))}
+    </div>
+  );
+}
+
 export default function CandidateCard({
   candidate,
   onClick,
   isMaintainer,
   onDelete,
+  onApprove,
+  onReject,
 }: Readonly<CandidateCardProps>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
   const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isActioning, setIsActioning] = useState(false);
 
   async function handleDeleteClick(e: React.MouseEvent) {
     e.stopPropagation();
@@ -65,9 +184,30 @@ export default function CandidateCard({
     }
   }
 
+  async function handleApprove(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onApprove) return;
+    setIsActioning(true);
+    try {
+      await onApprove();
+    } finally {
+      setIsActioning(false);
+    }
+  }
+
+  async function handleReject(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!onReject) return;
+    setIsActioning(true);
+    try {
+      await onReject();
+    } finally {
+      setIsActioning(false);
+    }
+  }
+
   return (
     <div className="group relative w-full h-full">
-      {/* Full-card click target — sits behind content so the CV link stays on top */}
       <button
         type="button"
         onClick={onClick}
@@ -75,53 +215,13 @@ export default function CandidateCard({
         className="absolute inset-0 rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
       />
 
-      {/* Visual card — pointer-events-none so clicks fall through to the button above */}
       <div className="pointer-events-none relative flex flex-col h-full rounded-2xl bg-surface-panel border border-border overflow-hidden transition-all duration-200 group-hover:border-white/10 group-hover:-translate-y-px group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
-        {/* Palette accent bar */}
         <div className="h-0.5 shrink-0" style={{ backgroundColor: palette.text, opacity: 0.55 }} />
 
         <div className="flex flex-col h-full p-5 gap-4">
-          {/* Identity row */}
           <div className="flex items-start gap-3.5">
-            <div
-              className="size-10 rounded-xl shrink-0 flex items-center justify-center font-heading font-bold text-sm"
-              style={{
-                backgroundColor: palette.bg,
-                color: palette.text,
-                border: `1px solid ${palette.border}`,
-              }}
-            >
-              {initials}
-            </div>
-            <div className="flex-1 min-w-0 pt-0.5">
-              <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
-                {candidate.full_name}
-              </h3>
-              <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1.5 truncate">
-                <IconBriefcase className="size-3 shrink-0" />
-                <span className="truncate">
-                  {candidate.current_role
-                    ? `${candidate.current_role} · ${candidate.experience_years}y`
-                    : candidate.previous_role
-                      ? `${candidate.previous_role} · ${candidate.experience_years}y`
-                      : candidate.previous_company
-                        ? candidate.previous_company
-                        : `Independent · ${candidate.experience_years}y`}
-                </span>
-              </p>
-              {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
-                <p className="text-[10px] text-text-muted mt-0.5 capitalize truncate">
-                  {[
-                    [candidate.city, candidate.area].filter(Boolean).join(" • "),
-                    [candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
-                      .filter(Boolean)
-                      .join(" • "),
-                  ]
-                    .filter(Boolean)
-                    .join(" | ")}
-                </p>
-              )}
-            </div>
+            <CandidateAvatar palette={palette} initials={initials} />
+            <CandidateInfo candidate={candidate} />
             {isMaintainer && onDelete && (
               <div className="pointer-events-auto relative z-10 shrink-0">
                 {confirmDelete ? (
@@ -147,58 +247,37 @@ export default function CandidateCard({
             )}
           </div>
 
-          {/* Skills */}
-          <div className="flex flex-wrap gap-1.5">
-            {candidate.skills.slice(0, 4).map((skill) => (
-              <span
-                key={skill}
-                className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-              >
-                {skill}
-              </span>
-            ))}
-            {candidate.skills.length > 4 && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
-                +{candidate.skills.length - 4}
-              </span>
-            )}
-          </div>
+          {candidate.status !== "PENDING" && <CandidateSkills skills={candidate.skills} />}
 
-          {/* Contact footer */}
-          <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <IconMail className="size-3.5 shrink-0 opacity-50" />
-              <span className="truncate">{candidate.email}</span>
+          <CandidateFooter email={candidate.email} cvRef={cvRef} hasCvLink={!!candidate.cv_link} />
+
+          {isMaintainer && (onApprove || onReject) && (
+            <div className="mt-3 pt-3 border-t border-border/40 flex items-center gap-2">
+              {onApprove && (
+                <button
+                  type="button"
+                  disabled={isActioning}
+                  onClick={handleApprove}
+                  className="pointer-events-auto relative z-10 flex-1 rounded bg-green-500/10 py-1.5 text-xs font-semibold text-green-500 transition-colors hover:bg-green-500/20 disabled:opacity-50"
+                >
+                  Approve
+                </button>
+              )}
+              {onReject && (
+                <button
+                  type="button"
+                  disabled={isActioning}
+                  onClick={handleReject}
+                  className="pointer-events-auto relative z-10 flex-1 rounded bg-red-500/10 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              )}
             </div>
-            {cvRef &&
-              (cvRef.href ? (
-                <a
-                  href={cvRef.href}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-semibold text-yellow hover:opacity-80 transition-opacity"
-                >
-                  {candidate.cv_link ? (
-                    <IconLink className="size-3.5" />
-                  ) : (
-                    <IconFileText className="size-3.5" />
-                  )}
-                  CV
-                </a>
-              ) : (
-                <span
-                  className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-medium opacity-40 cursor-default"
-                  title="CV on file — not yet uploaded"
-                >
-                  <IconFileText className="size-3.5" />
-                  CV
-                </span>
-              ))}
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Click-away to cancel confirm state */}
       {confirmDelete && (
         <button
           type="button"

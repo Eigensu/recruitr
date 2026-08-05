@@ -13,6 +13,7 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
   if (filters.city) params.set("city", filters.city);
   if (filters.gender) params.set("gender", filters.gender);
+  if (filters.status) params.set("status", filters.status);
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
@@ -103,6 +104,26 @@ export async function clientConfirmResume(
   return res.json();
 }
 
+export async function clientApproveCandidate(id: string): Promise<ApiCandidate> {
+  const res = await fetch(`${API_URL}/api/v1/candidates/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function clientRejectCandidate(id: string): Promise<ApiCandidate> {
+  const res = await fetch(`${API_URL}/api/v1/candidates/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function clientDeleteCandidate(id: string): Promise<void> {
   const res = await fetch(`${API_URL}/api/v1/candidates/${id}`, {
     method: "DELETE",
@@ -117,6 +138,15 @@ export async function clientBulkUpload(files: File[]): Promise<BulkUploadResult>
   const res = await fetch(`${API_URL}/api/v1/candidates/bulk-upload`, {
     method: "POST",
     credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function clientPublicApply(formData: FormData): Promise<ApiCandidate> {
+  const res = await fetch(`${API_URL}/api/v1/public/apply`, {
+    method: "POST",
     body: formData,
   });
   if (!res.ok) throw new Error(await res.text());
