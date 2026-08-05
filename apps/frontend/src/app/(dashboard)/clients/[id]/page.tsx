@@ -137,19 +137,301 @@ function AuthorizedUsersPanel({
   );
 }
 
-export default function ClientDetailsPage() {
-  const { id } = useParams() as { id: string };
-  const router = useRouter();
+/** The Company Info tab: the detail grid, its edit form and the rollup stats.
+ *
+ * Split out of ClientDetailsPage to bring that component's cognitive
+ * complexity back in range — eight `isEditing ? input : text` branches lived
+ * here, on top of the page's own branching for loading, load failure, active
+ * tab and maintainer rights.
+ */
+function CompanyInfoPanel({
+  client,
+  isEditing,
+  editForm,
+  setEditForm,
+  saving,
+  onCancel,
+  onSave,
+  userCount,
+}: Readonly<{
+  client: Client;
+  isEditing: boolean;
+  editForm: Partial<Client>;
+  setEditForm: React.Dispatch<React.SetStateAction<Partial<Client>>>;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+  userCount: number;
+}>) {
+  return (
+    <div className="p-6">
+      <h3 className="text-lg font-bold text-text-primary mb-4">Company Details</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+        {/* Field pairs */}
+        <div className="space-y-1">
+          <label htmlFor="client-name" className="text-sm font-medium text-text-secondary">
+            Company Name
+          </label>
+          {isEditing ? (
+            <input
+              id="client-name"
+              type="text"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary font-medium">{client.name}</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="client-city" className="text-sm font-medium text-text-secondary">
+            City
+          </label>
+          {isEditing ? (
+            <input
+              id="client-city"
+              type="text"
+              value={editForm.city ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">{client.city || "—"}</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="client-industry" className="text-sm font-medium text-text-secondary">
+            Industry
+          </label>
+          {isEditing ? (
+            <input
+              id="client-industry"
+              type="text"
+              value={editForm.industry ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">{client.industry || "—"}</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="client-website" className="text-sm font-medium text-text-secondary">
+            Website
+          </label>
+          {isEditing ? (
+            <input
+              id="client-website"
+              type="text"
+              value={editForm.website ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">{client.website || "—"}</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label
+            htmlFor="client-contact_person"
+            className="text-sm font-medium text-text-secondary"
+          >
+            Contact Person
+          </label>
+          {isEditing ? (
+            <input
+              id="client-contact_person"
+              type="text"
+              value={editForm.contact_person ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">{client.contact_person || "—"}</p>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="client-contact_email" className="text-sm font-medium text-text-secondary">
+            Contact Email
+          </label>
+          {isEditing ? (
+            <input
+              id="client-contact_email"
+              type="email"
+              value={editForm.contact_email ?? ""}
+              onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">{client.contact_email || "—"}</p>
+          )}
+        </div>
+
+        <div className="space-y-1 md:col-span-2">
+          <label
+            htmlFor="client-allowed_domains"
+            className="text-sm font-medium text-text-secondary"
+          >
+            Authorized Domains
+          </label>
+          {isEditing ? (
+            <input
+              id="client-allowed_domains"
+              type="text"
+              value={editForm.allowed_domains?.join(", ") || ""}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  allowed_domains: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="@company.com, @subsidiary.com"
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">
+              {client.allowed_domains?.length ? client.allowed_domains.join(", ") : "—"}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-1 md:col-span-2">
+          <label
+            htmlFor="client-allowed_emails"
+            className="text-sm font-medium text-text-secondary"
+          >
+            Authorized Emails
+          </label>
+          {isEditing ? (
+            <input
+              id="client-allowed_emails"
+              type="text"
+              value={editForm.allowed_emails?.join(", ") || ""}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  allowed_emails: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="ceo@other.com, hr@company.com"
+              className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
+            />
+          ) : (
+            <p className="text-text-primary">
+              {client.allowed_emails?.length ? client.allowed_emails.join(", ") : "—"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {isEditing && (
+        <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-border">
+          <button
+            type="button"
+            onClick={() => onCancel()}
+            className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-surface-2 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="px-4 py-2 bg-navy dark:bg-yellow dark:text-navy text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      )}
+
+      {!isEditing && (
+        <div className="mt-8 pt-6 border-t border-border grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold text-navy dark:text-yellow">{client.position_count}</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
+              Positions
+            </p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-navy dark:text-yellow">
+              {client.candidate_count}
+            </p>
+            <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
+              Candidates
+            </p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-navy dark:text-yellow">{userCount}</p>
+            <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
+              Users
+            </p>
+          </div>
+          <div className="text-left flex flex-col justify-center">
+            <p className="text-xs text-text-muted">
+              Created:{" "}
+              {client.created_at
+                ? new Date(client.created_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "—"}
+            </p>
+            {client.created_by_id && (
+              <p className="text-[10px] text-text-muted mt-0.5 truncate max-w-[150px]">
+                By: {client.created_by_id}
+              </p>
+            )}
+            <p className="text-xs text-text-muted mt-2">
+              Updated:{" "}
+              {client.updated_at
+                ? new Date(client.updated_at).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "—"}
+            </p>
+            {client.updated_by_id && (
+              <p className="text-[10px] text-text-muted mt-0.5 truncate max-w-[150px]">
+                By: {client.updated_by_id}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** All data loading and mutations for the client detail page.
+ *
+ * Separated from the component because six async handlers, each with its own
+ * guard clauses and try/catch, counted toward the component's cognitive
+ * complexity on top of its rendering branches. Keeping fetch-and-mutate here
+ * leaves the page to decide what to draw.
+ */
+function useClientDetails(id: string) {
   const apiFetch = useApiFetch();
   const toast = useToast();
-  const { isMaintainer } = useCurrentUser();
 
   const [client, setClient] = useState<Client | null>(null);
   const [users, setUsers] = useState<ClientUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [activeTab, setActiveTab] = useState<"info" | "users">("info");
 
   // Editing state for Company Info
   const [isEditing, setIsEditing] = useState(false);
@@ -278,6 +560,60 @@ export default function ClientDetailsPage() {
     }
   }
 
+  return {
+    client,
+    users,
+    isLoading,
+    loadError,
+    isEditing,
+    setIsEditing,
+    editForm,
+    setEditForm,
+    saving,
+    isInviteModalOpen,
+    setIsInviteModalOpen,
+    inviteEmail,
+    setInviteEmail,
+    inviteRole,
+    setInviteRole,
+    inviting,
+    startEdit,
+    saveEdit,
+    handleArchiveToggle,
+    handleInviteUser,
+    handleRemoveUser,
+  };
+}
+
+export default function ClientDetailsPage() {
+  const { id } = useParams() as { id: string };
+  const router = useRouter();
+  const { isMaintainer } = useCurrentUser();
+  const [activeTab, setActiveTab] = useState<"info" | "users">("info");
+  const {
+    client,
+    users,
+    isLoading,
+    loadError,
+    isEditing,
+    setIsEditing,
+    editForm,
+    setEditForm,
+    saving,
+    isInviteModalOpen,
+    setIsInviteModalOpen,
+    inviteEmail,
+    setInviteEmail,
+    inviteRole,
+    setInviteRole,
+    inviting,
+    startEdit,
+    saveEdit,
+    handleArchiveToggle,
+    handleInviteUser,
+    handleRemoveUser,
+  } = useClientDetails(id);
+
   if (isLoading) {
     return (
       <main className="mx-auto w-full max-w-5xl p-4 sm:p-6 lg:p-8 animate-in fade-in">
@@ -378,264 +714,16 @@ export default function ClientDetailsPage() {
       {/* Tab Content */}
       <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
         {activeTab === "info" && (
-          <div className="p-6">
-            <h3 className="text-lg font-bold text-text-primary mb-4">Company Details</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              {/* Field pairs */}
-              <div className="space-y-1">
-                <label htmlFor="client-name" className="text-sm font-medium text-text-secondary">
-                  Company Name
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-name"
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary font-medium">{client.name}</p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="client-city" className="text-sm font-medium text-text-secondary">
-                  City
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-city"
-                    type="text"
-                    value={editForm.city ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">{client.city || "—"}</p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label
-                  htmlFor="client-industry"
-                  className="text-sm font-medium text-text-secondary"
-                >
-                  Industry
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-industry"
-                    type="text"
-                    value={editForm.industry ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">{client.industry || "—"}</p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="client-website" className="text-sm font-medium text-text-secondary">
-                  Website
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-website"
-                    type="text"
-                    value={editForm.website ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">{client.website || "—"}</p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label
-                  htmlFor="client-contact_person"
-                  className="text-sm font-medium text-text-secondary"
-                >
-                  Contact Person
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-contact_person"
-                    type="text"
-                    value={editForm.contact_person ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, contact_person: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">{client.contact_person || "—"}</p>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label
-                  htmlFor="client-contact_email"
-                  className="text-sm font-medium text-text-secondary"
-                >
-                  Contact Email
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-contact_email"
-                    type="email"
-                    value={editForm.contact_email ?? ""}
-                    onChange={(e) => setEditForm({ ...editForm, contact_email: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">{client.contact_email || "—"}</p>
-                )}
-              </div>
-
-              <div className="space-y-1 md:col-span-2">
-                <label
-                  htmlFor="client-allowed_domains"
-                  className="text-sm font-medium text-text-secondary"
-                >
-                  Authorized Domains
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-allowed_domains"
-                    type="text"
-                    value={editForm.allowed_domains?.join(", ") || ""}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        allowed_domains: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="@company.com, @subsidiary.com"
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">
-                    {client.allowed_domains?.length ? client.allowed_domains.join(", ") : "—"}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1 md:col-span-2">
-                <label
-                  htmlFor="client-allowed_emails"
-                  className="text-sm font-medium text-text-secondary"
-                >
-                  Authorized Emails
-                </label>
-                {isEditing ? (
-                  <input
-                    id="client-allowed_emails"
-                    type="text"
-                    value={editForm.allowed_emails?.join(", ") || ""}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        allowed_emails: e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean),
-                      })
-                    }
-                    placeholder="ceo@other.com, hr@company.com"
-                    className="w-full px-3 py-1.5 border border-border rounded-md bg-surface text-sm"
-                  />
-                ) : (
-                  <p className="text-text-primary">
-                    {client.allowed_emails?.length ? client.allowed_emails.join(", ") : "—"}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {isEditing && (
-              <div className="mt-8 flex justify-end gap-3 pt-6 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-surface-2 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveEdit}
-                  disabled={saving}
-                  className="px-4 py-2 bg-navy dark:bg-yellow dark:text-navy text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            )}
-
-            {!isEditing && (
-              <div className="mt-8 pt-6 border-t border-border grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-navy dark:text-yellow">
-                    {client.position_count}
-                  </p>
-                  <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
-                    Positions
-                  </p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-navy dark:text-yellow">
-                    {client.candidate_count}
-                  </p>
-                  <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
-                    Candidates
-                  </p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-navy dark:text-yellow">{users.length}</p>
-                  <p className="text-xs text-text-secondary uppercase tracking-wider font-semibold">
-                    Users
-                  </p>
-                </div>
-                <div className="text-left flex flex-col justify-center">
-                  <p className="text-xs text-text-muted">
-                    Created:{" "}
-                    {client.created_at
-                      ? new Date(client.created_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })
-                      : "—"}
-                  </p>
-                  {client.created_by_id && (
-                    <p className="text-[10px] text-text-muted mt-0.5 truncate max-w-[150px]">
-                      By: {client.created_by_id}
-                    </p>
-                  )}
-                  <p className="text-xs text-text-muted mt-2">
-                    Updated:{" "}
-                    {client.updated_at
-                      ? new Date(client.updated_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })
-                      : "—"}
-                  </p>
-                  {client.updated_by_id && (
-                    <p className="text-[10px] text-text-muted mt-0.5 truncate max-w-[150px]">
-                      By: {client.updated_by_id}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          <CompanyInfoPanel
+            client={client}
+            isEditing={isEditing}
+            editForm={editForm}
+            setEditForm={setEditForm}
+            saving={saving}
+            onCancel={() => setIsEditing(false)}
+            onSave={saveEdit}
+            userCount={users.length}
+          />
         )}
 
         {activeTab === "users" && (
