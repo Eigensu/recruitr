@@ -15,9 +15,9 @@ export default function NotificationPreferences() {
   };
   const [localPrefs, setLocalPrefs] = useState<{ [key: string]: boolean } | null>(null);
 
-  const preferences = localPrefs || {
+  const preferences = localPrefs ?? {
     ...defaultPrefs,
-    ...(user?.notification_preferences || {}),
+    ...user?.notification_preferences,
   };
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -53,14 +53,20 @@ export default function NotificationPreferences() {
         <p className="text-sm text-text-secondary mt-1">Manage what alerts you receive.</p>
       </div>
       <div className="md:col-span-2 max-w-md flex flex-col gap-4">
-        <label className="flex items-center justify-between cursor-pointer group">
+        <div className="flex items-center justify-between group">
           <div>
-            <p className="text-sm font-medium text-text-primary">Email Alerts</p>
+            <label
+              htmlFor="pref-email_alerts"
+              className="block text-sm font-medium text-text-primary cursor-pointer"
+            >
+              Email Alerts
+            </label>
             <p className="text-xs text-text-muted mt-0.5">Receive general alerts to your inbox.</p>
           </div>
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-email_alerts"
               name="email_alerts"
               checked={preferences.email_alerts}
               onChange={() => handleToggle("email_alerts")}
@@ -78,16 +84,22 @@ export default function NotificationPreferences() {
               }`}
             ></div>
           </div>
-        </label>
+        </div>
 
-        <label className="flex items-center justify-between cursor-pointer group">
+        <div className="flex items-center justify-between group">
           <div>
-            <p className="text-sm font-medium text-text-primary">New Candidate Activity</p>
+            <label
+              htmlFor="pref-new_candidate"
+              className="block text-sm font-medium text-text-primary cursor-pointer"
+            >
+              New Candidate Activity
+            </label>
             <p className="text-xs text-text-muted mt-0.5">Alerts when a candidate changes stage.</p>
           </div>
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-new_candidate"
               name="new_candidate"
               checked={preferences.new_candidate}
               onChange={() => handleToggle("new_candidate")}
@@ -107,11 +119,16 @@ export default function NotificationPreferences() {
               }`}
             ></div>
           </div>
-        </label>
+        </div>
 
-        <label className="flex items-center justify-between cursor-pointer group">
+        <div className="flex items-center justify-between group">
           <div>
-            <p className="text-sm font-medium text-text-primary">Weekly Digest</p>
+            <label
+              htmlFor="pref-weekly_digest"
+              className="block text-sm font-medium text-text-primary cursor-pointer"
+            >
+              Weekly Digest
+            </label>
             <p className="text-xs text-text-muted mt-0.5">
               A summary of activity sent every Monday.
             </p>
@@ -119,6 +136,7 @@ export default function NotificationPreferences() {
           <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
             <input
               type="checkbox"
+              id="pref-weekly_digest"
               name="weekly_digest"
               checked={preferences.weekly_digest}
               onChange={() => handleToggle("weekly_digest")}
@@ -138,7 +156,7 @@ export default function NotificationPreferences() {
               }`}
             ></div>
           </div>
-        </label>
+        </div>
 
         {saved && (
           <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">

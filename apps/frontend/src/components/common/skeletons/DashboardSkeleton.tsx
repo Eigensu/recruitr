@@ -1,6 +1,10 @@
 import React from "react";
 import { Skeleton } from "./Skeleton";
 
+// Fixed identities for the placeholders. Keying by map index ties each element
+// to a position rather than to a thing.
+const KPI_SKELETON_KEYS = ["kpi-a", "kpi-b", "kpi-c", "kpi-d"];
+
 export default function DashboardSkeleton() {
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
@@ -11,8 +15,8 @@ export default function DashboardSkeleton() {
 
       {/* KPI Cards Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-32 w-full rounded-2xl" />
+        {KPI_SKELETON_KEYS.map((key) => (
+          <Skeleton key={key} className="h-32 w-full rounded-2xl" />
         ))}
       </div>
 
