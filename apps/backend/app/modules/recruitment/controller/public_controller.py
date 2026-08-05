@@ -210,30 +210,4 @@ async def public_apply(
             status.HTTP_409_CONFLICT, "An application with this email already exists"
         ) from exc
 
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=0,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        source_channel=doc.source_channel,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    return CandidateResponse.from_document(doc)

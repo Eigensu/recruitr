@@ -6,6 +6,7 @@ import {
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
+  ActivityFeed,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
 import {

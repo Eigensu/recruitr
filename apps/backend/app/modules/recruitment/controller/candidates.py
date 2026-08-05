@@ -175,32 +175,8 @@ async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
 
 
 def _build_candidate_response(doc: Candidate, mappings_count: int = 0) -> CandidateResponse:
-    return CandidateResponse(
-        id=str(doc.id),
-        full_name=doc.full_name,
-        email=doc.email,
-        phone=doc.phone,
-        previous_company=doc.previous_company,
-        experience_years=doc.experience_years,
-        education_level=doc.education_level,
-        city=doc.city,
-        area=doc.area,
-        gender=doc.gender,
-        age=doc.age,
-        skills=doc.skills,
-        tags=doc.tags,
-        preferred_train_line=doc.preferred_train_line,
-        cv_link=doc.cv_link,
-        resume_url=doc.resume_url,
-        current_stage=doc.current_stage,
-        mappings_count=mappings_count,
-        current_role=doc.current_role,
-        salary=doc.salary,
-        notes=doc.notes,
-        source=doc.source,
-        status=doc.status,
-        created_at=doc.created_at,
-    )
+    """Thin alias for the shared builder, kept for the call sites below."""
+    return CandidateResponse.from_document(doc, mappings_count)
 
 
 # ── Tags (must be before /{candidate_id} to avoid route conflict) ─────────────
