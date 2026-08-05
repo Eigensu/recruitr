@@ -6,6 +6,7 @@ import {
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
+  ActivityFeed,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
 import {
@@ -16,6 +17,7 @@ import {
   getRecruiterDashboardData,
 } from "@/lib/dashboard-data";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { getUserServer } from "@/lib/api/auth.server";
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -56,7 +58,16 @@ async function ClientProfilesSection() {
   return <ClientProfilesTable rows={rows} />;
 }
 
-export default function DashboardPage() {
+async function ActivityFeedSection() {
+  const { activity } = await getDashboardOverview();
+
+  return <ActivityFeed items={activity} />;
+}
+
+export default async function DashboardPage() {
+  const user = await getUserServer();
+  const isClient = user?.role === "client";
+
   return (
     <div
       className="min-h-full px-4 py-5 sm:px-6 lg:px-8"
@@ -70,13 +81,13 @@ export default function DashboardPage() {
                 className="text-xs font-bold uppercase tracking-normal"
                 style={{ color: "var(--color-text-secondary)" }}
               >
-                Recruitment command center
+                {isClient ? "Client Portal" : "Recruitment command center"}
               </p>
               <h1
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                Recruitment Dashboard
+                {isClient ? "Client Dashboard" : "Recruitment Dashboard"}
               </h1>
             </div>
             <div className="mt-1 shrink-0">
@@ -98,14 +109,22 @@ export default function DashboardPage() {
           <Suspense fallback={<PanelSkeleton rows={2} />}>
             <AnalyticsSection />
           </Suspense>
-          <Suspense fallback={<PanelSkeleton rows={5} />}>
-            <RecruiterLineSection />
-          </Suspense>
+          {isClient ? (
+            <Suspense fallback={<PanelSkeleton rows={5} />}>
+              <ActivityFeedSection />
+            </Suspense>
+          ) : (
+            <Suspense fallback={<PanelSkeleton rows={5} />}>
+              <RecruiterLineSection />
+            </Suspense>
+          )}
         </div>
 
-        <Suspense fallback={<PanelSkeleton rows={8} />}>
-          <ClientProfilesSection />
-        </Suspense>
+        {!isClient && (
+          <Suspense fallback={<PanelSkeleton rows={8} />}>
+            <ClientProfilesSection />
+          </Suspense>
+        )}
       </div>
     </div>
   );

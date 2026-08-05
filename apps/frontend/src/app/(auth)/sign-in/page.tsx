@@ -1,18 +1,31 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useApiFetch } from "@/lib/api";
 import "../auth.css";
 
-export default function SignInPage() {
+/** Turn an ?error= code from the OAuth callback into something readable. */
+function describeAuthError(code: string | null): string {
+  if (code === "not_registered") {
+    return "Your organization is not registered with Binge Consulting. Please contact Binge Consulting to request access.";
+  }
+  return code ? `Authentication error: ${code}` : "";
+}
+
+function SignInContent() {
   const router = useRouter();
   const apiFetch = useApiFetch();
+  const searchParams = useSearchParams();
+
+  const initErr = searchParams.get("error");
+  const initialErrorState = describeAuthError(initErr);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialErrorState);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -305,5 +318,19 @@ export default function SignInPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-dvh items-center justify-center bg-white">
+          <span className="spinner border-navy" />
+        </div>
+      }
+    >
+      <SignInContent />
+    </Suspense>
   );
 }

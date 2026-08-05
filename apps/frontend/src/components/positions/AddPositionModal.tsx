@@ -10,6 +10,7 @@ import {
   type PositionCreatePayload,
   type PositionUpdatePayload,
 } from "@/lib/api/positions";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createClient } from "@/lib/api/clients";
 import type { ApiClientOption, ApiPosition, ApiPositionFilters } from "@/types";
 
@@ -65,6 +66,7 @@ export default function AddPositionModal({
   onClientCreated,
 }: Readonly<Props>) {
   const apiFetch = useApiFetch();
+  const { isClient } = useCurrentUser();
   const isEditing = Boolean(position);
 
   const [form, setForm] = useState(position ? positionToForm(position) : EMPTY_FORM);
@@ -222,110 +224,112 @@ export default function AddPositionModal({
               )}
 
               <form id="add-position-form" onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label htmlFor="pos-client" className={LABEL_BASE}>
-                      Client *
-                    </label>
-                    {!isEditing && !showClientForm && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowClientForm(true);
-                          setClientError(null);
-                        }}
-                        className="flex items-center gap-1 text-xs font-semibold text-yellow hover:text-yellow-dark transition-colors cursor-pointer"
+                {!isClient && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="pos-client" className={LABEL_BASE}>
+                        Client *
+                      </label>
+                      {!isEditing && !showClientForm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowClientForm(true);
+                            setClientError(null);
+                          }}
+                          className="flex items-center gap-1 text-xs font-semibold text-yellow hover:text-yellow-dark transition-colors cursor-pointer"
+                        >
+                          <IconPlus className="size-3.5" /> New client
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="px-3 py-2 text-sm rounded-lg bg-(--color-surface) border border-border text-gray-400">
+                        {position?.client_name}
+                      </div>
+                    ) : (
+                      <select
+                        id="pos-client"
+                        required
+                        value={form.clientId}
+                        onChange={(e) => setForm({ ...form, clientId: e.target.value })}
+                        className={INPUT_CLS}
                       >
-                        <IconPlus className="size-3.5" /> New client
-                      </button>
+                        <option value="">Select client…</option>
+                        {clientOptions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Inline client creation — the new client is saved to the brand's
+                      list, so it stays in this dropdown for everyone afterwards. */}
+                    {!isEditing && showClientForm && (
+                      <div className="mt-2 p-3 rounded-lg bg-(--color-surface) border border-border space-y-2">
+                        <p className="text-xs text-gray-400">
+                          Adds a client to your brand&apos;s list permanently.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            aria-label="New client name"
+                            placeholder="Client name *"
+                            value={clientForm.name}
+                            onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                // The wrapping <form> submits the position, not this.
+                                e.preventDefault();
+                                void handleCreateClient();
+                              }
+                              if (e.key === "Escape") closeClientForm();
+                            }}
+                            className={INPUT_CLS}
+                          />
+                          <input
+                            type="text"
+                            aria-label="New client city"
+                            placeholder="City (optional)"
+                            value={clientForm.city}
+                            onChange={(e) => setClientForm({ ...clientForm, city: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void handleCreateClient();
+                              }
+                              if (e.key === "Escape") closeClientForm();
+                            }}
+                            className={INPUT_CLS}
+                          />
+                        </div>
+                        {clientError && <p className="text-xs text-red-400">{clientError}</p>}
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={closeClientForm}
+                            disabled={creatingClient}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCreateClient}
+                            disabled={creatingClient || !clientForm.name.trim()}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-xs font-bold transition-all disabled:opacity-60 cursor-pointer"
+                          >
+                            <IconCheck className="size-3.5" />
+                            {creatingClient ? "Adding…" : "Add client"}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
-
-                  {isEditing ? (
-                    <div className="px-3 py-2 text-sm rounded-lg bg-(--color-surface) border border-border text-gray-400">
-                      {position?.client_name}
-                    </div>
-                  ) : (
-                    <select
-                      id="pos-client"
-                      required
-                      value={form.clientId}
-                      onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-                      className={INPUT_CLS}
-                    >
-                      <option value="">Select client…</option>
-                      {clientOptions.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {/* Inline client creation — the new client is saved to the brand's
-                      list, so it stays in this dropdown for everyone afterwards. */}
-                  {!isEditing && showClientForm && (
-                    <div className="mt-2 p-3 rounded-lg bg-(--color-surface) border border-border space-y-2">
-                      <p className="text-xs text-gray-400">
-                        Adds a client to your brand&apos;s list permanently.
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          autoFocus
-                          type="text"
-                          aria-label="New client name"
-                          placeholder="Client name *"
-                          value={clientForm.name}
-                          onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              // The wrapping <form> submits the position, not this.
-                              e.preventDefault();
-                              void handleCreateClient();
-                            }
-                            if (e.key === "Escape") closeClientForm();
-                          }}
-                          className={INPUT_CLS}
-                        />
-                        <input
-                          type="text"
-                          aria-label="New client city"
-                          placeholder="City (optional)"
-                          value={clientForm.city}
-                          onChange={(e) => setClientForm({ ...clientForm, city: e.target.value })}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              void handleCreateClient();
-                            }
-                            if (e.key === "Escape") closeClientForm();
-                          }}
-                          className={INPUT_CLS}
-                        />
-                      </div>
-                      {clientError && <p className="text-xs text-red-400">{clientError}</p>}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={closeClientForm}
-                          disabled={creatingClient}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCreateClient}
-                          disabled={creatingClient || !clientForm.name.trim()}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-xs font-bold transition-all disabled:opacity-60 cursor-pointer"
-                        >
-                          <IconCheck className="size-3.5" />
-                          {creatingClient ? "Adding…" : "Add client"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
 
                 <div>
                   <label htmlFor="pos-role" className={LABEL_CLS}>
