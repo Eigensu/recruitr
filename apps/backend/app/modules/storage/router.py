@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 
-from app.dependencies import get_current_user
+from app.dependencies import deny_clients, get_current_user
 from app.modules.auth.schemas import TokenPayload
 from app.modules.storage import service
 from app.modules.storage.schemas import CloudinarySignatureResponse
@@ -10,13 +10,20 @@ from app.modules.storage.schemas import CloudinarySignatureResponse
 router = APIRouter()
 
 
-@router.get("/sign", response_model=CloudinarySignatureResponse)
+@router.get(
+    "/sign",
+    response_model=CloudinarySignatureResponse,
+    dependencies=[Depends(deny_clients)],
+)
 async def get_upload_signature(
     _: TokenPayload = Depends(get_current_user),  # noqa: B008
 ) -> CloudinarySignatureResponse:
     """Generate a signed payload so the frontend can upload directly to Cloudinary.
 
     The file bytes never touch the FastAPI server — only the signature is generated here.
+
+    Staff only. This hands the caller a credential to write into the agency's
+    Cloudinary account, which a client account has no reason to hold.
     """
     sig_data = service.generate_upload_signature()
     return CloudinarySignatureResponse(**sig_data)

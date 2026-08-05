@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, require_admin
+from app.dependencies import get_tenant, get_viewer, require_admin
 from app.modules.recruitment.models import Client, ClientUser, Mapping, Position
 from app.modules.recruitment.repository import generate_client_code
 from app.modules.recruitment.schemas import (
@@ -43,6 +43,7 @@ from app.modules.recruitment.schemas import (
 router = APIRouter()
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
+_Viewer = Annotated[TenantScope, Depends(get_viewer)]
 _IncludeArchived = Annotated[bool, Query()]
 # Gate that only lets admins through; raises 403 otherwise.
 _RequireAdmin = Depends(require_admin)
@@ -261,6 +262,26 @@ async def list_clients(tenant: _Tenant, include_archived: _IncludeArchived = Fal
 
 
 # ── Detail ─────────────────────────────────────────────────────────────────────
+
+
+# Registered before /{client_id} so the literal wins over the path parameter —
+# otherwise "me" is parsed as an id and 400s on the ObjectId conversion.
+@router.get("/me", response_model=ClientResponse)
+async def get_my_client(viewer: _Viewer):
+    """The signed-in client's own company — the Company Profile page.
+
+    Staff have no single company, so this is client-only rather than returning
+    something arbitrary for them.
+    """
+    if viewer.client_id is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only client accounts have a company profile.",
+        )
+    doc = await Client.find_one({"_id": viewer.client_id, "brand_id": viewer.brand_id})
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_NOT_FOUND)
+    return await _with_counts(viewer, doc)
 
 
 @router.get("/{client_id}", response_model=ClientResponse)

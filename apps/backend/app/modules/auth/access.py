@@ -61,6 +61,31 @@ async def may_hold_staff_account(email: str) -> bool:
     return is_agency_email(email) or await has_provisioned_employee(email)
 
 
+async def find_client_authorization(email: str):
+    """The active ClientUser grant for this address, if an admin created one.
+
+    Returns the row rather than a bool: callers need its client_id to record the
+    link at login. Revoked grants (is_active False) do not match, so revoking
+    one shuts the account out on its next sign-in.
+    """
+    from app.modules.recruitment.models import ClientUser
+
+    return await ClientUser.find_one({"email": email.strip().lower(), "is_active": True})
+
+
+async def may_sign_in(email: str) -> tuple[bool, bool]:
+    """(allowed, is_client) for an address arriving at sign-up or OAuth.
+
+    Staff is checked first: an agency address that also appears on a client's
+    contact list stays staff rather than being demoted to a client account.
+    """
+    if await may_hold_staff_account(email):
+        return True, False
+    if await find_client_authorization(email) is not None:
+        return True, True
+    return False, False
+
+
 def warn_if_unconfigured() -> None:
     """Log once at startup if no staff domain is set.
 

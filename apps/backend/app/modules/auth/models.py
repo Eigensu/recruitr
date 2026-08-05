@@ -14,11 +14,17 @@ class UserRole(str, Enum):
     - employee: regular recruiter; appears in the leaderboard and earns points.
     - maintainer: company manager (CEO); manages teams but is not a recruiter.
     - admin: full system access (single owner). Not a recruiter.
+    - client: an employer's own contact. NOT part of the hierarchy above — an
+      outsider who sees only their own company's positions and pipeline, and
+      has no Employee record. get_tenant refuses this role outright, so every
+      staff endpoint denies it by default and access has to be granted one
+      endpoint at a time via get_viewer.
     """
 
     employee = "employee"
     maintainer = "maintainer"
     admin = "admin"
+    client = "client"
 
 
 class User(Document):

@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, get_viewer
 from app.modules.recruitment.enums import KANBAN_STAGES, TERMINAL_STAGES, PipelineStage
 from app.modules.recruitment.models import ActivityLog, Candidate, Mapping, Position
 from app.modules.recruitment.repository_impl import recompute_position_seats
@@ -32,12 +32,16 @@ from app.modules.recruitment.schemas import (
     StageMoveResponse,
     TenantScope,
 )
+from app.modules.recruitment.utils.scoping import scope_mapping_match
 
 router = APIRouter()
 
 # ── Annotated aliases ──────────────────────────────────────────────────────────
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
+# Staff or client. Only for reads that narrow their query by the scope.
+_Viewer = Annotated[TenantScope, Depends(get_viewer)]
+_ERR_POSITION_NOT_FOUND = "Position not found"
 
 # ── Frontend-facing DTOs (not part of the core recruitment schemas) ────────────
 
@@ -162,15 +166,21 @@ def _activity_type_for_stage(stage: PipelineStage) -> str:
 
 
 @router.get("/board")
-async def get_pipeline_board(tenant: _Tenant) -> PipelineBoard:
+async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
     """
     Fetch the Kanban board state for this brand.
     Uses a single aggregation with $lookup to avoid N+1 queries.
+
+    A client sees only their own employer's cards.
     """
     kanban_stage_values = [s.value for s in KANBAN_STAGES]
 
+    board_match = await scope_mapping_match(
+        viewer, {"brand_id": viewer.brand_id, "stage": {"$in": kanban_stage_values}}
+    )
+
     agg = [
-        {_MATCH: {"brand_id": tenant.brand_id, "stage": {"$in": kanban_stage_values}}},
+        {_MATCH: board_match},
         {
             _LOOKUP: {
                 "from": "candidates",
@@ -327,7 +337,7 @@ _LimitQ = Annotated[int, Query(ge=1, le=50)]
 
 @router.get("/filtered")
 async def get_filtered_pipeline(
-    tenant: _Tenant,
+    viewer: _Viewer,
     position_id: _PosId,
     recruiter_id: _OptStr = None,
     client_id: _OptStr = None,
@@ -339,7 +349,14 @@ async def get_filtered_pipeline(
     """Return all mapped candidates for a position grouped into 3 Kanban columns."""
     pos_oid = to_object_id(position_id, "position_id")
 
-    mapping_match: dict = {"brand_id": tenant.brand_id, "position_id": pos_oid}
+    # Confirm the position is one the caller may see before reading its
+    # pipeline; for staff this is the brand check, for a client also the
+    # employer check.
+    owns = await Position.find_one(viewer.scoped({"_id": pos_oid, "brand_id": viewer.brand_id}))
+    if not owns:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
+
+    mapping_match: dict = {"brand_id": viewer.brand_id, "position_id": pos_oid}
     if recruiter_id:
         mapping_match["employee_id"] = to_object_id(recruiter_id, "recruiter_id")
     if client_id:

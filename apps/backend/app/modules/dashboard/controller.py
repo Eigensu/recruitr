@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, get_viewer
 from app.modules.dashboard import service
 from app.modules.dashboard.schemas import (
     DashboardActivityPage,
@@ -28,6 +28,10 @@ router = APIRouter()
 # These aliases carry only the metadata (validation constraints, docs).
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
+# Staff or client. Only on endpoints whose every query honours client_id —
+# which rules out /activity (_activity_match ignores it, so a client would
+# see the whole brand's feed) and the employee/client roster endpoints.
+_Viewer = Annotated[TenantScope, Depends(get_viewer)]
 _EmployeeId = Annotated[str | None, Query()]
 _StartDate = Annotated[datetime | None, Query()]
 _EndDate = Annotated[datetime | None, Query()]
@@ -45,6 +49,12 @@ def _filters(
     client_id: str | None,
     pipeline_stage: PipelineStage | None,
 ) -> DashboardFilters:
+    # Every dashboard query is built from this one place, so pinning client_id
+    # here scopes the whole dashboard rather than each endpoint separately. It
+    # overrides the query parameter, not merges with it: a client asking for
+    # another employer's numbers gets their own.
+    if tenant.client_id is not None:
+        client_id = str(tenant.client_id)
     return DashboardFilters(
         brand_id=str(tenant.brand_id),
         employee_id=employee_id,
@@ -60,7 +70,7 @@ def _filters(
 
 @router.get("/overview")
 async def get_overview(
-    tenant: _Tenant,
+    tenant: _Viewer,
     employee_id: _EmployeeId = None,
     start_date: _StartDate = None,
     end_date: _EndDate = None,
@@ -74,7 +84,7 @@ async def get_overview(
 
 @router.get("/pipeline")
 async def get_pipeline(
-    tenant: _Tenant,
+    tenant: _Viewer,
     employee_id: _EmployeeId = None,
     start_date: _StartDate = None,
     end_date: _EndDate = None,

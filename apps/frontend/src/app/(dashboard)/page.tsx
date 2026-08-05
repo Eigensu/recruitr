@@ -6,7 +6,6 @@ import {
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
-  ActivityFeed,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
 import {
@@ -58,12 +57,6 @@ async function ClientProfilesSection() {
   return <ClientProfilesTable rows={rows} />;
 }
 
-async function ActivityFeedSection() {
-  const { activity } = await getDashboardOverview();
-
-  return <ActivityFeed items={activity} />;
-}
-
 export default async function DashboardPage() {
   const user = await getUserServer();
   const isClient = user?.role === "client";
@@ -105,15 +98,18 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
 
-        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
+        <div
+          className={`grid grid-cols-1 items-stretch gap-6 ${
+            isClient ? "" : "xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]"
+          }`}
+        >
           <Suspense fallback={<PanelSkeleton rows={2} />}>
             <AnalyticsSection />
           </Suspense>
-          {isClient ? (
-            <Suspense fallback={<PanelSkeleton rows={5} />}>
-              <ActivityFeedSection />
-            </Suspense>
-          ) : (
+          {/* No second panel for a client: the activity feed is brand-wide and
+              cannot be narrowed to one employer (ActivityLog has no client
+              link), and the recruiter chart is agency-internal. */}
+          {!isClient && (
             <Suspense fallback={<PanelSkeleton rows={5} />}>
               <RecruiterLineSection />
             </Suspense>

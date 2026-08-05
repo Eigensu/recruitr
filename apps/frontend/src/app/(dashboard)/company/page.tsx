@@ -9,7 +9,7 @@ import {
   IconMapPin,
   IconBriefcase,
 } from "@tabler/icons-react";
-import { useApiFetch } from "@/lib/api";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
 
 interface ClientProfile {
   id: string;
@@ -38,12 +38,11 @@ export default function CompanyProfilePage() {
   useEffect(() => {
     async function loadClient() {
       try {
-        const res = (await apiFetch("/api/v1/clients/me")) as Response;
-        if (!res.ok) throw new Error("Failed to load company profile");
-        const data = await res.json();
-        setClient(data);
+        // apiFetch returns the parsed body, not a Response — treating it as one
+        // made every load fail on `res.ok` being undefined.
+        setClient(await apiFetch<ClientProfile>("/api/v1/clients/me"));
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Unknown error");
+        setError(apiErrorMessage(err, "Failed to load company profile."));
       } finally {
         setLoading(false);
       }
