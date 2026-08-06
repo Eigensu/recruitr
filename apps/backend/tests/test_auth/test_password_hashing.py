@@ -31,7 +31,13 @@ def test_wrong_password_is_rejected() -> None:
 
 
 def test_hashes_are_salted() -> None:
-    assert get_password_hash(LEGACY_PASSWORD) != get_password_hash(LEGACY_PASSWORD)
+    """bcrypt draws a fresh salt per call, so the same password hashes twice
+    to two different digests that both still verify."""
+    first = get_password_hash(LEGACY_PASSWORD)
+    second = get_password_hash(LEGACY_PASSWORD)
+    assert first != second
+    assert verify_password(LEGACY_PASSWORD, first)
+    assert verify_password(LEGACY_PASSWORD, second)
 
 
 def test_existing_passlib_hashes_still_verify() -> None:
