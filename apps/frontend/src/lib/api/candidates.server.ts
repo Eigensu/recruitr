@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import type { ApiCandidate, CandidateFilters, PaginatedResponse } from "@/types";
+import type { ApiCandidate, CandidateFilters, PaginatedResponse, RecruiterOption } from "@/types";
 import { buildCandidateQuery } from "./candidates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -33,4 +33,10 @@ export async function getCandidates(
 
 export function getCandidateTags() {
   return serverFetch<string[]>("/api/v1/candidates/tags");
+}
+
+/** Recruiters in this brand, for the "added by" filter. */
+export async function getRecruiters(): Promise<RecruiterOption[]> {
+  const employees = await serverFetch<{ id: string; name: string }[]>("/api/v1/teams/employees");
+  return employees.map((e) => ({ id: e.id, name: e.name }));
 }

@@ -22,6 +22,7 @@ from app.modules.recruitment.models import (
     ActivityLog,
     Candidate,
     CandidateDocument,
+    CandidateEvent,
     Client,
     ClientUser,
     Counter,
@@ -63,6 +64,7 @@ async def init_db() -> None:
         Team,
         RecruiterTag,
         ActivityLog,
+        CandidateEvent,
         CandidateDocument,
         # Gamification
         RecruiterProfile,

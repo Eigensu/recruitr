@@ -6,6 +6,7 @@ Never call get_motor_collection() outside this module for domain writes.
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -19,12 +20,14 @@ from app.common.utils.object_id import to_object_id
 from app.modules.recruitment.enums import (
     TERMINAL_STAGES,
     ActivityType,
+    CandidateEventType,
     Decision,
     PipelineStage,
 )
 from app.modules.recruitment.models import (
     ActivityLog,
     Candidate,
+    CandidateEvent,
     Client,
     Counter,
     Employee,
@@ -33,6 +36,8 @@ from app.modules.recruitment.models import (
     StageEvent,
 )
 from app.modules.recruitment.schemas import TenantScope
+
+logger = logging.getLogger(__name__)
 
 # ── Atomic code generation ─────────────────────────────────────────────────────
 
@@ -207,6 +212,13 @@ async def create_mapping(
         ],
     )
     await mapping.insert()
+    await record_candidate_event(
+        scope=scope,
+        candidate_id=candidate_id,
+        event_type=CandidateEventType.mapped,
+        position=position,
+        to_stage=PipelineStage.sourced,
+    )
     return mapping
 
 
@@ -223,12 +235,15 @@ async def move_stage(
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
 
-    Appends a StageEvent to history and updates the denormalized candidate stage.
+    Appends a StageEvent to the mapping's history, records the permanent
+    candidate history entry, and updates the denormalized candidate stage.
     Does NOT handle gamification or cache invalidation — caller's responsibility.
     """
     now = datetime.now(UTC)
+    from_stage = PipelineStage(mapping.stage) if mapping.stage else None
     event = StageEvent(
         stage=new_stage,
+        from_stage=from_stage,
         decision=decision,
         by_employee_id=scope.employee_id,
         at=now,
@@ -247,6 +262,15 @@ async def move_stage(
     )
     mapping.stage = new_stage
     mapping.decision = decision
+
+    await record_candidate_event(
+        scope=scope,
+        candidate_id=mapping.candidate_id,
+        event_type=CandidateEventType.stage_moved,
+        position=await Position.get(mapping.position_id),
+        from_stage=from_stage,
+        to_stage=new_stage,
+    )
 
     # Denormalize onto candidate
     await update_candidate_current_stage(scope, mapping.candidate_id, new_stage)
@@ -293,6 +317,60 @@ async def link_employee_user(employee: Employee, user_id: PydanticObjectId) -> E
         )
         employee.user_id = user_id
     return employee
+
+
+# ── Candidate history ──────────────────────────────────────────────────────────
+
+
+async def record_candidate_event(
+    *,
+    scope: TenantScope,
+    candidate_id: PydanticObjectId,
+    event_type: CandidateEventType,
+    position: Position | None = None,
+    from_stage: PipelineStage | None = None,
+    to_stage: PipelineStage | None = None,
+    note: str | None = None,
+) -> CandidateEvent | None:
+    """Append one permanent entry to a candidate's employment history.
+
+    Best-effort by design: history is a record of a write that has already
+    happened, so failing to write it must never fail the stage move or the
+    mapping that prompted it. It is logged rather than swallowed — a systemic
+    failure here silently empties every candidate profile's history, which is
+    exactly the kind of thing that stays invisible until someone asks where
+    last quarter's placements went.
+    """
+    employee_name: str | None = None
+    if scope.employee_id is not None:
+        employee = await Employee.get(scope.employee_id)
+        employee_name = employee.name if employee else None
+
+    event = CandidateEvent(
+        brand_id=scope.brand_id,
+        candidate_id=candidate_id,
+        event_type=event_type,
+        employee_id=scope.employee_id,
+        employee_name=employee_name,
+        position_id=position.id if position else None,
+        position_code=position.code if position else None,
+        position_role=position.role if position else None,
+        client_id=position.client_id if position else None,
+        client_name=position.client_name if position else None,
+        from_stage=from_stage,
+        to_stage=to_stage,
+        note=note,
+    )
+    try:
+        await event.insert()
+    except Exception:
+        logger.exception(
+            "Candidate history write failed: candidate=%s event=%s",
+            candidate_id,
+            event_type.value,
+        )
+        return None
+    return event
 
 
 # ── Activity log ───────────────────────────────────────────────────────────────

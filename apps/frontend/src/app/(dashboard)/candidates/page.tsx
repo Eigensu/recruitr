@@ -1,12 +1,13 @@
-import { getCandidates, getCandidateTags } from "@/lib/api/candidates.server";
+import { getCandidates, getCandidateTags, getRecruiters } from "@/lib/api/candidates.server";
 import CandidatesClient from "@/components/candidates/CandidatesClient";
-import type { ApiCandidate } from "@/types";
+import type { ApiCandidate, RecruiterOption } from "@/types";
 
 export default async function CandidatesPage() {
   let initialCandidates: ApiCandidate[] = [];
   let initialTotal = 0;
   let initialPendingCandidates: ApiCandidate[] = [];
   let availableTags: string[] = [];
+  let recruiters: RecruiterOption[] = [];
 
   try {
     const [candidatePage, pendingPage1, tags] = await Promise.all([
@@ -35,6 +36,14 @@ export default async function CandidatesPage() {
     console.error("Failed to load candidates page data during SSR:", err);
   }
 
+  // Separate from the block above on purpose: the recruiter list only feeds one
+  // filter dropdown, and losing it should cost that dropdown, not the directory.
+  try {
+    recruiters = await getRecruiters();
+  } catch (err) {
+    console.error("Failed to load recruiters for the candidate filter:", err);
+  }
+
   return (
     <div
       className="min-h-full px-4 py-5 sm:px-6 lg:px-8"
@@ -61,6 +70,7 @@ export default async function CandidatesPage() {
           initialTotal={initialTotal}
           initialPendingCandidates={initialPendingCandidates}
           availableTags={availableTags}
+          recruiters={recruiters}
         />
       </div>
     </div>

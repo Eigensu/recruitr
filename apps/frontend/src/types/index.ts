@@ -136,6 +136,8 @@ export interface CandidateFilters {
   source?: CandidateSource;
   /** External channel the candidate came from (LinkedIn, Naukri, …). */
   source_channel?: string;
+  /** Employee id of the recruiter who added them, or "unassigned". */
+  created_by?: string;
   tags?: string[];
   has_resume?: boolean;
   has_cv_link?: boolean;
@@ -204,6 +206,14 @@ export interface ApiCandidate {
   salary: number | null;
   notes: string | null;
   status: CandidateStatus;
+  /** Employee id of the recruiter who added them. Null for public applications. */
+  created_by_id: string | null;
+  created_by_name: string | null;
+  /**
+   * The CV belongs to another recruiter, so `cv_link` and `resume_url` came back
+   * null for that reason rather than because there is no CV on file.
+   */
+  cv_locked: boolean;
   created_at: string;
 }
 
@@ -218,6 +228,55 @@ export interface ApiCandidateMappingItem {
   stage: PipelineStage;
   match_score: number | null;
   mapped_at: string;
+}
+
+/** A recruiter as offered in a filter dropdown. */
+export interface RecruiterOption {
+  id: string;
+  name: string;
+}
+
+export type CandidateEventType =
+  | "created"
+  | "applied"
+  | "approved"
+  | "declined"
+  | "mapped"
+  | "stage_moved"
+  | "unmapped";
+
+/** One entry in a candidate's permanent history — GET /candidates/{id}/history */
+export interface ApiCandidateHistoryEvent {
+  id: string | null;
+  at: string;
+  event_type: CandidateEventType;
+  employee_id: string | null;
+  employee_name: string | null;
+  position_id: string | null;
+  position_code: string | null;
+  position_role: string | null;
+  client_name: string | null;
+  from_stage: PipelineStage | null;
+  to_stage: PipelineStage | null;
+  note: string | null;
+}
+
+/** A company this candidate was actually placed with. */
+export interface ApiCandidatePlacement {
+  position_id: string | null;
+  position_code: string | null;
+  role: string | null;
+  client_name: string | null;
+  stage: PipelineStage;
+  at: string;
+  employee_name: string | null;
+  /** False once they have moved on from that stage — it still happened. */
+  is_current: boolean;
+}
+
+export interface ApiCandidateHistory {
+  events: ApiCandidateHistoryEvent[];
+  placements: ApiCandidatePlacement[];
 }
 
 /** Shared pagination meta (mirrors ApiPaginationMeta in lib/api/dashboard.ts) */

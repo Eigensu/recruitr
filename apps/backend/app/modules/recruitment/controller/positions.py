@@ -40,6 +40,8 @@ from app.modules.recruitment.schemas import (
     TopCandidateItem,
 )
 from app.modules.recruitment.service_impl import map_candidate as service_map_candidate
+from app.modules.recruitment.service_impl import unmap_candidate as service_unmap_candidate
+from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.matching import _get_effective_requirements
 
 router = APIRouter()
@@ -704,7 +706,9 @@ async def get_top_candidates(
     results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(  # type: ignore[misc]
         length=None
     )
-    return [TopCandidateItem.model_validate(r) for r in results]
+    # A suggestion panel is still a place a resume URL is handed out, so the
+    # same ownership rule applies here as in the directory.
+    return [TopCandidateItem.model_validate(r) for r in mask_cv_rows(results, tenant)]
 
 
 # ── Mapped candidates ──────────────────────────────────────────────────────────
@@ -839,5 +843,10 @@ async def unmap_candidate_from_position(
     if not mapping:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_MAPPING_NOT_FOUND)
 
-    await mapping.delete()
+    # Through the service, not mapping.delete(): unmapping is the one action
+    # that destroys the only record of a candidate having been put forward for
+    # this client, so the permanent history entry has to be written first. The
+    # service also logs the activity and clears the dashboard caches, which the
+    # bare delete here skipped.
+    await service_unmap_candidate(scope=tenant, mapping=mapping)
     return {"success": True, "message": "Candidate unmapped"}

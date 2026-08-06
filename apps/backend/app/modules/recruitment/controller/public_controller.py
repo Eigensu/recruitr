@@ -28,9 +28,10 @@ from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.modules.brands.models import Brand
 from app.modules.brands.schemas import PublicBrandResponse
-from app.modules.recruitment.enums import CandidateStatus
+from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
 from app.modules.recruitment.models import Candidate
-from app.modules.recruitment.schemas import CandidateResponse
+from app.modules.recruitment.repository_impl import record_candidate_event
+from app.modules.recruitment.schemas import CandidateResponse, TenantScope
 from app.modules.recruitment.services.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
@@ -211,5 +212,18 @@ async def public_apply(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "An application with this email already exists"
         ) from exc
+
+    # Opens the candidate's permanent history. There is no employee behind a
+    # public application, so the scope carries the brand only.
+    await record_candidate_event(
+        scope=TenantScope(brand_id=target_brand_id),
+        candidate_id=doc.id,
+        event_type=CandidateEventType.applied,
+        note=(
+            f"Applied through the public form ({source_channel})"
+            if source_channel
+            else "Applied through the public form"
+        ),
+    )
 
     return CandidateResponse.from_document(doc)

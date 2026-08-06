@@ -6,7 +6,12 @@ from typing import Literal
 from pydantic import BaseModel, EmailStr, Field
 
 from app.common.dtos.pagination import PaginatedResponse
-from app.modules.recruitment.enums import CandidateStatus, Gender, PipelineStage
+from app.modules.recruitment.enums import (
+    CandidateEventType,
+    CandidateStatus,
+    Gender,
+    PipelineStage,
+)
 
 
 class CandidateCreate(BaseModel):
@@ -92,12 +97,27 @@ class CandidateResponse(BaseModel):
     # Mirrors Candidate.status, and matches the query's treatment of a missing
     # status as approved.
     status: CandidateStatus = CandidateStatus.approved
+    # The recruiter who added this candidate. Null for public-form applications
+    # and for records that predate the field.
+    created_by_id: str | None = None
+    created_by_name: str | None = None
+    # True when the CV was withheld from this viewer because another recruiter
+    # sourced the candidate — resume_url and cv_link are null for that reason,
+    # not because the candidate has no CV on file. See utils/cv_access.py.
+    cv_locked: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_document(cls, doc, mappings_count: int = 0) -> "CandidateResponse":
+    def from_document(
+        cls,
+        doc,
+        mappings_count: int = 0,
+        *,
+        created_by_name: str | None = None,
+        cv_locked: bool = False,
+    ) -> "CandidateResponse":
         """Build the response from a Candidate document.
 
         Lives on the DTO because both the authenticated candidate endpoints and
@@ -107,6 +127,10 @@ class CandidateResponse(BaseModel):
 
         Not model_validate(doc): `id` needs str() from an ObjectId, and
         mappings_count is a per-request count that is not on the document.
+
+        `cv_locked` is decided by the caller, which knows who is asking; the
+        blanking itself happens here so no call site can set the flag and still
+        hand the URL over.
         """
         return cls(
             id=str(doc.id),
@@ -123,8 +147,8 @@ class CandidateResponse(BaseModel):
             skills=doc.skills,
             tags=doc.tags,
             preferred_train_line=doc.preferred_train_line,
-            cv_link=doc.cv_link,
-            resume_url=doc.resume_url,
+            cv_link=None if cv_locked else doc.cv_link,
+            resume_url=None if cv_locked else doc.resume_url,
             current_stage=doc.current_stage,
             mappings_count=mappings_count,
             current_role=doc.current_role,
@@ -136,6 +160,9 @@ class CandidateResponse(BaseModel):
             source=doc.source,
             source_channel=doc.source_channel,
             status=doc.status,
+            created_by_id=str(doc.created_by_id) if doc.created_by_id else None,
+            created_by_name=created_by_name,
+            cv_locked=cv_locked,
             created_at=doc.created_at,
         )
 
@@ -152,6 +179,51 @@ class CandidateMappingItem(BaseModel):
     stage: PipelineStage
     match_score: float | None = None
     mapped_at: datetime
+
+
+class CandidateHistoryEvent(BaseModel):
+    """One entry in the candidate's permanent employment history."""
+
+    # Null on the synthetic opening entry, which is derived from the candidate
+    # record itself for profiles created before history was recorded.
+    id: str | None = None
+    at: datetime
+    event_type: CandidateEventType
+    employee_id: str | None = None
+    employee_name: str | None = None
+    position_id: str | None = None
+    position_code: str | None = None
+    position_role: str | None = None
+    client_name: str | None = None
+    from_stage: PipelineStage | None = None
+    to_stage: PipelineStage | None = None
+    note: str | None = None
+
+
+class CandidatePlacement(BaseModel):
+    """A company this candidate was actually placed with.
+
+    Recorded at the point the outcome happened, so it stays on the profile after
+    the position closes or the candidate is taken off the board.
+    """
+
+    position_id: str | None = None
+    position_code: str | None = None
+    role: str | None = None
+    client_name: str | None = None
+    stage: PipelineStage  # offer_accepted or position_close
+    at: datetime
+    employee_name: str | None = None
+    # False once the candidate is no longer sitting in that stage — the
+    # placement happened, but something moved afterwards.
+    is_current: bool = True
+
+
+class CandidateHistoryResponse(BaseModel):
+    """GET /candidates/{id}/history — the ATS view of one person."""
+
+    events: list[CandidateHistoryEvent]
+    placements: list[CandidatePlacement]
 
 
 class CandidatePage(PaginatedResponse[CandidateResponse]):

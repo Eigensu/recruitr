@@ -11,7 +11,13 @@ import logging
 
 from beanie import PydanticObjectId
 
-from app.modules.recruitment.enums import ActivityType, Decision, PipelineStage
+from app.modules.recruitment.enums import (
+    TERMINAL_STAGES,
+    ActivityType,
+    CandidateEventType,
+    Decision,
+    PipelineStage,
+)
 from app.modules.recruitment.models import Employee, Mapping, Position
 from app.modules.recruitment.repository import (
     create_employee,
@@ -19,6 +25,8 @@ from app.modules.recruitment.repository import (
     find_employee_by_email,
     link_employee_user,
     log_activity,
+    recompute_position_seats,
+    record_candidate_event,
 )
 from app.modules.recruitment.repository import (
     create_mapping as repo_create_mapping,
@@ -113,8 +121,31 @@ async def map_candidate(
 
 
 async def unmap_candidate(*, scope: TenantScope, mapping: Mapping) -> None:
-    """Delete a mapping (unmap action), log activity, invalidate caches."""
+    """Delete a mapping (unmap action), free its seat, log activity, drop caches.
+
+    The permanent history entry is written *before* the delete: the mapping row
+    is the only place the position link lives, and once it is gone there is
+    nothing left to say which client this candidate was withdrawn from.
+    """
+    await record_candidate_event(
+        scope=scope,
+        candidate_id=mapping.candidate_id,
+        event_type=CandidateEventType.unmapped,
+        position=await Position.get(mapping.position_id),
+        from_stage=PipelineStage(mapping.stage) if mapping.stage else None,
+    )
+
+    was_terminal = mapping.stage in TERMINAL_STAGES
     await delete_mapping(mapping)
+
+    # A candidate who had accepted or joined was holding a seat, and deleting
+    # their mapping is the one way out of a terminal stage that never went
+    # through move_stage — so without this the seat stayed filled forever, and
+    # a position auto-closed by that last hire could never be reopened for good
+    # (recompute would find it still full and close it again).
+    # Recomputed after the delete so the count excludes this mapping.
+    if was_terminal:
+        await recompute_position_seats(mapping.position_id)
 
     if scope.is_recruiter:
         await log_activity(
