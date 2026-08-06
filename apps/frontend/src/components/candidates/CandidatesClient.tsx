@@ -105,6 +105,9 @@ export default function CandidatesClient({
 
   function handleCandidateUpdated(updated: ApiCandidate) {
     setCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    // Pending applications are edited in the drawer before being approved, so
+    // that list needs the same refresh — otherwise the card keeps the old data.
+    setPendingCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setSelectedCandidate(updated);
   }
 
@@ -129,6 +132,8 @@ export default function CandidatesClient({
     try {
       const updated = await clientApproveCandidate(id);
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+      // Only on success — a failed approve keeps the drawer open on the details.
+      if (selectedCandidate?.id === id) setSelectedCandidate(null);
 
       const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
       if (!hasFilters && page === 1) {
@@ -150,6 +155,7 @@ export default function CandidatesClient({
     try {
       await clientRejectCandidate(id);
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+      if (selectedCandidate?.id === id) setSelectedCandidate(null);
       toast("Candidate rejected", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to reject candidate", "error");
@@ -297,6 +303,9 @@ export default function CandidatesClient({
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
         onUpdate={handleCandidateUpdated}
+        isMaintainer={isMaintainer}
+        onApprove={handleApproveCandidate}
+        onReject={handleRejectCandidate}
       />
     </div>
   );

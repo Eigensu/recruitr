@@ -8,18 +8,11 @@ import { clientPublicApply } from "@/lib/api/candidates.client";
 import ResumeDropzone from "@/components/public/ResumeDropzone";
 import {
   CITIES,
+  EDUCATION_LEVELS,
   SOURCE_CHANNEL_OTHER,
   SOURCE_CHANNELS,
 } from "@/lib/constants/candidate";
 import type { PublicBrand } from "@/types";
-
-// Values must match the backend EducationLevel enum exactly; only labels differ.
-const EDUCATION_LEVELS = [
-  { value: "High School", label: "High School" },
-  { value: "Bachelors", label: "Bachelors (Undergraduate)" },
-  { value: "Masters", label: "Masters (Postgraduate)" },
-  { value: "PhD", label: "PhD / Doctorate" },
-] as const;
 
 // The API stores email as a plain string with no format check, so a typo here
 // is stored silently and the applicant simply never hears back. Validate it.

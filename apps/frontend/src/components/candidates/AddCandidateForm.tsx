@@ -154,14 +154,20 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
-      <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
+    // Two fields per row: the single column ran far past the fold and pushed the
+    // submit button out of sight. Short fields pair up; only the wide ones
+    // (source, tags, notes) still span the full width.
+    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-x-4 gap-y-3.5 p-4 sm:grid-cols-2">
+      <h2
+        className="text-lg font-semibold sm:col-span-2"
+        style={{ color: "var(--color-text-primary)" }}
+      >
         Add Candidate
       </h2>
 
       {errors._root && (
         <p
-          className="rounded-lg px-3 py-2 text-sm"
+          className="rounded-lg px-3 py-2 text-sm sm:col-span-2"
           style={{ background: "rgba(255,90,95,0.12)", color: "#FF5A5F" }}
         >
           {errors._root}
@@ -220,7 +226,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Source *
         </label>
-        <div className="flex gap-4">
+        <div className="flex h-[38px] items-center gap-4">
           {(["internal", "external"] as const).map((s) => (
             <label key={s} className="flex cursor-pointer items-center gap-2">
               <input
@@ -241,8 +247,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         </div>
       </div>
 
+      {/* Full width: appearing mid-grid would otherwise shift every later
+          field into the opposite column. */}
       {form.source === "external" && (
-        <div>
+        <div className="sm:col-span-2">
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
             Source Channel
           </label>
@@ -297,113 +305,110 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         />
       </div>
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            City
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.city}
-            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            {CITIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Area
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. Andheri"
-            value={form.area}
-            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
-          />
-        </div>
-      </div>
-
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Gender
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.gender}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, gender: e.target.value as "male" | "female" | "other" | "" }))
-            }
-          >
-            <option value="">Select...</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Age
-          </label>
-          <input
-            type="number"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 25"
-            value={form.age}
-            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
-          />
-          {errors.age && (
-            <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
-              {errors.age}
-            </p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Expected Salary
-          </label>
-          <input
-            type="number"
-            min="0"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 85000"
-            value={form.expected_salary}
-            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
-          />
-          {errors.expected_salary && (
-            <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
-              {errors.expected_salary}
-            </p>
-          )}
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Notice Period
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 30 days"
-            value={form.notice_period}
-            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
-          />
-        </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          City
+        </label>
+        <select
+          className={inputCls}
+          style={inputStyle}
+          value={form.city}
+          onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+        >
+          <option value="">Select...</option>
+          {CITIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Area
+        </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. Andheri"
+          value={form.area}
+          onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Gender
+        </label>
+        <select
+          className={inputCls}
+          style={inputStyle}
+          value={form.gender}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, gender: e.target.value as "male" | "female" | "other" | "" }))
+          }
+        >
+          <option value="">Select...</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Age
+        </label>
+        <input
+          type="number"
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 25"
+          value={form.age}
+          onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+        />
+        {errors.age && (
+          <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+            {errors.age}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Expected Salary
+        </label>
+        <input
+          type="number"
+          min="0"
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 85000"
+          value={form.expected_salary}
+          onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
+        />
+        {errors.expected_salary && (
+          <p className="mt-0.5 text-xs" style={{ color: "#FF5A5F" }}>
+            {errors.expected_salary}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Notice Period
+        </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 30 days"
+          value={form.notice_period}
+          onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
+        />
+      </div>
+
+      <div className="sm:col-span-2">
         <div className="mb-1 flex items-center gap-2">
           <label className="block text-xs font-medium" style={labelStyle}>
             Manual Tags
@@ -503,7 +508,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         )}
       </div>
 
-      <div>
+      <div className="sm:col-span-2">
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Notes
         </label>
@@ -517,7 +522,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         />
       </div>
 
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3 pt-2 sm:col-span-2">
         <button
           type="submit"
           disabled={loading}

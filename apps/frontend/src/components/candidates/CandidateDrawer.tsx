@@ -13,19 +13,30 @@ import {
   IconNotes,
   IconPencil,
   IconCheck,
+  IconClockHour4,
+  IconSchool,
 } from "@tabler/icons-react";
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
-import { CITIES, SOURCE_CHANNEL_OTHER, SOURCE_CHANNELS } from "@/lib/constants/candidate";
+import {
+  CITIES,
+  EDUCATION_LEVELS,
+  SOURCE_CHANNEL_OTHER,
+  SOURCE_CHANNELS,
+} from "@/lib/constants/candidate";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 
 interface CandidateDrawerProps {
   candidate: ApiCandidate | null;
   onClose: () => void;
   onUpdate?: (updated: ApiCandidate) => void;
+  /** Approve/reject the open application. Only rendered for maintainers. */
+  isMaintainer?: boolean;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
 }
 
 /** Existing records may hold values outside the canonical list (legacy imports).
@@ -38,6 +49,9 @@ export default function CandidateDrawer({
   candidate,
   onClose,
   onUpdate,
+  isMaintainer,
+  onApprove,
+  onReject,
 }: Readonly<CandidateDrawerProps>) {
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
@@ -93,6 +107,9 @@ export default function CandidateDrawer({
               onUpdate={onUpdate}
               loadingMappings={loadingMappings}
               mappings={mappings}
+              isMaintainer={isMaintainer}
+              onApprove={onApprove}
+              onReject={onReject}
             />
           </motion.div>
         </>
@@ -107,18 +124,26 @@ function DrawerInner({
   onUpdate,
   loadingMappings,
   mappings,
+  isMaintainer,
+  onApprove,
+  onReject,
 }: Readonly<{
   candidate: ApiCandidate;
   onClose: () => void;
   onUpdate?: (updated: ApiCandidate) => void;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  isMaintainer?: boolean;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
 }>) {
   const [isEditing, setIsEditing] = useState(false);
 
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
   const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
+  const isPending = candidate.status === "PENDING";
+  const canDecide = isPending && !!isMaintainer && !!(onApprove || onReject);
 
   function handleSaved(updated: ApiCandidate) {
     setIsEditing(false);
@@ -164,6 +189,13 @@ function DrawerInner({
             </button>
           </div>
         </div>
+
+        {isPending && (
+          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-yellow/25 bg-yellow/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-yellow">
+            <IconClockHour4 className="size-3" />
+            Pending application
+          </span>
+        )}
 
         <h2
           id="candidateDrawerTitle"
@@ -227,9 +259,72 @@ function DrawerInner({
           onCancel={() => setIsEditing(false)}
         />
       ) : (
-        <ViewBody candidate={candidate} loadingMappings={loadingMappings} mappings={mappings} />
+        <ViewBody
+          candidate={candidate}
+          loadingMappings={loadingMappings}
+          mappings={mappings}
+          showReviewHint={canDecide}
+          onEdit={() => setIsEditing(true)}
+        />
+      )}
+
+      {/* Decision bar — outside the scroll area so it stays reachable.
+          Hidden while editing: approving half-typed edits would discard them. */}
+      {canDecide && !isEditing && (
+        <DecisionBar candidateId={candidate.id} onApprove={onApprove} onReject={onReject} />
       )}
     </>
+  );
+}
+
+/* ── Pending decision bar ──────────────────────────────────────────────────── */
+
+function DecisionBar({
+  candidateId,
+  onApprove,
+  onReject,
+}: Readonly<{
+  candidateId: string;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
+}>) {
+  const [acting, setActing] = useState<"approve" | "reject" | null>(null);
+
+  // Closing the drawer is the caller's job: it knows whether the decision
+  // actually landed, so a failed approve leaves the panel open on the details.
+  async function run(kind: "approve" | "reject", fn: (id: string) => Promise<void>) {
+    setActing(kind);
+    try {
+      await fn(candidateId);
+    } finally {
+      setActing(null);
+    }
+  }
+
+  return (
+    <div className="shrink-0 border-t border-border bg-(--color-surface) p-4 flex items-center gap-3">
+      {onReject && (
+        <button
+          type="button"
+          disabled={acting !== null}
+          onClick={() => run("reject", onReject)}
+          className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+        >
+          {acting === "reject" ? "Rejecting…" : "Reject"}
+        </button>
+      )}
+      {onApprove && (
+        <button
+          type="button"
+          disabled={acting !== null}
+          onClick={() => run("approve", onApprove)}
+          className="flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
+          style={{ background: "var(--color-yellow)", color: "#002348" }}
+        >
+          {acting === "approve" ? "Approving…" : "Approve candidate"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -239,15 +334,38 @@ function ViewBody({
   candidate,
   loadingMappings,
   mappings,
+  showReviewHint,
+  onEdit,
 }: Readonly<{
   candidate: ApiCandidate;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  showReviewHint?: boolean;
+  onEdit: () => void;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
-      {/* Current role / salary */}
-      {(candidate.current_role != null || candidate.salary != null) && (
+      {showReviewHint && (
+        <section className="rounded-xl border border-yellow/20 bg-yellow/5 p-4">
+          <p className="text-xs leading-relaxed text-text-secondary">
+            This candidate applied through your public form, so only what they filled in is here.
+            Review it and{" "}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="font-semibold text-yellow underline underline-offset-2 hover:opacity-80"
+            >
+              add any missing details
+            </button>{" "}
+            before approving.
+          </p>
+        </section>
+      )}
+
+      {/* Role & compensation */}
+      {(candidate.current_role ||
+        candidate.salary != null ||
+        candidate.expected_salary != null) && (
         <>
           <section className="flex flex-wrap gap-4">
             {candidate.current_role && (
@@ -256,10 +374,16 @@ function ViewBody({
                 <span>{candidate.current_role}</span>
               </div>
             )}
+            {candidate.salary != null && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
+                <span>Current: {candidate.salary.toLocaleString()}</span>
+              </div>
+            )}
             {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>{candidate.expected_salary.toLocaleString()}</span>
+                <span>Expected: {candidate.expected_salary.toLocaleString()}</span>
               </div>
             )}
           </section>
@@ -267,10 +391,11 @@ function ViewBody({
         </>
       )}
 
-      {/* Previous role / notice / source */}
-      {(candidate.previous_role != null ||
-        candidate.notice_period != null ||
-        candidate.source != null) && (
+      {/* Previous role / notice / education / source */}
+      {(candidate.previous_role ||
+        candidate.notice_period ||
+        candidate.education_level ||
+        candidate.source) && (
         <>
           <section className="flex flex-wrap gap-4">
             {candidate.previous_role && (
@@ -282,6 +407,12 @@ function ViewBody({
             {candidate.notice_period && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span>Notice: {candidate.notice_period}</span>
+              </div>
+            )}
+            {candidate.education_level && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconSchool className="size-3.5 shrink-0 opacity-60" />
+                <span>{candidate.education_level}</span>
               </div>
             )}
             {candidate.source && (
@@ -323,24 +454,27 @@ function ViewBody({
         </>
       )}
 
-      {/* Skills */}
-      <section>
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
-          Skills &amp; Expertise
-        </h3>
-        <div className="flex flex-wrap gap-2">
-          {candidate.skills.map((skill) => (
-            <span
-              key={skill}
-              className="skill-tag text-[11px] font-semibold px-3 py-1 rounded-full"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
-      </section>
-
-      <div className="h-px bg-border/50" />
+      {/* Skills — parsed from the CV, so empty until one is uploaded */}
+      {candidate.skills.length > 0 && (
+        <>
+          <section>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
+              Skills &amp; Expertise
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {candidate.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="skill-tag text-[11px] font-semibold px-3 py-1 rounded-full"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
 
       {/* Tags */}
       {candidate.tags.length > 0 && (
@@ -349,6 +483,21 @@ function ViewBody({
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
               Tags
             </h3>
+            <div className="flex flex-wrap gap-2">
+              {candidate.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                  style={{
+                    background: "rgba(96,165,250,0.1)",
+                    color: "#60a5fa",
+                    border: "1px solid rgba(96,165,250,0.25)",
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
           </section>
           <div className="h-px bg-border/50" />
         </>
@@ -418,9 +567,12 @@ function EditForm({
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
     age: candidate.age == null ? "" : String(candidate.age),
+    education_level: candidate.education_level ?? "",
     expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
     notice_period: candidate.notice_period ?? "",
-    source: candidate.source ?? "internal",
+    // Lowercased: the public form used to store "External", which matched
+    // neither radio and left the source unset for every applicant.
+    source: candidate.source?.toLowerCase() ?? "internal",
     source_channel: candidate.source_channel ?? "",
     source_channel_other: "",
     cv_link: candidate.cv_link ?? "",
@@ -470,6 +622,7 @@ function EditForm({
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
         age: form.age ? Number(form.age) : undefined,
+        education_level: form.education_level || undefined,
         expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
         notice_period: form.notice_period.trim() || undefined,
         source: form.source.trim() || undefined,
@@ -478,13 +631,12 @@ function EditForm({
         tags: form.tags,
         notes: form.notes.trim() || undefined,
       };
-      let updated = await clientUpdateCandidate(candidate.id, payload);
-
-      if (form.source === "internal" && resumeFile) {
-        const uploaded = await uploadResumeToCloudinary(resumeFile);
-        updated = await clientConfirmResume(updated.id, uploaded);
-      }
-
+      // The upload happens once, above, before the PATCH: confirming a resume
+      // kicks off background parsing that writes to the same document, so the
+      // recruiter's edits have to land last. A second upload used to run here
+      // for internal candidates, duplicating the Cloudinary asset and racing
+      // its own parse against the values just saved.
+      const updated = await clientUpdateCandidate(candidate.id, payload);
       onSaved(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -494,13 +646,15 @@ function EditForm({
   }
 
   return (
+    // Two fields per row so the whole profile fits in far less scrolling —
+    // wide inputs (source, tags, notes, files) still span both columns.
     <form
       onSubmit={handleSave}
-      className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-4 bg-(--color-canvas)"
+      className="flex-1 overflow-y-auto dashboard-scrollbar p-6 grid grid-cols-2 content-start gap-x-3 gap-y-3.5 bg-(--color-canvas)"
     >
       {error && (
         <p
-          className="rounded-lg px-3 py-2 text-sm"
+          className="col-span-2 rounded-lg px-3 py-2 text-sm"
           style={{ background: "rgba(255,90,95,0.12)", color: "#FF5A5F" }}
         >
           {error}
@@ -532,7 +686,7 @@ function EditForm({
         />
       </div>
 
-      <div>
+      <div className="col-span-2">
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Source
         </label>
@@ -557,8 +711,10 @@ function EditForm({
         </div>
       </div>
 
+      {/* Full width: appearing mid-grid would otherwise shift every later
+          field into the opposite column. */}
       {form.source === "external" && (
-        <div>
+        <div className="col-span-2">
           <label className="mb-1 block text-xs font-medium" style={labelStyle}>
             Source Channel
           </label>
@@ -640,121 +796,120 @@ function EditForm({
         />
       </div>
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            City
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.city}
-            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            {withExisting(CITIES, form.city).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Area
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. Andheri"
-            value={form.area}
-            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
-          />
-        </div>
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          City
+        </label>
+        <select
+          className={inputCls}
+          style={inputStyle}
+          value={form.city}
+          onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+        >
+          <option value="">Select...</option>
+          {withExisting(CITIES, form.city).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </div>
-
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Gender
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.gender}
-            onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Age
-          </label>
-          <input
-            type="number"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 25"
-            value={form.age}
-            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
-          />
-        </div>
-      </div>
-
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Expected Salary
-          </label>
-          <input
-            type="number"
-            min="0"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 85000"
-            value={form.expected_salary}
-            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
-          />
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Notice Period
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 30 days"
-            value={form.notice_period}
-            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
-          />
-        </div>
-      </div>
-
-      {form.source === "internal" && (
-        <div>
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Resume PDF
-          </label>
-          <input
-            type="file"
-            accept=".pdf,application/pdf"
-            className="block w-full text-sm"
-            style={{ color: "var(--color-text-secondary)" }}
-            onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
-          />
-          {resumeFile && (
-            <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              {resumeFile.name}
-            </p>
-          )}
-        </div>
-      )}
 
       <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Area
+        </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. Andheri"
+          value={form.area}
+          onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Gender
+        </label>
+        <select
+          className={inputCls}
+          style={inputStyle}
+          value={form.gender}
+          onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+        >
+          <option value="">Select...</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Age
+        </label>
+        <input
+          type="number"
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 25"
+          value={form.age}
+          onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Highest Education
+        </label>
+        <select
+          className={inputCls}
+          style={inputStyle}
+          value={form.education_level}
+          onChange={(e) => setForm((f) => ({ ...f, education_level: e.target.value }))}
+        >
+          <option value="">Select...</option>
+          {withExisting(
+            EDUCATION_LEVELS.map((l) => l.value),
+            form.education_level,
+          ).map((value) => (
+            <option key={value} value={value}>
+              {EDUCATION_LEVELS.find((l) => l.value === value)?.label ?? value}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Expected Salary
+        </label>
+        <input
+          type="number"
+          min="0"
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 85000"
+          value={form.expected_salary}
+          onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
+          Notice Period
+        </label>
+        <input
+          className={inputCls}
+          style={inputStyle}
+          placeholder="e.g. 30 days"
+          value={form.notice_period}
+          onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
+        />
+      </div>
+
+      <div className="col-span-2">
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           CV Link{form.source === "external" ? " *" : ""}
         </label>
@@ -768,7 +923,7 @@ function EditForm({
         />
       </div>
 
-      <div>
+      <div className="col-span-2">
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Resume
         </label>
@@ -798,7 +953,7 @@ function EditForm({
         )}
       </div>
 
-      <div>
+      <div className="col-span-2">
         <div className="mb-1 flex items-center gap-2">
           <label className="block text-xs font-medium" style={labelStyle}>
             Manual Tags
@@ -859,7 +1014,7 @@ function EditForm({
         )}
       </div>
 
-      <div>
+      <div className="col-span-2">
         <label className="mb-1 block text-xs font-medium" style={labelStyle}>
           Notes
         </label>
@@ -873,7 +1028,7 @@ function EditForm({
         />
       </div>
 
-      <div className="flex gap-3 pt-2 pb-4">
+      <div className="col-span-2 flex gap-3 pt-2 pb-4">
         <button
           type="submit"
           disabled={saving}
