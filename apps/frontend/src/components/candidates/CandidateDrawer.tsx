@@ -21,13 +21,28 @@ import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
-import {
-  CITIES,
-  EDUCATION_LEVELS,
-  SOURCE_CHANNEL_OTHER,
-  SOURCE_CHANNELS,
-} from "@/lib/constants/candidate";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
+import {
+  AgeField,
+  AreaField,
+  CityField,
+  CurrentRoleField,
+  CvLinkField,
+  EducationField,
+  ExpectedSalaryField,
+  GenderField,
+  NoticePeriodField,
+  NotesField,
+  PreviousRoleField,
+  ResumeField,
+  SourceChannelField,
+  SourceField,
+  TagChip,
+  TagsField,
+  TextField,
+  inputStyle,
+  resolveSourceChannel,
+} from "./CandidateFormFields";
 
 interface CandidateDrawerProps {
   candidate: ApiCandidate | null;
@@ -37,12 +52,6 @@ interface CandidateDrawerProps {
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
-}
-
-/** Existing records may hold values outside the canonical list (legacy imports).
- *  Keep the stored value selectable so opening and saving never erases it. */
-function withExisting(options: readonly string[], current: string): string[] {
-  return current && !options.includes(current) ? [...options, current] : [...options];
 }
 
 export default function CandidateDrawer({
@@ -485,17 +494,7 @@ function ViewBody({
             </h3>
             <div className="flex flex-wrap gap-2">
               {candidate.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                  style={{
-                    background: "rgba(96,165,250,0.1)",
-                    color: "#60a5fa",
-                    border: "1px solid rgba(96,165,250,0.25)",
-                  }}
-                >
-                  {tag}
-                </span>
+                <TagChip key={tag} tag={tag} />
               ))}
             </div>
           </section>
@@ -538,14 +537,6 @@ function ViewBody({
 }
 
 /* ── Edit mode ─────────────────────────────────────────────────────────────── */
-
-const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
-const inputStyle = {
-  background: "var(--color-canvas-val)",
-  color: "var(--color-text-primary)",
-  border: "1px solid var(--color-border-val)",
-};
-const labelStyle = { color: "var(--color-text-secondary)" };
 
 function EditForm({
   candidate,
@@ -594,12 +585,8 @@ function EditForm({
     setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   }
 
-  // Channels only classify external candidates; "Other" carries the typed value.
   function resolvedChannel(): string {
-    if (form.source !== "external") return "";
-    return form.source_channel === SOURCE_CHANNEL_OTHER
-      ? form.source_channel_other.trim()
-      : form.source_channel;
+    return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -645,390 +632,136 @@ function EditForm({
     }
   }
 
+  // Two fields per row from the sm breakpoint so the whole profile fits in far
+  // less scrolling; single column below it, where the drawer is full-width and
+  // half-width controls would be unusable. Wide inputs span both columns, as do
+  // the conditional fields, which would otherwise shift every later field into
+  // the opposite column when they appear.
+  const full = "sm:col-span-2";
+
   return (
-    // Two fields per row so the whole profile fits in far less scrolling —
-    // wide inputs (source, tags, notes, files) still span both columns.
     <form
       onSubmit={handleSave}
-      className="flex-1 overflow-y-auto dashboard-scrollbar p-6 grid grid-cols-2 content-start gap-x-3 gap-y-3.5 bg-(--color-canvas)"
+      className="flex-1 overflow-y-auto dashboard-scrollbar grid grid-cols-1 content-start gap-x-3 gap-y-3.5 bg-(--color-canvas) p-6 sm:grid-cols-2"
     >
       {error && (
         <p
-          className="col-span-2 rounded-lg px-3 py-2 text-sm"
+          className={`rounded-lg px-3 py-2 text-sm ${full}`}
           style={{ background: "rgba(255,90,95,0.12)", color: "#FF5A5F" }}
         >
           {error}
         </p>
       )}
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Full Name
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          value={form.full_name}
-          onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-        />
-      </div>
+      <TextField
+        label="Full Name"
+        value={form.full_name}
+        onChange={(full_name) => setForm((f) => ({ ...f, full_name }))}
+      />
+      <TextField
+        label="Phone"
+        type="tel"
+        value={form.phone}
+        onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Phone
-        </label>
-        <input
-          type="tel"
-          className={inputCls}
-          style={inputStyle}
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-        />
-      </div>
+      <SourceField
+        className={full}
+        value={form.source}
+        onChange={(source) => setForm((f) => ({ ...f, source }))}
+      />
 
-      <div className="col-span-2">
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Source
-        </label>
-        <div className="flex gap-4">
-          {(["internal", "external"] as const).map((s) => (
-            <label key={s} className="flex cursor-pointer items-center gap-2">
-              <input
-                type="radio"
-                name="source"
-                value={s}
-                checked={form.source === s}
-                onChange={() => setForm((f) => ({ ...f, source: s }))}
-              />
-              <span
-                className="text-sm font-medium"
-                style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
-              >
-                ● {s === "internal" ? "Internal" : "External"}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Full width: appearing mid-grid would otherwise shift every later
-          field into the opposite column. */}
       {form.source === "external" && (
-        <div className="col-span-2">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Source Channel
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.source_channel}
-            onChange={(e) => setForm((f) => ({ ...f, source_channel: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            {withExisting(SOURCE_CHANNELS, form.source_channel).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          {form.source_channel === SOURCE_CHANNEL_OTHER && (
-            <input
-              className={`${inputCls} mt-2`}
-              style={inputStyle}
-              placeholder="Where did they come from?"
-              value={form.source_channel_other}
-              onChange={(e) => setForm((f) => ({ ...f, source_channel_other: e.target.value }))}
-            />
-          )}
-        </div>
+        <SourceChannelField
+          className={full}
+          channel={form.source_channel}
+          other={form.source_channel_other}
+          onChannel={(source_channel) => setForm((f) => ({ ...f, source_channel }))}
+          onOther={(source_channel_other) => setForm((f) => ({ ...f, source_channel_other }))}
+        />
       )}
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Previous Company
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          value={form.previous_company}
-          onChange={(e) => setForm((f) => ({ ...f, previous_company: e.target.value }))}
-        />
-      </div>
+      <TextField
+        label="Previous Company"
+        value={form.previous_company}
+        onChange={(previous_company) => setForm((f) => ({ ...f, previous_company }))}
+      />
+      <TextField
+        label="Experience (years)"
+        type="number"
+        min="0"
+        step="0.5"
+        value={form.experience_years}
+        onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Experience (years)
-        </label>
-        <input
-          type="number"
-          min="0"
-          step="0.5"
-          className={inputCls}
-          style={inputStyle}
-          value={form.experience_years}
-          onChange={(e) => setForm((f) => ({ ...f, experience_years: e.target.value }))}
-        />
-      </div>
+      <CurrentRoleField
+        value={form.current_role}
+        onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+      />
+      <PreviousRoleField
+        value={form.previous_role}
+        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Current Role
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. Senior Engineer"
-          value={form.current_role}
-          onChange={(e) => setForm((f) => ({ ...f, current_role: e.target.value }))}
-        />
-      </div>
+      <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
+      <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Previous Role
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. Software Engineer"
-          value={form.previous_role}
-          onChange={(e) => setForm((f) => ({ ...f, previous_role: e.target.value }))}
-        />
-      </div>
+      <GenderField value={form.gender} onChange={(gender) => setForm((f) => ({ ...f, gender }))} />
+      <AgeField value={form.age} onChange={(age) => setForm((f) => ({ ...f, age }))} />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          City
-        </label>
-        <select
-          className={inputCls}
-          style={inputStyle}
-          value={form.city}
-          onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-        >
-          <option value="">Select...</option>
-          {withExisting(CITIES, form.city).map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
+      <EducationField
+        value={form.education_level}
+        onChange={(education_level) => setForm((f) => ({ ...f, education_level }))}
+      />
+      <ExpectedSalaryField
+        value={form.expected_salary}
+        onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
+      />
+      <NoticePeriodField
+        value={form.notice_period}
+        onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Area
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. Andheri"
-          value={form.area}
-          onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
-        />
-      </div>
+      <CvLinkField
+        className={full}
+        required={form.source === "external"}
+        value={form.cv_link}
+        onChange={(cv_link) => setForm((f) => ({ ...f, cv_link }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Gender
-        </label>
-        <select
-          className={inputCls}
-          style={inputStyle}
-          value={form.gender}
-          onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
-        >
-          <option value="">Select...</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Age
-        </label>
-        <input
-          type="number"
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. 25"
-          value={form.age}
-          onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Highest Education
-        </label>
-        <select
-          className={inputCls}
-          style={inputStyle}
-          value={form.education_level}
-          onChange={(e) => setForm((f) => ({ ...f, education_level: e.target.value }))}
-        >
-          <option value="">Select...</option>
-          {withExisting(
-            EDUCATION_LEVELS.map((l) => l.value),
-            form.education_level,
-          ).map((value) => (
-            <option key={value} value={value}>
-              {EDUCATION_LEVELS.find((l) => l.value === value)?.label ?? value}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Expected Salary
-        </label>
-        <input
-          type="number"
-          min="0"
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. 85000"
-          value={form.expected_salary}
-          onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Notice Period
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. 30 days"
-          value={form.notice_period}
-          onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
-        />
-      </div>
-
-      <div className="col-span-2">
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          CV Link{form.source === "external" ? " *" : ""}
-        </label>
-        <input
-          type="url"
-          className={inputCls}
-          style={inputStyle}
-          placeholder="https://…"
-          value={form.cv_link}
-          onChange={(e) => setForm((f) => ({ ...f, cv_link: e.target.value }))}
-        />
-      </div>
-
-      <div className="col-span-2">
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Resume
-        </label>
+      <ResumeField className={full} file={resumeFile} onFile={setResumeFile}>
         {candidate.resume_url && !resumeFile && (
           <a
             href={candidate.resume_url}
             target="_blank"
             rel="noreferrer noopener"
-            className="mb-2 flex items-center gap-2 text-xs hover:text-yellow transition-colors w-fit"
+            className="mb-2 flex w-fit items-center gap-2 text-xs transition-colors hover:text-yellow"
             style={{ color: "var(--color-text-secondary)" }}
           >
             <IconFileText className="size-3.5 shrink-0" />
             View current resume
           </a>
         )}
-        <input
-          type="file"
-          accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-          className="block w-full text-sm"
-          style={{ color: "var(--color-text-secondary)" }}
-          onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
-        />
-        {resumeFile && (
-          <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
-            {resumeFile.name}
-          </p>
-        )}
-      </div>
+      </ResumeField>
 
-      <div className="col-span-2">
-        <div className="mb-1 flex items-center gap-2">
-          <label className="block text-xs font-medium" style={labelStyle}>
-            Manual Tags
-          </label>
-          <span
-            className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-            style={{ background: "rgba(251,146,60,0.15)", color: "#fb923c" }}
-          >
-            recruiter
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. senior, python"
-            value={form.tagInput}
-            onChange={(e) => setForm((f) => ({ ...f, tagInput: e.target.value }))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === ",") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={addTag}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium"
-            style={inputStyle}
-          >
-            Add
-          </button>
-        </div>
-        {form.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {form.tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                style={{
-                  background: "rgba(96,165,250,0.1)",
-                  color: "#60a5fa",
-                  border: "1px solid rgba(96,165,250,0.25)",
-                }}
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="opacity-60 hover:opacity-100"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <TagsField
+        className={full}
+        tags={form.tags}
+        input={form.tagInput}
+        onInput={(tagInput) => setForm((f) => ({ ...f, tagInput }))}
+        onAdd={addTag}
+        onRemove={removeTag}
+      />
 
-      <div className="col-span-2">
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Notes
-        </label>
-        <textarea
-          rows={4}
-          className={inputCls}
-          style={{ ...inputStyle, resize: "vertical" }}
-          placeholder="Any notes about this candidate…"
-          value={form.notes}
-          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-        />
-      </div>
+      <NotesField
+        className={full}
+        rows={4}
+        value={form.notes}
+        onChange={(notes) => setForm((f) => ({ ...f, notes }))}
+      />
 
-      <div className="col-span-2 flex gap-3 pt-2 pb-4">
+      <div className={`flex gap-3 pt-2 pb-4 ${full}`}>
         <button
           type="submit"
           disabled={saving}

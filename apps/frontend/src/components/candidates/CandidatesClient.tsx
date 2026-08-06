@@ -129,25 +129,35 @@ export default function CandidatesClient({
   }
 
   async function handleApproveCandidate(id: string) {
+    // Only the approval itself decides success or failure. Folding the refresh
+    // below into the same try reported an approval that had already landed as
+    // "Failed to approve" whenever the follow-up fetch happened to fail.
+    let updated: ApiCandidate;
     try {
-      const updated = await clientApproveCandidate(id);
-      setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
-      // Only on success — a failed approve keeps the drawer open on the details.
-      if (selectedCandidate?.id === id) setSelectedCandidate(null);
-
-      const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
-      if (!hasFilters && page === 1) {
-        setCandidates((prev) => [updated, ...prev]);
-        setTotal((t) => t + 1);
-      } else {
-        const data = await clientFetchCandidates({ ...activeFilters, page: 1, limit: PAGE_SIZE });
-        setCandidates(data.items ?? []);
-        setTotal(data.meta?.total ?? 0);
-        setPage(1);
-      }
-      toast("Candidate approved successfully", "success");
+      updated = await clientApproveCandidate(id);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to approve candidate", "error");
+      return;
+    }
+
+    setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
+    // Only on success — a failed approve keeps the drawer open on the details.
+    if (selectedCandidate?.id === id) setSelectedCandidate(null);
+    toast("Candidate approved successfully", "success");
+
+    const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
+    if (!hasFilters && page === 1) {
+      setCandidates((prev) => [updated, ...prev]);
+      setTotal((t) => t + 1);
+      return;
+    }
+    try {
+      const data = await clientFetchCandidates({ ...activeFilters, page: 1, limit: PAGE_SIZE });
+      setCandidates(data.items ?? []);
+      setTotal(data.meta?.total ?? 0);
+      setPage(1);
+    } catch {
+      // The approval stands; the filtered list is just one candidate stale.
     }
   }
 
