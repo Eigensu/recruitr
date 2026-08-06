@@ -31,3 +31,14 @@ export const SOURCE_CHANNELS = [
 
 /** Selecting this reveals a free-text box; the typed value is stored instead. */
 export const SOURCE_CHANNEL_OTHER = "Other";
+
+/**
+ * Highest education. Values must match the backend EducationLevel enum exactly
+ * — it rejects anything else — so only the labels are free to differ.
+ */
+export const EDUCATION_LEVELS = [
+  { value: "High School", label: "High School" },
+  { value: "Bachelors", label: "Bachelors (Undergraduate)" },
+  { value: "Masters", label: "Masters (Postgraduate)" },
+  { value: "PhD", label: "PhD / Doctorate" },
+] as const;

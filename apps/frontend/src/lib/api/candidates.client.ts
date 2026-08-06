@@ -67,6 +67,7 @@ export async function clientUpdateCandidate(
     phone: string;
     previous_company: string;
     experience_years: number;
+    education_level: string;
     tags: string[];
     cv_link: string;
     current_role: string;

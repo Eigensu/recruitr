@@ -13,31 +13,54 @@ import {
   IconNotes,
   IconPencil,
   IconCheck,
+  IconClockHour4,
+  IconSchool,
 } from "@tabler/icons-react";
 import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
-import { CITIES, SOURCE_CHANNEL_OTHER, SOURCE_CHANNELS } from "@/lib/constants/candidate";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
+import {
+  AgeField,
+  AreaField,
+  CityField,
+  CurrentRoleField,
+  CvLinkField,
+  EducationField,
+  ExpectedSalaryField,
+  GenderField,
+  NoticePeriodField,
+  NotesField,
+  PreviousRoleField,
+  ResumeField,
+  SourceChannelField,
+  SourceField,
+  TagChip,
+  TagsField,
+  TextField,
+  inputStyle,
+  resolveSourceChannel,
+} from "./CandidateFormFields";
 
 interface CandidateDrawerProps {
   candidate: ApiCandidate | null;
   onClose: () => void;
   onUpdate?: (updated: ApiCandidate) => void;
-}
-
-/** Existing records may hold values outside the canonical list (legacy imports).
- *  Keep the stored value selectable so opening and saving never erases it. */
-function withExisting(options: readonly string[], current: string): string[] {
-  return current && !options.includes(current) ? [...options, current] : [...options];
+  /** Approve/reject the open application. Only rendered for maintainers. */
+  isMaintainer?: boolean;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
 }
 
 export default function CandidateDrawer({
   candidate,
   onClose,
   onUpdate,
+  isMaintainer,
+  onApprove,
+  onReject,
 }: Readonly<CandidateDrawerProps>) {
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
@@ -93,6 +116,9 @@ export default function CandidateDrawer({
               onUpdate={onUpdate}
               loadingMappings={loadingMappings}
               mappings={mappings}
+              isMaintainer={isMaintainer}
+              onApprove={onApprove}
+              onReject={onReject}
             />
           </motion.div>
         </>
@@ -107,18 +133,26 @@ function DrawerInner({
   onUpdate,
   loadingMappings,
   mappings,
+  isMaintainer,
+  onApprove,
+  onReject,
 }: Readonly<{
   candidate: ApiCandidate;
   onClose: () => void;
   onUpdate?: (updated: ApiCandidate) => void;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  isMaintainer?: boolean;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
 }>) {
   const [isEditing, setIsEditing] = useState(false);
 
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
   const cvRef = resolveCvRef(candidate.cv_link, candidate.resume_url);
+  const isPending = candidate.status === "PENDING";
+  const canDecide = isPending && !!isMaintainer && !!(onApprove || onReject);
 
   function handleSaved(updated: ApiCandidate) {
     setIsEditing(false);
@@ -164,6 +198,13 @@ function DrawerInner({
             </button>
           </div>
         </div>
+
+        {isPending && (
+          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-yellow/25 bg-yellow/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-yellow">
+            <IconClockHour4 className="size-3" />
+            Pending application
+          </span>
+        )}
 
         <h2
           id="candidateDrawerTitle"
@@ -227,9 +268,72 @@ function DrawerInner({
           onCancel={() => setIsEditing(false)}
         />
       ) : (
-        <ViewBody candidate={candidate} loadingMappings={loadingMappings} mappings={mappings} />
+        <ViewBody
+          candidate={candidate}
+          loadingMappings={loadingMappings}
+          mappings={mappings}
+          showReviewHint={canDecide}
+          onEdit={() => setIsEditing(true)}
+        />
+      )}
+
+      {/* Decision bar — outside the scroll area so it stays reachable.
+          Hidden while editing: approving half-typed edits would discard them. */}
+      {canDecide && !isEditing && (
+        <DecisionBar candidateId={candidate.id} onApprove={onApprove} onReject={onReject} />
       )}
     </>
+  );
+}
+
+/* ── Pending decision bar ──────────────────────────────────────────────────── */
+
+function DecisionBar({
+  candidateId,
+  onApprove,
+  onReject,
+}: Readonly<{
+  candidateId: string;
+  onApprove?: (id: string) => Promise<void>;
+  onReject?: (id: string) => Promise<void>;
+}>) {
+  const [acting, setActing] = useState<"approve" | "reject" | null>(null);
+
+  // Closing the drawer is the caller's job: it knows whether the decision
+  // actually landed, so a failed approve leaves the panel open on the details.
+  async function run(kind: "approve" | "reject", fn: (id: string) => Promise<void>) {
+    setActing(kind);
+    try {
+      await fn(candidateId);
+    } finally {
+      setActing(null);
+    }
+  }
+
+  return (
+    <div className="shrink-0 border-t border-border bg-(--color-surface) p-4 flex items-center gap-3">
+      {onReject && (
+        <button
+          type="button"
+          disabled={acting !== null}
+          onClick={() => run("reject", onReject)}
+          className="rounded-lg border border-red-500/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+        >
+          {acting === "reject" ? "Rejecting…" : "Reject"}
+        </button>
+      )}
+      {onApprove && (
+        <button
+          type="button"
+          disabled={acting !== null}
+          onClick={() => run("approve", onApprove)}
+          className="flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
+          style={{ background: "var(--color-yellow)", color: "#002348" }}
+        >
+          {acting === "approve" ? "Approving…" : "Approve candidate"}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -239,15 +343,38 @@ function ViewBody({
   candidate,
   loadingMappings,
   mappings,
+  showReviewHint,
+  onEdit,
 }: Readonly<{
   candidate: ApiCandidate;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  showReviewHint?: boolean;
+  onEdit: () => void;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
-      {/* Current role / salary */}
-      {(candidate.current_role != null || candidate.salary != null) && (
+      {showReviewHint && (
+        <section className="rounded-xl border border-yellow/20 bg-yellow/5 p-4">
+          <p className="text-xs leading-relaxed text-text-secondary">
+            This candidate applied through your public form, so only what they filled in is here.
+            Review it and{" "}
+            <button
+              type="button"
+              onClick={onEdit}
+              className="font-semibold text-yellow underline underline-offset-2 hover:opacity-80"
+            >
+              add any missing details
+            </button>{" "}
+            before approving.
+          </p>
+        </section>
+      )}
+
+      {/* Role & compensation */}
+      {(candidate.current_role ||
+        candidate.salary != null ||
+        candidate.expected_salary != null) && (
         <>
           <section className="flex flex-wrap gap-4">
             {candidate.current_role && (
@@ -256,10 +383,16 @@ function ViewBody({
                 <span>{candidate.current_role}</span>
               </div>
             )}
+            {candidate.salary != null && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
+                <span>Current: {candidate.salary.toLocaleString()}</span>
+              </div>
+            )}
             {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>{candidate.expected_salary.toLocaleString()}</span>
+                <span>Expected: {candidate.expected_salary.toLocaleString()}</span>
               </div>
             )}
           </section>
@@ -267,10 +400,11 @@ function ViewBody({
         </>
       )}
 
-      {/* Previous role / notice / source */}
-      {(candidate.previous_role != null ||
-        candidate.notice_period != null ||
-        candidate.source != null) && (
+      {/* Previous role / notice / education / source */}
+      {(candidate.previous_role ||
+        candidate.notice_period ||
+        candidate.education_level ||
+        candidate.source) && (
         <>
           <section className="flex flex-wrap gap-4">
             {candidate.previous_role && (
@@ -282,6 +416,12 @@ function ViewBody({
             {candidate.notice_period && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span>Notice: {candidate.notice_period}</span>
+              </div>
+            )}
+            {candidate.education_level && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <IconSchool className="size-3.5 shrink-0 opacity-60" />
+                <span>{candidate.education_level}</span>
               </div>
             )}
             {candidate.source && (
@@ -323,24 +463,27 @@ function ViewBody({
         </>
       )}
 
-      {/* Skills */}
-      <section>
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
-          Skills &amp; Expertise
-        </h3>
-        <div className="flex flex-wrap gap-2">
-          {candidate.skills.map((skill) => (
-            <span
-              key={skill}
-              className="skill-tag text-[11px] font-semibold px-3 py-1 rounded-full"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
-      </section>
-
-      <div className="h-px bg-border/50" />
+      {/* Skills — parsed from the CV, so empty until one is uploaded */}
+      {candidate.skills.length > 0 && (
+        <>
+          <section>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
+              Skills &amp; Expertise
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {candidate.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="skill-tag text-[11px] font-semibold px-3 py-1 rounded-full"
+                >
+                  {skill}
+                </span>
+              ))}
+            </div>
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
 
       {/* Tags */}
       {candidate.tags.length > 0 && (
@@ -349,6 +492,11 @@ function ViewBody({
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
               Tags
             </h3>
+            <div className="flex flex-wrap gap-2">
+              {candidate.tags.map((tag) => (
+                <TagChip key={tag} tag={tag} />
+              ))}
+            </div>
           </section>
           <div className="h-px bg-border/50" />
         </>
@@ -390,14 +538,6 @@ function ViewBody({
 
 /* ── Edit mode ─────────────────────────────────────────────────────────────── */
 
-const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
-const inputStyle = {
-  background: "var(--color-canvas-val)",
-  color: "var(--color-text-primary)",
-  border: "1px solid var(--color-border-val)",
-};
-const labelStyle = { color: "var(--color-text-secondary)" };
-
 function EditForm({
   candidate,
   onSaved,
@@ -418,9 +558,12 @@ function EditForm({
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
     age: candidate.age == null ? "" : String(candidate.age),
+    education_level: candidate.education_level ?? "",
     expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
     notice_period: candidate.notice_period ?? "",
-    source: candidate.source ?? "internal",
+    // Lowercased: the public form used to store "External", which matched
+    // neither radio and left the source unset for every applicant.
+    source: candidate.source?.toLowerCase() ?? "internal",
     source_channel: candidate.source_channel ?? "",
     source_channel_other: "",
     cv_link: candidate.cv_link ?? "",
@@ -442,12 +585,8 @@ function EditForm({
     setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
   }
 
-  // Channels only classify external candidates; "Other" carries the typed value.
   function resolvedChannel(): string {
-    if (form.source !== "external") return "";
-    return form.source_channel === SOURCE_CHANNEL_OTHER
-      ? form.source_channel_other.trim()
-      : form.source_channel;
+    return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -470,6 +609,7 @@ function EditForm({
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
         age: form.age ? Number(form.age) : undefined,
+        education_level: form.education_level || undefined,
         expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
         notice_period: form.notice_period.trim() || undefined,
         source: form.source.trim() || undefined,
@@ -478,13 +618,12 @@ function EditForm({
         tags: form.tags,
         notes: form.notes.trim() || undefined,
       };
-      let updated = await clientUpdateCandidate(candidate.id, payload);
-
-      if (form.source === "internal" && resumeFile) {
-        const uploaded = await uploadResumeToCloudinary(resumeFile);
-        updated = await clientConfirmResume(updated.id, uploaded);
-      }
-
+      // The upload happens once, above, before the PATCH: confirming a resume
+      // kicks off background parsing that writes to the same document, so the
+      // recruiter's edits have to land last. A second upload used to run here
+      // for internal candidates, duplicating the Cloudinary asset and racing
+      // its own parse against the values just saved.
+      const updated = await clientUpdateCandidate(candidate.id, payload);
       onSaved(updated);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -493,387 +632,136 @@ function EditForm({
     }
   }
 
+  // Two fields per row from the sm breakpoint so the whole profile fits in far
+  // less scrolling; single column below it, where the drawer is full-width and
+  // half-width controls would be unusable. Wide inputs span both columns, as do
+  // the conditional fields, which would otherwise shift every later field into
+  // the opposite column when they appear.
+  const full = "sm:col-span-2";
+
   return (
     <form
       onSubmit={handleSave}
-      className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-4 bg-(--color-canvas)"
+      className="flex-1 overflow-y-auto dashboard-scrollbar grid grid-cols-1 content-start gap-x-3 gap-y-3.5 bg-(--color-canvas) p-6 sm:grid-cols-2"
     >
       {error && (
         <p
-          className="rounded-lg px-3 py-2 text-sm"
+          className={`rounded-lg px-3 py-2 text-sm ${full}`}
           style={{ background: "rgba(255,90,95,0.12)", color: "#FF5A5F" }}
         >
           {error}
         </p>
       )}
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Full Name
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          value={form.full_name}
-          onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-        />
-      </div>
+      <TextField
+        label="Full Name"
+        value={form.full_name}
+        onChange={(full_name) => setForm((f) => ({ ...f, full_name }))}
+      />
+      <TextField
+        label="Phone"
+        type="tel"
+        value={form.phone}
+        onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Phone
-        </label>
-        <input
-          type="tel"
-          className={inputCls}
-          style={inputStyle}
-          value={form.phone}
-          onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Source
-        </label>
-        <div className="flex gap-4">
-          {(["internal", "external"] as const).map((s) => (
-            <label key={s} className="flex cursor-pointer items-center gap-2">
-              <input
-                type="radio"
-                name="source"
-                value={s}
-                checked={form.source === s}
-                onChange={() => setForm((f) => ({ ...f, source: s }))}
-              />
-              <span
-                className="text-sm font-medium"
-                style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
-              >
-                ● {s === "internal" ? "Internal" : "External"}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
+      <SourceField
+        className={full}
+        value={form.source}
+        onChange={(source) => setForm((f) => ({ ...f, source }))}
+      />
 
       {form.source === "external" && (
-        <div>
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Source Channel
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.source_channel}
-            onChange={(e) => setForm((f) => ({ ...f, source_channel: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            {withExisting(SOURCE_CHANNELS, form.source_channel).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          {form.source_channel === SOURCE_CHANNEL_OTHER && (
-            <input
-              className={`${inputCls} mt-2`}
-              style={inputStyle}
-              placeholder="Where did they come from?"
-              value={form.source_channel_other}
-              onChange={(e) => setForm((f) => ({ ...f, source_channel_other: e.target.value }))}
-            />
-          )}
-        </div>
+        <SourceChannelField
+          className={full}
+          channel={form.source_channel}
+          other={form.source_channel_other}
+          onChannel={(source_channel) => setForm((f) => ({ ...f, source_channel }))}
+          onOther={(source_channel_other) => setForm((f) => ({ ...f, source_channel_other }))}
+        />
       )}
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Previous Company
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          value={form.previous_company}
-          onChange={(e) => setForm((f) => ({ ...f, previous_company: e.target.value }))}
-        />
-      </div>
+      <TextField
+        label="Previous Company"
+        value={form.previous_company}
+        onChange={(previous_company) => setForm((f) => ({ ...f, previous_company }))}
+      />
+      <TextField
+        label="Experience (years)"
+        type="number"
+        min="0"
+        step="0.5"
+        value={form.experience_years}
+        onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Experience (years)
-        </label>
-        <input
-          type="number"
-          min="0"
-          step="0.5"
-          className={inputCls}
-          style={inputStyle}
-          value={form.experience_years}
-          onChange={(e) => setForm((f) => ({ ...f, experience_years: e.target.value }))}
-        />
-      </div>
+      <CurrentRoleField
+        value={form.current_role}
+        onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+      />
+      <PreviousRoleField
+        value={form.previous_role}
+        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Current Role
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. Senior Engineer"
-          value={form.current_role}
-          onChange={(e) => setForm((f) => ({ ...f, current_role: e.target.value }))}
-        />
-      </div>
+      <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
+      <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Previous Role
-        </label>
-        <input
-          className={inputCls}
-          style={inputStyle}
-          placeholder="e.g. Software Engineer"
-          value={form.previous_role}
-          onChange={(e) => setForm((f) => ({ ...f, previous_role: e.target.value }))}
-        />
-      </div>
+      <GenderField value={form.gender} onChange={(gender) => setForm((f) => ({ ...f, gender }))} />
+      <AgeField value={form.age} onChange={(age) => setForm((f) => ({ ...f, age }))} />
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            City
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.city}
-            onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            {withExisting(CITIES, form.city).map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Area
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. Andheri"
-            value={form.area}
-            onChange={(e) => setForm((f) => ({ ...f, area: e.target.value }))}
-          />
-        </div>
-      </div>
+      <EducationField
+        value={form.education_level}
+        onChange={(education_level) => setForm((f) => ({ ...f, education_level }))}
+      />
+      <ExpectedSalaryField
+        value={form.expected_salary}
+        onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
+      />
+      <NoticePeriodField
+        value={form.notice_period}
+        onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
+      />
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Gender
-          </label>
-          <select
-            className={inputCls}
-            style={inputStyle}
-            value={form.gender}
-            onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
-          >
-            <option value="">Select...</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Age
-          </label>
-          <input
-            type="number"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 25"
-            value={form.age}
-            onChange={(e) => setForm((f) => ({ ...f, age: e.target.value }))}
-          />
-        </div>
-      </div>
+      <CvLinkField
+        className={full}
+        required={form.source === "external"}
+        value={form.cv_link}
+        onChange={(cv_link) => setForm((f) => ({ ...f, cv_link }))}
+      />
 
-      <div className="flex gap-4">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Expected Salary
-          </label>
-          <input
-            type="number"
-            min="0"
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 85000"
-            value={form.expected_salary}
-            onChange={(e) => setForm((f) => ({ ...f, expected_salary: e.target.value }))}
-          />
-        </div>
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Notice Period
-          </label>
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. 30 days"
-            value={form.notice_period}
-            onChange={(e) => setForm((f) => ({ ...f, notice_period: e.target.value }))}
-          />
-        </div>
-      </div>
-
-      {form.source === "internal" && (
-        <div>
-          <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-            Resume PDF
-          </label>
-          <input
-            type="file"
-            accept=".pdf,application/pdf"
-            className="block w-full text-sm"
-            style={{ color: "var(--color-text-secondary)" }}
-            onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
-          />
-          {resumeFile && (
-            <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
-              {resumeFile.name}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          CV Link{form.source === "external" ? " *" : ""}
-        </label>
-        <input
-          type="url"
-          className={inputCls}
-          style={inputStyle}
-          placeholder="https://…"
-          value={form.cv_link}
-          onChange={(e) => setForm((f) => ({ ...f, cv_link: e.target.value }))}
-        />
-      </div>
-
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Resume
-        </label>
+      <ResumeField className={full} file={resumeFile} onFile={setResumeFile}>
         {candidate.resume_url && !resumeFile && (
           <a
             href={candidate.resume_url}
             target="_blank"
             rel="noreferrer noopener"
-            className="mb-2 flex items-center gap-2 text-xs hover:text-yellow transition-colors w-fit"
+            className="mb-2 flex w-fit items-center gap-2 text-xs transition-colors hover:text-yellow"
             style={{ color: "var(--color-text-secondary)" }}
           >
             <IconFileText className="size-3.5 shrink-0" />
             View current resume
           </a>
         )}
-        <input
-          type="file"
-          accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
-          className="block w-full text-sm"
-          style={{ color: "var(--color-text-secondary)" }}
-          onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
-        />
-        {resumeFile && (
-          <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>
-            {resumeFile.name}
-          </p>
-        )}
-      </div>
+      </ResumeField>
 
-      <div>
-        <div className="mb-1 flex items-center gap-2">
-          <label className="block text-xs font-medium" style={labelStyle}>
-            Manual Tags
-          </label>
-          <span
-            className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-            style={{ background: "rgba(251,146,60,0.15)", color: "#fb923c" }}
-          >
-            recruiter
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            style={inputStyle}
-            placeholder="e.g. senior, python"
-            value={form.tagInput}
-            onChange={(e) => setForm((f) => ({ ...f, tagInput: e.target.value }))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === ",") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={addTag}
-            className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium"
-            style={inputStyle}
-          >
-            Add
-          </button>
-        </div>
-        {form.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {form.tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                style={{
-                  background: "rgba(96,165,250,0.1)",
-                  color: "#60a5fa",
-                  border: "1px solid rgba(96,165,250,0.25)",
-                }}
-              >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="opacity-60 hover:opacity-100"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <TagsField
+        className={full}
+        tags={form.tags}
+        input={form.tagInput}
+        onInput={(tagInput) => setForm((f) => ({ ...f, tagInput }))}
+        onAdd={addTag}
+        onRemove={removeTag}
+      />
 
-      <div>
-        <label className="mb-1 block text-xs font-medium" style={labelStyle}>
-          Notes
-        </label>
-        <textarea
-          rows={4}
-          className={inputCls}
-          style={{ ...inputStyle, resize: "vertical" }}
-          placeholder="Any notes about this candidate…"
-          value={form.notes}
-          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-        />
-      </div>
+      <NotesField
+        className={full}
+        rows={4}
+        value={form.notes}
+        onChange={(notes) => setForm((f) => ({ ...f, notes }))}
+      />
 
-      <div className="flex gap-3 pt-2 pb-4">
+      <div className={`flex gap-3 pt-2 pb-4 ${full}`}>
         <button
           type="submit"
           disabled={saving}

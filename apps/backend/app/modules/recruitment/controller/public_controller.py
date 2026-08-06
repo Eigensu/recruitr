@@ -190,7 +190,9 @@ async def public_apply(
             resume_url=resume_url,
             resume_public_id=resume_public_id,
             resume_raw_text=raw_text,
-            source="External",
+            # Lowercase to match every other writer (and the source filter's
+            # options) — "External" was invisible to the directory's filter.
+            source="external",
             source_channel=source_channel,
             status=CandidateStatus.pending,
         )
