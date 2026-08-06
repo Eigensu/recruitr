@@ -168,6 +168,44 @@ async def test_create_email_normalised_to_lowercase(client_a: AsyncClient) -> No
     assert res.json()["email"] == "upper@test.com"
 
 
+# Every CandidateCreate field must survive the trip to Mongo and back. The
+# handler used to name each field by hand and had quietly stopped copying
+# previous_role, expected_salary, notice_period, source and source_channel —
+# the Add Candidate form sent them and they vanished.
+@pytest.mark.asyncio
+async def test_create_persists_every_submitted_field(client_a: AsyncClient) -> None:
+    extras = {
+        "previous_role": "Front Desk Executive",
+        "expected_salary": 85000,
+        "notice_period": "30 days",
+        "salary": 60000,
+        "source": "external",
+        "source_channel": "LinkedIn",
+        "current_role": "Guest Relations Manager",
+        "city": "Mumbai",
+        "area": "Andheri",
+        "gender": "female",
+        "age": 29,
+        "education_level": "Bachelors",
+        "preferred_train_line": "Western",
+        "cv_link": "https://cv.test/priya",
+        "tags": ["senior"],
+        "notes": "Strong on escalations.",
+    }
+    body = await _create_via_api(client_a, extras)
+
+    for field, expected in extras.items():
+        assert body[field] == expected, f"{field} missing from the create response"
+
+    doc = await Candidate.get(PydanticObjectId(body["id"]))
+    assert doc is not None
+    assert doc.previous_role == "Front Desk Executive"
+    assert doc.expected_salary == 85000
+    assert doc.notice_period == "30 days"
+    assert doc.source == "external"
+    assert doc.source_channel == "LinkedIn"
+
+
 # ── Detail ─────────────────────────────────────────────────────────────────────
 
 
@@ -208,6 +246,47 @@ async def test_update_candidate(client_a: AsyncClient) -> None:
     doc = await Candidate.get(PydanticObjectId(cid))
     assert doc is not None
     assert doc.skills_normalized == ["mixology"]
+
+
+# Same drift as create: the PATCH handler's if-chain ignored these fields, so
+# filling them in from the candidate drawer looked saved but never was.
+@pytest.mark.asyncio
+async def test_update_persists_role_and_compensation_fields(client_a: AsyncClient) -> None:
+    created = await _create_via_api(client_a)
+    cid = created["id"]
+
+    patch = {
+        "previous_role": "Front Desk Executive",
+        "expected_salary": 92000,
+        "notice_period": "60 days",
+        "source": "external",
+        "source_channel": "Naukri",
+    }
+    res = await client_a.patch(f"/api/v1/candidates/{cid}", json=patch)
+    assert res.status_code == 200
+    body = res.json()
+    for field, expected in patch.items():
+        assert body[field] == expected, f"{field} missing from the update response"
+
+    doc = await Candidate.get(PydanticObjectId(cid))
+    assert doc is not None
+    assert doc.previous_role == "Front Desk Executive"
+    assert doc.expected_salary == 92000
+    assert doc.notice_period == "60 days"
+
+
+@pytest.mark.asyncio
+async def test_update_leaves_omitted_fields_untouched(client_a: AsyncClient) -> None:
+    created = await _create_via_api(client_a, {"notice_period": "30 days", "notes": "keep me"})
+
+    res = await client_a.patch(
+        f"/api/v1/candidates/{created['id']}", json={"full_name": "Priya Pillai"}
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["full_name"] == "Priya Pillai"
+    assert body["notice_period"] == "30 days"
+    assert body["notes"] == "keep me"
 
 
 # ── Mappings (drawer) ──────────────────────────────────────────────────────────

@@ -306,26 +306,16 @@ async def list_candidates(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateResponse:
+    # Spread the whole DTO instead of naming each field: the hand-written list
+    # this replaced had drifted from CandidateCreate and silently dropped
+    # previous_role, expected_salary, notice_period, source and source_channel.
+    # Only email and skills need massaging on the way in.
     doc = Candidate(
+        **data.model_dump(exclude={"email", "skills"}),
         brand_id=tenant.brand_id,
-        full_name=data.full_name,
         email=data.email.lower(),
-        phone=data.phone,
-        previous_company=data.previous_company,
-        experience_years=data.experience_years,
-        education_level=data.education_level,
-        city=data.city,
-        area=data.area,
-        gender=data.gender,
-        age=data.age,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
-        tags=data.tags,
-        preferred_train_line=data.preferred_train_line,
-        cv_link=data.cv_link,
-        current_role=data.current_role,
-        salary=data.salary,
-        notes=data.notes,
     )
     try:
         await doc.insert()
@@ -472,42 +462,13 @@ async def update_candidate(
     tenant: _Tenant, candidate_id: str, data: CandidateUpdate
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
-    update: dict = {}
-    if data.full_name is not None:
-        update["full_name"] = data.full_name
-    if data.phone is not None:
-        update["phone"] = data.phone
-    if data.previous_company is not None:
-        update["previous_company"] = data.previous_company
-    if data.experience_years is not None:
-        update["experience_years"] = data.experience_years
-    if data.skills is not None:
-        update["skills"] = data.skills
-        update["skills_normalized"] = [s.lower() for s in data.skills]
-    if data.education_level is not None:
-        update["education_level"] = data.education_level
-    if data.city is not None:
-        update["city"] = data.city
-    if data.area is not None:
-        update["area"] = data.area
-    if data.gender is not None:
-        update["gender"] = data.gender
-    if data.age is not None:
-        update["age"] = data.age
-    if data.tags is not None:
-        update["tags"] = data.tags
-    if data.preferred_train_line is not None:
-        update["preferred_train_line"] = data.preferred_train_line
-    if data.cv_link is not None:
-        update["cv_link"] = data.cv_link
-    if data.current_role is not None:
-        update["current_role"] = data.current_role
-    if data.salary is not None:
-        update["salary"] = data.salary
-    if data.notes is not None:
-        update["notes"] = data.notes
-    if data.status is not None:
-        update["status"] = data.status
+    # Whole-DTO dump instead of a field-by-field if-chain: that chain had drifted
+    # from CandidateUpdate and silently ignored previous_role, expected_salary,
+    # notice_period, source and source_channel on every save. exclude_none keeps
+    # the established contract that an omitted (or null) field means "leave it".
+    update: dict = data.model_dump(exclude_unset=True, exclude_none=True)
+    if "skills" in update:
+        update["skills_normalized"] = [s.lower() for s in update["skills"]]
     if update:
         await doc.set(update)
     cand_oid = to_object_id(candidate_id, "candidate_id")
