@@ -4,7 +4,7 @@ import { buildCandidateQuery } from "./candidates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function serverFetch<T>(path: string): Promise<T> {
+async function serverFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore
     .getAll()
@@ -12,9 +12,11 @@ async function serverFetch<T>(path: string): Promise<T> {
     .join("; ");
 
   const res = await fetch(`${API_URL}${path}`, {
+    ...init,
     headers: {
       Accept: "application/json",
       ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+      ...init.headers,
     },
     cache: "no-store",
   });
@@ -35,8 +37,17 @@ export function getCandidateTags() {
   return serverFetch<string[]>("/api/v1/candidates/tags");
 }
 
-/** Recruiters in this brand, for the "added by" filter. */
+/**
+ * Recruiters in this brand, for the "added by" filter.
+ *
+ * Timeboxed: this feeds one non-critical filter dropdown, called from the
+ * page's async component body with nothing to stream around it — a hung
+ * request here would otherwise hold up the whole candidate directory render,
+ * not just the dropdown.
+ */
 export async function getRecruiters(): Promise<RecruiterOption[]> {
-  const employees = await serverFetch<{ id: string; name: string }[]>("/api/v1/teams/employees");
+  const employees = await serverFetch<{ id: string; name: string }[]>("/api/v1/teams/employees", {
+    signal: AbortSignal.timeout(5000),
+  });
   return employees.map((e) => ({ id: e.id, name: e.name }));
 }

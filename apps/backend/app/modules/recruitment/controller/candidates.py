@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from typing import Annotated
 
 import httpx
@@ -701,11 +702,19 @@ def _opening_event(candidate: Candidate, owner_name: str | None) -> CandidateHis
     )
 
 
-async def _live_placements(scope: TenantScope, cand_oid) -> list[CandidatePlacement]:
+async def _live_placements(
+    scope: TenantScope, cand_oid, fallback_at: datetime
+) -> list[CandidatePlacement]:
     """Placements read off the candidate's current mappings.
 
     The authoritative "where are they now": a mapping sitting in offer_accepted
     or position_close is a live placement even if its history was never recorded.
+
+    `fallback_at` covers a raw Mongo document that predates both `updated_at`
+    and `mapped_at` — Beanie always writes them now, but this reads the motor
+    collection directly, so it cannot lean on that. Without it, a legacy
+    document would leave `at` null and fail CandidatePlacement's validation,
+    404ing this candidate's whole history instead of just guessing a date.
     """
     agg = [
         {
@@ -742,7 +751,7 @@ async def _live_placements(scope: TenantScope, cand_oid) -> list[CandidatePlacem
             role=r["pos"].get("role"),
             client_name=r["pos"].get("client_name"),
             stage=PipelineStage(r["stage"]),
-            at=r.get("updated_at") or r.get("mapped_at"),
+            at=r.get("updated_at") or r.get("mapped_at") or fallback_at,
             employee_name=(r["emp"][0].get("name") if r.get("emp") else None),
             is_current=True,
         )
@@ -804,7 +813,7 @@ async def get_candidate_history(tenant: _Tenant, candidate_id: str) -> Candidate
     ):
         events.insert(0, _opening_event(candidate, await _owner_name(candidate)))
 
-    live = await _live_placements(tenant, candidate.id)
+    live = await _live_placements(tenant, candidate.id, candidate.created_at)
     live_keys = {(p.position_id, p.stage.value) for p in live}
     placements = live + [
         p for p in _historic_placements(rows) if (p.position_id, p.stage.value) not in live_keys

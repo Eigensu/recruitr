@@ -94,12 +94,26 @@ def main() -> int:
     per_employee: dict = defaultdict(int)
     skipped_applicants = 0
     for cand in unowned:
+        # Public-form applicants first, before any lookup: the docstring's
+        # promise is that nobody sourced them, but the mapper/actor lookups
+        # below would happily find the recruiter who *later* mapped one to a
+        # position and misattribute the CV to them — someone who acted on the
+        # application, not the person who brought it in.
+        if (cand.get("source") or "").lower() == "external":
+            skipped_applicants += 1
+            continue
         owner = first_mapper.get(cand["_id"]) or first_actor.get(str(cand["_id"]))
         if owner is None:
-            if (cand.get("source") or "").lower() == "external":
-                skipped_applicants += 1
             continue
-        ops.append(UpdateOne({"_id": cand["_id"]}, {"$set": {"created_by_id": owner}}))
+        # created_by_id: None in the filter, not just at select time: two
+        # invocations of this script (or a concurrent one) could otherwise
+        # race and overwrite an ownership this same write already assigned.
+        ops.append(
+            UpdateOne(
+                {"_id": cand["_id"], "created_by_id": None},
+                {"$set": {"created_by_id": owner}},
+            )
+        )
         per_employee[owner] += 1
 
     print(f"  attributable      : {len(ops)}")

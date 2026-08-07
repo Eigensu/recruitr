@@ -153,6 +153,40 @@ async def test_a_placement_survives_being_unmapped(
 
 
 @pytest.mark.asyncio
+async def test_a_placement_missing_both_timestamps_falls_back_to_created_at(
+    client_a: AsyncClient, position: Position
+) -> None:
+    """A raw legacy document with neither mapped_at nor updated_at set.
+
+    Beanie's default_factory means no mapping written through the app can be
+    missing both, but _live_placements reads the motor collection directly —
+    it does not get that guarantee for free. Before the fallback, `at` came
+    back None and CandidatePlacement(at=None) failed validation, 500ing the
+    whole history endpoint for this candidate.
+    """
+    cid = await _add_candidate(client_a)
+    await Mapping.get_motor_collection().insert_one(
+        {
+            "brand_id": _BRAND,
+            "candidate_id": PydanticObjectId(cid),
+            "position_id": position.id,
+            "client_id": position.client_id,
+            "employee_id": _EMP,
+            "stage": "position_close",
+            "decision": "pending",
+            "history": [],
+            # mapped_at and updated_at deliberately omitted.
+        }
+    )
+
+    res = await client_a.get(f"/api/v1/candidates/{cid}/history")
+    assert res.status_code == 200, res.text
+    placements = res.json()["placements"]
+    assert len(placements) == 1
+    assert placements[0]["at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_a_rejection_is_history_but_not_a_placement(
     client_a: AsyncClient, position: Position
 ) -> None:

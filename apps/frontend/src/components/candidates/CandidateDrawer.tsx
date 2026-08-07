@@ -75,7 +75,14 @@ export default function CandidateDrawer({
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
-  const [history, setHistory] = useState<ApiCandidateHistory | null>(null);
+  // Tagged with the candidate it was fetched for: `candidate` changes on
+  // every switch (a new object each time), but this state only updates once
+  // the fetch resolves. Rendering it unconditionally between those two
+  // moments would show the previous candidate's history under the new one's
+  // name — the effect below has not yet even set loadingHistory back to true.
+  const [history, setHistory] = useState<{ candidateId: string; data: ApiCandidateHistory } | null>(
+    null,
+  );
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
@@ -105,7 +112,7 @@ export default function CandidateDrawer({
     setLoadingHistory(true);
     getCandidateHistory(apiFetch, candidate.id)
       .then((data) => {
-        if (!cancelled) setHistory(data);
+        if (!cancelled) setHistory({ candidateId: candidate.id, data });
       })
       .catch(() => {
         if (!cancelled) setHistory(null);
@@ -148,7 +155,7 @@ export default function CandidateDrawer({
               onUpdate={onUpdate}
               loadingMappings={loadingMappings}
               mappings={mappings}
-              history={history}
+              history={history?.candidateId === candidate.id ? history.data : null}
               loadingHistory={loadingHistory}
               isMaintainer={isMaintainer}
               onApprove={onApprove}

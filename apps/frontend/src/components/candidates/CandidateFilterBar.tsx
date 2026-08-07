@@ -125,27 +125,29 @@ export default function CandidateFilterBar({
         style={inputStyle}
       />
 
-      {recruiters.length > 0 && (
-        <select
-          value={createdBy}
-          onChange={(e) => {
-            const v = e.target.value;
-            setCreatedBy(v);
-            emit({ createdBy: v });
-          }}
-          className="rounded-lg px-3 py-1.5 text-sm outline-none"
-          style={inputStyle}
-          aria-label="Filter by the recruiter who added the candidate"
-        >
-          <option value="">All Recruiters</option>
-          {recruiters.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-          <option value={UNASSIGNED}>Unassigned</option>
-        </select>
-      )}
+      {/* Not gated on recruiters.length: "Unassigned" is a static sentinel
+          independent of that list, and hiding the whole control whenever the
+          list is empty (e.g. it failed to load) would take that option away
+          along with the per-recruiter ones it has nothing to do with. */}
+      <select
+        value={createdBy}
+        onChange={(e) => {
+          const v = e.target.value;
+          setCreatedBy(v);
+          emit({ createdBy: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+        aria-label="Filter by the recruiter who added the candidate"
+      >
+        <option value="">All Recruiters</option>
+        {recruiters.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+        <option value={UNASSIGNED}>Unassigned</option>
+      </select>
 
       <select
         value={source}
