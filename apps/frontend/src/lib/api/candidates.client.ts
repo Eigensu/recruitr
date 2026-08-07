@@ -36,6 +36,11 @@ export async function clientCreateCandidate(data: {
   email: string;
   phone?: string;
   tags?: string[];
+  communication?: string;
+  education?: string;
+  brand_experience?: string;
+  department?: string;
+  specialization?: string;
   cv_link?: string;
   current_role?: string;
   previous_role?: string;
@@ -69,6 +74,11 @@ export async function clientUpdateCandidate(
     experience_years: number;
     education_level: string;
     tags: string[];
+    communication: string;
+    education: string;
+    brand_experience: string;
+    department: string;
+    specialization: string;
     cv_link: string;
     current_role: string;
     previous_role: string;

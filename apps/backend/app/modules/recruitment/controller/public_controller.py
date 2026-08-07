@@ -160,6 +160,9 @@ async def public_apply(
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
     source_channel: Annotated[str | None, Form(description="How the applicant found us")] = None,
+    connect_code: Annotated[
+        str | None, Form(description="Optional connect code for referrals")
+    ] = None,
     resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
@@ -194,6 +197,7 @@ async def public_apply(
             # options) — "External" was invisible to the directory's filter.
             source="external",
             source_channel=source_channel,
+            connect_code=connect_code,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:

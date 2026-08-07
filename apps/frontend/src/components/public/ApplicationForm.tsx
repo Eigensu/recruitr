@@ -39,9 +39,9 @@ interface ApplicationFormProps {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
+  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-white placeholder:text-white/70 focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
 const inputErrorCls = inputCls.replace("border-border", "border-red-500/60");
-const labelCls = "mb-1.5 block text-xs font-medium text-text-secondary";
+const labelCls = "mb-1.5 block text-xs font-medium text-white";
 
 function FieldError({ id, message }: Readonly<{ id: string; message?: string }>) {
   if (!message) return null;
@@ -91,7 +91,7 @@ function Select({
             </option>
           ))}
         </select>
-        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/70" />
       </div>
     </div>
   );
@@ -106,10 +106,10 @@ function Section({
   return (
     <section className="border-t border-border pt-6 first:border-t-0 first:pt-0">
       <div className="mb-4">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">
           {title}
         </h2>
-        <p className="mt-1 text-xs text-text-muted/80">{hint}</p>
+        <p className="mt-1 text-xs text-white/80">{hint}</p>
       </div>
       {children}
     </section>
@@ -131,12 +131,12 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     educationLevel: "",
     sourceChannel: "",
     sourceChannelOther: "",
+    connectCode: "",
   });
   const [resume, setResume] = useState<File | null>(null);
 
   // Null lets the API infer the agency when the deployment has exactly one.
   const targetBrandId = brand?.id ?? brandId ?? null;
-  const agency = brand?.name ?? "our talent network";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,6 +176,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
         ? parsed.data.sourceChannelOther
         : form.sourceChannel;
     if (channel) formData.append("source_channel", channel);
+    if (form.connectCode) formData.append("connect_code", form.connectCode);
     if (resume) formData.append("resume", resume);
 
     try {
@@ -210,7 +211,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           className="size-8 rounded-lg object-cover"
         />
       )}
-      <span className="font-heading text-lg font-bold tracking-tight text-text-primary">
+      <span className="font-heading text-lg font-bold tracking-tight text-white">
         {brand?.name ?? "Binge"}
       </span>
     </div>
@@ -223,10 +224,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-yellow/10 text-yellow">
             <IconCheck className="size-6" />
           </div>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-white">
             Application received
           </h1>
-          <p className="mt-3 text-sm text-text-secondary">
+          <p className="mt-3 text-sm text-white">
             {brand?.name ?? "The team"} has your details
             {resume ? " and your CV" : ""}. You&apos;ll hear back by email if there&apos;s a match.
           </p>
@@ -236,7 +237,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   }
 
   return (
-    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
+    <main className="min-h-dvh bg-shell font-sans text-white theme-transition">
       <header className="flex items-center justify-between px-5 py-5 sm:px-8">
         {masthead}
       </header>
@@ -244,12 +245,11 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       <div className="flex justify-center px-4 pb-16 sm:px-6">
         <div className="w-full max-w-2xl">
           <div className="mb-7">
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
-              Join {agency}
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Find Your Next Job
             </h1>
-            <p className="mt-2.5 text-sm text-text-secondary sm:text-base">
-              Share your details and CV. Takes about two minutes — fields marked{" "}
-              <span className="text-yellow">*</span> are required.
+            <p className="mt-2.5 text-sm text-white sm:text-base">
+              One application. Multiple job opportunities.
             </p>
           </div>
 
@@ -364,13 +364,20 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
               </div>
             </Section>
 
-            <Section title="How you found us" hint="Tells the team which channels are working.">
+            <Section title="How you heard about us" hint="Just so we can say thanks to whoever pointed you our way.">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Select
                   id="sourceChannel"
                   label="Where you heard about us"
                   value={form.sourceChannel}
-                  onChange={(sourceChannel) => setForm({ ...form, sourceChannel })}
+                  onChange={(sourceChannel) => {
+                    const isConnectCodeOption = sourceChannel === "Referred by a Friend" || sourceChannel === "Connected by a Binge Partner";
+                    setForm({ 
+                      ...form, 
+                      sourceChannel,
+                      connectCode: isConnectCodeOption ? form.connectCode : ""
+                    });
+                  }}
                   options={SOURCE_CHANNELS}
                   placeholder="Select..."
                 />
@@ -397,6 +404,24 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
                     />
                   </div>
                 )}
+                {(form.sourceChannel === "Referred by a Friend" || form.sourceChannel === "Connected by a Binge Partner") && (
+                  <div>
+                    <label htmlFor="connectCode" className={labelCls}>
+                      Connect Code
+                    </label>
+                    <input
+                      id="connectCode"
+                      name="connectCode"
+                      className={inputCls}
+                      placeholder="e.g. ABC1234"
+                      value={form.connectCode}
+                      onChange={(e) => setForm({ ...form, connectCode: e.target.value })}
+                    />
+                    <p className="mt-1.5 text-xs text-white/80">
+                      Have a Connect Code? Enter it here (optional).
+                    </p>
+                  </div>
+                )}
               </div>
             </Section>
 
@@ -413,7 +438,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
             </button>
           </form>
 
-          <p className="mt-4 text-center text-xs text-text-muted">
+          <p className="mt-4 text-center text-xs text-white/70">
             Your details are shared only with {brand?.name ?? "the hiring team"}.
           </p>
         </div>

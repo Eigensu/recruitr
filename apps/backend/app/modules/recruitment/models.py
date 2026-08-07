@@ -230,6 +230,11 @@ class Candidate(Document):
     skills: list[str] = Field(default_factory=list)
     skills_normalized: list[str] = Field(default_factory=list)  # lowercased, for $setIntersection
     tags: list[str] = Field(default_factory=list)
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None
@@ -241,6 +246,7 @@ class Candidate(Document):
     notice_period: str | None = None
     source: str | None = None  # internal | external — how the candidate entered the system
     source_channel: str | None = None  # where they came from: LinkedIn, Naukri, referral, …
+    connect_code: str | None = None
     salary: float | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage

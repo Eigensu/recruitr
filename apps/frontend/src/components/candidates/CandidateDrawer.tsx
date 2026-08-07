@@ -25,9 +25,12 @@ import { getAvatarPalette, getInitials } from "./CandidateCard";
 import {
   AgeField,
   AreaField,
+  BrandExperienceField,
   CityField,
+  CommunicationField,
   CurrentRoleField,
   CvLinkField,
+  DepartmentField,
   EducationField,
   ExpectedSalaryField,
   GenderField,
@@ -37,8 +40,9 @@ import {
   ResumeField,
   SourceChannelField,
   SourceField,
+  SpecializationField,
+  StructuredEducationField,
   TagChip,
-  TagsField,
   TextField,
   inputStyle,
   resolveSourceChannel,
@@ -486,16 +490,22 @@ function ViewBody({
       )}
 
       {/* Tags */}
-      {candidate.tags.length > 0 && (
+      {(candidate.communication ||
+        candidate.education ||
+        candidate.brand_experience ||
+        candidate.department ||
+        candidate.specialization) && (
         <>
           <section>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
               Tags
             </h3>
             <div className="flex flex-wrap gap-2">
-              {candidate.tags.map((tag) => (
-                <TagChip key={tag} tag={tag} />
-              ))}
+              {candidate.communication && <TagChip tag={`Comm: ${candidate.communication}`} />}
+              {candidate.education && <TagChip tag={`Edu: ${candidate.education}`} />}
+              {candidate.brand_experience && <TagChip tag={`Exp: ${candidate.brand_experience}`} />}
+              {candidate.department && <TagChip tag={`Dept: ${candidate.department}`} />}
+              {candidate.specialization && <TagChip tag={`Spec: ${candidate.specialization}`} />}
             </div>
           </section>
           <div className="h-px bg-border/50" />
@@ -567,22 +577,19 @@ function EditForm({
     source_channel: candidate.source_channel ?? "",
     source_channel_other: "",
     cv_link: candidate.cv_link ?? "",
-    tagInput: "",
-    tags: [...candidate.tags],
+    communication: candidate.communication ?? "",
+    education: candidate.education ?? "",
+    brand_experience: candidate.brand_experience ?? "",
+    department: candidate.department ?? "",
+    specialization: candidate.specialization ?? "",
     notes: candidate.notes ?? "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function addTag() {
-    const raw = form.tagInput.trim().toLowerCase();
-    if (!raw || form.tags.includes(raw)) return;
-    setForm((f) => ({ ...f, tags: [...f.tags, raw], tagInput: "" }));
-  }
-
-  function removeTag(tag: string) {
-    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
+  function handleDepartmentChange(dept: string) {
+    setForm((f) => ({ ...f, department: dept, specialization: "" }));
   }
 
   function resolvedChannel(): string {
@@ -615,7 +622,11 @@ function EditForm({
         source: form.source.trim() || undefined,
         source_channel: resolvedChannel() || undefined,
         cv_link: form.cv_link.trim() || undefined,
-        tags: form.tags,
+        communication: form.communication || undefined,
+        education: form.education || undefined,
+        brand_experience: form.brand_experience || undefined,
+        department: form.department || undefined,
+        specialization: form.specialization || undefined,
         notes: form.notes.trim() || undefined,
       };
       // The upload happens once, above, before the PATCH: confirming a resume
@@ -745,13 +756,23 @@ function EditForm({
         )}
       </ResumeField>
 
-      <TagsField
-        className={full}
-        tags={form.tags}
-        input={form.tagInput}
-        onInput={(tagInput) => setForm((f) => ({ ...f, tagInput }))}
-        onAdd={addTag}
-        onRemove={removeTag}
+      <CommunicationField
+        value={form.communication}
+        onChange={(communication) => setForm((f) => ({ ...f, communication }))}
+      />
+      <StructuredEducationField
+        value={form.education}
+        onChange={(education) => setForm((f) => ({ ...f, education }))}
+      />
+      <BrandExperienceField
+        value={form.brand_experience}
+        onChange={(brand_experience) => setForm((f) => ({ ...f, brand_experience }))}
+      />
+      <DepartmentField value={form.department} onChange={handleDepartmentChange} />
+      <SpecializationField
+        department={form.department}
+        value={form.specialization}
+        onChange={(specialization) => setForm((f) => ({ ...f, specialization }))}
       />
 
       <NotesField

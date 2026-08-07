@@ -22,6 +22,11 @@ class CandidateCreate(BaseModel):
     age: int | None = Field(default=None, ge=0)
     skills: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -30,6 +35,7 @@ class CandidateCreate(BaseModel):
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
@@ -46,6 +52,11 @@ class CandidateUpdate(BaseModel):
     age: int | None = Field(default=None, ge=0)
     skills: list[str] | None = None
     tags: list[str] | None = None
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -54,6 +65,7 @@ class CandidateUpdate(BaseModel):
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
     status: CandidateStatus | None = None
@@ -73,6 +85,11 @@ class CandidateResponse(BaseModel):
     age: int | None = None
     skills: list[str]
     tags: list[str] = Field(default_factory=list)
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None
@@ -84,6 +101,7 @@ class CandidateResponse(BaseModel):
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = None
     notes: str | None = None
     # Defaulted, not required: candidates created before `status` existed have no
@@ -122,6 +140,11 @@ class CandidateResponse(BaseModel):
             age=doc.age,
             skills=doc.skills,
             tags=doc.tags,
+            communication=doc.communication,
+            education=doc.education,
+            brand_experience=doc.brand_experience,
+            department=doc.department,
+            specialization=doc.specialization,
             preferred_train_line=doc.preferred_train_line,
             cv_link=doc.cv_link,
             resume_url=doc.resume_url,
@@ -135,6 +158,7 @@ class CandidateResponse(BaseModel):
             notes=doc.notes,
             source=doc.source,
             source_channel=doc.source_channel,
+            connect_code=doc.connect_code,
             status=doc.status,
             created_at=doc.created_at,
         )

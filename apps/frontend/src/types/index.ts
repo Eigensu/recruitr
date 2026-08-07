@@ -189,6 +189,11 @@ export interface ApiCandidate {
   age: number | null;
   skills: string[];
   tags: string[];
+  communication: string | null;
+  education: string | null;
+  brand_experience: string | null;
+  department: string | null;
+  specialization: string | null;
   preferred_train_line: string | null;
   cv_link: string | null;
   resume_url: string | null;

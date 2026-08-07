@@ -19,6 +19,11 @@ import {
   EDUCATION_LEVELS,
   SOURCE_CHANNEL_OTHER,
   SOURCE_CHANNELS,
+  COMMUNICATION_OPTIONS,
+  STRUCTURED_EDUCATION_OPTIONS,
+  BRAND_EXPERIENCE_OPTIONS,
+  DEPARTMENT_OPTIONS,
+  SPECIALIZATION_OPTIONS,
 } from "@/lib/constants/candidate";
 
 export const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
@@ -459,5 +464,51 @@ export function TagChip({ tag, onRemove }: Readonly<{ tag: string; onRemove?: ()
         </button>
       )}
     </span>
+  );
+}
+
+export function CommunicationField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Communication" options={COMMUNICATION_OPTIONS} {...props} />;
+}
+
+export function StructuredEducationField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Education" options={STRUCTURED_EDUCATION_OPTIONS} {...props} />;
+}
+
+export function BrandExperienceField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Brand Experience" options={BRAND_EXPERIENCE_OPTIONS} {...props} />;
+}
+
+export function DepartmentField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+  return <SelectField label="Department" options={DEPARTMENT_OPTIONS} {...props} />;
+}
+
+export function SpecializationField({
+  department,
+  value,
+  onChange,
+  className,
+}: Readonly<{
+  department: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}>) {
+  if (!department) return null;
+  const options = SPECIALIZATION_OPTIONS[department] || [];
+  return (
+    <SelectField
+      label="Specialization *"
+      options={options}
+      value={value}
+      onChange={onChange}
+      className={className}
+    />
   );
 }

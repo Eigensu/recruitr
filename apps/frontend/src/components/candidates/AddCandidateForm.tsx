@@ -8,9 +8,12 @@ import type { ApiCandidate } from "@/types";
 import {
   AgeField,
   AreaField,
+  BrandExperienceField,
   CityField,
+  CommunicationField,
   CurrentRoleField,
   CvLinkField,
+  DepartmentField,
   ExpectedSalaryField,
   GenderField,
   NoticePeriodField,
@@ -19,7 +22,8 @@ import {
   ResumeField,
   SourceChannelField,
   SourceField,
-  TagsField,
+  SpecializationField,
+  StructuredEducationField,
   TextField,
   inputStyle,
   resolveSourceChannel,
@@ -31,7 +35,11 @@ const schema = z.object({
   phone: z.string().optional(),
   source: z.enum(["internal", "external"]),
   source_channel: z.string().optional(),
-  tags: z.array(z.string()),
+  communication: z.string().optional(),
+  education: z.string().optional(),
+  brand_experience: z.string().optional(),
+  department: z.string().optional(),
+  specialization: z.string().optional(),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
   previous_role: z.string().optional(),
@@ -63,8 +71,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     source: "internal" as "internal" | "external",
     source_channel: "",
     source_channel_other: "",
-    tagInput: "",
-    tags: [] as string[],
+    communication: "",
+    education: "",
+    brand_experience: "",
+    department: "",
+    specialization: "",
     cv_link: "",
     current_role: "",
     previous_role: "",
@@ -80,14 +91,8 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  function addTag() {
-    const raw = form.tagInput.trim().toLowerCase();
-    if (!raw || form.tags.includes(raw)) return;
-    setForm((f) => ({ ...f, tags: [...f.tags, raw], tagInput: "" }));
-  }
-
-  function removeTag(tag: string) {
-    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
+  function handleDepartmentChange(dept: string) {
+    setForm((f) => ({ ...f, department: dept, specialization: "" }));
   }
 
   function resolvedChannel(): string {
@@ -102,7 +107,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       phone: form.phone || undefined,
       source: form.source,
       source_channel: resolvedChannel() || undefined,
-      tags: form.tags,
+      communication: form.communication || undefined,
+      education: form.education || undefined,
+      brand_experience: form.brand_experience || undefined,
+      department: form.department || undefined,
+      specialization: form.specialization || undefined,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
       previous_role: form.previous_role || undefined,
@@ -124,6 +133,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       return;
     }
 
+    if (parsed.data.department && !parsed.data.specialization) {
+      setErrors({ specialization: "Specialization is required when a department is selected" });
+      return;
+    }
     setLoading(true);
     setErrors({});
     try {
@@ -131,7 +144,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         full_name: parsed.data.name,
         email: parsed.data.email,
         phone: parsed.data.phone,
-        tags: parsed.data.tags,
+        communication: parsed.data.communication,
+        education: parsed.data.education,
+        brand_experience: parsed.data.brand_experience,
+        department: parsed.data.department,
+        specialization: parsed.data.specialization,
         cv_link: parsed.data.cv_link,
         current_role: parsed.data.current_role,
         previous_role: parsed.data.previous_role,
@@ -247,13 +264,23 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
       />
 
-      <TagsField
-        className={full}
-        tags={form.tags}
-        input={form.tagInput}
-        onInput={(tagInput) => setForm((f) => ({ ...f, tagInput }))}
-        onAdd={addTag}
-        onRemove={removeTag}
+      <CommunicationField
+        value={form.communication}
+        onChange={(communication) => setForm((f) => ({ ...f, communication }))}
+      />
+      <StructuredEducationField
+        value={form.education}
+        onChange={(education) => setForm((f) => ({ ...f, education }))}
+      />
+      <BrandExperienceField
+        value={form.brand_experience}
+        onChange={(brand_experience) => setForm((f) => ({ ...f, brand_experience }))}
+      />
+      <DepartmentField value={form.department} onChange={handleDepartmentChange} />
+      <SpecializationField
+        department={form.department}
+        value={form.specialization}
+        onChange={(specialization) => setForm((f) => ({ ...f, specialization }))}
       />
 
       {form.source === "internal" && <ResumeField file={resumeFile} onFile={setResumeFile} />}
