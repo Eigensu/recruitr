@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.common.dtos.pagination import PaginatedResponse
 from app.modules.recruitment.enums import (
@@ -14,7 +14,21 @@ from app.modules.recruitment.enums import (
 )
 
 
-class CandidateCreate(BaseModel):
+class CandidateStructuredTags(BaseModel):
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
+
+    @model_validator(mode="after")
+    def validate_department_specialization(self) -> "CandidateStructuredTags":
+        if self.department and not self.specialization:
+            raise ValueError("Specialization is required when a department is selected")
+        return self
+
+
+class CandidateCreate(CandidateStructuredTags):
     full_name: str
     email: EmailStr | None = None
     phone: str = Field(..., min_length=1)
@@ -27,11 +41,6 @@ class CandidateCreate(BaseModel):
     age: int | None = Field(default=None, ge=0)
     skills: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
-    communication: str | None = None
-    education: str | None = None
-    brand_experience: str | None = None
-    department: str | None = None
-    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -44,7 +53,7 @@ class CandidateCreate(BaseModel):
     notes: str | None = None
 
 
-class CandidateUpdate(BaseModel):
+class CandidateUpdate(CandidateStructuredTags):
     full_name: str | None = None
     phone: str | None = None
     previous_company: str | None = None
@@ -56,11 +65,6 @@ class CandidateUpdate(BaseModel):
     age: int | None = Field(default=None, ge=0)
     skills: list[str] | None = None
     tags: list[str] | None = None
-    communication: str | None = None
-    education: str | None = None
-    brand_experience: str | None = None
-    department: str | None = None
-    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
@@ -74,7 +78,7 @@ class CandidateUpdate(BaseModel):
     status: CandidateStatus | None = None
 
 
-class CandidateResponse(BaseModel):
+class CandidateResponse(CandidateStructuredTags):
     id: str
     full_name: str
     email: str | None = None
@@ -88,11 +92,6 @@ class CandidateResponse(BaseModel):
     age: int | None = None
     skills: list[str]
     tags: list[str] = Field(default_factory=list)
-    communication: str | None = None
-    education: str | None = None
-    brand_experience: str | None = None
-    department: str | None = None
-    specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None

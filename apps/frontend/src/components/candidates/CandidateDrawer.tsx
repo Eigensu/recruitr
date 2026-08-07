@@ -35,13 +35,10 @@ import { getAvatarPalette, getInitials } from "./CandidateCard";
 import {
   AgeField,
   AreaField,
-  BrandExperienceField,
   CityField,
-  CommunicationField,
   CurrentRoleField,
   CurrentSalaryField,
   CvLinkField,
-  DepartmentField,
   EducationField,
   ExpectedSalaryField,
   ExperienceYearsField,
@@ -51,8 +48,7 @@ import {
   ResumeField,
   SourceChannelField,
   SourceField,
-  SpecializationField,
-  StructuredEducationField,
+  StructuredCandidateTags,
   TagChip,
   TextField,
   inputStyle,
@@ -812,16 +808,16 @@ function EditForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleDepartmentChange(dept: string) {
-    setForm((f) => ({ ...f, department: dept, specialization: "" }));
-  }
-
   function resolvedChannel(): string {
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (form.department && !form.specialization) {
+      setError("Specialization is required when a department is selected");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -994,23 +990,9 @@ function EditForm({
         </>
       )}
 
-      <CommunicationField
-        value={form.communication}
-        onChange={(communication) => setForm((f) => ({ ...f, communication }))}
-      />
-      <StructuredEducationField
-        value={form.education}
-        onChange={(education) => setForm((f) => ({ ...f, education }))}
-      />
-      <BrandExperienceField
-        value={form.brand_experience}
-        onChange={(brand_experience) => setForm((f) => ({ ...f, brand_experience }))}
-      />
-      <DepartmentField value={form.department} onChange={handleDepartmentChange} />
-      <SpecializationField
-        department={form.department}
-        value={form.specialization}
-        onChange={(specialization) => setForm((f) => ({ ...f, specialization }))}
+      <StructuredCandidateTags
+        form={form}
+        onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
       />
 
       <NotesField

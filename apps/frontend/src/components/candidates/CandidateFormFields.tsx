@@ -529,3 +529,43 @@ export function SpecializationField({
     />
   );
 }
+
+export function StructuredCandidateTags({
+  form,
+  onChange,
+}: Readonly<{
+  form: {
+    communication?: string;
+    education?: string;
+    brand_experience?: string;
+    department?: string;
+    specialization?: string;
+  };
+  onChange: (updates: Partial<typeof form>) => void;
+}>) {
+  return (
+    <>
+      <CommunicationField
+        value={form.communication || ""}
+        onChange={(v) => onChange({ communication: v })}
+      />
+      <StructuredEducationField
+        value={form.education || ""}
+        onChange={(v) => onChange({ education: v })}
+      />
+      <BrandExperienceField
+        value={form.brand_experience || ""}
+        onChange={(v) => onChange({ brand_experience: v })}
+      />
+      <DepartmentField
+        value={form.department || ""}
+        onChange={(dept) => onChange({ department: dept, specialization: "" })}
+      />
+      <SpecializationField
+        department={form.department || ""}
+        value={form.specialization || ""}
+        onChange={(v) => onChange({ specialization: v })}
+      />
+    </>
+  );
+}

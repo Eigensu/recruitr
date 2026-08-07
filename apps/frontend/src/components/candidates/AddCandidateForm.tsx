@@ -8,13 +8,10 @@ import type { ApiCandidate } from "@/types";
 import {
   AgeField,
   AreaField,
-  BrandExperienceField,
   CityField,
-  CommunicationField,
   CurrentRoleField,
   CurrentSalaryField,
   CvLinkField,
-  DepartmentField,
   ExpectedSalaryField,
   ExperienceYearsField,
   GenderField,
@@ -23,8 +20,7 @@ import {
   ResumeField,
   SourceChannelField,
   SourceField,
-  SpecializationField,
-  StructuredEducationField,
+  StructuredCandidateTags,
   TextField,
   inputStyle,
   resolveSourceChannel,
@@ -99,10 +95,6 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-
-  function handleDepartmentChange(dept: string) {
-    setForm((f) => ({ ...f, department: dept, specialization: "" }));
-  }
 
   function resolvedChannel(): string {
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
@@ -187,10 +179,6 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     }
   }
 
-  // Two fields per row: the single column ran far past the fold and pushed the
-  // submit button out of sight. Short fields pair up; the wide ones — source,
-  // tags, notes — span both, as do the conditional fields, which would
-  // otherwise shift every later field into the opposite column when they show.
   const full = "sm:col-span-2";
 
   return (
@@ -282,23 +270,9 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
       />
 
-      <CommunicationField
-        value={form.communication}
-        onChange={(communication) => setForm((f) => ({ ...f, communication }))}
-      />
-      <StructuredEducationField
-        value={form.education}
-        onChange={(education) => setForm((f) => ({ ...f, education }))}
-      />
-      <BrandExperienceField
-        value={form.brand_experience}
-        onChange={(brand_experience) => setForm((f) => ({ ...f, brand_experience }))}
-      />
-      <DepartmentField value={form.department} onChange={handleDepartmentChange} />
-      <SpecializationField
-        department={form.department}
-        value={form.specialization}
-        onChange={(specialization) => setForm((f) => ({ ...f, specialization }))}
+      <StructuredCandidateTags
+        form={form}
+        onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
       />
 
       {form.source === "internal" && <ResumeField file={resumeFile} onFile={setResumeFile} />}
