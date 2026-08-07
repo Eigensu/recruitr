@@ -84,6 +84,9 @@ class TopCandidateItem(BaseModel):
     tags: list[str] = Field(default_factory=list)
     preferred_train_line: str | None = None
     resume_url: str | None = None
+    # True when resume_url was withheld because another recruiter sourced this
+    # candidate — see recruitment/utils/cv_access.py.
+    cv_locked: bool = False
     match_score: float | None = None  # null when position has no requirements
     is_mapped: bool = False
 

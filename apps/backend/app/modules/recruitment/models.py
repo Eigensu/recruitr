@@ -14,6 +14,7 @@ from pymongo import IndexModel
 
 from app.modules.recruitment.enums import (
     ActivityType,
+    CandidateEventType,
     CandidateStatus,
     Decision,
     EducationLevel,
@@ -218,7 +219,10 @@ class Candidate(Document):
 
     brand_id: PydanticObjectId
     full_name: str
-    email: str  # unique within brand
+    # Optional: phone is the mandatory contact channel for a manually-added
+    # candidate now (see CandidateCreate), email is not. The unique index
+    # below is partial for exactly this reason — see its comment.
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float = 0
@@ -241,7 +245,6 @@ class Candidate(Document):
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None  # internal | external — how the candidate entered the system
@@ -251,6 +254,11 @@ class Candidate(Document):
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     status: CandidateStatus = CandidateStatus.approved
+    # The recruiter who put this person in the pool — FK → employees._id. Null
+    # for public-form applications (nobody sourced them) and for records that
+    # predate the field. Ownership gates who may open the CV: see
+    # utils/cv_access.py, where a null owner means "shared, anyone may view".
+    created_by_id: PydanticObjectId | None = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -262,9 +270,19 @@ class Candidate(Document):
     class Settings:
         name = "candidates"
         indexes = [
-            IndexModel([("brand_id", 1), ("email", 1)], unique=True),
+            # Partial, not a plain unique index: email is now optional (phone is
+            # the mandatory contact field), and Mongo indexes a missing/null
+            # email as the same value for every such document — a second
+            # emailless candidate in the same brand would 409 as a "duplicate"
+            # of the first without this filter excluding them from the index.
+            IndexModel(
+                [("brand_id", 1), ("email", 1)],
+                unique=True,
+                partialFilterExpression={"email": {"$type": "string"}},
+            ),
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
+            IndexModel([("brand_id", 1), ("created_by_id", 1)]),
             IndexModel("created_at"),
         ]
 
@@ -273,11 +291,18 @@ class Candidate(Document):
 
 
 class StageEvent(BaseModel):
-    """Immutable history entry appended on every stage transition."""
+    """Immutable history entry appended on every stage transition.
+
+    The trail for one mapping, and it dies with that mapping — unmapping a
+    candidate deletes the row. CandidateEvent below is the permanent record.
+    """
 
     stage: PipelineStage
+    # Absent on entries written before this field existed, and on the opening
+    # event of a mapping (there is no stage to have come from).
+    from_stage: PipelineStage | None = None
     decision: Decision = Decision.pending
-    by_employee_id: PydanticObjectId
+    by_employee_id: PydanticObjectId | None = None
     at: datetime = Field(default_factory=_utcnow)
 
 
@@ -372,6 +397,55 @@ class ActivityLog(Document):
             IndexModel("employee_id"),
             IndexModel("target_entity_id"),
             IndexModel("created_at", expireAfterSeconds=7776000),  # 90-day TTL
+        ]
+
+
+# ── CandidateEvent ─────────────────────────────────────────────────────────────
+
+
+class CandidateEvent(Document):
+    """One permanent entry in a candidate's employment history.
+
+    Append-only, and deliberately not the activity feed: ActivityLog above
+    carries a 90-day TTL and is keyed to the recruiter for the leaderboard, so
+    a placement made last year has already vanished from it. This collection
+    never expires and is never deleted — it is what the candidate profile reads
+    to answer "which companies has this person been put in front of, and what
+    came of it".
+
+    Client, position and role are snapshotted rather than joined at read time.
+    A mapping is deleted outright when a candidate is unmapped, and a position
+    can be closed or renamed; the history has to survive both, so it stores
+    what was true when the event happened.
+    """
+
+    brand_id: PydanticObjectId
+    candidate_id: PydanticObjectId
+    event_type: CandidateEventType
+    at: datetime = Field(default_factory=_utcnow)
+    # Who acted. Null for public-form applications and backfilled rows whose
+    # actor could not be recovered.
+    employee_id: PydanticObjectId | None = None
+    employee_name: str | None = None
+    # Position context — null on events that are not about a position
+    # (created/applied/approved/declined).
+    position_id: PydanticObjectId | None = None
+    position_code: str | None = None
+    position_role: str | None = None
+    client_id: PydanticObjectId | None = None
+    client_name: str | None = None
+    # Stage transition — set on mapped/stage_moved.
+    from_stage: PipelineStage | None = None
+    to_stage: PipelineStage | None = None
+    note: str | None = None
+
+    class Settings:
+        name = "candidate_events"
+        indexes = [
+            IndexModel([("brand_id", 1), ("candidate_id", 1), ("at", -1)]),
+            IndexModel([("brand_id", 1), ("event_type", 1)]),
+            IndexModel("position_id"),
+            IndexModel("employee_id"),
         ]
 
 

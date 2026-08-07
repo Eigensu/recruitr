@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,9 +21,25 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant, get_viewer
-from app.modules.recruitment.enums import KANBAN_STAGES, TERMINAL_STAGES, PipelineStage
-from app.modules.recruitment.models import ActivityLog, Candidate, Mapping, Position
-from app.modules.recruitment.repository_impl import recompute_position_seats
+from app.modules.recruitment.enums import (
+    KANBAN_STAGES,
+    TERMINAL_STAGES,
+    CandidateEventType,
+    Decision,
+    PipelineStage,
+)
+from app.modules.recruitment.models import (
+    ActivityLog,
+    Candidate,
+    Mapping,
+    Position,
+    StageEvent,
+)
+from app.modules.recruitment.repository_impl import (
+    move_stage,
+    recompute_position_seats,
+    record_candidate_event,
+)
 from app.modules.recruitment.schemas import (
     PipelineBoard,
     PipelineStageColumn,
@@ -32,6 +48,7 @@ from app.modules.recruitment.schemas import (
     StageMoveResponse,
     TenantScope,
 )
+from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
 
 router = APIRouter()
@@ -58,6 +75,10 @@ class FilteredCandidate(BaseModel):
     tags: list[str] = []
     source: str = "internal"
     cv_link: str | None = None
+    created_by_id: str | None = None
+    # True when the CV was withheld because another recruiter sourced this
+    # candidate — see recruitment/utils/cv_access.py.
+    cv_locked: bool = False
     status: Literal["pending", "accepted", "rejected"] = "pending"
 
 
@@ -72,6 +93,8 @@ class SuggestedCandidate(BaseModel):
     tags: list[str] = []
     source: str = "internal"
     cv_link: str | None = None
+    created_by_id: str | None = None
+    cv_locked: bool = False
     match_score: float
 
 
@@ -282,11 +305,20 @@ async def move_mapping_to_stage(
             recruiter_score_delta=0,
         )
 
-    # Update mapping
-    await mapping.set({"stage": req.new_stage.value, "decision": "pending"})
+    # Through the repository rather than a bare mapping.set(): that shortcut
+    # skipped the mapping's own stage history, the permanent candidate history,
+    # and the denormalized candidate.current_stage, so a card dragged across the
+    # board left no trace anywhere once the board was next re-arranged.
+    await move_stage(
+        mapping=mapping,
+        new_stage=req.new_stage,
+        decision=Decision.pending,
+        scope=tenant,
+    )
 
-    # Recompute seats when crossing a terminal stage boundary in either direction
-    if req.new_stage in TERMINAL_STAGES or old_stage in TERMINAL_STAGES:
+    # move_stage already recomputes seats on the way *into* a terminal stage;
+    # this covers dragging a card back out of one.
+    if req.new_stage not in TERMINAL_STAGES and old_stage in TERMINAL_STAGES:
         await recompute_position_seats(mapping.position_id)
 
     # Calculate recruiter score
@@ -402,6 +434,7 @@ async def get_filtered_pipeline(
                 "tags": {"$ifNull": ["$candidate.tags", []]},
                 "source": {"$ifNull": ["$candidate.source", "internal"]},
                 "cv_link": "$candidate.cv_link",
+                "created_by_id": {_TO_STR: "$candidate.created_by_id"},
                 "status": {
                     "$switch": {
                         "branches": [
@@ -430,7 +463,7 @@ async def get_filtered_pipeline(
     )
 
     rows = await (await Mapping.get_motor_collection().aggregate(agg)).to_list(length=None)
-    return [FilteredCandidate(**r) for r in rows]
+    return [FilteredCandidate(**r) for r in mask_cv_rows(rows, viewer)]
 
 
 # ── Top candidates (keyword match scoring) ─────────────────────────────────────
@@ -484,13 +517,14 @@ async def get_top_candidates(
                 "tags": {"$ifNull": ["$tags", []]},
                 "source": "internal",
                 "cv_link": None,
+                "created_by_id": {_TO_STR: "$created_by_id"},
                 "match_score": 1,
             }
         },
     ]
 
     rows = await (await Candidate.get_motor_collection().aggregate(agg)).to_list(length=None)
-    return [SuggestedCandidate(**r) for r in rows]
+    return [SuggestedCandidate(**r) for r in mask_cv_rows(rows, tenant)]
 
 
 # ── Match / assign candidate to position ───────────────────────────────────────
@@ -518,37 +552,59 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
 
     target_stage = _STATUS_TO_STAGE.get(req.target_status, PipelineStage.sourced)
 
-    existing = await Mapping.find_one(
+    mapping = await Mapping.find_one(
         {"candidate_id": cand_oid, "position_id": pos_oid, "brand_id": tenant.brand_id}
     )
-    prev_stage = existing.stage if existing else None
-    if existing:
-        await existing.set({"stage": target_stage.value, "updated_at": datetime.now(UTC)})
-    else:
+    prev_stage = mapping.stage if mapping else None
+
+    if mapping is None:
+        # New mappings always open at `sourced`, then move — even when the
+        # recruiter accepted or rejected in one click. Writing the final stage
+        # straight onto the insert would leave a candidate whose history says
+        # they were rejected without ever having been put forward.
         mapping = Mapping(
             brand_id=tenant.brand_id,
             candidate_id=cand_oid,
             position_id=pos_oid,
             client_id=position.client_id,
             employee_id=tenant.employee_id,
-            stage=target_stage,
+            stage=PipelineStage.sourced,
+            history=[
+                StageEvent(
+                    stage=PipelineStage.sourced,
+                    by_employee_id=tenant.employee_id,
+                )
+            ],
         )
         try:
             await mapping.insert()
         except DuplicateKeyError:
             # Race condition: another request inserted between find_one and insert.
-            race_existing = await Mapping.find_one(
+            mapping = await Mapping.find_one(
                 {"brand_id": tenant.brand_id, "candidate_id": cand_oid, "position_id": pos_oid}
             )
-            if race_existing:
-                prev_stage = race_existing.stage
-                await race_existing.set(
-                    {"stage": target_stage.value, "updated_at": datetime.now(UTC)}
-                )
-            else:
+            if mapping is None:
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to create mapping"
                 ) from None
+            prev_stage = mapping.stage
+        else:
+            prev_stage = PipelineStage.sourced.value
+            await record_candidate_event(
+                scope=tenant,
+                candidate_id=cand_oid,
+                event_type=CandidateEventType.mapped,
+                position=position,
+                to_stage=PipelineStage.sourced,
+            )
+
+    if mapping.stage != target_stage.value:
+        await move_stage(
+            mapping=mapping,
+            new_stage=target_stage,
+            decision=Decision.pending,
+            scope=tenant,
+        )
 
     if target_stage in TERMINAL_STAGES or prev_stage in TERMINAL_STAGES:
         await recompute_position_seats(pos_oid)

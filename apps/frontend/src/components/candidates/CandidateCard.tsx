@@ -1,7 +1,16 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { IconMail, IconBriefcase, IconFileText, IconLink, IconTrash } from "@tabler/icons-react";
+import {
+  IconMail,
+  IconBriefcase,
+  IconFileText,
+  IconLink,
+  IconLock,
+  IconPhone,
+  IconTrash,
+  IconUserCheck,
+} from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
 import { resolveCvRef } from "@/lib/api/candidates";
 
@@ -71,11 +80,9 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
         <span className="truncate">
           {candidate.current_role
             ? `${candidate.current_role} · ${candidate.experience_years}y`
-            : candidate.previous_role
-              ? `${candidate.previous_role} · ${candidate.experience_years}y`
-              : candidate.previous_company
-                ? candidate.previous_company
-                : `Independent · ${candidate.experience_years}y`}
+            : candidate.previous_company
+              ? candidate.previous_company
+              : `Independent · ${candidate.experience_years}y`}
         </span>
       </p>
       {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
@@ -88,6 +95,12 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
           ]
             .filter(Boolean)
             .join(" | ")}
+        </p>
+      )}
+      {candidate.created_by_name && (
+        <p className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1 truncate">
+          <IconUserCheck className="size-3 shrink-0 opacity-50" />
+          <span className="truncate">Added by {candidate.created_by_name}</span>
         </p>
       )}
     </div>
@@ -115,21 +128,47 @@ function CandidateSkills({ skills }: { skills: string[] }) {
 }
 
 function CandidateFooter({
+  phone,
   email,
   cvRef,
   hasCvLink,
+  cvLocked,
+  ownerName,
 }: {
-  email: string;
+  phone: string | null;
+  email: string | null;
   cvRef: { href?: string | null } | null;
   hasCvLink: boolean;
+  cvLocked?: boolean;
+  ownerName?: string | null;
 }) {
+  // Phone leads: it's the mandatory contact field now, email is not. Older
+  // candidates predating that change may still only have an email on file.
+  const contact = phone ?? email;
   return (
     <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
       <div className="flex items-center gap-1.5 min-w-0">
-        <IconMail className="size-3.5 shrink-0 opacity-50" />
-        <span className="truncate">{email}</span>
+        {phone ? (
+          <IconPhone className="size-3.5 shrink-0 opacity-50" />
+        ) : (
+          <IconMail className="size-3.5 shrink-0 opacity-50" />
+        )}
+        <span className="truncate">{contact ?? "No contact info"}</span>
       </div>
-      {cvRef &&
+      {cvLocked ? (
+        <span
+          className="pointer-events-auto relative z-10 flex shrink-0 items-center gap-1 font-medium opacity-40 cursor-default"
+          title={
+            ownerName
+              ? `CV held by ${ownerName} — only they can open it`
+              : "CV held by another recruiter"
+          }
+        >
+          <IconLock className="size-3.5" />
+          CV
+        </span>
+      ) : (
+        cvRef &&
         (cvRef.href ? (
           <a
             href={cvRef.href}
@@ -148,7 +187,8 @@ function CandidateFooter({
             <IconFileText className="size-3.5" />
             CV
           </span>
-        ))}
+        ))
+      )}
     </div>
   );
 }
@@ -272,7 +312,14 @@ export default function CandidateCard({
 
           {candidate.status !== "PENDING" && <CandidateSkills skills={candidate.skills} />}
 
-          <CandidateFooter email={candidate.email} cvRef={cvRef} hasCvLink={!!candidate.cv_link} />
+          <CandidateFooter
+            phone={candidate.phone}
+            email={candidate.email}
+            cvRef={cvRef}
+            hasCvLink={!!candidate.cv_link}
+            cvLocked={candidate.cv_locked}
+            ownerName={candidate.created_by_name}
+          />
 
           {isMaintainer && (onApprove || onReject) && (
             <div className="mt-3 pt-3 border-t border-border/40 flex items-center gap-2">

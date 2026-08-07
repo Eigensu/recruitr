@@ -9,6 +9,7 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   if (filters.search) params.set("search", filters.search);
   if (filters.source) params.set("source", filters.source);
   if (filters.source_channel) params.set("source_channel", filters.source_channel);
+  if (filters.created_by) params.set("created_by", filters.created_by);
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
@@ -33,8 +34,8 @@ export async function clientFetchCandidates(
 
 export async function clientCreateCandidate(data: {
   full_name: string;
-  email: string;
-  phone?: string;
+  email?: string;
+  phone: string;
   tags?: string[];
   communication?: string;
   education?: string;
@@ -43,7 +44,7 @@ export async function clientCreateCandidate(data: {
   specialization?: string;
   cv_link?: string;
   current_role?: string;
-  previous_role?: string;
+  experience_years?: number;
   expected_salary?: number;
   notice_period?: string;
   source?: string;
@@ -81,7 +82,6 @@ export async function clientUpdateCandidate(
     specialization: string;
     cv_link: string;
     current_role: string;
-    previous_role: string;
     expected_salary: number;
     notice_period: string;
     source: string;

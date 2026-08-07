@@ -15,10 +15,20 @@ import {
   IconCheck,
   IconClockHour4,
   IconSchool,
+  IconLock,
+  IconUserCheck,
+  IconBuildingStore,
+  IconHistory,
 } from "@tabler/icons-react";
-import type { ApiCandidate, ApiCandidateMappingItem } from "@/types";
+import type {
+  ApiCandidate,
+  ApiCandidateHistory,
+  ApiCandidateHistoryEvent,
+  ApiCandidateMappingItem,
+  ApiCandidatePlacement,
+} from "@/types";
 import { useApiFetch } from "@/lib/api";
-import { getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
+import { getCandidateHistory, getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
@@ -29,14 +39,15 @@ import {
   CityField,
   CommunicationField,
   CurrentRoleField,
+  CurrentSalaryField,
   CvLinkField,
   DepartmentField,
   EducationField,
   ExpectedSalaryField,
+  ExperienceYearsField,
   GenderField,
   NoticePeriodField,
   NotesField,
-  PreviousRoleField,
   ResumeField,
   SourceChannelField,
   SourceField,
@@ -69,6 +80,15 @@ export default function CandidateDrawer({
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
   const [loadingMappings, setLoadingMappings] = useState(false);
+  // Tagged with the candidate it was fetched for: `candidate` changes on
+  // every switch (a new object each time), but this state only updates once
+  // the fetch resolves. Rendering it unconditionally between those two
+  // moments would show the previous candidate's history under the new one's
+  // name — the effect below has not yet even set loadingHistory back to true.
+  const [history, setHistory] = useState<{ candidateId: string; data: ApiCandidateHistory } | null>(
+    null,
+  );
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (!candidate) return;
@@ -84,6 +104,26 @@ export default function CandidateDrawer({
       })
       .finally(() => {
         if (!cancelled) setLoadingMappings(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiFetch, candidate]);
+
+  useEffect(() => {
+    if (!candidate) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingHistory(true);
+    getCandidateHistory(apiFetch, candidate.id)
+      .then((data) => {
+        if (!cancelled) setHistory({ candidateId: candidate.id, data });
+      })
+      .catch(() => {
+        if (!cancelled) setHistory(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingHistory(false);
       });
     return () => {
       cancelled = true;
@@ -120,6 +160,8 @@ export default function CandidateDrawer({
               onUpdate={onUpdate}
               loadingMappings={loadingMappings}
               mappings={mappings}
+              history={history?.candidateId === candidate.id ? history.data : null}
+              loadingHistory={loadingHistory}
               isMaintainer={isMaintainer}
               onApprove={onApprove}
               onReject={onReject}
@@ -137,6 +179,8 @@ function DrawerInner({
   onUpdate,
   loadingMappings,
   mappings,
+  history,
+  loadingHistory,
   isMaintainer,
   onApprove,
   onReject,
@@ -146,6 +190,8 @@ function DrawerInner({
   onUpdate?: (updated: ApiCandidate) => void;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  history: ApiCandidateHistory | null;
+  loadingHistory: boolean;
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
@@ -224,20 +270,30 @@ function DrawerInner({
 
         {/* Contact */}
         <div className="mt-4 flex flex-col gap-2">
-          <a
-            href={`mailto:${candidate.email}`}
-            className="flex items-center gap-2 text-xs text-text-muted hover:text-yellow transition-colors w-fit"
-          >
-            <IconMail className="size-3.5 shrink-0" />
-            {candidate.email}
-          </a>
           {candidate.phone && (
             <span className="flex items-center gap-2 text-xs text-text-muted">
               <IconPhone className="size-3.5 shrink-0" />
               {candidate.phone}
             </span>
           )}
-          {cvRef &&
+          {candidate.email && (
+            <a
+              href={`mailto:${candidate.email}`}
+              className="flex items-center gap-2 text-xs text-text-muted hover:text-yellow transition-colors w-fit"
+            >
+              <IconMail className="size-3.5 shrink-0" />
+              {candidate.email}
+            </a>
+          )}
+          {candidate.cv_locked ? (
+            <span className="flex items-center gap-2 text-xs opacity-50 cursor-default w-fit">
+              <IconLock className="size-3.5 shrink-0" />
+              {candidate.created_by_name
+                ? `CV held by ${candidate.created_by_name}`
+                : "CV held by another recruiter"}
+            </span>
+          ) : (
+            cvRef &&
             (cvRef.href ? (
               <a
                 href={cvRef.href}
@@ -260,7 +316,14 @@ function DrawerInner({
                 <IconFileText className="size-3.5 shrink-0" />
                 {cvRef.label} (on file)
               </span>
-            ))}
+            ))
+          )}
+          {candidate.created_by_name && (
+            <span className="flex items-center gap-2 text-xs text-text-muted">
+              <IconUserCheck className="size-3.5 shrink-0" />
+              Added by {candidate.created_by_name}
+            </span>
+          )}
         </div>
       </div>
 
@@ -276,6 +339,8 @@ function DrawerInner({
           candidate={candidate}
           loadingMappings={loadingMappings}
           mappings={mappings}
+          history={history}
+          loadingHistory={loadingHistory}
           showReviewHint={canDecide}
           onEdit={() => setIsEditing(true)}
         />
@@ -347,12 +412,16 @@ function ViewBody({
   candidate,
   loadingMappings,
   mappings,
+  history,
+  loadingHistory,
   showReviewHint,
   onEdit,
 }: Readonly<{
   candidate: ApiCandidate;
   loadingMappings: boolean;
   mappings: ApiCandidateMappingItem[];
+  history: ApiCandidateHistory | null;
+  loadingHistory: boolean;
   showReviewHint?: boolean;
   onEdit: () => void;
 }>) {
@@ -404,19 +473,10 @@ function ViewBody({
         </>
       )}
 
-      {/* Previous role / notice / education / source */}
-      {(candidate.previous_role ||
-        candidate.notice_period ||
-        candidate.education_level ||
-        candidate.source) && (
+      {/* Notice / education / source */}
+      {(candidate.notice_period || candidate.education_level || candidate.source) && (
         <>
           <section className="flex flex-wrap gap-4">
-            {candidate.previous_role && (
-              <div className="flex items-center gap-2 text-sm text-text-muted">
-                <IconBriefcase className="size-3.5 shrink-0 opacity-60" />
-                <span>Prev: {candidate.previous_role}</span>
-              </div>
-            )}
             {candidate.notice_period && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span>Notice: {candidate.notice_period}</span>
@@ -530,6 +590,27 @@ function ViewBody({
         </>
       )}
 
+      {/* Placements — where this person actually landed. Kept above the live
+          mappings: it is the part of the profile that outlives the board. */}
+      {(history?.placements.length ?? 0) > 0 && (
+        <>
+          <section>
+            <div className="flex items-center gap-1.5 mb-3">
+              <IconBuildingStore className="size-3.5 opacity-60 text-text-muted" />
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                Placements
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {history?.placements.map((p) => (
+                <PlacementRow key={`${p.position_id}-${p.stage}-${p.at}`} placement={p} />
+              ))}
+            </div>
+          </section>
+          <div className="h-px bg-border/50" />
+        </>
+      )}
+
       {/* Mapped positions */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -542,7 +623,150 @@ function ViewBody({
         </div>
         <MappingsList loadingMappings={loadingMappings} mappings={mappings} />
       </section>
+
+      <div className="h-px bg-border/50" />
+
+      {/* Full history */}
+      <section>
+        <div className="flex items-center gap-1.5 mb-3">
+          <IconHistory className="size-3.5 opacity-60 text-text-muted" />
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+            History
+          </h3>
+        </div>
+        <HistoryTimeline loading={loadingHistory} events={history?.events ?? []} />
+      </section>
     </div>
+  );
+}
+
+/* ── History ───────────────────────────────────────────────────────────────── */
+
+const STAGE_LABELS: Record<string, string> = {
+  sourced: "Sourced",
+  sent_to_client: "Sent to client",
+  interview: "Interview",
+  decision_pending: "Decision pending",
+  offer: "Offer",
+  offer_accepted: "Offer accepted",
+  position_close: "Joined",
+  rejected: "Rejected",
+  on_hold: "On hold",
+};
+
+function stageLabel(stage: string | null): string {
+  if (!stage) return "";
+  return STAGE_LABELS[stage] ?? stage.replaceAll("_", " ");
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function PlacementRow({ placement }: Readonly<{ placement: ApiCandidatePlacement }>) {
+  const joined = placement.stage === "position_close";
+  return (
+    <div className="flex items-start justify-between gap-2 rounded-xl border border-border bg-surface-panel p-3">
+      <div className="min-w-0">
+        <p className="font-heading font-bold text-text-primary text-sm leading-snug truncate">
+          {placement.client_name ?? "Unknown company"}
+        </p>
+        <p className="text-[11px] text-text-muted mt-0.5 truncate">
+          {[placement.role, placement.position_code].filter(Boolean).join(" · ")}
+        </p>
+        <p className="text-[10px] text-text-muted mt-1">
+          {formatDate(placement.at)}
+          {placement.employee_name ? ` · ${placement.employee_name}` : ""}
+          {placement.is_current ? "" : " · since moved on"}
+        </p>
+      </div>
+      <span
+        className="shrink-0 rounded-lg border px-2 py-1 text-[9px] font-bold uppercase"
+        style={
+          joined
+            ? {
+                background: "rgba(52,211,153,0.1)",
+                color: "#34d399",
+                borderColor: "rgba(52,211,153,0.2)",
+              }
+            : {
+                background: "rgba(243,255,84,0.1)",
+                color: "var(--color-yellow)",
+                borderColor: "rgba(243,255,84,0.2)",
+              }
+        }
+      >
+        {joined ? "Joined" : "Selected"}
+      </span>
+    </div>
+  );
+}
+
+function eventSummary(event: ApiCandidateHistoryEvent): string {
+  const at = event.client_name ? ` at ${event.client_name}` : "";
+  switch (event.event_type) {
+    case "applied":
+      return "Applied through the public form";
+    case "created":
+      return "Added to the talent pool";
+    case "approved":
+      return "Application approved";
+    case "declined":
+      return "Application declined";
+    case "mapped":
+      return `Put forward for ${event.position_role ?? "a position"}${at}`;
+    case "unmapped":
+      return `Withdrawn from ${event.position_role ?? "a position"}${at}`;
+    case "stage_moved":
+      return event.from_stage
+        ? `${stageLabel(event.from_stage)} → ${stageLabel(event.to_stage)}${at}`
+        : `${stageLabel(event.to_stage)}${at}`;
+    default:
+      return event.event_type;
+  }
+}
+
+function HistoryTimeline({
+  loading,
+  events,
+}: Readonly<{ loading: boolean; events: ApiCandidateHistoryEvent[] }>) {
+  if (loading) {
+    return (
+      <div className="h-16 rounded-xl border border-dashed border-border flex items-center justify-center">
+        <div className="size-4 border-2 border-border border-t-text-muted rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (events.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-border bg-surface-panel p-4 text-center text-xs text-text-muted">
+        Nothing recorded yet.
+      </p>
+    );
+  }
+  // Newest first: the last thing that happened is the thing being looked for.
+  const ordered = [...events].reverse();
+  return (
+    <ol className="relative space-y-3 border-l border-border/60 pl-4">
+      {ordered.map((event, i) => (
+        <li key={event.id ?? `${event.at}-${i}`} className="relative">
+          <span
+            className="absolute -left-[21px] top-1.5 size-1.5 rounded-full"
+            style={{ background: i === 0 ? "var(--color-yellow)" : "var(--color-border-val)" }}
+          />
+          <p className="text-xs text-text-primary leading-snug">{eventSummary(event)}</p>
+          <p className="text-[10px] text-text-muted mt-0.5">
+            {formatDate(event.at)}
+            {event.employee_name ? ` · ${event.employee_name}` : ""}
+            {event.position_code ? ` · ${event.position_code}` : ""}
+          </p>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -563,13 +787,13 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
-    previous_role: candidate.previous_role ?? "",
     city: candidate.city ?? "",
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
     age: candidate.age == null ? "" : String(candidate.age),
     education_level: candidate.education_level ?? "",
     expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
+    salary: candidate.salary == null ? "" : String(candidate.salary),
     notice_period: candidate.notice_period ?? "",
     // Lowercased: the public form used to store "External", which matched
     // neither radio and left the source unset for every applicant.
@@ -611,13 +835,13 @@ function EditForm({
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
         current_role: form.current_role.trim() || undefined,
-        previous_role: form.previous_role.trim() || undefined,
         city: form.city.trim() || undefined,
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
         age: form.age ? Number(form.age) : undefined,
         education_level: form.education_level || undefined,
         expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
+        salary: form.salary ? Number(form.salary) : undefined,
         notice_period: form.notice_period.trim() || undefined,
         source: form.source.trim() || undefined,
         source_channel: resolvedChannel() || undefined,
@@ -697,11 +921,7 @@ function EditForm({
         value={form.previous_company}
         onChange={(previous_company) => setForm((f) => ({ ...f, previous_company }))}
       />
-      <TextField
-        label="Experience (years)"
-        type="number"
-        min="0"
-        step="0.5"
+      <ExperienceYearsField
         value={form.experience_years}
         onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
       />
@@ -709,10 +929,6 @@ function EditForm({
       <CurrentRoleField
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
-      />
-      <PreviousRoleField
-        value={form.previous_role}
-        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
       />
 
       <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
@@ -729,32 +945,54 @@ function EditForm({
         value={form.expected_salary}
         onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
       />
+      <CurrentSalaryField
+        value={form.salary}
+        onChange={(salary) => setForm((f) => ({ ...f, salary }))}
+      />
       <NoticePeriodField
         value={form.notice_period}
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
       />
 
-      <CvLinkField
-        className={full}
-        required={form.source === "external"}
-        value={form.cv_link}
-        onChange={(cv_link) => setForm((f) => ({ ...f, cv_link }))}
-      />
+      {/* The CV belongs to whoever sourced this candidate. Editing the rest of
+          the profile is still fair game, but the two CV controls are not shown
+          at all: an empty CV link field reads as "no CV", and uploading a
+          replacement resume would overwrite work that is not this recruiter's. */}
+      {candidate.cv_locked ? (
+        <p
+          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${full}`}
+          style={{ ...inputStyle, opacity: 0.7 }}
+        >
+          <IconLock className="size-3.5 shrink-0" />
+          {candidate.created_by_name
+            ? `CV held by ${candidate.created_by_name} — only they can change it`
+            : "CV held by another recruiter"}
+        </p>
+      ) : (
+        <>
+          <CvLinkField
+            className={full}
+            required={form.source === "external"}
+            value={form.cv_link}
+            onChange={(cv_link) => setForm((f) => ({ ...f, cv_link }))}
+          />
 
-      <ResumeField className={full} file={resumeFile} onFile={setResumeFile}>
-        {candidate.resume_url && !resumeFile && (
-          <a
-            href={candidate.resume_url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="mb-2 flex w-fit items-center gap-2 text-xs transition-colors hover:text-yellow"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            <IconFileText className="size-3.5 shrink-0" />
-            View current resume
-          </a>
-        )}
-      </ResumeField>
+          <ResumeField className={full} file={resumeFile} onFile={setResumeFile}>
+            {candidate.resume_url && !resumeFile && (
+              <a
+                href={candidate.resume_url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mb-2 flex w-fit items-center gap-2 text-xs transition-colors hover:text-yellow"
+                style={{ color: "var(--color-text-secondary)" }}
+              >
+                <IconFileText className="size-3.5 shrink-0" />
+                View current resume
+              </a>
+            )}
+          </ResumeField>
+        </>
+      )}
 
       <CommunicationField
         value={form.communication}

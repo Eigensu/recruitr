@@ -17,6 +17,7 @@ from app.modules.recruitment.repository_impl import (
     move_stage,
     next_seq,
     recompute_position_seats,
+    record_candidate_event,
     set_seq,
     update_candidate_current_stage,
 )
@@ -37,6 +38,7 @@ __all__ = [
     "log_activity",
     "move_stage",
     "next_seq",
+    "record_candidate_event",
     "recompute_position_seats",
     "set_seq",
     "update_candidate_current_stage",

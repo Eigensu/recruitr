@@ -12,13 +12,14 @@ import {
   CityField,
   CommunicationField,
   CurrentRoleField,
+  CurrentSalaryField,
   CvLinkField,
   DepartmentField,
   ExpectedSalaryField,
+  ExperienceYearsField,
   GenderField,
   NoticePeriodField,
   NotesField,
-  PreviousRoleField,
   ResumeField,
   SourceChannelField,
   SourceField,
@@ -31,8 +32,8 @@ import {
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email required"),
-  phone: z.string().optional(),
+  email: z.string().email("Valid email required").optional().or(z.literal("")),
+  phone: z.string().min(1, "Phone is required"),
   source: z.enum(["internal", "external"]),
   source_channel: z.string().optional(),
   communication: z.string().optional(),
@@ -42,7 +43,10 @@ const schema = z.object({
   specialization: z.string().optional(),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
-  previous_role: z.string().optional(),
+  experience_years: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0, "Must be 0 or more").optional(),
+  ),
   city: z.string().optional(),
   area: z.string().optional(),
   gender: z.enum(["male", "female", "other"]).optional(),
@@ -51,6 +55,10 @@ const schema = z.object({
     z.number().positive("Must be a positive number").optional(),
   ),
   expected_salary: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().positive("Must be a positive number").optional(),
+  ),
+  salary: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().positive("Must be a positive number").optional(),
   ),
@@ -78,12 +86,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     specialization: "",
     cv_link: "",
     current_role: "",
-    previous_role: "",
+    experience_years: "",
     city: "",
     area: "",
     gender: "" as "male" | "female" | "other" | "",
     age: "",
     expected_salary: "",
+    salary: "",
     notice_period: "",
     notes: "",
   });
@@ -103,8 +112,8 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     e.preventDefault();
     const parsed = schema.safeParse({
       name: form.name,
-      email: form.email,
-      phone: form.phone || undefined,
+      email: form.email || undefined,
+      phone: form.phone,
       source: form.source,
       source_channel: resolvedChannel() || undefined,
       communication: form.communication || undefined,
@@ -114,12 +123,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       specialization: form.specialization || undefined,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
-      previous_role: form.previous_role || undefined,
+      experience_years: form.experience_years || undefined,
       city: form.city || undefined,
       area: form.area || undefined,
       gender: form.gender || undefined,
       age: form.age || undefined,
       expected_salary: form.expected_salary || undefined,
+      salary: form.salary || undefined,
       notice_period: form.notice_period || undefined,
       notes: form.notes || undefined,
     });
@@ -142,7 +152,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     try {
       let candidate = await clientCreateCandidate({
         full_name: parsed.data.name,
-        email: parsed.data.email,
+        email: parsed.data.email || undefined,
         phone: parsed.data.phone,
         communication: parsed.data.communication,
         education: parsed.data.education,
@@ -151,12 +161,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         specialization: parsed.data.specialization,
         cv_link: parsed.data.cv_link,
         current_role: parsed.data.current_role,
-        previous_role: parsed.data.previous_role,
+        experience_years: parsed.data.experience_years,
         city: parsed.data.city,
         area: parsed.data.area,
         gender: parsed.data.gender,
         age: parsed.data.age,
         expected_salary: parsed.data.expected_salary,
+        salary: parsed.data.salary,
         notice_period: parsed.data.notice_period,
         source: parsed.data.source,
         source_channel: parsed.data.source_channel,
@@ -207,17 +218,18 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.name}
       />
       <TextField
-        label="Email *"
+        label="Email"
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
         error={errors.email}
       />
       <TextField
-        label="Phone"
+        label="Phone *"
         type="tel"
         value={form.phone}
         onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+        error={errors.phone}
       />
       <SourceField
         required
@@ -239,9 +251,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
       />
-      <PreviousRoleField
-        value={form.previous_role}
-        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
+      <ExperienceYearsField
+        value={form.experience_years}
+        onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
+        error={errors.experience_years}
       />
       <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
       <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
@@ -258,6 +271,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         value={form.expected_salary}
         onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
         error={errors.expected_salary}
+      />
+      <CurrentSalaryField
+        value={form.salary}
+        onChange={(salary) => setForm((f) => ({ ...f, salary }))}
+        error={errors.salary}
       />
       <NoticePeriodField
         value={form.notice_period}
