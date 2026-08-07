@@ -39,9 +39,9 @@ interface ApplicationFormProps {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-white placeholder:text-white/70 focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
+  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
 const inputErrorCls = inputCls.replace("border-border", "border-red-500/60");
-const labelCls = "mb-1.5 block text-xs font-medium text-white";
+const labelCls = "mb-1.5 block text-xs font-medium text-text-secondary";
 
 function FieldError({ id, message }: Readonly<{ id: string; message?: string }>) {
   if (!message) return null;
@@ -91,7 +91,7 @@ function Select({
             </option>
           ))}
         </select>
-        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-white/70" />
+        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
       </div>
     </div>
   );
@@ -106,10 +106,10 @@ function Section({
   return (
     <section className="border-t border-border pt-6 first:border-t-0 first:pt-0">
       <div className="mb-4">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-primary">
           {title}
         </h2>
-        <p className="mt-1 text-xs text-white/80">{hint}</p>
+        <p className="mt-1 text-xs text-text-muted">{hint}</p>
       </div>
       {children}
     </section>
@@ -211,7 +211,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           className="size-8 rounded-lg object-cover"
         />
       )}
-      <span className="font-heading text-lg font-bold tracking-tight text-white">
+      <span className="font-heading text-lg font-bold tracking-tight text-text-primary">
         {brand?.name ?? "Binge"}
       </span>
     </div>
@@ -224,10 +224,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-yellow/10 text-yellow">
             <IconCheck className="size-6" />
           </div>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-white">
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
             Application received
           </h1>
-          <p className="mt-3 text-sm text-white">
+          <p className="mt-3 text-sm text-text-secondary">
             {brand?.name ?? "The team"} has your details
             {resume ? " and your CV" : ""}. You&apos;ll hear back by email if there&apos;s a match.
           </p>
@@ -237,7 +237,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   }
 
   return (
-    <main className="min-h-dvh bg-shell font-sans text-white theme-transition">
+    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
       <header className="flex items-center justify-between px-5 py-5 sm:px-8">
         {masthead}
       </header>
@@ -245,10 +245,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       <div className="flex justify-center px-4 pb-16 sm:px-6">
         <div className="w-full max-w-2xl">
           <div className="mb-7">
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
               Find Your Next Job
             </h1>
-            <p className="mt-2.5 text-sm text-white sm:text-base">
+            <p className="mt-2.5 text-sm text-text-secondary sm:text-base">
               One application. Multiple job opportunities.
             </p>
           </div>
@@ -417,7 +417,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
                       value={form.connectCode}
                       onChange={(e) => setForm({ ...form, connectCode: e.target.value })}
                     />
-                    <p className="mt-1.5 text-xs text-white/80">
+                    <p className="mt-1.5 text-xs text-text-muted">
                       Have a Connect Code? Enter it here (optional).
                     </p>
                   </div>
@@ -438,7 +438,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
             </button>
           </form>
 
-          <p className="mt-4 text-center text-xs text-white/70">
+          <p className="mt-4 text-center text-xs text-text-muted">
             Your details are shared only with {brand?.name ?? "the hiring team"}.
           </p>
         </div>

@@ -42,6 +42,14 @@ export const EDUCATION_LEVELS = [
   { value: "PhD", label: "PhD / Doctorate" },
 ] as const;
 
+export const GENDER_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const CANDIDATE_SOURCES = ["internal", "external"] as const;
+
 export const COMMUNICATION_OPTIONS = ["Basic", "Good", "Excellent"] as const;
 
 export const STRUCTURED_EDUCATION_OPTIONS = [

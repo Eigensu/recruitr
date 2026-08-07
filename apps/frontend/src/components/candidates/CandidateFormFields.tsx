@@ -24,6 +24,8 @@ import {
   BRAND_EXPERIENCE_OPTIONS,
   DEPARTMENT_OPTIONS,
   SPECIALIZATION_OPTIONS,
+  GENDER_OPTIONS,
+  CANDIDATE_SOURCES,
 } from "@/lib/constants/candidate";
 
 export const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
@@ -183,24 +185,36 @@ export function SourceField({
 }>) {
   return (
     <Field label={`Source${required ? " *" : ""}`} className={className}>
-      <div className={`flex items-center gap-4 ${CONTROL_HEIGHT}`}>
-        {(["internal", "external"] as const).map((s) => (
-          <label key={s} className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="source"
-              value={s}
-              checked={value === s}
-              onChange={() => onChange(s)}
-            />
-            <span
-              className="text-sm font-medium"
-              style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
+      <div className={`grid grid-cols-2 gap-3 ${CONTROL_HEIGHT}`}>
+        {CANDIDATE_SOURCES.map((s) => {
+          const isSelected = value === s;
+          return (
+            <label
+              key={s}
+              className={`flex h-full cursor-pointer items-center justify-center rounded-lg border text-sm font-medium transition-all ${
+                isSelected
+                  ? "border-yellow ring-1 ring-yellow"
+                  : "border-border hover:border-yellow/50"
+              }`}
+              style={{
+                background: isSelected ? "var(--color-surface-2-val)" : "var(--color-canvas-val)",
+                color: isSelected
+                  ? "var(--color-text-primary-val)"
+                  : "var(--color-text-secondary-val)",
+              }}
             >
-              ● {s === "internal" ? "Internal" : "External"}
-            </span>
-          </label>
-        ))}
+              <input
+                type="radio"
+                name="source"
+                value={s}
+                checked={isSelected}
+                onChange={() => onChange(s as CandidateSource)}
+                className="sr-only"
+              />
+              {s === "internal" ? "Internal" : "External"}
+            </label>
+          );
+        })}
       </div>
     </Field>
   );
@@ -250,17 +264,7 @@ export function AreaField(props: Readonly<{ value: string; onChange: (v: string)
 }
 
 export function GenderField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return (
-    <SelectField
-      label="Gender"
-      options={[
-        { value: "male", label: "Male" },
-        { value: "female", label: "Female" },
-        { value: "other", label: "Other" },
-      ]}
-      {...props}
-    />
-  );
+  return <SelectField label="Gender" options={GENDER_OPTIONS} {...props} />;
 }
 
 export function AgeField(
