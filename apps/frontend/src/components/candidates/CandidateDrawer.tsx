@@ -37,13 +37,14 @@ import {
   AreaField,
   CityField,
   CurrentRoleField,
+  CurrentSalaryField,
   CvLinkField,
   EducationField,
   ExpectedSalaryField,
+  ExperienceYearsField,
   GenderField,
   NoticePeriodField,
   NotesField,
-  PreviousRoleField,
   ResumeField,
   SourceChannelField,
   SourceField,
@@ -265,18 +266,20 @@ function DrawerInner({
 
         {/* Contact */}
         <div className="mt-4 flex flex-col gap-2">
-          <a
-            href={`mailto:${candidate.email}`}
-            className="flex items-center gap-2 text-xs text-text-muted hover:text-yellow transition-colors w-fit"
-          >
-            <IconMail className="size-3.5 shrink-0" />
-            {candidate.email}
-          </a>
           {candidate.phone && (
             <span className="flex items-center gap-2 text-xs text-text-muted">
               <IconPhone className="size-3.5 shrink-0" />
               {candidate.phone}
             </span>
+          )}
+          {candidate.email && (
+            <a
+              href={`mailto:${candidate.email}`}
+              className="flex items-center gap-2 text-xs text-text-muted hover:text-yellow transition-colors w-fit"
+            >
+              <IconMail className="size-3.5 shrink-0" />
+              {candidate.email}
+            </a>
           )}
           {candidate.cv_locked ? (
             <span className="flex items-center gap-2 text-xs opacity-50 cursor-default w-fit">
@@ -466,19 +469,10 @@ function ViewBody({
         </>
       )}
 
-      {/* Previous role / notice / education / source */}
-      {(candidate.previous_role ||
-        candidate.notice_period ||
-        candidate.education_level ||
-        candidate.source) && (
+      {/* Notice / education / source */}
+      {(candidate.notice_period || candidate.education_level || candidate.source) && (
         <>
           <section className="flex flex-wrap gap-4">
-            {candidate.previous_role && (
-              <div className="flex items-center gap-2 text-sm text-text-muted">
-                <IconBriefcase className="size-3.5 shrink-0 opacity-60" />
-                <span>Prev: {candidate.previous_role}</span>
-              </div>
-            )}
             {candidate.notice_period && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <span>Notice: {candidate.notice_period}</span>
@@ -783,13 +777,13 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
-    previous_role: candidate.previous_role ?? "",
     city: candidate.city ?? "",
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
     age: candidate.age == null ? "" : String(candidate.age),
     education_level: candidate.education_level ?? "",
     expected_salary: candidate.expected_salary == null ? "" : String(candidate.expected_salary),
+    salary: candidate.salary == null ? "" : String(candidate.salary),
     notice_period: candidate.notice_period ?? "",
     // Lowercased: the public form used to store "External", which matched
     // neither radio and left the source unset for every applicant.
@@ -834,13 +828,13 @@ function EditForm({
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
         current_role: form.current_role.trim() || undefined,
-        previous_role: form.previous_role.trim() || undefined,
         city: form.city.trim() || undefined,
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
         age: form.age ? Number(form.age) : undefined,
         education_level: form.education_level || undefined,
         expected_salary: form.expected_salary ? Number(form.expected_salary) : undefined,
+        salary: form.salary ? Number(form.salary) : undefined,
         notice_period: form.notice_period.trim() || undefined,
         source: form.source.trim() || undefined,
         source_channel: resolvedChannel() || undefined,
@@ -916,11 +910,7 @@ function EditForm({
         value={form.previous_company}
         onChange={(previous_company) => setForm((f) => ({ ...f, previous_company }))}
       />
-      <TextField
-        label="Experience (years)"
-        type="number"
-        min="0"
-        step="0.5"
+      <ExperienceYearsField
         value={form.experience_years}
         onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
       />
@@ -928,10 +918,6 @@ function EditForm({
       <CurrentRoleField
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
-      />
-      <PreviousRoleField
-        value={form.previous_role}
-        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
       />
 
       <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
@@ -947,6 +933,10 @@ function EditForm({
       <ExpectedSalaryField
         value={form.expected_salary}
         onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
+      />
+      <CurrentSalaryField
+        value={form.salary}
+        onChange={(salary) => setForm((f) => ({ ...f, salary }))}
       />
       <NoticePeriodField
         value={form.notice_period}

@@ -33,6 +33,7 @@ CV_LINK = "https://drive.example.com/cv/anita.pdf"
 PAYLOAD = {
     "full_name": "Anita Rao",
     "email": "anita@test.com",
+    "phone": "+91 98765 00002",
     "experience_years": 4,
     "skills": ["Mixology"],
     "cv_link": CV_LINK,

@@ -55,7 +55,13 @@ async def position() -> Position:
 async def _candidate(client: AsyncClient, email: str) -> str:
     res = await client.post(
         "/api/v1/candidates",
-        json={"full_name": "Anita Rao", "email": email, "experience_years": 4, "skills": []},
+        json={
+            "full_name": "Anita Rao",
+            "email": email,
+            "phone": "+91 98765 00003",
+            "experience_years": 4,
+            "skills": [],
+        },
     )
     assert res.status_code == 201, res.text
     return res.json()["id"]

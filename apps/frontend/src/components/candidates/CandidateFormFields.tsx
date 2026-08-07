@@ -276,6 +276,29 @@ export function ExpectedSalaryField(
   );
 }
 
+export function CurrentSalaryField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
+  return (
+    <TextField label="Current Salary" type="number" min="0" placeholder="e.g. 60000" {...props} />
+  );
+}
+
+export function ExperienceYearsField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
+  return (
+    <TextField
+      label="Experience (years)"
+      type="number"
+      min="0"
+      step="0.5"
+      placeholder="e.g. 3"
+      {...props}
+    />
+  );
+}
+
 export function NoticePeriodField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
@@ -286,12 +309,6 @@ export function CurrentRoleField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
   return <TextField label="Current Role" placeholder="e.g. Senior Engineer" {...props} />;
-}
-
-export function PreviousRoleField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
-) {
-  return <TextField label="Previous Role" placeholder="e.g. Software Engineer" {...props} />;
 }
 
 export function CvLinkField({

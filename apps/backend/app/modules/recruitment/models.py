@@ -219,7 +219,10 @@ class Candidate(Document):
 
     brand_id: PydanticObjectId
     full_name: str
-    email: str  # unique within brand
+    # Optional: phone is the mandatory contact channel for a manually-added
+    # candidate now (see CandidateCreate), email is not. The unique index
+    # below is partial for exactly this reason — see its comment.
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float = 0
@@ -237,7 +240,6 @@ class Candidate(Document):
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None  # internal | external — how the candidate entered the system
@@ -262,7 +264,16 @@ class Candidate(Document):
     class Settings:
         name = "candidates"
         indexes = [
-            IndexModel([("brand_id", 1), ("email", 1)], unique=True),
+            # Partial, not a plain unique index: email is now optional (phone is
+            # the mandatory contact field), and Mongo indexes a missing/null
+            # email as the same value for every such document — a second
+            # emailless candidate in the same brand would 409 as a "duplicate"
+            # of the first without this filter excluding them from the index.
+            IndexModel(
+                [("brand_id", 1), ("email", 1)],
+                unique=True,
+                partialFilterExpression={"email": {"$type": "string"}},
+            ),
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
             IndexModel([("brand_id", 1), ("created_by_id", 1)]),

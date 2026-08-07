@@ -376,12 +376,12 @@ async def list_candidates(
 async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateResponse:
     # Spread the whole DTO instead of naming each field: the hand-written list
     # this replaced had drifted from CandidateCreate and silently dropped
-    # previous_role, expected_salary, notice_period, source and source_channel.
+    # expected_salary, notice_period, source and source_channel.
     # Only email and skills need massaging on the way in.
     doc = Candidate(
         **data.model_dump(exclude={"email", "skills"}),
         brand_id=tenant.brand_id,
-        email=data.email.lower(),
+        email=data.email.lower() if data.email else None,
         skills=data.skills,
         skills_normalized=[s.lower() for s in data.skills],
         created_by_id=tenant.employee_id,
@@ -543,8 +543,8 @@ async def update_candidate(
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
     # Whole-DTO dump instead of a field-by-field if-chain: that chain had drifted
-    # from CandidateUpdate and silently ignored previous_role, expected_salary,
-    # notice_period, source and source_channel on every save. exclude_none keeps
+    # from CandidateUpdate and silently ignored expected_salary, notice_period,
+    # source and source_channel on every save. exclude_none keeps
     # the established contract that an omitted (or null) field means "leave it".
     update: dict = data.model_dump(exclude_unset=True, exclude_none=True)
     if "skills" in update:

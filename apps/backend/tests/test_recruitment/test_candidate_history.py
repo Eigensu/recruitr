@@ -25,6 +25,7 @@ TENANT = TenantScope(brand_id=_BRAND, employee_id=_EMP)
 PAYLOAD = {
     "full_name": "Anita Rao",
     "email": "anita@test.com",
+    "phone": "+91 98765 00001",
     "experience_years": 4,
     "skills": ["Mixology"],
 }

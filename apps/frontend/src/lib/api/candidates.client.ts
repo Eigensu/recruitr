@@ -34,12 +34,12 @@ export async function clientFetchCandidates(
 
 export async function clientCreateCandidate(data: {
   full_name: string;
-  email: string;
-  phone?: string;
+  email?: string;
+  phone: string;
   tags?: string[];
   cv_link?: string;
   current_role?: string;
-  previous_role?: string;
+  experience_years?: number;
   expected_salary?: number;
   notice_period?: string;
   source?: string;
@@ -72,7 +72,6 @@ export async function clientUpdateCandidate(
     tags: string[];
     cv_link: string;
     current_role: string;
-    previous_role: string;
     expected_salary: number;
     notice_period: string;
     source: string;

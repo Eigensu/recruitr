@@ -81,7 +81,7 @@ async def test_pending_application_can_be_filled_in_then_approved(
     res = await client.patch(
         f"/api/v1/candidates/{cid}",
         json={
-            "previous_role": "Guest Relations Executive",
+            "salary": 60000,
             "previous_company": "Taj Hotels",
             "expected_salary": 75000,
             "notice_period": "45 days",
@@ -93,7 +93,7 @@ async def test_pending_application_can_be_filled_in_then_approved(
     patched = res.json()
     assert patched["expected_salary"] == 75000
     assert patched["notice_period"] == "45 days"
-    assert patched["previous_role"] == "Guest Relations Executive"
+    assert patched["salary"] == 60000
     # Reviewing must not approve by itself.
     assert patched["status"] == "PENDING"
 
@@ -104,7 +104,7 @@ async def test_pending_application_can_be_filled_in_then_approved(
     # The details added during review survive the approval.
     assert approved["expected_salary"] == 75000
     assert approved["notice_period"] == "45 days"
-    assert approved["previous_role"] == "Guest Relations Executive"
+    assert approved["salary"] == 60000
     assert approved["notes"] == "Called — available immediately after notice."
 
     doc = await Candidate.get(PydanticObjectId(cid))

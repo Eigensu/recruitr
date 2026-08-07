@@ -7,6 +7,7 @@ import {
   IconFileText,
   IconLink,
   IconLock,
+  IconPhone,
   IconTrash,
   IconUserCheck,
 } from "@tabler/icons-react";
@@ -79,11 +80,9 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
         <span className="truncate">
           {candidate.current_role
             ? `${candidate.current_role} · ${candidate.experience_years}y`
-            : candidate.previous_role
-              ? `${candidate.previous_role} · ${candidate.experience_years}y`
-              : candidate.previous_company
-                ? candidate.previous_company
-                : `Independent · ${candidate.experience_years}y`}
+            : candidate.previous_company
+              ? candidate.previous_company
+              : `Independent · ${candidate.experience_years}y`}
         </span>
       </p>
       {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
@@ -129,23 +128,32 @@ function CandidateSkills({ skills }: { skills: string[] }) {
 }
 
 function CandidateFooter({
+  phone,
   email,
   cvRef,
   hasCvLink,
   cvLocked,
   ownerName,
 }: {
-  email: string;
+  phone: string | null;
+  email: string | null;
   cvRef: { href?: string | null } | null;
   hasCvLink: boolean;
   cvLocked?: boolean;
   ownerName?: string | null;
 }) {
+  // Phone leads: it's the mandatory contact field now, email is not. Older
+  // candidates predating that change may still only have an email on file.
+  const contact = phone ?? email;
   return (
     <div className="mt-auto pt-3.5 border-t border-border/40 flex items-center justify-between gap-2 text-[11px] text-text-muted">
       <div className="flex items-center gap-1.5 min-w-0">
-        <IconMail className="size-3.5 shrink-0 opacity-50" />
-        <span className="truncate">{email}</span>
+        {phone ? (
+          <IconPhone className="size-3.5 shrink-0 opacity-50" />
+        ) : (
+          <IconMail className="size-3.5 shrink-0 opacity-50" />
+        )}
+        <span className="truncate">{contact ?? "No contact info"}</span>
       </div>
       {cvLocked ? (
         <span
@@ -305,6 +313,7 @@ export default function CandidateCard({
           {candidate.status !== "PENDING" && <CandidateSkills skills={candidate.skills} />}
 
           <CandidateFooter
+            phone={candidate.phone}
             email={candidate.email}
             cvRef={cvRef}
             hasCvLink={!!candidate.cv_link}

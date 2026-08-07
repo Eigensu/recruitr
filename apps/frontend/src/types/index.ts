@@ -89,7 +89,7 @@ export interface ApiPosition {
 export interface ApiTopCandidate {
   id: string;
   full_name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   previous_company: string | null;
   experience_years: number;
@@ -180,7 +180,7 @@ export type PipelineStage =
 export interface ApiCandidate {
   id: string;
   full_name: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   previous_company: string | null;
   experience_years: number;
@@ -197,7 +197,6 @@ export interface ApiCandidate {
   current_stage: PipelineStage;
   mappings_count: number;
   current_role: string | null;
-  previous_role: string | null;
   expected_salary: number | null;
   notice_period: string | null;
   source: string | null;

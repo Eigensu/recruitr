@@ -16,8 +16,8 @@ from app.modules.recruitment.enums import (
 
 class CandidateCreate(BaseModel):
     full_name: str
-    email: EmailStr
-    phone: str | None = None
+    email: EmailStr | None = None
+    phone: str = Field(..., min_length=1)
     previous_company: str | None = None
     experience_years: float = Field(default=0, ge=0)
     education_level: str | None = None
@@ -30,7 +30,6 @@ class CandidateCreate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
@@ -54,7 +53,6 @@ class CandidateUpdate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
@@ -67,7 +65,7 @@ class CandidateUpdate(BaseModel):
 class CandidateResponse(BaseModel):
     id: str
     full_name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float
@@ -84,7 +82,6 @@ class CandidateResponse(BaseModel):
     current_stage: PipelineStage
     mappings_count: int = 0
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None
@@ -152,7 +149,6 @@ class CandidateResponse(BaseModel):
             current_stage=doc.current_stage,
             mappings_count=mappings_count,
             current_role=doc.current_role,
-            previous_role=doc.previous_role,
             expected_salary=doc.expected_salary,
             notice_period=doc.notice_period,
             salary=doc.salary,
