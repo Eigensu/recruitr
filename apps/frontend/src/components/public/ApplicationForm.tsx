@@ -39,7 +39,7 @@ interface ApplicationFormProps {
 }
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
+  "w-full rounded-lg border border-border bg-transparent px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-secondary focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
 const inputErrorCls = inputCls.replace("border-border", "border-red-500/60");
 const labelCls = "mb-1.5 block text-xs font-medium text-text-secondary";
 
@@ -91,7 +91,7 @@ function Select({
             </option>
           ))}
         </select>
-        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-muted" />
+        <IconChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-secondary" />
       </div>
     </div>
   );
@@ -109,7 +109,7 @@ function Section({
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-text-primary">
           {title}
         </h2>
-        <p className="mt-1 text-xs text-text-muted">{hint}</p>
+        <p className="mt-1 text-xs text-text-secondary">{hint}</p>
       </div>
       {children}
     </section>
@@ -211,7 +211,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           className="size-8 rounded-lg object-cover"
         />
       )}
-      <span className="font-heading text-lg font-bold tracking-tight text-text-primary">
+      <span className="font-heading text-lg font-bold tracking-tight text-light">
         {brand?.name ?? "Binge"}
       </span>
     </div>
@@ -219,8 +219,8 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
 
   if (success) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-shell p-4 font-sans theme-transition">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-surface-panel p-8 text-center">
+      <main className="flex min-h-dvh items-center justify-center bg-navy text-light p-4 font-sans theme-transition">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-surface-panel p-8 text-center text-text-primary">
           <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-yellow/10 text-yellow">
             <IconCheck className="size-6" />
           </div>
@@ -237,7 +237,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   }
 
   return (
-    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
+    <main className="min-h-dvh bg-navy font-sans text-light theme-transition">
       <header className="flex items-center justify-between px-5 py-5 sm:px-8">
         {masthead}
       </header>
@@ -245,10 +245,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       <div className="flex justify-center px-4 pb-16 sm:px-6">
         <div className="w-full max-w-2xl">
           <div className="mb-7">
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-light sm:text-4xl">
               Find Your Next Job
             </h1>
-            <p className="mt-2.5 text-sm text-text-secondary sm:text-base">
+            <p className="mt-2.5 text-sm text-light/80 sm:text-base">
               One application. Multiple job opportunities.
             </p>
           </div>
@@ -266,7 +266,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           <form
             onSubmit={handleSubmit}
             noValidate
-            className="flex flex-col gap-6 rounded-2xl border border-border bg-surface-panel p-5 sm:p-8"
+            className="flex flex-col gap-6 rounded-2xl border border-border bg-surface-panel text-text-primary p-5 sm:p-8"
           >
             <Section title="About you" hint="How the team will reach you.">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -417,7 +417,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
                       value={form.connectCode}
                       onChange={(e) => setForm({ ...form, connectCode: e.target.value })}
                     />
-                    <p className="mt-1.5 text-xs text-text-muted">
+                    <p className="mt-1.5 text-xs text-text-secondary">
                       Have a Connect Code? Enter it here (optional).
                     </p>
                   </div>
@@ -438,7 +438,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
             </button>
           </form>
 
-          <p className="mt-4 text-center text-xs text-text-muted">
+          <p className="mt-4 text-center text-xs text-light/80">
             Your details are shared only with {brand?.name ?? "the hiring team"}.
           </p>
         </div>

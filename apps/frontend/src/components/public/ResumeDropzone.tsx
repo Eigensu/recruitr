@@ -108,7 +108,7 @@ export default function ResumeDropzone({
           {...dragProps}
           className="flex items-center gap-3 rounded-xl border border-border bg-canvas p-3 sm:p-4"
         >
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-yellow/10 text-yellow">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-navy/10 text-navy dark:bg-yellow/10 dark:text-yellow">
             <FileIcon className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
@@ -141,15 +141,15 @@ export default function ResumeDropzone({
           disabled={disabled}
           className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors sm:py-10 ${
             dragging
-              ? "border-yellow bg-yellow/5"
-              : "border-border bg-canvas/30 hover:border-yellow/50 hover:bg-canvas/60"
+              ? "border-navy bg-navy/5 dark:border-yellow dark:bg-yellow/5"
+              : "border-border bg-canvas/30 hover:border-navy/50 hover:bg-canvas/60 dark:hover:border-yellow/50"
           } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
         >
           <IconCloudUpload
-            className={`size-8 transition-colors ${dragging ? "text-yellow" : "text-text-muted"}`}
+            className={`size-8 transition-colors ${dragging ? "text-navy dark:text-yellow" : "text-text-muted"}`}
           />
           <span className="text-sm text-text-secondary">
-            <span className="font-semibold text-yellow">Choose a file</span> or drag it here
+            <span className="font-semibold text-navy dark:text-yellow">Choose a file</span> or drag it here
           </span>
           <span className="text-xs text-text-muted">PDF or DOCX, up to 10 MB</span>
         </button>
