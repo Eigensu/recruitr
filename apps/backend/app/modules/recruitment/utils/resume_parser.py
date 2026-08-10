@@ -168,7 +168,12 @@ class ParsedResume:
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
 
-def _extract_email(text: str) -> str | None:
+def extract_email(text: str) -> str | None:
+    """First email address in the text.
+
+    Public because bulk upload identifies candidates by it and needs that one
+    field even when the brand has full resume parsing turned off.
+    """
     m = _EMAIL_RE.search(text)
     return m.group(0).lower() if m else None
 
@@ -281,7 +286,7 @@ def parse_resume(text: str) -> ParsedResume:
     """Extract structured fields from raw PDF text."""
     skills = _extract_skills(text)
     return ParsedResume(
-        email=_extract_email(text),
+        email=extract_email(text),
         phone=_extract_phone(text),
         experience_years=_extract_experience_years(text),
         previous_company=_extract_previous_company(text),

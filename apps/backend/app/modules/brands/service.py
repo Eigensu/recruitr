@@ -1,10 +1,11 @@
 """Business logic for Brand management."""
 
+from beanie import PydanticObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
-from app.modules.brands.models import Brand, Branding
-from app.modules.brands.schemas import BrandCreate
+from app.modules.brands.models import AutomationSettings, Brand, Branding
+from app.modules.brands.schemas import AutomationSettingsUpdate, BrandCreate
 
 
 async def create_brand_from_org(
@@ -38,6 +39,49 @@ async def create_brand_from_org(
             detail="A brand with this domain already exists.",
         ) from err
     return brand
+
+
+# ── Automation settings ────────────────────────────────────────────────────────
+
+
+async def get_automation_settings(brand_id: PydanticObjectId) -> AutomationSettings:
+    """Resume automation switches for a brand.
+
+    Falls back to the defaults (everything on, i.e. the behaviour that predates
+    this setting) when the brand row is missing, so a dangling brand_id degrades
+    into the old behaviour rather than silently turning parsing off everywhere.
+    """
+    brand = await Brand.get(brand_id)
+    return brand.automation if brand else AutomationSettings()
+
+
+async def update_automation_settings(
+    brand_id: PydanticObjectId, data: AutomationSettingsUpdate
+) -> AutomationSettings:
+    brand = await Brand.get(brand_id)
+    if brand is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
+
+    current = brand.automation
+    updated = AutomationSettings(
+        resume_parsing_enabled=(
+            current.resume_parsing_enabled
+            if data.resume_parsing_enabled is None
+            else data.resume_parsing_enabled
+        ),
+        auto_tagging_enabled=(
+            current.auto_tagging_enabled
+            if data.auto_tagging_enabled is None
+            else data.auto_tagging_enabled
+        ),
+    )
+    # Auto-tagging is sourced from parsed skills, so leaving it "on" while
+    # parsing is off would show a switch that does nothing.
+    if not updated.resume_parsing_enabled:
+        updated.auto_tagging_enabled = False
+
+    await brand.set({"automation": updated.model_dump()})
+    return updated
 
 
 async def get_brand_by_org(owner_id: str) -> Brand | None:
