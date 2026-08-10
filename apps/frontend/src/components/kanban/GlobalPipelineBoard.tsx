@@ -129,6 +129,14 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
     return out.sort();
   }, [positions, board]);
 
+  // Positions offered in the dropdown, narrowed to the selected client. The
+  // client filter comes first in the bar, so picking one is how you get to a
+  // short, readable position list instead of every open role in the agency.
+  const positionOptions = useMemo(() => {
+    if (!filters.client) return positions;
+    return positions.filter((p) => p.client === filters.client);
+  }, [positions, filters.client]);
+
   // Apply client-side filters to board columns
   const filteredStages = useMemo(() => {
     if (!board) return [];
@@ -194,7 +202,19 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
   }
 
   function updateFilter<K extends keyof Filters>(key: K, value: string) {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters((prev) => {
+      const next = { ...prev, [key]: value };
+      // Changing the client leaves any position selected under the previous one
+      // stranded: it is no longer in the dropdown, but it would keep filtering
+      // the board down to nothing.
+      if (key === "client" && prev.position_id) {
+        const stillListed = positions.some(
+          (p) => p.id === prev.position_id && (!value || p.client === value),
+        );
+        if (!stillListed) next.position_id = "";
+      }
+      return next;
+    });
   }
 
   const hasFilters = filters.recruiter_id || filters.position_id || filters.client;
@@ -219,20 +239,6 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
         </select>
 
         <select
-          value={filters.position_id}
-          onChange={(e) => updateFilter("position_id", e.target.value)}
-          className={selectCls}
-          style={selectStyle}
-        >
-          <option value="">All Positions</option>
-          {positions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-
-        <select
           value={filters.client}
           onChange={(e) => updateFilter("client", e.target.value)}
           className={selectCls}
@@ -242,6 +248,22 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
           {clientOptions.map((c) => (
             <option key={c} value={c}>
               {c}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={filters.position_id}
+          onChange={(e) => updateFilter("position_id", e.target.value)}
+          className={selectCls}
+          style={selectStyle}
+        >
+          <option value="">
+            {filters.client ? `All ${filters.client} Positions` : "All Positions"}
+          </option>
+          {positionOptions.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
             </option>
           ))}
         </select>

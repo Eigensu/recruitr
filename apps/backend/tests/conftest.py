@@ -22,11 +22,15 @@ from app.modules.recruitment.models import (
     ActivityLog,
     Candidate,
     CandidateDocument,
+    CandidateEvent,
     Client,
+    ClientUser,
     Counter,
     Employee,
     Mapping,
     Position,
+    RecruiterTag,
+    Team,
 )
 
 
@@ -41,14 +45,21 @@ async def init_test_db() -> AsyncGenerator[None, None]:
             # Auth
             User,
             Brand,
-            # Recruitment domain
+            # Recruitment domain. Keep in step with app/database.py — a model
+            # missing here is not caught until some endpoint happens to query
+            # it, and then fails as CollectionWasNotInitialized rather than as
+            # anything that points at this list.
             Counter,
             Client,
+            ClientUser,
             Position,
             Candidate,
             Mapping,
             Employee,
+            Team,
+            RecruiterTag,
             ActivityLog,
+            CandidateEvent,
             CandidateDocument,
             # Gamification
             RecruiterProfile,

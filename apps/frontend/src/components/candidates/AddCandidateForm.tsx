@@ -10,16 +10,17 @@ import {
   AreaField,
   CityField,
   CurrentRoleField,
+  CurrentSalaryField,
   CvLinkField,
   ExpectedSalaryField,
+  ExperienceYearsField,
   GenderField,
   NoticePeriodField,
   NotesField,
-  PreviousRoleField,
   ResumeField,
   SourceChannelField,
   SourceField,
-  TagsField,
+  StructuredCandidateTags,
   TextField,
   inputStyle,
   resolveSourceChannel,
@@ -27,14 +28,21 @@ import {
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email required"),
-  phone: z.string().optional(),
+  email: z.string().email("Valid email required").optional().or(z.literal("")),
+  phone: z.string().min(1, "Phone is required"),
   source: z.enum(["internal", "external"]),
   source_channel: z.string().optional(),
-  tags: z.array(z.string()),
+  communication: z.string().optional(),
+  education: z.string().optional(),
+  brand_experience: z.string().optional(),
+  department: z.string().optional(),
+  specialization: z.string().optional(),
   cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
   current_role: z.string().optional(),
-  previous_role: z.string().optional(),
+  experience_years: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().min(0, "Must be 0 or more").optional(),
+  ),
   city: z.string().optional(),
   area: z.string().optional(),
   gender: z.enum(["male", "female", "other"]).optional(),
@@ -43,6 +51,10 @@ const schema = z.object({
     z.number().positive("Must be a positive number").optional(),
   ),
   expected_salary: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    z.number().positive("Must be a positive number").optional(),
+  ),
+  salary: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : Number(v)),
     z.number().positive("Must be a positive number").optional(),
   ),
@@ -63,32 +75,26 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     source: "internal" as "internal" | "external",
     source_channel: "",
     source_channel_other: "",
-    tagInput: "",
-    tags: [] as string[],
+    communication: "",
+    education: "",
+    brand_experience: "",
+    department: "",
+    specialization: "",
     cv_link: "",
     current_role: "",
-    previous_role: "",
+    experience_years: "",
     city: "",
     area: "",
     gender: "" as "male" | "female" | "other" | "",
     age: "",
     expected_salary: "",
+    salary: "",
     notice_period: "",
     notes: "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-
-  function addTag() {
-    const raw = form.tagInput.trim().toLowerCase();
-    if (!raw || form.tags.includes(raw)) return;
-    setForm((f) => ({ ...f, tags: [...f.tags, raw], tagInput: "" }));
-  }
-
-  function removeTag(tag: string) {
-    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== tag) }));
-  }
 
   function resolvedChannel(): string {
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
@@ -98,19 +104,24 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     e.preventDefault();
     const parsed = schema.safeParse({
       name: form.name,
-      email: form.email,
-      phone: form.phone || undefined,
+      email: form.email || undefined,
+      phone: form.phone,
       source: form.source,
       source_channel: resolvedChannel() || undefined,
-      tags: form.tags,
+      communication: form.communication || undefined,
+      education: form.education || undefined,
+      brand_experience: form.brand_experience || undefined,
+      department: form.department || undefined,
+      specialization: form.specialization || undefined,
       cv_link: form.cv_link || undefined,
       current_role: form.current_role || undefined,
-      previous_role: form.previous_role || undefined,
+      experience_years: form.experience_years || undefined,
       city: form.city || undefined,
       area: form.area || undefined,
       gender: form.gender || undefined,
       age: form.age || undefined,
       expected_salary: form.expected_salary || undefined,
+      salary: form.salary || undefined,
       notice_period: form.notice_period || undefined,
       notes: form.notes || undefined,
     });
@@ -124,22 +135,31 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       return;
     }
 
+    if (parsed.data.department && !parsed.data.specialization) {
+      setErrors({ specialization: "Specialization is required when a department is selected" });
+      return;
+    }
     setLoading(true);
     setErrors({});
     try {
       let candidate = await clientCreateCandidate({
         full_name: parsed.data.name,
-        email: parsed.data.email,
+        email: parsed.data.email || undefined,
         phone: parsed.data.phone,
-        tags: parsed.data.tags,
+        communication: parsed.data.communication,
+        education: parsed.data.education,
+        brand_experience: parsed.data.brand_experience,
+        department: parsed.data.department,
+        specialization: parsed.data.specialization,
         cv_link: parsed.data.cv_link,
         current_role: parsed.data.current_role,
-        previous_role: parsed.data.previous_role,
+        experience_years: parsed.data.experience_years,
         city: parsed.data.city,
         area: parsed.data.area,
         gender: parsed.data.gender,
         age: parsed.data.age,
         expected_salary: parsed.data.expected_salary,
+        salary: parsed.data.salary,
         notice_period: parsed.data.notice_period,
         source: parsed.data.source,
         source_channel: parsed.data.source_channel,
@@ -159,10 +179,6 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     }
   }
 
-  // Two fields per row: the single column ran far past the fold and pushed the
-  // submit button out of sight. Short fields pair up; the wide ones — source,
-  // tags, notes — span both, as do the conditional fields, which would
-  // otherwise shift every later field into the opposite column when they show.
   const full = "sm:col-span-2";
 
   return (
@@ -190,17 +206,18 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.name}
       />
       <TextField
-        label="Email *"
+        label="Email"
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
         error={errors.email}
       />
       <TextField
-        label="Phone"
+        label="Phone *"
         type="tel"
         value={form.phone}
         onChange={(phone) => setForm((f) => ({ ...f, phone }))}
+        error={errors.phone}
       />
       <SourceField
         required
@@ -222,9 +239,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
       />
-      <PreviousRoleField
-        value={form.previous_role}
-        onChange={(previous_role) => setForm((f) => ({ ...f, previous_role }))}
+      <ExperienceYearsField
+        value={form.experience_years}
+        onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
+        error={errors.experience_years}
       />
       <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
       <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
@@ -242,18 +260,19 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
         error={errors.expected_salary}
       />
+      <CurrentSalaryField
+        value={form.salary}
+        onChange={(salary) => setForm((f) => ({ ...f, salary }))}
+        error={errors.salary}
+      />
       <NoticePeriodField
         value={form.notice_period}
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
       />
 
-      <TagsField
-        className={full}
-        tags={form.tags}
-        input={form.tagInput}
-        onInput={(tagInput) => setForm((f) => ({ ...f, tagInput }))}
-        onAdd={addTag}
-        onRemove={removeTag}
+      <StructuredCandidateTags
+        form={form}
+        onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
       />
 
       {form.source === "internal" && <ResumeField file={resumeFile} onFile={setResumeFile} />}

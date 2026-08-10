@@ -19,6 +19,13 @@ import {
   EDUCATION_LEVELS,
   SOURCE_CHANNEL_OTHER,
   SOURCE_CHANNELS,
+  COMMUNICATION_OPTIONS,
+  STRUCTURED_EDUCATION_OPTIONS,
+  BRAND_EXPERIENCE_OPTIONS,
+  DEPARTMENT_OPTIONS,
+  SPECIALIZATION_OPTIONS,
+  GENDER_OPTIONS,
+  CANDIDATE_SOURCES,
 } from "@/lib/constants/candidate";
 
 export const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
@@ -178,24 +185,36 @@ export function SourceField({
 }>) {
   return (
     <Field label={`Source${required ? " *" : ""}`} className={className}>
-      <div className={`flex items-center gap-4 ${CONTROL_HEIGHT}`}>
-        {(["internal", "external"] as const).map((s) => (
-          <label key={s} className="flex cursor-pointer items-center gap-2">
-            <input
-              type="radio"
-              name="source"
-              value={s}
-              checked={value === s}
-              onChange={() => onChange(s)}
-            />
-            <span
-              className="text-sm font-medium"
-              style={{ color: s === "internal" ? "#3DDC97" : "#FF5A5F" }}
+      <div className={`grid grid-cols-2 gap-3 ${CONTROL_HEIGHT}`}>
+        {CANDIDATE_SOURCES.map((s) => {
+          const isSelected = value === s;
+          return (
+            <label
+              key={s}
+              className={`flex h-full cursor-pointer items-center justify-center rounded-lg border text-sm font-medium transition-all ${
+                isSelected
+                  ? "border-yellow ring-1 ring-yellow"
+                  : "border-border hover:border-yellow/50"
+              }`}
+              style={{
+                background: isSelected ? "var(--color-surface-2-val)" : "var(--color-canvas-val)",
+                color: isSelected
+                  ? "var(--color-text-primary-val)"
+                  : "var(--color-text-secondary-val)",
+              }}
             >
-              ● {s === "internal" ? "Internal" : "External"}
-            </span>
-          </label>
-        ))}
+              <input
+                type="radio"
+                name="source"
+                value={s}
+                checked={isSelected}
+                onChange={() => onChange(s as CandidateSource)}
+                className="sr-only"
+              />
+              {s === "internal" ? "Internal" : "External"}
+            </label>
+          );
+        })}
       </div>
     </Field>
   );
@@ -245,17 +264,7 @@ export function AreaField(props: Readonly<{ value: string; onChange: (v: string)
 }
 
 export function GenderField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return (
-    <SelectField
-      label="Gender"
-      options={[
-        { value: "male", label: "Male" },
-        { value: "female", label: "Female" },
-        { value: "other", label: "Other" },
-      ]}
-      {...props}
-    />
-  );
+  return <SelectField label="Gender" options={GENDER_OPTIONS} {...props} />;
 }
 
 export function AgeField(
@@ -276,6 +285,29 @@ export function ExpectedSalaryField(
   );
 }
 
+export function CurrentSalaryField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
+  return (
+    <TextField label="Current Salary" type="number" min="0" placeholder="e.g. 60000" {...props} />
+  );
+}
+
+export function ExperienceYearsField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
+  return (
+    <TextField
+      label="Experience (years)"
+      type="number"
+      min="0"
+      step="0.5"
+      placeholder="e.g. 3"
+      {...props}
+    />
+  );
+}
+
 export function NoticePeriodField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
@@ -286,12 +318,6 @@ export function CurrentRoleField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
   return <TextField label="Current Role" placeholder="e.g. Senior Engineer" {...props} />;
-}
-
-export function PreviousRoleField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
-) {
-  return <TextField label="Previous Role" placeholder="e.g. Software Engineer" {...props} />;
 }
 
 export function CvLinkField({
@@ -459,5 +485,91 @@ export function TagChip({ tag, onRemove }: Readonly<{ tag: string; onRemove?: ()
         </button>
       )}
     </span>
+  );
+}
+
+export function CommunicationField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Communication" options={COMMUNICATION_OPTIONS} {...props} />;
+}
+
+export function StructuredEducationField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Education" options={STRUCTURED_EDUCATION_OPTIONS} {...props} />;
+}
+
+export function BrandExperienceField(
+  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+) {
+  return <SelectField label="Brand Experience" options={BRAND_EXPERIENCE_OPTIONS} {...props} />;
+}
+
+export function DepartmentField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+  return <SelectField label="Department" options={DEPARTMENT_OPTIONS} {...props} />;
+}
+
+export function SpecializationField({
+  department,
+  value,
+  onChange,
+  className,
+}: Readonly<{
+  department: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}>) {
+  if (!department) return null;
+  const options = SPECIALIZATION_OPTIONS[department] || [];
+  return (
+    <SelectField
+      label="Specialization *"
+      options={options}
+      value={value}
+      onChange={onChange}
+      className={className}
+    />
+  );
+}
+
+export function StructuredCandidateTags({
+  form,
+  onChange,
+}: Readonly<{
+  form: {
+    communication?: string;
+    education?: string;
+    brand_experience?: string;
+    department?: string;
+    specialization?: string;
+  };
+  onChange: (updates: Partial<typeof form>) => void;
+}>) {
+  return (
+    <>
+      <CommunicationField
+        value={form.communication || ""}
+        onChange={(v) => onChange({ communication: v })}
+      />
+      <StructuredEducationField
+        value={form.education || ""}
+        onChange={(v) => onChange({ education: v })}
+      />
+      <BrandExperienceField
+        value={form.brand_experience || ""}
+        onChange={(v) => onChange({ brand_experience: v })}
+      />
+      <DepartmentField
+        value={form.department || ""}
+        onChange={(dept) => onChange({ department: dept, specialization: "" })}
+      />
+      <SpecializationField
+        department={form.department || ""}
+        value={form.specialization || ""}
+        onChange={(v) => onChange({ specialization: v })}
+      />
+    </>
   );
 }

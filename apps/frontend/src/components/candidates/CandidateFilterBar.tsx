@@ -3,12 +3,16 @@
 import { useState } from "react";
 import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import { SOURCE_CHANNELS } from "@/lib/constants/candidate";
-import type { CandidateFilters, CandidateSource } from "@/types";
+import type { CandidateFilters, CandidateSource, RecruiterOption } from "@/types";
 
 interface Props {
   availableTags: string[];
+  recruiters?: readonly RecruiterOption[];
   onFilterChange: (filters: Partial<CandidateFilters>) => void;
 }
+
+/** Sentinel the API accepts for candidates nobody owns (public applications). */
+const UNASSIGNED = "unassigned";
 
 const inputStyle = {
   background: "var(--color-canvas-val)",
@@ -16,10 +20,15 @@ const inputStyle = {
   border: "1px solid var(--color-border-val)",
 };
 
-export default function CandidateFilterBar({ availableTags, onFilterChange }: Props) {
+export default function CandidateFilterBar({
+  availableTags,
+  recruiters = [],
+  onFilterChange,
+}: Props) {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<CandidateSource | "">("");
   const [sourceChannel, setSourceChannel] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [hasResume, setHasResume] = useState<boolean | undefined>(undefined);
   const [hasCvLink, setHasCvLink] = useState<boolean | undefined>(undefined);
@@ -32,6 +41,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
       search: string;
       source: CandidateSource | "";
       sourceChannel: string;
+      createdBy: string;
       selectedTags: string[];
       hasResume: boolean | undefined;
       hasCvLink: boolean | undefined;
@@ -42,6 +52,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     const s = over.search ?? search;
     const src = over.source ?? source;
     const chan = over.sourceChannel ?? sourceChannel;
+    const by = over.createdBy ?? createdBy;
     const tags = over.selectedTags ?? selectedTags;
     const resume = "hasResume" in over ? over.hasResume : hasResume;
     const cv = "hasCvLink" in over ? over.hasCvLink : hasCvLink;
@@ -51,6 +62,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
       search: s || undefined,
       source: (src as CandidateSource) || undefined,
       source_channel: chan || undefined,
+      created_by: by || undefined,
       tags: tags.length > 0 ? tags : undefined,
       has_resume: resume,
       has_cv_link: cv,
@@ -73,6 +85,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     setSearch("");
     setSource("");
     setSourceChannel("");
+    setCreatedBy("");
     setSelectedTags([]);
     setHasResume(undefined);
     setHasCvLink(undefined);
@@ -85,6 +98,7 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
     !!search ||
     !!source ||
     !!sourceChannel ||
+    !!createdBy ||
     selectedTags.length > 0 ||
     hasResume !== undefined ||
     hasCvLink !== undefined ||
@@ -110,6 +124,30 @@ export default function CandidateFilterBar({ availableTags, onFilterChange }: Pr
         className="min-w-[200px] flex-1 rounded-lg px-3 py-1.5 text-sm outline-none"
         style={inputStyle}
       />
+
+      {/* Not gated on recruiters.length: "Unassigned" is a static sentinel
+          independent of that list, and hiding the whole control whenever the
+          list is empty (e.g. it failed to load) would take that option away
+          along with the per-recruiter ones it has nothing to do with. */}
+      <select
+        value={createdBy}
+        onChange={(e) => {
+          const v = e.target.value;
+          setCreatedBy(v);
+          emit({ createdBy: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+        aria-label="Filter by the recruiter who added the candidate"
+      >
+        <option value="">All Recruiters</option>
+        {recruiters.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.name}
+          </option>
+        ))}
+        <option value={UNASSIGNED}>Unassigned</option>
+      </select>
 
       <select
         value={source}

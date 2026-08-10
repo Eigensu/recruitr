@@ -21,11 +21,10 @@ export const CITIES = [
  */
 export const SOURCE_CHANNELS = [
   "LinkedIn",
-  "Indeed",
-  "Naukri",
-  "Reference from Candidate",
-  "WhatsApp Groups",
   "Instagram",
+  "WhatsApp",
+  "Referred by a Friend",
+  "Connected by a Binge Partner",
   "Other",
 ] as const;
 
@@ -42,3 +41,40 @@ export const EDUCATION_LEVELS = [
   { value: "Masters", label: "Masters (Postgraduate)" },
   { value: "PhD", label: "PhD / Doctorate" },
 ] as const;
+
+export const GENDER_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const CANDIDATE_SOURCES = ["internal", "external"] as const;
+
+export const COMMUNICATION_OPTIONS = ["Basic", "Good", "Excellent"] as const;
+
+export const STRUCTURED_EDUCATION_OPTIONS = [
+  "SSC",
+  "HSC",
+  "Diploma",
+  "Graduate",
+  "Hospitality Graduate",
+] as const;
+
+export const BRAND_EXPERIENCE_OPTIONS = ["Low", "Mid", "Premium"] as const;
+
+export const DEPARTMENT_OPTIONS = ["Kitchen", "FOH", "Corporate"] as const;
+
+export const SPECIALIZATION_OPTIONS: Record<string, string[]> = {
+  Kitchen: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
+  FOH: ["Service", "Guest Relations", "Bar", "Coffee", "Operations"],
+  Corporate: [
+    "HR",
+    "Accounts & Finance",
+    "Business Development",
+    "Marketing",
+    "PR",
+    "Social Media",
+    "Design",
+    "Admin",
+  ],
+};

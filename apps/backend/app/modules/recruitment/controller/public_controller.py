@@ -26,11 +26,13 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.config import settings
-from app.modules.brands.models import Brand
+from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
-from app.modules.recruitment.enums import CandidateStatus
+from app.modules.brands.service import get_automation_settings
+from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
 from app.modules.recruitment.models import Candidate
-from app.modules.recruitment.schemas import CandidateResponse
+from app.modules.recruitment.repository_impl import record_candidate_event
+from app.modules.recruitment.schemas import CandidateResponse, TenantScope
 from app.modules.recruitment.services.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
@@ -101,8 +103,14 @@ async def public_brand_by_domain(domain: str) -> PublicBrandResponse:
 
 async def _process_resume_upload(
     resume: UploadFile | None,
+    automation: AutomationSettings,
 ) -> tuple[str | None, str | None, str | None, list[str], list[str], float]:
-    """Process the resume upload, parse it, and upload to Cloudinary."""
+    """Process the resume upload, parse it, and upload to Cloudinary.
+
+    Honours the target brand's automation settings: with parsing off the file is
+    still stored and linked, and the applicant lands with no inferred skills,
+    tags or experience.
+    """
     if not resume:
         return None, None, None, [], [], 0.0
 
@@ -125,7 +133,7 @@ async def _process_resume_upload(
             )
 
         raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
-            file_bytes, filename
+            file_bytes, filename, automation
         )
 
         parsed_skills = parsed.skills or []
@@ -160,11 +168,15 @@ async def public_apply(
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
     source_channel: Annotated[str | None, Form(description="How the applicant found us")] = None,
+    connect_code: Annotated[
+        str | None, Form(description="Optional connect code for referrals")
+    ] = None,
     resume: Annotated[UploadFile | None, File(description="PDF or DOCX resume file")] = None,
 ) -> CandidateResponse:
     """Submit a public application."""
 
     target_brand_id = await _resolve_target_brand(brand_id)
+    automation = await get_automation_settings(target_brand_id)
     (
         raw_text,
         resume_url,
@@ -172,7 +184,7 @@ async def public_apply(
         parsed_skills,
         parsed_tags,
         parsed_exp,
-    ) = await _process_resume_upload(resume)
+    ) = await _process_resume_upload(resume, automation)
 
     try:
         doc = Candidate(
@@ -194,6 +206,7 @@ async def public_apply(
             # options) — "External" was invisible to the directory's filter.
             source="external",
             source_channel=source_channel,
+            connect_code=connect_code,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:
@@ -211,5 +224,18 @@ async def public_apply(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "An application with this email already exists"
         ) from exc
+
+    # Opens the candidate's permanent history. There is no employee behind a
+    # public application, so the scope carries the brand only.
+    await record_candidate_event(
+        scope=TenantScope(brand_id=target_brand_id),
+        candidate_id=doc.id,
+        event_type=CandidateEventType.applied,
+        note=(
+            f"Applied through the public form ({source_channel})"
+            if source_channel
+            else "Applied through the public form"
+        ),
+    )
 
     return CandidateResponse.from_document(doc)

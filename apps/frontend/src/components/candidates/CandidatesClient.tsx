@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ApiCandidate, CandidateFilters } from "@/types";
+import type { ApiCandidate, CandidateFilters, RecruiterOption } from "@/types";
 import {
   clientDeleteCandidate,
   clientFetchCandidates,
@@ -24,6 +24,7 @@ interface Props {
   initialTotal: number;
   initialPendingCandidates?: ApiCandidate[];
   availableTags: string[];
+  recruiters?: RecruiterOption[];
 }
 
 const drawerStyle = {
@@ -36,6 +37,7 @@ export default function CandidatesClient({
   initialTotal,
   initialPendingCandidates = [],
   availableTags,
+  recruiters = [],
 }: Readonly<Props>) {
   const { isMaintainer } = useCurrentUser();
   const toast = useToast();
@@ -223,7 +225,11 @@ export default function CandidatesClient({
         </div>
       </div>
 
-      <CandidateFilterBar availableTags={availableTags} onFilterChange={handleFilterChange} />
+      <CandidateFilterBar
+        availableTags={availableTags}
+        recruiters={recruiters}
+        onFilterChange={handleFilterChange}
+      />
 
       {showAddForm && (
         <div className="rounded-lg" style={drawerStyle}>

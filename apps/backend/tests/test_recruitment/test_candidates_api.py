@@ -168,14 +168,47 @@ async def test_create_email_normalised_to_lowercase(client_a: AsyncClient) -> No
     assert res.json()["email"] == "upper@test.com"
 
 
+@pytest.mark.asyncio
+async def test_create_without_phone_returns_422(client_a: AsyncClient) -> None:
+    payload = {k: v for k, v in BASE_PAYLOAD.items() if k != "phone"}
+    res = await client_a.post("/api/v1/candidates", json=payload)
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_without_email_succeeds(client_a: AsyncClient) -> None:
+    payload = {k: v for k, v in BASE_PAYLOAD.items() if k != "email"}
+    res = await client_a.post("/api/v1/candidates", json=payload)
+    assert res.status_code == 201, res.text
+    assert res.json()["email"] is None
+
+
+@pytest.mark.asyncio
+async def test_two_emailless_candidates_in_one_brand_do_not_collide(
+    client_a: AsyncClient,
+) -> None:
+    """The unique email index is partial for exactly this reason.
+
+    A plain unique index treats every missing/null email as the same indexed
+    value, so the second candidate without an email would 409 as a
+    "duplicate" of the first. It isn't one — neither has an email at all.
+    """
+    payload = {k: v for k, v in BASE_PAYLOAD.items() if k != "email"}
+    first = await client_a.post("/api/v1/candidates", json={**payload, "full_name": "No Email One"})
+    second = await client_a.post(
+        "/api/v1/candidates", json={**payload, "full_name": "No Email Two"}
+    )
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+
+
 # Every CandidateCreate field must survive the trip to Mongo and back. The
 # handler used to name each field by hand and had quietly stopped copying
-# previous_role, expected_salary, notice_period, source and source_channel —
+# expected_salary, notice_period, source and source_channel —
 # the Add Candidate form sent them and they vanished.
 @pytest.mark.asyncio
 async def test_create_persists_every_submitted_field(client_a: AsyncClient) -> None:
     extras = {
-        "previous_role": "Front Desk Executive",
         "expected_salary": 85000,
         "notice_period": "30 days",
         "salary": 60000,
@@ -199,7 +232,6 @@ async def test_create_persists_every_submitted_field(client_a: AsyncClient) -> N
 
     doc = await Candidate.get(PydanticObjectId(body["id"]))
     assert doc is not None
-    assert doc.previous_role == "Front Desk Executive"
     assert doc.expected_salary == 85000
     assert doc.notice_period == "30 days"
     assert doc.source == "external"
@@ -256,7 +288,7 @@ async def test_update_persists_role_and_compensation_fields(client_a: AsyncClien
     cid = created["id"]
 
     patch = {
-        "previous_role": "Front Desk Executive",
+        "salary": 60000,
         "expected_salary": 92000,
         "notice_period": "60 days",
         "source": "external",
@@ -270,7 +302,7 @@ async def test_update_persists_role_and_compensation_fields(client_a: AsyncClien
 
     doc = await Candidate.get(PydanticObjectId(cid))
     assert doc is not None
-    assert doc.previous_role == "Front Desk Executive"
+    assert doc.salary == 60000
     assert doc.expected_salary == 92000
     assert doc.notice_period == "60 days"
 

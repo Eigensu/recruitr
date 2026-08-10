@@ -3,16 +3,35 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.common.dtos.pagination import PaginatedResponse
-from app.modules.recruitment.enums import CandidateStatus, Gender, PipelineStage
+from app.modules.recruitment.enums import (
+    CandidateEventType,
+    CandidateStatus,
+    Gender,
+    PipelineStage,
+)
 
 
-class CandidateCreate(BaseModel):
+class CandidateStructuredTags(BaseModel):
+    communication: str | None = None
+    education: str | None = None
+    brand_experience: str | None = None
+    department: str | None = None
+    specialization: str | None = None
+
+    @model_validator(mode="after")
+    def validate_department_specialization(self) -> "CandidateStructuredTags":
+        if self.department and not self.specialization:
+            raise ValueError("Specialization is required when a department is selected")
+        return self
+
+
+class CandidateCreate(CandidateStructuredTags):
     full_name: str
-    email: EmailStr
-    phone: str | None = None
+    email: EmailStr | None = None
+    phone: str = Field(..., min_length=1)
     previous_company: str | None = None
     experience_years: float = Field(default=0, ge=0)
     education_level: str | None = None
@@ -25,16 +44,16 @@ class CandidateCreate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
 
-class CandidateUpdate(BaseModel):
+class CandidateUpdate(CandidateStructuredTags):
     full_name: str | None = None
     phone: str | None = None
     previous_company: str | None = None
@@ -49,20 +68,20 @@ class CandidateUpdate(BaseModel):
     preferred_train_line: str | None = None
     cv_link: str | None = None
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = Field(default=None, ge=0)
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
     status: CandidateStatus | None = None
 
 
-class CandidateResponse(BaseModel):
+class CandidateResponse(CandidateStructuredTags):
     id: str
     full_name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float
@@ -79,11 +98,11 @@ class CandidateResponse(BaseModel):
     current_stage: PipelineStage
     mappings_count: int = 0
     current_role: str | None = None
-    previous_role: str | None = None
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None
     source_channel: str | None = None
+    connect_code: str | None = None
     salary: float | None = None
     notes: str | None = None
     # Defaulted, not required: candidates created before `status` existed have no
@@ -92,12 +111,27 @@ class CandidateResponse(BaseModel):
     # Mirrors Candidate.status, and matches the query's treatment of a missing
     # status as approved.
     status: CandidateStatus = CandidateStatus.approved
+    # The recruiter who added this candidate. Null for public-form applications
+    # and for records that predate the field.
+    created_by_id: str | None = None
+    created_by_name: str | None = None
+    # True when the CV was withheld from this viewer because another recruiter
+    # sourced the candidate — resume_url and cv_link are null for that reason,
+    # not because the candidate has no CV on file. See utils/cv_access.py.
+    cv_locked: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_document(cls, doc, mappings_count: int = 0) -> "CandidateResponse":
+    def from_document(
+        cls,
+        doc,
+        mappings_count: int = 0,
+        *,
+        created_by_name: str | None = None,
+        cv_locked: bool = False,
+    ) -> "CandidateResponse":
         """Build the response from a Candidate document.
 
         Lives on the DTO because both the authenticated candidate endpoints and
@@ -107,6 +141,10 @@ class CandidateResponse(BaseModel):
 
         Not model_validate(doc): `id` needs str() from an ObjectId, and
         mappings_count is a per-request count that is not on the document.
+
+        `cv_locked` is decided by the caller, which knows who is asking; the
+        blanking itself happens here so no call site can set the flag and still
+        hand the URL over.
         """
         return cls(
             id=str(doc.id),
@@ -122,20 +160,28 @@ class CandidateResponse(BaseModel):
             age=doc.age,
             skills=doc.skills,
             tags=doc.tags,
+            communication=doc.communication,
+            education=doc.education,
+            brand_experience=doc.brand_experience,
+            department=doc.department,
+            specialization=doc.specialization,
             preferred_train_line=doc.preferred_train_line,
-            cv_link=doc.cv_link,
-            resume_url=doc.resume_url,
+            cv_link=None if cv_locked else doc.cv_link,
+            resume_url=None if cv_locked else doc.resume_url,
             current_stage=doc.current_stage,
             mappings_count=mappings_count,
             current_role=doc.current_role,
-            previous_role=doc.previous_role,
             expected_salary=doc.expected_salary,
             notice_period=doc.notice_period,
             salary=doc.salary,
             notes=doc.notes,
             source=doc.source,
             source_channel=doc.source_channel,
+            connect_code=doc.connect_code,
             status=doc.status,
+            created_by_id=str(doc.created_by_id) if doc.created_by_id else None,
+            created_by_name=created_by_name,
+            cv_locked=cv_locked,
             created_at=doc.created_at,
         )
 
@@ -152,6 +198,51 @@ class CandidateMappingItem(BaseModel):
     stage: PipelineStage
     match_score: float | None = None
     mapped_at: datetime
+
+
+class CandidateHistoryEvent(BaseModel):
+    """One entry in the candidate's permanent employment history."""
+
+    # Null on the synthetic opening entry, which is derived from the candidate
+    # record itself for profiles created before history was recorded.
+    id: str | None = None
+    at: datetime
+    event_type: CandidateEventType
+    employee_id: str | None = None
+    employee_name: str | None = None
+    position_id: str | None = None
+    position_code: str | None = None
+    position_role: str | None = None
+    client_name: str | None = None
+    from_stage: PipelineStage | None = None
+    to_stage: PipelineStage | None = None
+    note: str | None = None
+
+
+class CandidatePlacement(BaseModel):
+    """A company this candidate was actually placed with.
+
+    Recorded at the point the outcome happened, so it stays on the profile after
+    the position closes or the candidate is taken off the board.
+    """
+
+    position_id: str | None = None
+    position_code: str | None = None
+    role: str | None = None
+    client_name: str | None = None
+    stage: PipelineStage  # offer_accepted or position_close
+    at: datetime
+    employee_name: str | None = None
+    # False once the candidate is no longer sitting in that stage — the
+    # placement happened, but something moved afterwards.
+    is_current: bool = True
+
+
+class CandidateHistoryResponse(BaseModel):
+    """GET /candidates/{id}/history — the ATS view of one person."""
+
+    events: list[CandidateHistoryEvent]
+    placements: list[CandidatePlacement]
 
 
 class CandidatePage(PaginatedResponse[CandidateResponse]):
