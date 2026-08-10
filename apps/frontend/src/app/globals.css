@@ -94,6 +94,14 @@
 /* ── Dark mode (default) ── */
 :root,
 [data-theme="dark"] {
+  /* Tells the browser to paint native UI dark: `<select>` dropdown popups,
+     scrollbars, autofill, spinners and the text caret. Without it the browser
+     paints those light while our own `color` tokens stay near-white — a native
+     dropdown then renders white-on-white and its options are invisible until
+     hovered. Must live beside the tokens, not in a media query, because the
+     theme comes from [data-theme] rather than the OS setting. */
+  color-scheme: dark;
+
   --color-shell-val: #002348;
   --color-sidebar-val: #0d2347;
   --color-canvas-val: #0a1628;
@@ -130,6 +138,8 @@
 
 /* ── Light mode ── */
 [data-theme="light"] {
+  color-scheme: light;
+
   --color-shell-val: #c8c8cc; /* outer frame — clearly grey, visible gap */
   --color-sidebar-val: #0d2347; /* sidebar always stays dark navy */
   --color-canvas-val: #e4e4e8; /* page background — medium grey, clearly distinct */

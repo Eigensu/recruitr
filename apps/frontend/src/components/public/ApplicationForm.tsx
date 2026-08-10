@@ -42,6 +42,9 @@ const inputCls =
   "w-full rounded-lg border border-border bg-canvas px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-yellow focus:outline-none focus:ring-1 focus:ring-yellow transition-colors";
 const inputErrorCls = inputCls.replace("border-border", "border-red-500/60");
 const labelCls = "mb-1.5 block text-xs font-medium text-text-secondary";
+// bg-surface rather than bg-canvas: canvas is the page grey in light mode, and
+// the dropdown reads as a panel floating above the form in both themes.
+const optionCls = "bg-surface text-text-primary";
 
 function FieldError({ id, message }: Readonly<{ id: string; message?: string }>) {
   if (!message) return null;
@@ -84,9 +87,15 @@ function Select({
           value={value}
           onChange={(e) => onChange(e.target.value)}
         >
-          <option value="">{placeholder}</option>
+          {/* Options carry their own colours on top of the root `color-scheme`.
+              Chrome on Windows/Linux draws the dropdown from the element rather
+              than the colour scheme, and would otherwise inherit the near-white
+              `text-text-primary` onto its default white popup. */}
+          <option className={optionCls} value="">
+            {placeholder}
+          </option>
           {items.map((item) => (
-            <option key={item.value} value={item.value}>
+            <option className={optionCls} key={item.value} value={item.value}>
               {item.label}
             </option>
           ))}
