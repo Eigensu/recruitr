@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import (
@@ -275,7 +275,7 @@ async def list_candidates(
     city: Annotated[str | None, Query()] = None,
     gender: Annotated[str | None, Query()] = None,
     role: Annotated[str | None, Query()] = None,
-    salary: Annotated[str | None, Query()] = None,
+    salary: Annotated[Literal["lt3", "3to5", "5to8", "8to12", "gt12"] | None, Query()] = None,
     status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
     page: _Page = 1,
     limit: _Limit = 30,
@@ -344,13 +344,13 @@ async def list_candidates(
         if salary == "lt3":
             match["salary"] = {"$lt": 300000}
         elif salary == "3to5":
-            match["salary"] = {"$gte": 300000, "$lte": 500000}
+            match["salary"] = {"$gte": 300000, "$lt": 500000}
         elif salary == "5to8":
-            match["salary"] = {"$gte": 500000, "$lte": 800000}
+            match["salary"] = {"$gte": 500000, "$lt": 800000}
         elif salary == "8to12":
-            match["salary"] = {"$gte": 800000, "$lte": 1200000}
+            match["salary"] = {"$gte": 800000, "$lt": 1200000}
         elif salary == "gt12":
-            match["salary"] = {"$gt": 1200000}
+            match["salary"] = {"$gte": 1200000}
 
     if tags:
         match["tags"] = {"$in": tags}

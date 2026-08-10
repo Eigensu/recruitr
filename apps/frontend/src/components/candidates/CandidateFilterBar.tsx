@@ -255,9 +255,9 @@ export default function CandidateFilterBar({
       >
         <option value="">All Salaries</option>
         <option value="lt3">Below ₹3L</option>
-        <option value="3to5">₹3L – ₹5L</option>
-        <option value="5to8">₹5L – ₹8L</option>
-        <option value="8to12">₹8L – ₹12L</option>
+        <option value="3to5">₹3L – &lt;₹5L</option>
+        <option value="5to8">₹5L – &lt;₹8L</option>
+        <option value="8to12">₹8L – &lt;₹12L</option>
         <option value="gt12">₹12L+</option>
       </select>
 

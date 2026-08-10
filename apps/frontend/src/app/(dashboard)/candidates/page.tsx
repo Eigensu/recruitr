@@ -20,7 +20,10 @@ export default async function CandidatesPage() {
       getCandidates({ page: 1, limit: 50 }),
       getCandidates({ page: 1, limit: 50, status: "PENDING" }),
       getCandidateTags(),
-      getCandidateRoles(),
+      getCandidateRoles().catch((err) => {
+        console.error("Failed to load candidate roles:", err);
+        return [];
+      }),
     ]);
     initialCandidates = candidatePage.items ?? [];
     initialTotal = candidatePage.meta?.total ?? initialCandidates.length;
