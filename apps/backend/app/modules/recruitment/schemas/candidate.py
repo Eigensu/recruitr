@@ -1,5 +1,6 @@
 """Candidate resource DTOs."""
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -51,6 +52,51 @@ class CandidateCreate(CandidateStructuredTags):
     connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
+
+
+class CandidateCreateStrict(CandidateCreate):
+    """Strictly validates all recruiter-presented fields during manual creation & bulk upload.
+    This preserves CandidateCreate and CandidateUpdate as partials for legacy operations."""
+
+    full_name: str = Field(..., min_length=1)
+    email: EmailStr = Field(...)
+    phone: str = Field(..., min_length=1)
+    source: str = Field(..., min_length=1)
+    communication: str = Field(..., min_length=1)
+    education: str = Field(..., min_length=1)
+    brand_experience: str = Field(..., min_length=1)
+    department: str = Field(..., min_length=1)
+    specialization: str = Field(..., min_length=1)
+    current_role: str = Field(..., min_length=1)
+    experience_years: float = Field(..., ge=0)
+    city: str = Field(..., min_length=1)
+    area: str = Field(..., min_length=1)
+    gender: Gender = Field(...)
+    age: int = Field(..., gt=0)
+    expected_salary: float = Field(..., ge=0)
+    salary: float = Field(..., ge=0)
+    notice_period: str = Field(..., min_length=1)
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_conditional(self) -> "CandidateCreateStrict":
+        if self.source:
+            self.source = self.source.strip()
+
+        if self.source not in ("internal", "external"):
+            raise ValueError("Source must be internal or external")
+
+        if self.source == "external":
+            if not self.source_channel or not self.source_channel.strip():
+                raise ValueError("Source Channel is required for external source")
+            if not self.cv_link or not self.cv_link.strip():
+                raise ValueError("CV Link is required for external source")
+
+            self.cv_link = self.cv_link.strip()
+            if not re.match(r"^https?://", self.cv_link, re.IGNORECASE):
+                raise ValueError("CV Link must be a valid HTTP(S) URL")
+
+        return self
 
 
 class CandidateUpdate(CandidateStructuredTags):

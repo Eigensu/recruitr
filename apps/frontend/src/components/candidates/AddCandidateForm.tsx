@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { z } from "zod";
-import { clientConfirmResume, clientCreateCandidate } from "@/lib/api/candidates.client";
+import {
+  clientConfirmResume,
+  clientCreateCandidate,
+  clientDeleteCandidate,
+} from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import type { ApiCandidate } from "@/types";
 import {
@@ -26,41 +30,74 @@ import {
   resolveSourceChannel,
 } from "./CandidateFormFields";
 
-const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email required").optional().or(z.literal("")),
-  phone: z.string().min(1, "Phone is required"),
-  source: z.enum(["internal", "external"]),
-  source_channel: z.string().optional(),
-  communication: z.string().optional(),
-  education: z.string().optional(),
-  brand_experience: z.string().optional(),
-  department: z.string().optional(),
-  specialization: z.string().optional(),
-  cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-  current_role: z.string().optional(),
-  experience_years: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(0, "Must be 0 or more").optional(),
-  ),
-  city: z.string().optional(),
-  area: z.string().optional(),
-  gender: z.enum(["male", "female", "other"]).optional(),
-  age: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  expected_salary: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  salary: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  notice_period: z.string().optional(),
-  notes: z.string().optional(),
-});
+const schema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Valid email required").min(1, "Email is required"),
+    phone: z.string().min(1, "Phone is required"),
+    source: z.enum(["internal", "external"]),
+    source_channel: z.string().optional(),
+    communication: z.string().min(1, "Communication is required"),
+    education: z.string().min(1, "Education is required"),
+    brand_experience: z.string().min(1, "Brand Experience is required"),
+    department: z.string().min(1, "Department is required"),
+    specialization: z.string().optional(),
+    cv_link: z.string().optional(),
+    current_role: z.string().min(1, "Current Role is required"),
+    experience_years: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Experience Years is required" }).min(0, "Must be 0 or more"),
+    ),
+    city: z.string().min(1, "City is required"),
+    area: z.string().min(1, "Area is required"),
+    gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
+    age: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Age is required" }).min(1, "Must be 1 or more"),
+    ),
+    expected_salary: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Expected Salary is required" }).min(0, "Must be 0 or more"),
+    ),
+    salary: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Current Salary is required" }).min(0, "Must be 0 or more"),
+    ),
+    notice_period: z.string().min(1, "Notice Period is required"),
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.department && !data.specialization) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["specialization"],
+        message: "Specialization is required when a department is selected",
+      });
+    }
+    if (data.source === "external" && !data.source_channel) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["source_channel"],
+        message: "Source Channel is required for external source",
+      });
+    }
+    if (data.source === "external" && (!data.cv_link || data.cv_link.trim() === "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cv_link"],
+        message: "CV Link is required for external source",
+      });
+    } else if (data.source === "external" && data.cv_link) {
+      const isUrl = z.string().url().safeParse(data.cv_link);
+      if (!isUrl.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cv_link"],
+          message: "Must be a valid URL",
+        });
+      }
+    }
+  });
 
 interface Props {
   onSuccess: (candidate: ApiCandidate) => void;
@@ -127,7 +164,9 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     });
 
     if (!parsed.success) {
-      const fieldErrors: Record<string, string> = {};
+      const fieldErrors: Record<string, string> = {
+        _root: "Please fix the validation errors below before submitting.",
+      };
       parsed.error.issues.forEach((err) => {
         if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
       });
@@ -135,8 +174,8 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       return;
     }
 
-    if (parsed.data.department && !parsed.data.specialization) {
-      setErrors({ specialization: "Specialization is required when a department is selected" });
+    if (parsed.data.source === "internal" && !resumeFile) {
+      setErrors({ _root: "Please select a CV file to upload" });
       return;
     }
     setLoading(true);
@@ -167,8 +206,15 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       });
 
       if (parsed.data.source === "internal" && resumeFile) {
-        const uploaded = await uploadResumeToCloudinary(resumeFile);
-        candidate = await clientConfirmResume(candidate.id, uploaded);
+        try {
+          const uploaded = await uploadResumeToCloudinary(resumeFile);
+          candidate = await clientConfirmResume(candidate.id, uploaded);
+        } catch (uploadError) {
+          await clientDeleteCandidate(candidate.id).catch(() => {
+            // Ignore rollback failure
+          });
+          throw uploadError;
+        }
       }
 
       onSuccess(candidate);
@@ -206,7 +252,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.name}
       />
       <TextField
-        label="Email"
+        label="Email *"
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
@@ -232,23 +278,34 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
           other={form.source_channel_other}
           onChannel={(source_channel) => setForm((f) => ({ ...f, source_channel }))}
           onOther={(source_channel_other) => setForm((f) => ({ ...f, source_channel_other }))}
+          error={errors.source_channel}
         />
       )}
 
       <CurrentRoleField
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        error={errors.current_role}
       />
       <ExperienceYearsField
         value={form.experience_years}
         onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
         error={errors.experience_years}
       />
-      <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
-      <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
+      <CityField
+        value={form.city}
+        onChange={(city) => setForm((f) => ({ ...f, city }))}
+        error={errors.city}
+      />
+      <AreaField
+        value={form.area}
+        onChange={(area) => setForm((f) => ({ ...f, area }))}
+        error={errors.area}
+      />
       <GenderField
         value={form.gender}
         onChange={(v) => setForm((f) => ({ ...f, gender: v as typeof f.gender }))}
+        error={errors.gender}
       />
       <AgeField
         value={form.age}
@@ -268,10 +325,12 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       <NoticePeriodField
         value={form.notice_period}
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
+        error={errors.notice_period}
       />
 
       <StructuredCandidateTags
         form={form}
+        errors={errors}
         onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
       />
 
