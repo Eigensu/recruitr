@@ -26,41 +26,74 @@ import {
   resolveSourceChannel,
 } from "./CandidateFormFields";
 
-const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email required").optional().or(z.literal("")),
-  phone: z.string().min(1, "Phone is required"),
-  source: z.enum(["internal", "external"]),
-  source_channel: z.string().optional(),
-  communication: z.string().optional(),
-  education: z.string().optional(),
-  brand_experience: z.string().optional(),
-  department: z.string().optional(),
-  specialization: z.string().optional(),
-  cv_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-  current_role: z.string().optional(),
-  experience_years: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().min(0, "Must be 0 or more").optional(),
-  ),
-  city: z.string().optional(),
-  area: z.string().optional(),
-  gender: z.enum(["male", "female", "other"]).optional(),
-  age: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  expected_salary: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  salary: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number().positive("Must be a positive number").optional(),
-  ),
-  notice_period: z.string().optional(),
-  notes: z.string().optional(),
-});
+const schema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Valid email required").min(1, "Email is required"),
+    phone: z.string().min(1, "Phone is required"),
+    source: z.enum(["internal", "external"]),
+    source_channel: z.string().optional(),
+    communication: z.string().min(1, "Communication is required"),
+    education: z.string().min(1, "Education is required"),
+    brand_experience: z.string().min(1, "Brand Experience is required"),
+    department: z.string().min(1, "Department is required"),
+    specialization: z.string().optional(),
+    cv_link: z.string().optional(),
+    current_role: z.string().min(1, "Current Role is required"),
+    experience_years: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Experience Years is required" }).min(0, "Must be 0 or more"),
+    ),
+    city: z.string().min(1, "City is required"),
+    area: z.string().min(1, "Area is required"),
+    gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
+    age: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Age is required" }).positive("Must be a positive number"),
+    ),
+    expected_salary: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Expected Salary is required" }).positive("Must be a positive number"),
+    ),
+    salary: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : Number(v)),
+      z.number({ message: "Current Salary is required" }).positive("Must be a positive number"),
+    ),
+    notice_period: z.string().min(1, "Notice Period is required"),
+    notes: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.department && !data.specialization) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["specialization"],
+        message: "Specialization is required when a department is selected",
+      });
+    }
+    if (data.source === "external" && !data.source_channel) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["source_channel"],
+        message: "Source Channel is required for external source",
+      });
+    }
+    if (data.source === "external" && (!data.cv_link || data.cv_link.trim() === "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cv_link"],
+        message: "CV Link is required for external source",
+      });
+    } else if (data.source === "external" && data.cv_link) {
+      const isUrl = z.string().url().safeParse(data.cv_link);
+      if (!isUrl.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cv_link"],
+          message: "Must be a valid URL",
+        });
+      }
+    }
+  });
 
 interface Props {
   onSuccess: (candidate: ApiCandidate) => void;
@@ -135,8 +168,8 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       return;
     }
 
-    if (parsed.data.department && !parsed.data.specialization) {
-      setErrors({ specialization: "Specialization is required when a department is selected" });
+    if (parsed.data.source === "internal" && !resumeFile) {
+      setErrors({ _root: "Please select a CV file to upload" });
       return;
     }
     setLoading(true);
@@ -206,7 +239,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.name}
       />
       <TextField
-        label="Email"
+        label="Email *"
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}

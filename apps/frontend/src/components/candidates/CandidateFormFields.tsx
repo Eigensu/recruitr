@@ -237,7 +237,7 @@ export function SourceChannelField({
   return (
     <div className={className}>
       <SelectField
-        label="Source Channel"
+        label="Source Channel *"
         value={channel}
         onChange={onChannel}
         options={SOURCE_CHANNELS}
@@ -256,32 +256,38 @@ export function SourceChannelField({
 }
 
 export function CityField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return <SelectField label="City" options={CITIES} {...props} />;
+  return <SelectField label="City *" options={CITIES} {...props} />;
 }
 
 export function AreaField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return <TextField label="Area" placeholder="e.g. Andheri" {...props} />;
+  return <TextField label="Area *" placeholder="e.g. Andheri" {...props} />;
 }
 
 export function GenderField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return <SelectField label="Gender" options={GENDER_OPTIONS} {...props} />;
+  return <SelectField label="Gender *" options={GENDER_OPTIONS} {...props} />;
 }
 
 export function AgeField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
-  return <TextField label="Age" type="number" min="0" placeholder="e.g. 25" {...props} />;
+  return <TextField label="Age *" type="number" min="0" placeholder="e.g. 25" {...props} />;
 }
 
 export function EducationField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return <SelectField label="Highest Education" options={EDUCATION_LEVELS} {...props} />;
+  return <SelectField label="Highest Education *" options={EDUCATION_LEVELS} {...props} />;
 }
 
 export function ExpectedSalaryField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return (
-    <TextField label="Expected Salary" type="number" min="0" placeholder="e.g. 85000" {...props} />
+    <TextField
+      label="Expected Salary *"
+      type="number"
+      min="0"
+      placeholder="e.g. 85000"
+      {...props}
+    />
   );
 }
 
@@ -289,7 +295,7 @@ export function CurrentSalaryField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return (
-    <TextField label="Current Salary" type="number" min="0" placeholder="e.g. 60000" {...props} />
+    <TextField label="Current Salary *" type="number" min="0" placeholder="e.g. 60000" {...props} />
   );
 }
 
@@ -298,7 +304,7 @@ export function ExperienceYearsField(
 ) {
   return (
     <TextField
-      label="Experience (years)"
+      label="Experience (years) *"
       type="number"
       min="0"
       step="0.5"
@@ -311,13 +317,13 @@ export function ExperienceYearsField(
 export function NoticePeriodField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
-  return <TextField label="Notice Period" placeholder="e.g. 30 days" {...props} />;
+  return <TextField label="Notice Period *" placeholder="e.g. 30 days" {...props} />;
 }
 
 export function CurrentRoleField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
-  return <TextField label="Current Role" placeholder="e.g. Senior Engineer" {...props} />;
+  return <TextField label="Current Role *" placeholder="e.g. Senior Engineer" {...props} />;
 }
 
 export function CvLinkField({
@@ -359,7 +365,7 @@ export function ResumeField({
   children?: React.ReactNode;
 }>) {
   return (
-    <Field label="Resume" className={className}>
+    <Field label="Resume *" className={className}>
       {children}
       <input
         type="file"
@@ -491,23 +497,23 @@ export function TagChip({ tag, onRemove }: Readonly<{ tag: string; onRemove?: ()
 export function CommunicationField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
-  return <SelectField label="Communication" options={COMMUNICATION_OPTIONS} {...props} />;
+  return <SelectField label="Communication *" options={COMMUNICATION_OPTIONS} {...props} />;
 }
 
 export function StructuredEducationField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
-  return <SelectField label="Education" options={STRUCTURED_EDUCATION_OPTIONS} {...props} />;
+  return <SelectField label="Education *" options={STRUCTURED_EDUCATION_OPTIONS} {...props} />;
 }
 
 export function BrandExperienceField(
   props: Readonly<{ value: string; onChange: (v: string) => void }>,
 ) {
-  return <SelectField label="Brand Experience" options={BRAND_EXPERIENCE_OPTIONS} {...props} />;
+  return <SelectField label="Brand Experience *" options={BRAND_EXPERIENCE_OPTIONS} {...props} />;
 }
 
 export function DepartmentField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
-  return <SelectField label="Department" options={DEPARTMENT_OPTIONS} {...props} />;
+  return <SelectField label="Department *" options={DEPARTMENT_OPTIONS} {...props} />;
 }
 
 export function SpecializationField({

@@ -46,7 +46,7 @@ from app.modules.recruitment.repository_impl import record_candidate_event
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
     BulkUploadResult,
-    CandidateCreate,
+    CandidateCreateStrict,
     CandidateHistoryEvent,
     CandidateHistoryResponse,
     CandidateMappingItem,
@@ -248,10 +248,13 @@ async def list_candidate_tags(tenant: _Tenant) -> list[str]:
 async def list_candidate_roles(tenant: _Tenant) -> list[str]:
     """Return all distinct current roles for candidates in this brand."""
     collection = Candidate.get_motor_collection()
-    roles = await collection.distinct(
-        "current_role", {"brand_id": tenant.brand_id, "is_active": True}
-    )
-    return sorted(r for r in roles if r)
+    match_q = {"brand_id": tenant.brand_id, "is_active": True}
+    roles_current = await collection.distinct("current_role", match_q)
+    roles_legacy = await collection.distinct("role", match_q)
+    all_roles = set(roles_current + roles_legacy)
+    all_roles.discard(None)
+    all_roles.discard("")
+    return sorted(r for r in all_roles if r)
 
 
 # ── List ───────────────────────────────────────────────────────────────────────
@@ -338,19 +341,26 @@ async def list_candidates(
         match["gender"] = gender
 
     if role:
-        match["current_role"] = role
+        and_clauses.append({"$or": [{"current_role": role}, {"role": role}]})
 
     if salary:
+        # Convert salary field to double safely. If missing/invalid, resolves to null.
+        num_salary = {
+            "$convert": {"input": "$salary", "to": "double", "onError": None, "onNull": None}
+        }
+
         if salary == "lt3":
-            match["salary"] = {"$lt": 300000}
+            cond = {"$lt": [num_salary, 300000]}
         elif salary == "3to5":
-            match["salary"] = {"$gte": 300000, "$lt": 500000}
+            cond = {"$and": [{"$gte": [num_salary, 300000]}, {"$lt": [num_salary, 500000]}]}
         elif salary == "5to8":
-            match["salary"] = {"$gte": 500000, "$lt": 800000}
+            cond = {"$and": [{"$gte": [num_salary, 500000]}, {"$lt": [num_salary, 800000]}]}
         elif salary == "8to12":
-            match["salary"] = {"$gte": 800000, "$lt": 1200000}
+            cond = {"$and": [{"$gte": [num_salary, 800000]}, {"$lt": [num_salary, 1200000]}]}
         elif salary == "gt12":
-            match["salary"] = {"$gte": 1200000}
+            cond = {"$gte": [num_salary, 1200000]}
+
+        and_clauses.append({"$expr": {"$and": [{"$ne": [num_salary, None]}, cond]}})
 
     if tags:
         match["tags"] = {"$in": tags}
@@ -410,7 +420,7 @@ async def list_candidates(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_candidate(tenant: _Tenant, data: CandidateCreate) -> CandidateResponse:
+async def create_candidate(tenant: _Tenant, data: CandidateCreateStrict) -> CandidateResponse:
     # Spread the whole DTO instead of naming each field: the hand-written list
     # this replaced had drifted from CandidateCreate and silently dropped
     # expected_salary, notice_period, source and source_channel.
@@ -503,6 +513,37 @@ async def bulk_upload_resumes(
 
             # 4. Upsert candidate by email
             email_lower = parsed.email.lower()
+
+            try:
+                # Validates against the strict schema before proceeding
+                CandidateCreateStrict.model_validate(
+                    {
+                        "full_name": _name_from_filename(filename),
+                        "email": email_lower,
+                        "phone": parsed.phone or "",
+                        "source": "internal",
+                        "communication": parsed.communication or "",
+                        "education": parsed.education or "",
+                        "brand_experience": parsed.brand_experience or "",
+                        "department": parsed.department or "",
+                        "specialization": parsed.specialization or "",
+                        "current_role": parsed.current_role or "",
+                        "experience_years": parsed.experience_years or 0,
+                        "city": parsed.city or "",
+                        "area": parsed.area or "",
+                        "gender": parsed.gender or None,
+                        "age": parsed.age or 0,
+                        "expected_salary": parsed.expected_salary or 0,
+                        "salary": parsed.salary or 0,
+                        "notice_period": parsed.notice_period or "",
+                    }
+                )
+            except Exception as exc:
+                failed.append(
+                    BulkUploadFailure(filename=filename, reason=f"Incomplete candidate data: {exc}")
+                )
+                continue
+
             existing = await Candidate.find_one({"email": email_lower, "brand_id": tenant.brand_id})
 
             if existing:
