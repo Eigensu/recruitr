@@ -79,11 +79,22 @@ class CandidateCreateStrict(CandidateCreate):
 
     @model_validator(mode="after")
     def validate_conditional(self) -> "CandidateCreateStrict":
+        if self.source:
+            self.source = self.source.strip()
+
+        if self.source not in ("internal", "external"):
+            raise ValueError("Source must be internal or external")
+
         if self.source == "external":
-            if not self.source_channel:
+            if not self.source_channel or not self.source_channel.strip():
                 raise ValueError("Source Channel is required for external source")
-            if not self.cv_link:
+            if not self.cv_link or not self.cv_link.strip():
                 raise ValueError("CV Link is required for external source")
+
+            self.cv_link = self.cv_link.strip()
+            if not self.cv_link.startswith(("http://", "https://")):
+                raise ValueError("CV Link must be a valid HTTP(S) URL")
+
         return self
 
 

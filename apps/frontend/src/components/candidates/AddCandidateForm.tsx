@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { z } from "zod";
-import { clientConfirmResume, clientCreateCandidate } from "@/lib/api/candidates.client";
+import {
+  clientConfirmResume,
+  clientCreateCandidate,
+  clientDeleteCandidate,
+} from "@/lib/api/candidates.client";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import type { ApiCandidate } from "@/types";
 import {
@@ -49,15 +53,15 @@ const schema = z
     gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
     age: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
-      z.number({ message: "Age is required" }).positive("Must be a positive number"),
+      z.number({ message: "Age is required" }).min(1, "Must be 1 or more"),
     ),
     expected_salary: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
-      z.number({ message: "Expected Salary is required" }).positive("Must be a positive number"),
+      z.number({ message: "Expected Salary is required" }).min(0, "Must be 0 or more"),
     ),
     salary: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
-      z.number({ message: "Current Salary is required" }).positive("Must be a positive number"),
+      z.number({ message: "Current Salary is required" }).min(0, "Must be 0 or more"),
     ),
     notice_period: z.string().min(1, "Notice Period is required"),
     notes: z.string().optional(),
@@ -160,7 +164,9 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     });
 
     if (!parsed.success) {
-      const fieldErrors: Record<string, string> = {};
+      const fieldErrors: Record<string, string> = {
+        _root: "Please fix the validation errors below before submitting.",
+      };
       parsed.error.issues.forEach((err) => {
         if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
       });
@@ -200,8 +206,15 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       });
 
       if (parsed.data.source === "internal" && resumeFile) {
-        const uploaded = await uploadResumeToCloudinary(resumeFile);
-        candidate = await clientConfirmResume(candidate.id, uploaded);
+        try {
+          const uploaded = await uploadResumeToCloudinary(resumeFile);
+          candidate = await clientConfirmResume(candidate.id, uploaded);
+        } catch (uploadError) {
+          await clientDeleteCandidate(candidate.id).catch(() => {
+            // Ignore rollback failure
+          });
+          throw uploadError;
+        }
       }
 
       onSuccess(candidate);
@@ -265,23 +278,34 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
           other={form.source_channel_other}
           onChannel={(source_channel) => setForm((f) => ({ ...f, source_channel }))}
           onOther={(source_channel_other) => setForm((f) => ({ ...f, source_channel_other }))}
+          error={errors.source_channel}
         />
       )}
 
       <CurrentRoleField
         value={form.current_role}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        error={errors.current_role}
       />
       <ExperienceYearsField
         value={form.experience_years}
         onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
         error={errors.experience_years}
       />
-      <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />
-      <AreaField value={form.area} onChange={(area) => setForm((f) => ({ ...f, area }))} />
+      <CityField
+        value={form.city}
+        onChange={(city) => setForm((f) => ({ ...f, city }))}
+        error={errors.city}
+      />
+      <AreaField
+        value={form.area}
+        onChange={(area) => setForm((f) => ({ ...f, area }))}
+        error={errors.area}
+      />
       <GenderField
         value={form.gender}
         onChange={(v) => setForm((f) => ({ ...f, gender: v as typeof f.gender }))}
+        error={errors.gender}
       />
       <AgeField
         value={form.age}
@@ -301,10 +325,12 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       <NoticePeriodField
         value={form.notice_period}
         onChange={(notice_period) => setForm((f) => ({ ...f, notice_period }))}
+        error={errors.notice_period}
       />
 
       <StructuredCandidateTags
         form={form}
+        errors={errors}
         onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
       />
 

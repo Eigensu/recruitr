@@ -226,12 +226,14 @@ export function SourceChannelField({
   other,
   onChannel,
   onOther,
+  error,
   className,
 }: Readonly<{
   channel: string;
   other: string;
   onChannel: (value: string) => void;
   onOther: (value: string) => void;
+  error?: string;
   className?: string;
 }>) {
   return (
@@ -241,6 +243,7 @@ export function SourceChannelField({
         value={channel}
         onChange={onChannel}
         options={SOURCE_CHANNELS}
+        error={error}
       />
       {channel === SOURCE_CHANNEL_OTHER && (
         <input
@@ -255,25 +258,33 @@ export function SourceChannelField({
   );
 }
 
-export function CityField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+export function CityField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
   return <SelectField label="City *" options={CITIES} {...props} />;
 }
 
-export function AreaField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+export function AreaField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
   return <TextField label="Area *" placeholder="e.g. Andheri" {...props} />;
 }
 
-export function GenderField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+export function GenderField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
   return <SelectField label="Gender *" options={GENDER_OPTIONS} {...props} />;
 }
 
 export function AgeField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
-  return <TextField label="Age *" type="number" min="0" placeholder="e.g. 25" {...props} />;
+  return <TextField label="Age *" type="number" min="1" placeholder="e.g. 25" {...props} />;
 }
 
-export function EducationField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+export function EducationField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
   return <SelectField label="Highest Education *" options={EDUCATION_LEVELS} {...props} />;
 }
 
@@ -315,13 +326,13 @@ export function ExperienceYearsField(
 }
 
 export function NoticePeriodField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return <TextField label="Notice Period *" placeholder="e.g. 30 days" {...props} />;
 }
 
 export function CurrentRoleField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return <TextField label="Current Role *" placeholder="e.g. Senior Engineer" {...props} />;
 }
@@ -495,24 +506,26 @@ export function TagChip({ tag, onRemove }: Readonly<{ tag: string; onRemove?: ()
 }
 
 export function CommunicationField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return <SelectField label="Communication *" options={COMMUNICATION_OPTIONS} {...props} />;
 }
 
 export function StructuredEducationField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return <SelectField label="Education *" options={STRUCTURED_EDUCATION_OPTIONS} {...props} />;
 }
 
 export function BrandExperienceField(
-  props: Readonly<{ value: string; onChange: (v: string) => void }>,
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return <SelectField label="Brand Experience *" options={BRAND_EXPERIENCE_OPTIONS} {...props} />;
 }
 
-export function DepartmentField(props: Readonly<{ value: string; onChange: (v: string) => void }>) {
+export function DepartmentField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
   return <SelectField label="Department *" options={DEPARTMENT_OPTIONS} {...props} />;
 }
 
@@ -520,11 +533,13 @@ export function SpecializationField({
   department,
   value,
   onChange,
+  error,
   className,
 }: Readonly<{
   department: string;
   value: string;
   onChange: (v: string) => void;
+  error?: string;
   className?: string;
 }>) {
   if (!department) return null;
@@ -535,6 +550,7 @@ export function SpecializationField({
       options={options}
       value={value}
       onChange={onChange}
+      error={error}
       className={className}
     />
   );
@@ -542,6 +558,7 @@ export function SpecializationField({
 
 export function StructuredCandidateTags({
   form,
+  errors,
   onChange,
 }: Readonly<{
   form: {
@@ -551,6 +568,7 @@ export function StructuredCandidateTags({
     department?: string;
     specialization?: string;
   };
+  errors?: Record<string, string>;
   onChange: (updates: Partial<typeof form>) => void;
 }>) {
   return (
@@ -558,23 +576,28 @@ export function StructuredCandidateTags({
       <CommunicationField
         value={form.communication || ""}
         onChange={(v) => onChange({ communication: v })}
+        error={errors?.communication}
       />
       <StructuredEducationField
         value={form.education || ""}
         onChange={(v) => onChange({ education: v })}
+        error={errors?.education}
       />
       <BrandExperienceField
         value={form.brand_experience || ""}
         onChange={(v) => onChange({ brand_experience: v })}
+        error={errors?.brand_experience}
       />
       <DepartmentField
         value={form.department || ""}
         onChange={(dept) => onChange({ department: dept, specialization: "" })}
+        error={errors?.department}
       />
       <SpecializationField
         department={form.department || ""}
         value={form.specialization || ""}
         onChange={(v) => onChange({ specialization: v })}
+        error={errors?.specialization}
       />
     </>
   );

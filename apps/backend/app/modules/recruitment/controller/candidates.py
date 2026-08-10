@@ -516,7 +516,7 @@ async def bulk_upload_resumes(
 
             try:
                 # Validates against the strict schema before proceeding
-                CandidateCreateStrict.model_validate(
+                validated_dto = CandidateCreateStrict.model_validate(
                     {
                         "full_name": _name_from_filename(filename),
                         "email": email_lower,
@@ -563,12 +563,10 @@ async def bulk_upload_resumes(
                 updated += 1
             else:
                 doc = Candidate(
+                    **validated_dto.model_dump(exclude={"email", "skills"}),
                     brand_id=tenant.brand_id,
-                    full_name=_name_from_filename(filename),
                     email=email_lower,
-                    phone=parsed.phone,
                     previous_company=parsed.previous_company,
-                    experience_years=parsed.experience_years or 0,
                     education_level=parsed.education_level,
                     skills=parsed.skills,
                     skills_normalized=[s.lower() for s in parsed.skills],
