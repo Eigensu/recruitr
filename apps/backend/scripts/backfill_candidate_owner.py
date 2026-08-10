@@ -19,7 +19,11 @@ Two inferences, best first:
      covers candidates who were added and never mapped.
 
 Anything neither reaches stays null and stays shared. Public-form applications
-are skipped outright: nobody sourced them, so they have no owner to find.
+are skipped outright: nobody sourced them, so they have no owner to find. So is
+a resolved owner that has no matching Employee document — seen in production
+from a batch write that stamped an employee_id without ever creating it;
+assigning it would lock the candidate to a recruiter who can never log in and
+claim it, which is worse than the shared default it has today.
 
 Safe to re-run — it only writes to documents whose created_by_id is still unset.
 """
@@ -93,6 +97,7 @@ def main() -> int:
     ops: list[UpdateOne] = []
     per_employee: dict = defaultdict(int)
     skipped_applicants = 0
+    skipped_phantom = 0
     for cand in unowned:
         # Public-form applicants first, before any lookup: the docstring's
         # promise is that nobody sourced them, but the mapper/actor lookups
@@ -104,6 +109,15 @@ def main() -> int:
             continue
         owner = first_mapper.get(cand["_id"]) or first_actor.get(str(cand["_id"]))
         if owner is None:
+            continue
+        if owner not in names:
+            # An employee_id on a mapping or activity log with no matching
+            # Employee document — seen in prod from a batch write that
+            # stamped one without ever creating it. Assigning it as owner
+            # would not just fail to attribute the CV; it would lock the
+            # candidate to a recruiter who can never log in and claim it,
+            # which is worse than the shared default this candidate has today.
+            skipped_phantom += 1
             continue
         # created_by_id: None in the filter, not just at select time: two
         # invocations of this script (or a concurrent one) could otherwise
@@ -118,7 +132,11 @@ def main() -> int:
 
     print(f"  attributable      : {len(ops)}")
     print(f"  public applicants : {skipped_applicants} (left unowned by design)")
-    print(f"  no signal at all  : {len(unowned) - len(ops) - skipped_applicants}")
+    print(
+        f"  phantom owner     : {skipped_phantom} (names a recruiter with no employee record — left unowned)"
+    )
+    no_signal = len(unowned) - len(ops) - skipped_applicants - skipped_phantom
+    print(f"  no signal at all  : {no_signal}")
 
     if per_employee:
         print("\nWould assign:")
