@@ -1,5 +1,6 @@
 """Candidate resource DTOs."""
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -92,7 +93,7 @@ class CandidateCreateStrict(CandidateCreate):
                 raise ValueError("CV Link is required for external source")
 
             self.cv_link = self.cv_link.strip()
-            if not self.cv_link.startswith(("http://", "https://")):
+            if not re.match(r"^https?://", self.cv_link, re.IGNORECASE):
                 raise ValueError("CV Link must be a valid HTTP(S) URL")
 
         return self
