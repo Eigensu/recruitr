@@ -37,6 +37,10 @@ export function getCandidateTags() {
   return serverFetch<string[]>("/api/v1/candidates/tags");
 }
 
+export function getCandidateRoles() {
+  return serverFetch<string[]>("/api/v1/candidates/roles");
+}
+
 /**
  * Recruiters in this brand, for the "added by" filter.
  *

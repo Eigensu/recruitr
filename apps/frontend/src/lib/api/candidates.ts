@@ -51,6 +51,8 @@ export function buildCandidateQuery(filters: Partial<CandidateFilters>): string 
   if (filters.created_by) params.set("created_by", filters.created_by);
   if (filters.city) params.set("city", filters.city);
   if (filters.gender) params.set("gender", filters.gender);
+  if (filters.role) params.set("role", filters.role);
+  if (filters.salary) params.set("salary", filters.salary);
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));

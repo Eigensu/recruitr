@@ -143,6 +143,8 @@ export interface CandidateFilters {
   has_cv_link?: boolean;
   city?: string;
   gender?: string;
+  role?: string;
+  salary?: string;
   status?: string;
   page: number;
   limit: number;

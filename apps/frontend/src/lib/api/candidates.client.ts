@@ -15,6 +15,8 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
   if (filters.city) params.set("city", filters.city);
   if (filters.gender) params.set("gender", filters.gender);
+  if (filters.role) params.set("role", filters.role);
+  if (filters.salary) params.set("salary", filters.salary);
   if (filters.status) params.set("status", filters.status);
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));

@@ -7,6 +7,7 @@ import type { CandidateFilters, CandidateSource, RecruiterOption } from "@/types
 
 interface Props {
   availableTags: string[];
+  availableRoles?: string[];
   recruiters?: readonly RecruiterOption[];
   onFilterChange: (filters: Partial<CandidateFilters>) => void;
 }
@@ -22,6 +23,7 @@ const inputStyle = {
 
 export default function CandidateFilterBar({
   availableTags,
+  availableRoles = [],
   recruiters = [],
   onFilterChange,
 }: Props) {
@@ -34,6 +36,8 @@ export default function CandidateFilterBar({
   const [hasCvLink, setHasCvLink] = useState<boolean | undefined>(undefined);
   const [city, setCity] = useState("");
   const [gender, setGender] = useState("");
+  const [role, setRole] = useState("");
+  const [salary, setSalary] = useState("");
   const [tagsOpen, setTagsOpen] = useState(false);
 
   function emit(
@@ -47,6 +51,8 @@ export default function CandidateFilterBar({
       hasCvLink: boolean | undefined;
       city: string;
       gender: string;
+      role: string;
+      salary: string;
     }> = {},
   ) {
     const s = over.search ?? search;
@@ -58,6 +64,8 @@ export default function CandidateFilterBar({
     const cv = "hasCvLink" in over ? over.hasCvLink : hasCvLink;
     const c = over.city ?? city;
     const g = over.gender ?? gender;
+    const r = over.role ?? role;
+    const sal = over.salary ?? salary;
     onFilterChange({
       search: s || undefined,
       source: (src as CandidateSource) || undefined,
@@ -68,6 +76,8 @@ export default function CandidateFilterBar({
       has_cv_link: cv,
       city: c || undefined,
       gender: g || undefined,
+      role: r || undefined,
+      salary: sal || undefined,
       page: 1,
       limit: 50,
     });
@@ -91,6 +101,8 @@ export default function CandidateFilterBar({
     setHasCvLink(undefined);
     setCity("");
     setGender("");
+    setRole("");
+    setSalary("");
     onFilterChange({ page: 1, limit: 50 });
   }
 
@@ -103,7 +115,9 @@ export default function CandidateFilterBar({
     hasResume !== undefined ||
     hasCvLink !== undefined ||
     !!city ||
-    !!gender;
+    !!gender ||
+    !!role ||
+    !!salary;
 
   return (
     <div
@@ -209,6 +223,42 @@ export default function CandidateFilterBar({
         <option value="male">Male</option>
         <option value="female">Female</option>
         <option value="other">Other</option>
+      </select>
+
+      <select
+        value={role}
+        onChange={(e) => {
+          const v = e.target.value;
+          setRole(v);
+          emit({ role: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Roles</option>
+        {availableRoles.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={salary}
+        onChange={(e) => {
+          const v = e.target.value;
+          setSalary(v);
+          emit({ salary: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Salaries</option>
+        <option value="lt3">Below ₹3L</option>
+        <option value="3to5">₹3L – &lt;₹5L</option>
+        <option value="5to8">₹5L – &lt;₹8L</option>
+        <option value="8to12">₹8L – &lt;₹12L</option>
+        <option value="gt12">₹12L+</option>
       </select>
 
       <div className="relative">
