@@ -4,6 +4,7 @@ from app.modules.recruitment.schemas.candidate import (
     BulkUploadFailure,
     BulkUploadResult,
     CandidateCreate,
+    CandidateCreateStrict,
     CandidateHistoryEvent,
     CandidateHistoryResponse,
     CandidateMappingItem,
@@ -53,6 +54,7 @@ from app.modules.recruitment.schemas.team import (
 __all__ = [
     # Candidate DTOs
     "CandidateCreate",
+    "CandidateCreateStrict",
     "CandidateUpdate",
     "CandidateResponse",
     "CandidateMappingItem",
