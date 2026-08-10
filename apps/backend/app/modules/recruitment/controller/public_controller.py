@@ -26,8 +26,9 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.config import settings
-from app.modules.brands.models import Brand
+from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
+from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.repository_impl import record_candidate_event
@@ -102,8 +103,14 @@ async def public_brand_by_domain(domain: str) -> PublicBrandResponse:
 
 async def _process_resume_upload(
     resume: UploadFile | None,
+    automation: AutomationSettings,
 ) -> tuple[str | None, str | None, str | None, list[str], list[str], float]:
-    """Process the resume upload, parse it, and upload to Cloudinary."""
+    """Process the resume upload, parse it, and upload to Cloudinary.
+
+    Honours the target brand's automation settings: with parsing off the file is
+    still stored and linked, and the applicant lands with no inferred skills,
+    tags or experience.
+    """
     if not resume:
         return None, None, None, [], [], 0.0
 
@@ -126,7 +133,7 @@ async def _process_resume_upload(
             )
 
         raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
-            file_bytes, filename
+            file_bytes, filename, automation
         )
 
         parsed_skills = parsed.skills or []
@@ -169,6 +176,7 @@ async def public_apply(
     """Submit a public application."""
 
     target_brand_id = await _resolve_target_brand(brand_id)
+    automation = await get_automation_settings(target_brand_id)
     (
         raw_text,
         resume_url,
@@ -176,7 +184,7 @@ async def public_apply(
         parsed_skills,
         parsed_tags,
         parsed_exp,
-    ) = await _process_resume_upload(resume)
+    ) = await _process_resume_upload(resume, automation)
 
     try:
         doc = Candidate(

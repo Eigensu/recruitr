@@ -34,6 +34,8 @@ from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.config import settings
 from app.dependencies import get_tenant, require_maintainer
+from app.modules.brands.models import AutomationSettings
+from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
@@ -57,7 +59,6 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.utils.cv_access import can_view_cv, mask_cv_rows
-from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import extract_text_from_file
 
 _CLOUDINARY_HOST = f"https://res.cloudinary.com/{settings.CLOUDINARY_CLOUD_NAME}/"
@@ -103,20 +104,25 @@ _PLACEMENT_STAGES = (PipelineStage.offer_accepted, PipelineStage.position_close)
 # ── Background tasks ───────────────────────────────────────────────────────────
 
 
-async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
+async def _parse_and_update_resume(
+    candidate_id: str, resume_url: str, automation: AutomationSettings
+) -> None:
     """Download resume PDF, parse it, and update candidate fields.
 
-    Runs as a background task after confirm_resume returns. Failures are logged
-    but never surface to the caller — the resume URL is already saved.
+    Runs as a background task after confirm_resume returns, and only when the
+    brand has resume parsing enabled. Failures are logged but never surface to
+    the caller — the resume URL is already saved.
     Fields are only updated when the candidate currently has no value
     (skills are always refreshed since the resume is the source of truth).
     """
+    from app.modules.recruitment.services.resume_service import parse_resume_with
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(resume_url)
             resp.raise_for_status()
         raw_text = extract_text_from_file(resp.content)
-        parsed = parse_resume(raw_text)
+        parsed = parse_resume_with(raw_text, automation)
     except Exception:
         _log.exception("Resume parse failed for candidate %s", candidate_id)
         return
@@ -132,7 +138,8 @@ async def _parse_and_update_resume(candidate_id: str, resume_url: str) -> None:
         from app.modules.recruitment.services.resume_service import build_candidate_resume_update
 
         update = build_candidate_resume_update(doc, parsed, raw_text)
-        await doc.set(update)
+        if update:
+            await doc.set(update)
     except Exception:
         _log.exception("Resume DB update failed for candidate %s", candidate_id)
 
@@ -422,9 +429,17 @@ async def bulk_upload_resumes(
     - Upserts by email: creates a new Candidate or refreshes an existing one's
       skills / resume URL without overwriting fields the recruiter has set
     - Uploads the file to Cloudinary and stores resume_url on the candidate
+
+    With the brand's resume parsing switched off, each file is still read for
+    its email address — that is how a candidate is identified here — but no
+    skills, tags or other fields are inferred from it.
     """
     if len(files) > _BULK_MAX:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Maximum {_BULK_MAX} files per upload")
+
+    # Resolved once for the whole batch rather than per file: 50 identical
+    # brand lookups, and a mid-batch toggle would split one upload's behaviour.
+    automation = await get_automation_settings(tenant.brand_id)
 
     created = 0
     updated = 0
@@ -439,7 +454,7 @@ async def bulk_upload_resumes(
 
             try:
                 raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
-                    file_bytes, filename
+                    file_bytes, filename, automation, email_only=True
                 )
             except ValueError as exc:
                 failed.append(BulkUploadFailure(filename=filename, reason=str(exc)))
@@ -472,7 +487,8 @@ async def bulk_upload_resumes(
                     resume_url=resume_url,
                     resume_public_id=resume_public_id,
                 )
-                await existing.set(patch)
+                if patch:
+                    await existing.set(patch)
                 updated += 1
             else:
                 doc = Candidate(
@@ -837,5 +853,11 @@ async def confirm_resume(
     if settings.CLOUDINARY_CLOUD_NAME and not data.resume_url.startswith(_CLOUDINARY_HOST):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "resume_url must be a Cloudinary URL")
     await doc.set({"resume_public_id": data.resume_public_id, "resume_url": data.resume_url})
-    background_tasks.add_task(_parse_and_update_resume, candidate_id, data.resume_url)
+    # Nothing is scheduled at all when the brand has parsing off — the resume is
+    # attached and left unread.
+    automation = await get_automation_settings(tenant.brand_id)
+    if automation.resume_parsing_enabled:
+        background_tasks.add_task(
+            _parse_and_update_resume, candidate_id, data.resume_url, automation
+        )
     return await _build_candidate_response(doc, await _mappings_count(tenant, candidate_id), tenant)
