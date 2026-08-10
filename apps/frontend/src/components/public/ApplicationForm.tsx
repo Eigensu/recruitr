@@ -6,6 +6,7 @@ import { z } from "zod";
 import { IconAlertCircle, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { clientPublicApply } from "@/lib/api/candidates.client";
 import ResumeDropzone from "@/components/public/ResumeDropzone";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import {
   CITIES,
   EDUCATION_LEVELS,
@@ -200,7 +201,9 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   };
 
   const masthead = (
-    <div className="flex items-center gap-2.5">
+    // min-w-0 so a long agency name truncates instead of pushing the theme
+    // toggle off the right edge of a phone screen.
+    <div className="flex min-w-0 items-center gap-2.5">
       {brand?.logo_url ? (
         <Image
           src={brand.logo_url}
@@ -219,7 +222,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           className="size-8 rounded-lg object-cover"
         />
       )}
-      <span className="font-heading text-lg font-bold tracking-tight text-text-primary">
+      <span className="truncate font-heading text-lg font-bold tracking-tight text-text-primary">
         {brand?.name ?? "Binge"}
       </span>
     </div>
@@ -227,7 +230,12 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
 
   if (success) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-shell p-4 font-sans theme-transition">
+      <main className="relative flex min-h-dvh items-center justify-center bg-shell p-4 font-sans theme-transition">
+        {/* This screen has no header, and it is where an applicant may sit for a
+            while reading the confirmation — so the toggle follows them here. */}
+        <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
+          <ThemeToggle size="lg" />
+        </div>
         <div className="w-full max-w-md rounded-2xl border border-border bg-surface-panel p-8 text-center">
           <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-yellow/10 text-yellow">
             <IconCheck className="size-6" />
@@ -246,8 +254,9 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
 
   return (
     <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
-      <header className="flex items-center justify-between px-5 py-5 sm:px-8">
+      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
         {masthead}
+        <ThemeToggle size="lg" />
       </header>
 
       <div className="flex justify-center px-4 pb-16 sm:px-6">
