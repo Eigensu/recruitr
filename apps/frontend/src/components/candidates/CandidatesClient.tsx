@@ -24,6 +24,7 @@ interface Props {
   initialTotal: number;
   initialPendingCandidates?: ApiCandidate[];
   availableTags: string[];
+  availableRoles: string[];
   recruiters?: RecruiterOption[];
 }
 
@@ -37,6 +38,7 @@ export default function CandidatesClient({
   initialTotal,
   initialPendingCandidates = [],
   availableTags,
+  availableRoles = [],
   recruiters = [],
 }: Readonly<Props>) {
   const { isMaintainer } = useCurrentUser();
@@ -227,6 +229,7 @@ export default function CandidatesClient({
 
       <CandidateFilterBar
         availableTags={availableTags}
+        availableRoles={availableRoles}
         recruiters={recruiters}
         onFilterChange={handleFilterChange}
       />

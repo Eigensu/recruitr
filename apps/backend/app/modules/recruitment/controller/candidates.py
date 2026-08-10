@@ -241,6 +241,19 @@ async def list_candidate_tags(tenant: _Tenant) -> list[str]:
     return sorted(t for t in tags if t)
 
 
+# ── Roles ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/roles")
+async def list_candidate_roles(tenant: _Tenant) -> list[str]:
+    """Return all distinct current roles for candidates in this brand."""
+    collection = Candidate.get_motor_collection()
+    roles = await collection.distinct(
+        "current_role", {"brand_id": tenant.brand_id, "is_active": True}
+    )
+    return sorted(r for r in roles if r)
+
+
 # ── List ───────────────────────────────────────────────────────────────────────
 
 
@@ -261,6 +274,8 @@ async def list_candidates(
     has_cv_link: Annotated[bool | None, Query()] = None,
     city: Annotated[str | None, Query()] = None,
     gender: Annotated[str | None, Query()] = None,
+    role: Annotated[str | None, Query()] = None,
+    salary: Annotated[str | None, Query()] = None,
     status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
     page: _Page = 1,
     limit: _Limit = 30,
@@ -321,6 +336,21 @@ async def list_candidates(
 
     if gender:
         match["gender"] = gender
+
+    if role:
+        match["current_role"] = role
+
+    if salary:
+        if salary == "lt3":
+            match["salary"] = {"$lt": 300000}
+        elif salary == "3to5":
+            match["salary"] = {"$gte": 300000, "$lte": 500000}
+        elif salary == "5to8":
+            match["salary"] = {"$gte": 500000, "$lte": 800000}
+        elif salary == "8to12":
+            match["salary"] = {"$gte": 800000, "$lte": 1200000}
+        elif salary == "gt12":
+            match["salary"] = {"$gt": 1200000}
 
     if tags:
         match["tags"] = {"$in": tags}

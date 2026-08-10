@@ -1,4 +1,9 @@
-import { getCandidates, getCandidateTags, getRecruiters } from "@/lib/api/candidates.server";
+import {
+  getCandidates,
+  getCandidateTags,
+  getCandidateRoles,
+  getRecruiters,
+} from "@/lib/api/candidates.server";
 import CandidatesClient from "@/components/candidates/CandidatesClient";
 import type { ApiCandidate, RecruiterOption } from "@/types";
 
@@ -7,13 +12,15 @@ export default async function CandidatesPage() {
   let initialTotal = 0;
   let initialPendingCandidates: ApiCandidate[] = [];
   let availableTags: string[] = [];
+  let availableRoles: string[] = [];
   let recruiters: RecruiterOption[] = [];
 
   try {
-    const [candidatePage, pendingPage1, tags] = await Promise.all([
+    const [candidatePage, pendingPage1, tags, roles] = await Promise.all([
       getCandidates({ page: 1, limit: 50 }),
       getCandidates({ page: 1, limit: 50, status: "PENDING" }),
       getCandidateTags(),
+      getCandidateRoles(),
     ]);
     initialCandidates = candidatePage.items ?? [];
     initialTotal = candidatePage.meta?.total ?? initialCandidates.length;
@@ -32,6 +39,7 @@ export default async function CandidatesPage() {
     }
     initialPendingCandidates = allPending;
     availableTags = tags;
+    availableRoles = roles;
   } catch (err) {
     console.error("Failed to load candidates page data during SSR:", err);
   }
@@ -70,6 +78,7 @@ export default async function CandidatesPage() {
           initialTotal={initialTotal}
           initialPendingCandidates={initialPendingCandidates}
           availableTags={availableTags}
+          availableRoles={availableRoles}
           recruiters={recruiters}
         />
       </div>
