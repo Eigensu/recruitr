@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   IconInfoCircle,
   IconAlertTriangle,
@@ -38,47 +38,44 @@ const TYPE_CONFIG: Record<ClientMessageType, { icon: React.ElementType; tone: st
 };
 
 export function ClientMessagingBanner({ messages, userId }: BannerProps) {
-  const [activeMessages, setActiveMessages] = useState<ClientMessage[]>([]);
+  // null = "haven't checked sessionStorage yet" (always true during SSR).
+  // Keeps the banner hidden rather than briefly showing an already-dismissed
+  // message before the effect below corrects it.
+  const [dismissedIds, setDismissedIds] = useState<string[] | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    // Filter out dismissed messages from session storage
+    // One-time sync from an external system (sessionStorage) into React state —
+    // not a derived value, so this is exactly what an effect is for.
     const storageKey = `dismissed_banners_${userId}`;
     const dismissed = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
-    const visible = messages.filter((m) => !dismissed.includes(m._id));
-    // Clamp currentIndex if it now exceeds the available messages
-    if (currentIndex >= visible.length && visible.length > 0) {
-      setCurrentIndex(visible.length - 1);
-    } else if (visible.length === 0) {
-      setCurrentIndex(0);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveMessages(visible);
-  }, [messages, userId, currentIndex]);
+    setDismissedIds(dismissed);
+  }, [userId]);
+
+  const activeMessages = useMemo(
+    () => (dismissedIds === null ? [] : messages.filter((m) => !dismissedIds.includes(m._id))),
+    [messages, dismissedIds],
+  );
+
+  // Derived at render time instead of clamped via setState-in-effect, so
+  // currentIndex never has to be "corrected" out-of-band when the list shrinks.
+  const safeIndex = activeMessages.length > 0 ? Math.min(currentIndex, activeMessages.length - 1) : 0;
 
   if (activeMessages.length === 0) return null;
 
-  const msg = activeMessages[currentIndex];
+  const msg = activeMessages[safeIndex];
   const config = TYPE_CONFIG[msg.type] || TYPE_CONFIG.announcement;
   const Icon = config.icon;
 
   const handleDismiss = () => {
     const storageKey = `dismissed_banners_${userId}`;
-    const dismissed = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
-    dismissed.push(msg._id);
-    sessionStorage.setItem(storageKey, JSON.stringify(dismissed));
-
-    // Remove from current view
-    const newActive = activeMessages.filter((m) => m._id !== msg._id);
-    setActiveMessages(newActive);
-    if (currentIndex >= newActive.length && newActive.length > 0) {
-      setCurrentIndex(newActive.length - 1);
-    }
+    const updated = [...(dismissedIds ?? []), msg._id];
+    setDismissedIds(updated);
+    sessionStorage.setItem(storageKey, JSON.stringify(updated));
   };
 
-  const nextMsg = () => setCurrentIndex((prev) => (prev + 1) % activeMessages.length);
-  const prevMsg = () =>
-    setCurrentIndex((prev) => (prev - 1 + activeMessages.length) % activeMessages.length);
+  const nextMsg = () => setCurrentIndex((safeIndex + 1) % activeMessages.length);
+  const prevMsg = () => setCurrentIndex((safeIndex - 1 + activeMessages.length) % activeMessages.length);
 
   return (
     <AnimatePresence mode="wait">
@@ -113,7 +110,7 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
                 <IconChevronLeft className="size-4" />
               </button>
               <span className="text-xs font-medium px-1">
-                {currentIndex + 1} / {activeMessages.length}
+                {safeIndex + 1} / {activeMessages.length}
               </span>
               <button
                 onClick={nextMsg}

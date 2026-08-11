@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { IconArrowRight, IconLayoutKanban } from "@tabler/icons-react";
+import { IconAlertCircle, IconArrowRight, IconLayoutKanban } from "@tabler/icons-react";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
-import type { ClientStage } from "@/components/kanban/ClientPipelineBoard";
+import type { ClientStage } from "@/lib/constants/client-pipeline";
 
 interface StageCount {
   stage: ClientStage;
@@ -15,9 +15,14 @@ interface StageCount {
 
 interface ClientPipelineSnapshotProps {
   stages: StageCount[];
+  /** True when the stage-count fetch itself failed — kept distinct from "genuinely no candidates". */
+  failed?: boolean;
 }
 
-export default function ClientPipelineSnapshot({ stages }: ClientPipelineSnapshotProps) {
+export default function ClientPipelineSnapshot({
+  stages,
+  failed = false,
+}: ClientPipelineSnapshotProps) {
   const total = stages.reduce((sum, stage) => sum + stage.count, 0);
   const maxCount = Math.max(...stages.map((s) => s.count), 1);
 
@@ -34,9 +39,11 @@ export default function ClientPipelineSnapshot({ stages }: ClientPipelineSnapsho
         <div>
           <h2 className="font-heading text-xl">Where Your Candidates Stand</h2>
           <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
-            {total > 0
-              ? `${total} candidate${total === 1 ? "" : "s"} moving through your roles`
-              : "No active candidates right now"}
+            {failed
+              ? "Live counts unavailable"
+              : total > 0
+                ? `${total} candidate${total === 1 ? "" : "s"} moving through your roles`
+                : "No active candidates right now"}
           </p>
         </div>
         <Link
@@ -47,7 +54,15 @@ export default function ClientPipelineSnapshot({ stages }: ClientPipelineSnapsho
         </Link>
       </div>
 
-      {total === 0 ? (
+      {failed ? (
+        <div
+          className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center"
+          style={{ opacity: 0.5 }}
+        >
+          <IconAlertCircle className="size-8" style={{ opacity: 0.4 }} />
+          <p className="max-w-60 text-sm">Couldn&apos;t load your pipeline right now.</p>
+        </div>
+      ) : total === 0 ? (
         <div
           className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center"
           style={{ opacity: 0.5 }}

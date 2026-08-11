@@ -28,7 +28,7 @@ import {
   getPositionsPreview,
 } from "@/lib/api/dashboard";
 import { ClientMessagingBanner } from "@/components/dashboard/ClientMessagingBanner";
-import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/components/kanban/ClientPipelineBoard";
+import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants/client-pipeline";
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -76,11 +76,17 @@ async function ClientOverviewSection() {
   const overview = await getApiDashboardOverview();
   const { summary } = overview;
 
-  const [messages, user, positionsResult, pipelineResult] = await Promise.all([
+  const [messages, user, positionsSettled, pipelineSettled] = await Promise.all([
     getActiveClientMessages(),
     getUserServer(),
-    getPositionsPreview({ status: "open", limit: 5 }).catch(() => null),
-    getDashboardPipeline().catch(() => null),
+    getPositionsPreview({ status: "open", limit: 5 }).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const, value: null }),
+    ),
+    getDashboardPipeline().then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const, value: null }),
+    ),
   ]);
 
   const metrics: DashboardKpi[] = [
@@ -119,10 +125,10 @@ async function ClientOverviewSection() {
     },
   ];
 
-  const positionsPreview = positionsResult?.items ?? [];
-  const totalOpenPositions = positionsResult?.meta.total ?? summary.open_positions;
+  const positionsPreview = positionsSettled.value?.items ?? [];
+  const totalOpenPositions = positionsSettled.value?.meta.total ?? summary.open_positions;
 
-  const stageCounts = new Map(pipelineResult?.stages.map((s) => [s.stage, s.count]) ?? []);
+  const stageCounts = new Map(pipelineSettled.value?.stages.map((s) => [s.stage, s.count]) ?? []);
   const clientPipelineStages = CLIENT_STAGES.map((stage) => ({
     stage,
     label: CLIENT_STAGE_LABELS[stage],
@@ -160,8 +166,12 @@ async function ClientOverviewSection() {
         </div>
 
         <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
-          <ClientPositionsSnapshot positions={positionsPreview} totalOpen={totalOpenPositions} />
-          <ClientPipelineSnapshot stages={clientPipelineStages} />
+          <ClientPositionsSnapshot
+            positions={positionsPreview}
+            totalOpen={totalOpenPositions}
+            failed={!positionsSettled.ok}
+          />
+          <ClientPipelineSnapshot stages={clientPipelineStages} failed={!pipelineSettled.ok} />
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { IconArrowRight, IconBriefcase, IconMapPin } from "@tabler/icons-react";
+import { IconAlertCircle, IconArrowRight, IconBriefcase, IconMapPin } from "@tabler/icons-react";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
 import type { ApiPosition } from "@/types";
@@ -10,11 +10,14 @@ import type { ApiPosition } from "@/types";
 interface ClientPositionsSnapshotProps {
   positions: ApiPosition[];
   totalOpen: number;
+  /** True when the preview fetch itself failed — kept distinct from "genuinely no open roles". */
+  failed?: boolean;
 }
 
 export default function ClientPositionsSnapshot({
   positions,
   totalOpen,
+  failed = false,
 }: ClientPositionsSnapshotProps) {
   return (
     <motion.section
@@ -42,7 +45,15 @@ export default function ClientPositionsSnapshot({
         </Link>
       </div>
 
-      {positions.length === 0 ? (
+      {failed ? (
+        <div
+          className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center"
+          style={{ opacity: 0.5 }}
+        >
+          <IconAlertCircle className="size-8" style={{ opacity: 0.4 }} />
+          <p className="max-w-60 text-sm">Couldn&apos;t load your open positions right now.</p>
+        </div>
+      ) : positions.length === 0 ? (
         <div
           className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center"
           style={{ opacity: 0.5 }}

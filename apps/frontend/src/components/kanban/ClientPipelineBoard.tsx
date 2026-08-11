@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
+import { CLIENT_STAGES, CLIENT_STAGE_LABELS, type ClientStage } from "@/lib/constants/client-pipeline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -25,38 +26,6 @@ interface Props {
 interface Filters {
   position_id: string;
 }
-
-export type ClientStage =
-  | "sourced"
-  | "sent_to_client"
-  | "interview"
-  | "decision_pending"
-  | "offer"
-  | "offer_accepted"
-  | "position_close";
-
-// Exported so other client-facing views (e.g. the dashboard pipeline snapshot)
-// stay in lockstep with exactly which stages a client is allowed to see —
-// notably excluding "rejected" and "on_hold", which are internal-only.
-export const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
-  sourced: "Sourced",
-  sent_to_client: "Sent to Client",
-  interview: "Interview",
-  decision_pending: "Decision Pending",
-  offer: "Offer",
-  offer_accepted: "Offer Accepted",
-  position_close: "Joined",
-};
-
-export const CLIENT_STAGES: ClientStage[] = [
-  "sourced",
-  "sent_to_client",
-  "interview",
-  "decision_pending",
-  "offer",
-  "offer_accepted",
-  "position_close",
-];
 
 function mapToClientStage(stage: KanbanStage): ClientStage | null {
   switch (stage) {
