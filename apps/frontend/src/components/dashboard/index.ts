@@ -11,6 +11,7 @@ export { default as ActivityFeedItem } from "./molecules/ActivityFeedItem";
 export { default as PipelineStageItem } from "./molecules/PipelineStageItem";
 export { default as RecruiterLineItem } from "./molecules/RecruiterLineItem";
 export { default as ClientActivityTableRow } from "./molecules/ClientActivityTableRow";
+export { default as ActionNeededCallout } from "./molecules/ActionNeededCallout";
 
 // Organisms
 export { default as AnalyticsWidgets } from "./organisms/AnalyticsWidgets";
@@ -20,3 +21,5 @@ export { default as RecruiterLineGraph } from "./organisms/RecruiterLineGraph";
 export { default as ClientActivityTable } from "./organisms/ClientActivityTable";
 export { default as PipelinePieChart } from "./organisms/PipelinePieChart";
 export { DashboardSkeleton } from "./organisms/DashboardSkeleton";
+export { default as ClientPositionsSnapshot } from "./organisms/ClientPositionsSnapshot";
+export { default as ClientPipelineSnapshot } from "./organisms/ClientPipelineSnapshot";

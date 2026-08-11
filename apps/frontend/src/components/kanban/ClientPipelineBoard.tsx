@@ -26,7 +26,7 @@ interface Filters {
   position_id: string;
 }
 
-type ClientStage =
+export type ClientStage =
   | "sourced"
   | "sent_to_client"
   | "interview"
@@ -35,7 +35,10 @@ type ClientStage =
   | "offer_accepted"
   | "position_close";
 
-const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
+// Exported so other client-facing views (e.g. the dashboard pipeline snapshot)
+// stay in lockstep with exactly which stages a client is allowed to see —
+// notably excluding "rejected" and "on_hold", which are internal-only.
+export const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
   sourced: "Sourced",
   sent_to_client: "Sent to Client",
   interview: "Interview",
@@ -45,7 +48,7 @@ const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
   position_close: "Joined",
 };
 
-const CLIENT_STAGES: ClientStage[] = [
+export const CLIENT_STAGES: ClientStage[] = [
   "sourced",
   "sent_to_client",
   "interview",

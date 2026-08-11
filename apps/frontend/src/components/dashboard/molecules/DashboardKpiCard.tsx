@@ -40,7 +40,7 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
           </p>
           {/* Value — inherits card text colour */}
           <p className="mt-2 font-heading text-4xl leading-none">
-            <AnimatedNumber value={metric.value} />
+            <AnimatedNumber value={metric.value} suffix={metric.suffix ? ` ${metric.suffix}` : ""} />
           </p>
         </div>
         {/* Icon chip */}
