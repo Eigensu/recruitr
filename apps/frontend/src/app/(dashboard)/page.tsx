@@ -226,16 +226,10 @@ export default async function DashboardPage() {
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                {isClient ? "Client Dashboard" : "Recruitment Dashboard"}
+                {isClient
+                  ? `Welcome, ${user?.client_name ?? "back"}`
+                  : "Recruitment Dashboard"}
               </h1>
-              {isClient && user?.client_name && (
-                <p
-                  className="mt-1 text-sm font-medium"
-                  style={{ color: "var(--color-text-secondary)" }}
-                >
-                  {user.client_name}
-                </p>
-              )}
             </div>
             <div className="mt-1 shrink-0">
               <ThemeToggle />
