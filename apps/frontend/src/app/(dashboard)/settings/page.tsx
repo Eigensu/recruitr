@@ -134,13 +134,18 @@ export default function SettingsPage() {
       console.error("Logout failed:", err);
     } finally {
       // Safely remove only client messaging dismissals
-      for (let i = sessionStorage.length - 1; i >= 0; i--) {
-        const key = sessionStorage.key(i);
-        if (key && key.startsWith("dismissed_banners_")) {
-          sessionStorage.removeItem(key);
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith("dismissed_banners_")) {
+            sessionStorage.removeItem(key);
+          }
         }
+      } catch (storageErr) {
+        console.warn("Failed to clear session storage:", storageErr);
+      } finally {
+        router.push("/sign-in");
       }
-      router.push("/sign-in");
     }
   }
 

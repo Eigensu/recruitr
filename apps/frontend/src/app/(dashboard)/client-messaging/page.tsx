@@ -58,10 +58,19 @@ export default function ClientMessagingPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMessages();
 
+    const formatLocalDatetime = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
     setFormData((prev) => ({
       ...prev,
-      start_at: new Date().toISOString().slice(0, 16),
-      end_at: new Date(Date.now() + 86400000 * 7).toISOString().slice(0, 16),
+      start_at: formatLocalDatetime(new Date()),
+      end_at: formatLocalDatetime(new Date(Date.now() + 86400000 * 7)),
     }));
   }, []);
 
@@ -173,7 +182,7 @@ export default function ClientMessagingPage() {
                           : formData.target_client_ids.filter((id) => id !== c.id);
                         setFormData({ ...formData, target_client_ids: newIds });
                       }}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-3 focus:ring-blue-200/50"
                     />
                     <span>
                       {c.name} <span className="text-gray-400">({c.code})</span>

@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from beanie import PydanticObjectId
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.recruitment.enums.client_message import ClientMessageTarget, ClientMessageType
 
@@ -53,8 +53,7 @@ class ClientMessageOut(ClientMessageBase):
     updated_at: datetime
     created_by_id: PydanticObjectId | None = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class ClientMessagePublicOut(BaseModel):
@@ -63,5 +62,4 @@ class ClientMessagePublicOut(BaseModel):
     type: ClientMessageType
     cta_url: str | None = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

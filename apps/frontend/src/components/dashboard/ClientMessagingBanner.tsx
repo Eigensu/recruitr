@@ -46,9 +46,15 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
     const storageKey = `dismissed_banners_${userId}`;
     const dismissed = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
     const visible = messages.filter((m) => !dismissed.includes(m._id));
+    // Clamp currentIndex if it now exceeds the available messages
+    if (currentIndex >= visible.length && visible.length > 0) {
+      setCurrentIndex(visible.length - 1);
+    } else if (visible.length === 0) {
+      setCurrentIndex(0);
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveMessages(visible);
-  }, [messages, userId]);
+  }, [messages, userId, currentIndex]);
 
   if (activeMessages.length === 0) return null;
 

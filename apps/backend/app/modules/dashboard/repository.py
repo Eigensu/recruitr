@@ -246,18 +246,23 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
                             "vars": {
                                 "shortlist_event": {
                                     "$first": {
-                                        "$filter": {
-                                            "input": "$history",
-                                            "as": "h",
-                                            "cond": {
-                                                "$in": [
-                                                    "$$h.stage",
-                                                    [
-                                                        PipelineStage.sent_to_client.value,
-                                                        PipelineStage.interview.value,
-                                                    ],
-                                                ]
+                                        "$sortArray": {
+                                            "input": {
+                                                "$filter": {
+                                                    "input": "$history",
+                                                    "as": "h",
+                                                    "cond": {
+                                                        "$in": [
+                                                            "$$h.stage",
+                                                            [
+                                                                PipelineStage.sent_to_client.value,
+                                                                PipelineStage.interview.value,
+                                                            ],
+                                                        ]
+                                                    },
+                                                }
                                             },
+                                            "sortBy": {"at": 1},
                                         }
                                     }
                                 }
