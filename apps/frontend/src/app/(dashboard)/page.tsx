@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import { IconBriefcase, IconBuilding, IconLayoutKanban } from "@tabler/icons-react";
 import {
   ActionNeededCallout,
   AnalyticsWidgets,
@@ -29,6 +31,12 @@ import {
 } from "@/lib/api/dashboard";
 import { ClientMessagingBanner } from "@/components/dashboard/ClientMessagingBanner";
 import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants/client-pipeline";
+
+const QUICK_LINKS = [
+  { href: "/positions", label: "Open Positions", icon: IconBriefcase },
+  { href: "/pipeline", label: "Pipeline Board", icon: IconLayoutKanban },
+  { href: "/company", label: "Company Profile", icon: IconBuilding },
+] as const;
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -152,17 +160,34 @@ async function ClientOverviewSection() {
 
       {/* ── Section 2: Your Pipeline at a Glance — the "show your work" layer ── */}
       <div className="mt-2 flex flex-col gap-4">
-        <div>
-          <h2
-            className="font-heading text-2xl"
-            style={{ color: "var(--color-text-primary)" }}
-          >
-            Your Pipeline at a Glance
-          </h2>
-          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            A closer look at your open roles and where candidates stand, without digging through
-            every tab.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl" style={{ color: "var(--color-text-primary)" }}>
+              Your Pipeline at a Glance
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              A closer look at your open roles and where candidates stand, without digging
+              through every tab.
+            </p>
+          </div>
+
+          <nav aria-label="Quick links" className="flex flex-wrap gap-2">
+            {QUICK_LINKS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:border-yellow hover:text-yellow"
+                style={{
+                  borderColor: "var(--color-border-val)",
+                  color: "var(--color-text-primary)",
+                  background: "var(--color-surface-val)",
+                }}
+              >
+                <Icon className="size-4" />
+                {label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
@@ -203,6 +228,14 @@ export default async function DashboardPage() {
               >
                 {isClient ? "Client Dashboard" : "Recruitment Dashboard"}
               </h1>
+              {isClient && user?.client_name && (
+                <p
+                  className="mt-1 text-sm font-medium"
+                  style={{ color: "var(--color-text-secondary)" }}
+                >
+                  {user.client_name}
+                </p>
+              )}
             </div>
             <div className="mt-1 shrink-0">
               <ThemeToggle />

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
   IconSearch,
@@ -542,9 +543,10 @@ function DragGhostCard({ cand }: Readonly<{ cand: ApiTopCandidate }>) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function PositionsPage() {
+function PositionsPageContent() {
   const apiFetch = useApiFetch();
   const { isMaintainer, isClient } = useCurrentUser();
+  const searchParams = useSearchParams();
 
   const [positions, setPositions] = useState<ApiPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
@@ -558,7 +560,12 @@ export default function PositionsPage() {
   const [candidateSearch, setCandidateSearch] = useState("");
   const [debouncedCandidateSearch, setDebouncedCandidateSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
-  const [selectedPositionId, setSelectedPositionId] = useState<string | null>(null);
+  // Pre-select a position when arriving via a deep link (e.g. the dashboard's
+  // "Your Open Positions" preview) — read once on mount, not kept in sync with
+  // later URL changes, since selection afterwards is purely local UI state.
+  const [selectedPositionId, setSelectedPositionId] = useState<string | null>(() =>
+    searchParams.get("position"),
+  );
   const [activeDragCand, setActiveDragCand] = useState<ApiTopCandidate | null>(null);
   const [addPositionOpen, setAddPositionOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<ApiPosition | null>(null);
@@ -1093,5 +1100,13 @@ export default function PositionsPage() {
         }}
       />
     </DndContext>
+  );
+}
+
+export default function PositionsPage() {
+  return (
+    <Suspense fallback={<div className="h-full bg-canvas" />}>
+      <PositionsPageContent />
+    </Suspense>
   );
 }

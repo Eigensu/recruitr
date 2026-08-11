@@ -72,9 +72,10 @@ export default function ClientPositionsSnapshot({
                 : 0;
 
             return (
-              <div
+              <Link
                 key={position.id}
-                className="rounded-lg border p-3"
+                href={`/positions?position=${position.id}`}
+                className="block rounded-lg border p-3 transition-colors hover:border-yellow"
                 style={{
                   borderColor: "var(--color-border-val)",
                   background: "var(--color-surface-2-val)",
@@ -113,7 +114,7 @@ export default function ClientPositionsSnapshot({
                     style={{ width: `${progress}%` }}
                   />
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

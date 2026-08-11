@@ -17,6 +17,9 @@ export interface UserInfo {
   brand_name?: string | null;
   brand_domain?: string | null;
   notification_preferences?: Record<string, boolean>;
+  /** Set only for the client role — the employer company this login is scoped to. */
+  client_id?: string | null;
+  client_name?: string | null;
 }
 
 // ── Brands ───────────────────────────────────────────────────────────────────
