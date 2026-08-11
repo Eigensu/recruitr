@@ -19,6 +19,7 @@ from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
     activity_router,
     candidates_router,
+    client_messaging_router,
     clients_router,
     pipeline_router,
     positions_router,
@@ -72,6 +73,9 @@ app.include_router(public_router, prefix="/api/v1/public", tags=["Public"])
 app.include_router(brands_router, prefix="/api/v1/brands", tags=["Brands"])
 app.include_router(candidates_router, prefix="/api/v1/candidates", tags=["Candidates"])
 app.include_router(clients_router, prefix="/api/v1/clients", tags=["Clients"])
+app.include_router(
+    client_messaging_router, prefix="/api/v1/client-messaging", tags=["Client Messaging"]
+)
 app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])

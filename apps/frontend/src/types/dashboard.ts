@@ -61,6 +61,8 @@ export interface DashboardTotals {
   remaining: number;
   inPipeline: number;
   joined: number;
+  actionNeeded: number;
+  avgDaysToShortlist: number;
 }
 
 export interface DashboardAnalyticsWidget {

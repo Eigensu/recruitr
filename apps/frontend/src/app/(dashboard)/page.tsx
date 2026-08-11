@@ -17,6 +17,11 @@ import {
 } from "@/lib/dashboard-data";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getUserServer } from "@/lib/api/auth.server";
+import Link from "next/link";
+import { IconArrowRight } from "@tabler/icons-react";
+import type { DashboardKpi } from "@/types/dashboard";
+import { getActiveClientMessages } from "@/lib/api/dashboard";
+import { ClientMessagingBanner } from "@/components/dashboard/ClientMessagingBanner";
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -57,6 +62,79 @@ async function ClientProfilesSection() {
   return <ClientProfilesTable rows={rows} />;
 }
 
+async function ClientOverviewSection() {
+  const { totals } = await getDashboardOverview();
+  const messages = await getActiveClientMessages();
+  const user = await getUserServer();
+
+  const metrics: DashboardKpi[] = [
+    {
+      id: "open_roles",
+      label: "Open Roles with Binge",
+      value: totals.openPositions,
+      helper: "Active open positions",
+      tone: "green",
+      trend: "",
+    },
+    {
+      id: "in_process",
+      label: "Candidates Currently in Process",
+      value: totals.inPipeline,
+      helper: "Currently active in pipeline",
+      tone: "yellow",
+      trend: "",
+    },
+    {
+      id: "seats_filled",
+      label: "Seats Filled",
+      value: totals.seatsFilled,
+      helper: "Total positions closed",
+      tone: "navy",
+      trend: "",
+    },
+    {
+      id: "time_to_fill",
+      label: "Avg. Days to First Shortlist",
+      value: totals.avgDaysToShortlist,
+      helper: "Speed to first shortlist",
+      tone: "neutral",
+      trend: "",
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        {metrics.map((metric, index) => (
+          <DashboardKpiCard key={metric.id} metric={metric} index={index} />
+        ))}
+      </section>
+
+      {totals.actionNeeded > 0 && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-red-500 mb-1">Action Needed</h3>
+            <p className="text-sm text-red-500/80">
+              {totals.actionNeeded} {totals.actionNeeded === 1 ? "candidate is" : "candidates are"}{" "}
+              awaiting your decision or offer.
+            </p>
+          </div>
+          <Link
+            href="/pipeline"
+            className="flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-400 transition-colors"
+          >
+            Review Candidates <IconArrowRight className="size-4" />
+          </Link>
+        </div>
+      )}
+
+      {messages && messages.length > 0 && user?.user_id && (
+        <ClientMessagingBanner messages={messages} userId={user.user_id} />
+      )}
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await getUserServer();
   const isClient = user?.role === "client";
@@ -89,37 +167,34 @@ export default async function DashboardPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.9fr)]">
-          <Suspense fallback={<PanelSkeleton rows={7} />}>
-            <PipelinePieSection />
-          </Suspense>
+        {isClient ? (
           <Suspense fallback={<KpiGridSkeleton />}>
-            <LiveOverviewSection />
+            <ClientOverviewSection />
           </Suspense>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.9fr)]">
+              <Suspense fallback={<PanelSkeleton rows={7} />}>
+                <PipelinePieSection />
+              </Suspense>
+              <Suspense fallback={<KpiGridSkeleton />}>
+                <LiveOverviewSection />
+              </Suspense>
+            </div>
 
-        <div
-          className={`grid grid-cols-1 items-stretch gap-6 ${
-            isClient ? "" : "xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]"
-          }`}
-        >
-          <Suspense fallback={<PanelSkeleton rows={2} />}>
-            <AnalyticsSection />
-          </Suspense>
-          {/* No second panel for a client: the activity feed is brand-wide and
-              cannot be narrowed to one employer (ActivityLog has no client
-              link), and the recruiter chart is agency-internal. */}
-          {!isClient && (
-            <Suspense fallback={<PanelSkeleton rows={5} />}>
-              <RecruiterLineSection />
+            <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
+              <Suspense fallback={<PanelSkeleton rows={2} />}>
+                <AnalyticsSection />
+              </Suspense>
+              <Suspense fallback={<PanelSkeleton rows={5} />}>
+                <RecruiterLineSection />
+              </Suspense>
+            </div>
+
+            <Suspense fallback={<PanelSkeleton rows={8} />}>
+              <ClientProfilesSection />
             </Suspense>
-          )}
-        </div>
-
-        {!isClient && (
-          <Suspense fallback={<PanelSkeleton rows={8} />}>
-            <ClientProfilesSection />
-          </Suspense>
+          </>
         )}
       </div>
     </div>

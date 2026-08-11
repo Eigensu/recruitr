@@ -16,6 +16,8 @@ from app.modules.recruitment.enums import (
     ActivityType,
     CandidateEventType,
     CandidateStatus,
+    ClientMessageTarget,
+    ClientMessageType,
     Decision,
     EducationLevel,
     Gender,
@@ -467,4 +469,34 @@ class CandidateDocument(Document):
             IndexModel("candidate_id"),
             IndexModel("file_type"),
             IndexModel("uploaded_at"),
+        ]
+
+
+# ── ClientMessage ──────────────────────────────────────────────────────────────
+
+
+class ClientMessage(Document):
+    """A targeted message shown to clients on their dashboard."""
+
+    brand_id: PydanticObjectId
+    message_text: str
+    target_type: ClientMessageTarget
+    target_client_ids: list[PydanticObjectId] = Field(default_factory=list)
+    start_at: datetime
+    end_at: datetime
+    type: ClientMessageType
+    cta_url: str | None = None
+    created_by_id: PydanticObjectId | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "client_messages"
+        indexes = [
+            IndexModel([("brand_id", 1), ("start_at", 1), ("end_at", 1)]),
+            IndexModel("target_client_ids"),
         ]

@@ -13,7 +13,13 @@ export default function RouteGuard({ children }: { readonly children: React.Reac
     if (isLoading) return;
 
     if (isClient) {
-      const forbiddenForClients = ["/candidates", "/leaderboard", "/clients", "/activity"];
+      const forbiddenForClients = [
+        "/candidates",
+        "/leaderboard",
+        "/clients",
+        "/activity",
+        "/client-messaging",
+      ];
       if (forbiddenForClients.some((path) => pathname.startsWith(path))) {
         router.replace("/");
       }

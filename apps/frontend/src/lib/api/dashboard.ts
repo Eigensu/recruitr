@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import type { ClientMessage } from "@/components/dashboard/ClientMessagingBanner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -26,6 +27,8 @@ export interface ApiDashboardOverviewResponse {
     candidates_in_pipeline: number;
     offers_accepted: number;
     joined_candidates: number;
+    action_needed_count: number;
+    avg_days_to_shortlist: number;
   };
   pipeline: Array<{
     stage: string;
@@ -167,6 +170,16 @@ async function fetchAllPages<T>(
   }
 
   return items;
+}
+
+export async function getActiveClientMessages(): Promise<ClientMessage[]> {
+  try {
+    const res = await dashboardFetch<{ items: ClientMessage[] }>("/api/v1/client-messaging/active");
+    return res.items || [];
+  } catch (error) {
+    console.error("Failed to fetch client messages", error);
+    return [];
+  }
 }
 
 export function getDashboardOverview() {

@@ -376,11 +376,13 @@ function DraggableCandidateCard({
   cand,
   rank,
   isMapped,
+  isClient,
   onToggleMap,
 }: Readonly<{
   cand: ApiTopCandidate;
   rank: number;
   isMapped: boolean;
+  isClient?: boolean;
   onToggleMap: () => void;
 }>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -432,13 +434,15 @@ function DraggableCandidateCard({
       </div>
 
       {/* Drag handle */}
-      <div
-        {...attributes}
-        {...listeners}
-        className="mt-0.5 text-text-muted hover:text-yellow cursor-grab active:cursor-grabbing p-1 rounded hover:bg-surface-2 shrink-0 touch-none transition-colors"
-      >
-        <IconGripVertical className="size-4" />
-      </div>
+      {!isClient && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="mt-0.5 text-text-muted hover:text-yellow cursor-grab active:cursor-grabbing p-1 rounded hover:bg-surface-2 shrink-0 touch-none transition-colors"
+        >
+          <IconGripVertical className="size-4" />
+        </div>
+      )}
 
       <div className="flex-1 min-w-0">
         {/* Name + score */}
@@ -475,30 +479,32 @@ function DraggableCandidateCard({
         {/* Footer */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] text-text-muted truncate">{cand.email}</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleMap();
-            }}
-            className={cn(
-              "shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 leading-none",
-              isMapped
-                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20"
-                : "bg-surface-2 text-text-primary border-border hover:bg-yellow hover:text-navy hover:border-yellow",
-            )}
-          >
-            {isMapped ? (
-              <>
-                <IconCircleCheck className="size-3" />
-                Mapped
-              </>
-            ) : (
-              <>
-                <IconChevronRight className="size-3" />
-                Map
-              </>
-            )}
-          </button>
+          {!isClient && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMap();
+              }}
+              className={cn(
+                "shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 leading-none",
+                isMapped
+                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20"
+                  : "bg-surface-2 text-text-primary border-border hover:bg-yellow hover:text-navy hover:border-yellow",
+              )}
+            >
+              {isMapped ? (
+                <>
+                  <IconCircleCheck className="size-3" />
+                  Mapped
+                </>
+              ) : (
+                <>
+                  <IconChevronRight className="size-3" />
+                  Map
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -787,18 +793,20 @@ export default function PositionsPage() {
                 Open Positions
               </h1>
               <p className="text-sm mt-1 text-text-muted">
-                Click a position to see top matched candidates. Drag candidates onto a position to
-                map them.
+                Click a position to see top matched candidates.
+                {!isClient && " Drag candidates onto a position to map them."}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setAddPositionOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
-            >
-              <IconPlus className="size-4" />
-              New Position
-            </button>
+            {!isClient && (
+              <button
+                type="button"
+                onClick={() => setAddPositionOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
+              >
+                <IconPlus className="size-4" />
+                New Position
+              </button>
+            )}
           </div>
         </div>
 
@@ -971,9 +979,11 @@ export default function PositionsPage() {
                   <p className="text-sm text-center leading-relaxed">
                     Select a position to see its top 10 matched candidates.
                   </p>
-                  <p className="text-[11px] text-text-muted/60 text-center">
-                    You can also drag candidates onto a position card to map them.
-                  </p>
+                  {!isClient && (
+                    <p className="text-[11px] text-text-muted/60 text-center">
+                      You can also drag candidates onto a position card to map them.
+                    </p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1018,6 +1028,7 @@ export default function PositionsPage() {
                               cand={cand}
                               rank={idx + 1}
                               isMapped={cand.is_mapped}
+                              isClient={isClient}
                               onToggleMap={() => {
                                 if (cand.is_mapped) {
                                   doUnmap(selectedPosition.id, cand.id);

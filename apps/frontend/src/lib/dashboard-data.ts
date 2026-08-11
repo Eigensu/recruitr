@@ -41,6 +41,8 @@ const DEFAULT_TOTALS: DashboardTotals = {
   remaining: 0,
   inPipeline: 0,
   joined: 0,
+  actionNeeded: 0,
+  avgDaysToShortlist: 0,
 };
 
 const EMPTY_DATA: DashboardDemoData = {
@@ -345,6 +347,8 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
         remaining: Math.max(overview.summary.total_seats_open - overview.summary.seats_filled, 0),
         inPipeline: overview.summary.candidates_in_pipeline,
         joined: overview.summary.joined_candidates,
+        actionNeeded: overview.summary.action_needed_count,
+        avgDaysToShortlist: overview.summary.avg_days_to_shortlist,
       }
     : DEFAULT_TOTALS;
 

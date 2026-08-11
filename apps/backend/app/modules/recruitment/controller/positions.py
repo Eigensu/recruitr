@@ -285,6 +285,8 @@ async def list_positions(
         if client_oid:
             match["client_id"] = client_oid
 
+    match = viewer.scoped(match)
+
     if status_filter:
         match["status"] = status_filter
 

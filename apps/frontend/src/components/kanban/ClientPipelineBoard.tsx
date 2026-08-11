@@ -26,34 +26,46 @@ interface Filters {
   position_id: string;
 }
 
-type ClientStage = "applied" | "shortlisted" | "interview" | "offer" | "hired";
+type ClientStage =
+  | "sourced"
+  | "sent_to_client"
+  | "interview"
+  | "decision_pending"
+  | "offer"
+  | "offer_accepted"
+  | "position_close";
 
 const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
-  applied: "Applied",
-  shortlisted: "Shortlisted",
+  sourced: "Sourced",
+  sent_to_client: "Sent to Client",
   interview: "Interview",
+  decision_pending: "Decision Pending",
   offer: "Offer",
-  hired: "Hired",
+  offer_accepted: "Offer Accepted",
+  position_close: "Joined",
 };
 
-const CLIENT_STAGES: ClientStage[] = ["applied", "shortlisted", "interview", "offer", "hired"];
+const CLIENT_STAGES: ClientStage[] = [
+  "sourced",
+  "sent_to_client",
+  "interview",
+  "decision_pending",
+  "offer",
+  "offer_accepted",
+  "position_close",
+];
 
 function mapToClientStage(stage: KanbanStage): ClientStage | null {
   switch (stage) {
     case "sourced":
-      return "applied";
     case "sent_to_client":
-      return "shortlisted";
     case "interview":
-    case "decision_pending": // Decision pending from interview -> still 'Interview' or maybe 'Shortlisted'
-      return "interview";
+    case "decision_pending":
     case "offer":
     case "offer_accepted":
-      return "offer";
     case "position_close":
-      return "hired";
+      return stage;
     case "rejected":
-      return null;
     default:
       return null;
   }
@@ -88,11 +100,13 @@ export default function ClientPipelineBoard({ positions }: Props) {
 
     // Initialize client stages
     const columns: Record<ClientStage, PipelineCard[]> = {
-      applied: [],
-      shortlisted: [],
+      sourced: [],
+      sent_to_client: [],
       interview: [],
+      decision_pending: [],
       offer: [],
-      hired: [],
+      offer_accepted: [],
+      position_close: [],
     };
 
     // Filter and map

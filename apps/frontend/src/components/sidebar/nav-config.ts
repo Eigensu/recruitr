@@ -9,6 +9,7 @@ import {
   IconUsers,
   IconBuildingStore,
   IconBuilding,
+  IconMessage,
 } from "@tabler/icons-react";
 
 export interface NavItemConfig {
@@ -33,6 +34,12 @@ export const NAV_CONFIG: NavItemConfig[] = [
     label: "Clients",
     icon: IconBuildingStore,
     maintainerOnly: true,
+    hideForClient: true,
+  },
+  {
+    href: "/client-messaging",
+    label: "Client Messaging",
+    icon: IconMessage,
     hideForClient: true,
   },
   { href: "/settings", label: "Settings", icon: IconSettings },

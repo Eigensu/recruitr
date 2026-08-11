@@ -218,6 +218,71 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
                 "offers_accepted": {
                     "$sum": {_COND: [{"$eq": [_F_STAGE, PipelineStage.offer_accepted.value]}, 1, 0]}
                 },
+                "action_needed_count": {
+                    "$sum": {
+                        _COND: [
+                            {
+                                "$and": [
+                                    {
+                                        "$in": [
+                                            _F_STAGE,
+                                            [
+                                                PipelineStage.decision_pending.value,
+                                                PipelineStage.offer.value,
+                                            ],
+                                        ]
+                                    },
+                                    {"$eq": ["$decision", "pending"]},
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "avg_days_to_shortlist": {
+                    "$avg": {
+                        "$let": {
+                            "vars": {
+                                "shortlist_event": {
+                                    "$first": {
+                                        "$filter": {
+                                            "input": "$history",
+                                            "as": "h",
+                                            "cond": {
+                                                "$in": [
+                                                    "$$h.stage",
+                                                    [
+                                                        PipelineStage.sent_to_client.value,
+                                                        PipelineStage.interview.value,
+                                                    ],
+                                                ]
+                                            },
+                                        }
+                                    }
+                                }
+                            },
+                            "in": {
+                                "$cond": [
+                                    {"$ne": ["$$shortlist_event", None]},
+                                    {
+                                        "$divide": [
+                                            {
+                                                "$dateDiff": {
+                                                    "startDate": "$mapped_at",
+                                                    "endDate": "$$shortlist_event.at",
+                                                    "unit": "millisecond",
+                                                }
+                                            },
+                                            1000 * 60 * 60 * 24,
+                                        ]
+                                    },
+                                    None,
+                                ]
+                            },
+                        }
+                    }
+                },
             }
         },
     ]
@@ -245,6 +310,10 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
             "seats_filled": int(job_totals.get("seats_filled", 0)),
             "candidates_in_pipeline": int(mapping_totals.get("candidates_in_pipeline", 0)),
             "offers_accepted": int(mapping_totals.get("offers_accepted", 0)),
+            "action_needed_count": int(mapping_totals.get("action_needed_count", 0)),
+            "avg_days_to_shortlist": round(
+                float(mapping_totals.get("avg_days_to_shortlist") or 0.0), 1
+            ),
             "joined_candidates": int(joined_totals.get("joined_candidates", 0)),
         }
     }
