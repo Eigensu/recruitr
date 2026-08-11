@@ -9,6 +9,7 @@ import type { PipelineCard } from "@/types";
 interface Props {
   card: PipelineCard;
   isDragOverlay?: boolean;
+  readOnly?: boolean;
 }
 
 function scoreColor(score: number | null): string {
@@ -18,10 +19,15 @@ function scoreColor(score: number | null): string {
   return "text-red-400 bg-red-500/10 border-red-500/20";
 }
 
-export default function KanbanCard({ card, isDragOverlay = false }: Readonly<Props>) {
+export default function KanbanCard({
+  card,
+  isDragOverlay = false,
+  readOnly = false,
+}: Readonly<Props>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.mapping_id,
     data: { card },
+    disabled: readOnly,
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
@@ -37,24 +43,31 @@ export default function KanbanCard({ card, isDragOverlay = false }: Readonly<Pro
         isDragging && !isDragOverlay && "opacity-40 scale-95",
         isDragOverlay &&
           "shadow-2xl shadow-black/50 rotate-1 cursor-grabbing ring-1 ring-yellow/30",
-        !isDragging && !isDragOverlay && "hover:border-border hover:shadow-sm cursor-grab",
+        !isDragging &&
+          !isDragOverlay &&
+          !readOnly &&
+          "hover:border-border hover:shadow-sm cursor-grab",
         "border-border",
       )}
     >
       {/* Drag handle */}
-      <div
-        {...listeners}
-        className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
-      >
-        <IconGripVertical className="size-3.5 text-text-muted" />
-      </div>
+      {!readOnly && (
+        <div
+          {...listeners}
+          className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
+        >
+          <IconGripVertical className="size-3.5 text-text-muted" />
+        </div>
+      )}
 
       {/* Candidate */}
       <div className="pr-4 mb-2">
         <p className="text-sm font-semibold text-text-primary truncate leading-tight">
           {card.candidate_name}
         </p>
-        <p className="text-[11px] text-text-muted truncate mt-0.5">{card.candidate_email}</p>
+        {!readOnly && (
+          <p className="text-[11px] text-text-muted truncate mt-0.5">{card.candidate_email}</p>
+        )}
       </div>
 
       {/* Position */}
@@ -62,8 +75,12 @@ export default function KanbanCard({ card, isDragOverlay = false }: Readonly<Pro
         <span className="text-[10px] font-medium text-text-secondary truncate">
           {card.position_role}
         </span>
-        <span className="text-text-muted/40">·</span>
-        <span className="text-[10px] text-text-muted truncate">{card.position_client}</span>
+        {!readOnly && (
+          <>
+            <span className="text-text-muted/40">·</span>
+            <span className="text-[10px] text-text-muted truncate">{card.position_client}</span>
+          </>
+        )}
       </div>
 
       {/* Footer */}
@@ -71,7 +88,7 @@ export default function KanbanCard({ card, isDragOverlay = false }: Readonly<Pro
         <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
           {card.position_code}
         </span>
-        {card.match_score !== null && (
+        {!readOnly && card.match_score !== null && (
           <span
             className={cn(
               "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border",

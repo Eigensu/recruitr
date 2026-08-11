@@ -40,6 +40,8 @@ class DashboardKpiSummary(BaseModel):
     candidates_in_pipeline: int = 0
     offers_accepted: int = 0
     joined_candidates: int = 0
+    action_needed_count: int = 0
+    avg_days_to_shortlist: float = 0.0
 
 
 class PipelineStageMetric(BaseModel):

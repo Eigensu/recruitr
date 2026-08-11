@@ -4,6 +4,7 @@ import {
   IconChartDots3,
   IconCheck,
   IconCircleX,
+  IconClockHour4,
   IconPercentage,
   IconRoute,
   IconSend,
@@ -20,6 +21,10 @@ export const KPI_ICON_MAP = {
   offers_accepted: IconCheck,
   candidate_dropped: IconCircleX,
   joined: IconCheck,
+  // Client dashboard hero metrics
+  open_roles: IconBriefcase,
+  in_process: IconUsers,
+  avg_days_to_shortlist: IconClockHour4,
 } as const;
 
 export const ANALYTICS_ICON_MAP = {

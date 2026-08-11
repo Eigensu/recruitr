@@ -30,4 +30,7 @@ __all__ = [
     "ActivityType",
     "EducationLevel",
     "Gender",
+    "ClientMessageTarget",
+    "ClientMessageType",
 ]
+from .client_message import ClientMessageTarget, ClientMessageType

@@ -24,6 +24,10 @@ export default function AnimatedNumber({
   const isInView = useInView(ref, { once: true, amount: 0.6 });
   const [displayValue, setDisplayValue] = useState(0);
   const startValueRef = useRef(0);
+  // A non-finite source value (NaN/Infinity, e.g. from a still-loading or
+  // divide-by-zero upstream metric) must never propagate into the animation —
+  // toLocaleString() on NaN renders the literal string "NaN".
+  const safeValue = Number.isFinite(value) ? value : 0;
 
   useEffect(() => {
     if (!isInView) return;
@@ -31,10 +35,10 @@ export default function AnimatedNumber({
     let frame = 0;
     let startTime = 0;
     const startValue = startValueRef.current;
-    const diff = value - startValue;
+    const diff = safeValue - startValue;
 
     if (diff === 0) {
-      setDisplayValue(value);
+      setDisplayValue(safeValue);
       return;
     }
 
@@ -49,14 +53,14 @@ export default function AnimatedNumber({
       if (progress < 1) {
         frame = window.requestAnimationFrame(tick);
       } else {
-        startValueRef.current = value;
+        startValueRef.current = safeValue;
       }
     };
 
     frame = window.requestAnimationFrame(tick);
 
     return () => window.cancelAnimationFrame(frame);
-  }, [duration, isInView, value]);
+  }, [duration, isInView, safeValue]);
 
   return (
     <span ref={ref}>

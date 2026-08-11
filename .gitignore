@@ -17,6 +17,7 @@ node_modules/
 apps/frontend/.next/
 apps/frontend/tsconfig.tsbuildinfo
 apps/frontend/out/
+apps/frontend/test-results/
 
 # ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/

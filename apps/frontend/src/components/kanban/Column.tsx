@@ -76,7 +76,7 @@ export default function KanbanColumn({ stage, label, cards, readOnly }: Readonly
         )}
       >
         {cards.map((card) => (
-          <KanbanCard key={card.mapping_id} card={card} />
+          <KanbanCard key={card.mapping_id} card={card} readOnly={readOnly} />
         ))}
         {cards.length === 0 && (
           <div className="flex items-center justify-center h-16">

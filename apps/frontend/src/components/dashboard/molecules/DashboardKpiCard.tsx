@@ -40,7 +40,7 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
           </p>
           {/* Value — inherits card text colour */}
           <p className="mt-2 font-heading text-4xl leading-none">
-            <AnimatedNumber value={metric.value} />
+            <AnimatedNumber value={metric.value} suffix={metric.suffix ? ` ${metric.suffix}` : ""} />
           </p>
         </div>
         {/* Icon chip */}
@@ -56,7 +56,7 @@ export default function DashboardKpiCard({ metric, index }: DashboardKpiCardProp
           {metric.helper}
         </span>
         <span
-          className="rounded-full px-2 py-1 text-[11px] font-semibold"
+          className="shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold"
           style={{ background: tone.chipBg, color: tone.chipText }}
         >
           {metric.trend}

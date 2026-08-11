@@ -18,6 +18,8 @@ export interface DashboardKpi {
   helper: string;
   tone: DashboardTone;
   trend: string;
+  /** Unit shown after the animated number, e.g. "days". */
+  suffix?: string;
 }
 
 export interface PipelineStageMetric {
@@ -61,6 +63,8 @@ export interface DashboardTotals {
   remaining: number;
   inPipeline: number;
   joined: number;
+  actionNeeded: number;
+  avgDaysToShortlist: number;
 }
 
 export interface DashboardAnalyticsWidget {

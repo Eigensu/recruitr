@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "motion/react";
@@ -16,8 +16,7 @@ import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/s
 import { useTheme } from "@/context/ThemeContext";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
 import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import type { UserInfo } from "@/types";
 
 /** Logo row — single component, handles both open/collapsed states */
 function LogoRow() {
@@ -139,7 +138,7 @@ function ThemeToggleRow() {
 }
 
 /** Bottom user row — avatar + name, no hover popover */
-function UserRow({ user }: { readonly user: { full_name: string; email: string } | null }) {
+function UserRow({ user }: { readonly user: UserInfo | null }) {
   const { open, animate } = useSidebar();
   const labelAnimation = animate ? { opacity: open ? 1 : 0, x: open ? 0 : -4 } : undefined;
 
@@ -166,30 +165,9 @@ function UserRow({ user }: { readonly user: { full_name: string; email: string }
 }
 
 /** The full sidebar */
-export default function DashboardSidebar() {
+export default function DashboardSidebar({ user }: { readonly user: UserInfo | null }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState<{ full_name: string; email: string; role?: string } | null>(
-    null,
-  );
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/auth/me`, { credentials: "include" })
-      .then((r) => {
-        if (!r.ok) {
-          router.replace("/sign-in");
-          return null;
-        }
-        return r.json();
-      })
-      .then((data) => {
-        if (data) setUser({ full_name: data.full_name, email: data.email, role: data.role });
-      })
-      .catch(() => {
-        router.replace("/sign-in");
-      });
-  }, [router]);
 
   const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
   const isClient = user?.role === "client";

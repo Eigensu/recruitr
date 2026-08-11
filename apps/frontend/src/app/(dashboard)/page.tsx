@@ -1,6 +1,11 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import { IconBriefcase, IconBuilding, IconLayoutKanban } from "@tabler/icons-react";
 import {
+  ActionNeededCallout,
   AnalyticsWidgets,
+  ClientPipelineSnapshot,
+  ClientPositionsSnapshot,
   DashboardKpiCard,
   KpiGridSkeleton,
   PanelSkeleton,
@@ -17,6 +22,21 @@ import {
 } from "@/lib/dashboard-data";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getUserServer } from "@/lib/api/auth.server";
+import type { DashboardKpi } from "@/types/dashboard";
+import {
+  getActiveClientMessages,
+  getDashboardOverview as getApiDashboardOverview,
+  getDashboardPipeline,
+  getPositionsPreview,
+} from "@/lib/api/dashboard";
+import { ClientMessagingBanner } from "@/components/dashboard/ClientMessagingBanner";
+import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants/client-pipeline";
+
+const QUICK_LINKS = [
+  { href: "/positions", label: "Open Positions", icon: IconBriefcase },
+  { href: "/pipeline", label: "Pipeline Board", icon: IconLayoutKanban },
+  { href: "/company", label: "Company Profile", icon: IconBuilding },
+] as const;
 
 async function LiveOverviewSection() {
   const { kpis } = await getDashboardOverview();
@@ -57,6 +77,132 @@ async function ClientProfilesSection() {
   return <ClientProfilesTable rows={rows} />;
 }
 
+async function ClientOverviewSection() {
+  // Raw, viewer-scoped fetch — deliberately bypasses the staff dashboard
+  // aggregator (getDashboardOverview from lib/dashboard-data), which also
+  // calls several staff-only endpoints that 403 for the client role.
+  const overview = await getApiDashboardOverview();
+  const { summary } = overview;
+
+  const [messages, user, positionsSettled, pipelineSettled] = await Promise.all([
+    getActiveClientMessages(),
+    getUserServer(),
+    getPositionsPreview({ status: "open", limit: 5 }).then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const, value: null }),
+    ),
+    getDashboardPipeline().then(
+      (value) => ({ ok: true as const, value }),
+      () => ({ ok: false as const, value: null }),
+    ),
+  ]);
+
+  const metrics: DashboardKpi[] = [
+    {
+      id: "open_roles",
+      label: "Open Roles with Binge",
+      value: summary.open_positions,
+      helper: "Active hiring mandates",
+      tone: "yellow",
+      trend: "Open now",
+    },
+    {
+      id: "in_process",
+      label: "Candidates Currently in Process",
+      value: summary.candidates_in_pipeline,
+      helper: "Moving through your pipeline",
+      tone: "navy",
+      trend: "Active pipeline",
+    },
+    {
+      id: "seats_filled",
+      label: "Seats Filled",
+      value: summary.seats_filled,
+      helper: "Positions successfully closed",
+      tone: "green",
+      trend: "Closed",
+    },
+    {
+      id: "avg_days_to_shortlist",
+      label: "Avg. Days to First Shortlist",
+      value: summary.avg_days_to_shortlist,
+      helper: "From opening the role to your first shortlist",
+      tone: "neutral",
+      trend: "Per role",
+      suffix: "days",
+    },
+  ];
+
+  const positionsPreview = positionsSettled.value?.items ?? [];
+  const totalOpenPositions = positionsSettled.value?.meta.total ?? summary.open_positions;
+
+  const stageCounts = new Map(pipelineSettled.value?.stages.map((s) => [s.stage, s.count]) ?? []);
+  const clientPipelineStages = CLIENT_STAGES.map((stage) => ({
+    stage,
+    label: CLIENT_STAGE_LABELS[stage],
+    count: stageCounts.get(stage) ?? 0,
+  }));
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* ── Section 1: Snapshot — hero numbers, action needed, announcements ── */}
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric, index) => (
+          <DashboardKpiCard key={metric.id} metric={metric} index={index} />
+        ))}
+      </section>
+
+      <ActionNeededCallout count={summary.action_needed_count} />
+
+      {messages && messages.length > 0 && user?.user_id && (
+        <ClientMessagingBanner messages={messages} userId={user.user_id} />
+      )}
+
+      {/* ── Section 2: Your Pipeline at a Glance — the "show your work" layer ── */}
+      <div className="mt-2 flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-2xl" style={{ color: "var(--color-text-primary)" }}>
+              Your Pipeline at a Glance
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              A closer look at your open roles and where candidates stand, without digging
+              through every tab.
+            </p>
+          </div>
+
+          <nav aria-label="Quick links" className="flex flex-wrap gap-2">
+            {QUICK_LINKS.map(({ href, label, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:border-yellow hover:text-yellow"
+                style={{
+                  borderColor: "var(--color-border-val)",
+                  color: "var(--color-text-primary)",
+                  background: "var(--color-surface-val)",
+                }}
+              >
+                <Icon className="size-4" />
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
+          <ClientPositionsSnapshot
+            positions={positionsPreview}
+            totalOpen={totalOpenPositions}
+            failed={!positionsSettled.ok}
+          />
+          <ClientPipelineSnapshot stages={clientPipelineStages} failed={!pipelineSettled.ok} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await getUserServer();
   const isClient = user?.role === "client";
@@ -80,7 +226,9 @@ export default async function DashboardPage() {
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                {isClient ? "Client Dashboard" : "Recruitment Dashboard"}
+                {isClient
+                  ? `Welcome, ${user?.client_name ?? "back"}`
+                  : "Recruitment Dashboard"}
               </h1>
             </div>
             <div className="mt-1 shrink-0">
@@ -89,37 +237,34 @@ export default async function DashboardPage() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.9fr)]">
-          <Suspense fallback={<PanelSkeleton rows={7} />}>
-            <PipelinePieSection />
-          </Suspense>
+        {isClient ? (
           <Suspense fallback={<KpiGridSkeleton />}>
-            <LiveOverviewSection />
+            <ClientOverviewSection />
           </Suspense>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.9fr)]">
+              <Suspense fallback={<PanelSkeleton rows={7} />}>
+                <PipelinePieSection />
+              </Suspense>
+              <Suspense fallback={<KpiGridSkeleton />}>
+                <LiveOverviewSection />
+              </Suspense>
+            </div>
 
-        <div
-          className={`grid grid-cols-1 items-stretch gap-6 ${
-            isClient ? "" : "xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]"
-          }`}
-        >
-          <Suspense fallback={<PanelSkeleton rows={2} />}>
-            <AnalyticsSection />
-          </Suspense>
-          {/* No second panel for a client: the activity feed is brand-wide and
-              cannot be narrowed to one employer (ActivityLog has no client
-              link), and the recruiter chart is agency-internal. */}
-          {!isClient && (
-            <Suspense fallback={<PanelSkeleton rows={5} />}>
-              <RecruiterLineSection />
+            <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
+              <Suspense fallback={<PanelSkeleton rows={2} />}>
+                <AnalyticsSection />
+              </Suspense>
+              <Suspense fallback={<PanelSkeleton rows={5} />}>
+                <RecruiterLineSection />
+              </Suspense>
+            </div>
+
+            <Suspense fallback={<PanelSkeleton rows={8} />}>
+              <ClientProfilesSection />
             </Suspense>
-          )}
-        </div>
-
-        {!isClient && (
-          <Suspense fallback={<PanelSkeleton rows={8} />}>
-            <ClientProfilesSection />
-          </Suspense>
+          </>
         )}
       </div>
     </div>

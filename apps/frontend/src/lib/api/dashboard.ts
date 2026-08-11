@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import type { ClientMessage } from "@/components/dashboard/ClientMessagingBanner";
+import type { ApiPosition } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -26,6 +28,8 @@ export interface ApiDashboardOverviewResponse {
     candidates_in_pipeline: number;
     offers_accepted: number;
     joined_candidates: number;
+    action_needed_count: number;
+    avg_days_to_shortlist: number;
   };
   pipeline: Array<{
     stage: string;
@@ -169,6 +173,16 @@ async function fetchAllPages<T>(
   return items;
 }
 
+export async function getActiveClientMessages(): Promise<ClientMessage[]> {
+  try {
+    const res = await dashboardFetch<{ items: ClientMessage[] }>("/api/v1/client-messaging/active");
+    return res.items || [];
+  } catch (error) {
+    console.error("Failed to fetch client messages", error);
+    return [];
+  }
+}
+
 export function getDashboardOverview() {
   return dashboardFetch<ApiDashboardOverviewResponse>("/api/v1/dashboard/overview");
 }
@@ -234,4 +248,12 @@ export function getClientProfiles(query: Record<string, QueryValue> = {}) {
     "/api/v1/dashboard/client-profiles",
     query,
   );
+}
+
+// Not a /dashboard/* route, but dashboardFetch is a generic cookie-forwarding
+// GET helper — reused here for the client dashboard's "Your Open Positions"
+// preview. Tenant-scoped server-side via get_viewer, same as everything else
+// in this file, so a client only ever gets their own company's positions.
+export function getPositionsPreview(query: Record<string, QueryValue> = {}) {
+  return dashboardFetch<ApiPaginatedResponse<ApiPosition>>("/api/v1/positions", query);
 }
