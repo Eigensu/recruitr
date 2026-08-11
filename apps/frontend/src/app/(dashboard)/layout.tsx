@@ -4,6 +4,15 @@ import ForbiddenBoundary from "@/components/common/ForbiddenBoundary";
 import RouteGuard from "@/components/common/RouteGuard";
 import "./dashboard.css";
 
+// Every route under (dashboard) is authenticated and reads the access_token
+// cookie (directly via getUserServer, or indirectly via dashboardFetch)
+// before rendering anything — none of them can be statically generated.
+// Without this, `next build` still attempts a static pass, and the resulting
+// DYNAMIC_SERVER_USAGE bailout gets caught by this codebase's own
+// Promise.allSettled error handling instead of reaching Next.js's build step
+// cleanly, which is what produced the noisy "X fetch failed" build log.
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({ children }: { readonly children: React.ReactNode }) {
   return (
     <ToastProvider>
