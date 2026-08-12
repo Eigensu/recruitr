@@ -53,7 +53,7 @@ const schema = z
     gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
     age: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
-      z.number().min(1, "Must be 1 or more").optional(),
+      z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
     ),
     expected_salary: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
