@@ -16,8 +16,10 @@ from app.modules.auth.access import (
     find_client_authorization,
     may_sign_in,
 )
-from app.modules.auth.models import User, UserRole
+from app.modules.auth.models import OTPToken, User, UserRole
 from app.modules.auth.schemas import (
+    RefereeOTPRequest,
+    RefereeOTPVerify,
     TokenPayload,
     UserCreate,
     UserInfoResponse,
@@ -417,3 +419,83 @@ async def google_callback(
     redirect = RedirectResponse(f"{frontend}{redirect_path}")
     _set_auth_cookie(redirect, str(user.id))
     return redirect
+
+
+# ── Referee OTP endpoints ────────────────────────────────────────────────────────
+
+
+@router.post("/referee/request-otp")
+async def request_referee_otp(payload: RefereeOTPRequest) -> dict:
+    email = payload.email.lower()
+    allowed, is_client, is_referee = await may_sign_in(email)
+
+    if not allowed or not is_referee:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_AUTHORIZED)
+
+    # Generate 6-digit OTP
+    otp_code = "".join(str(secrets.randbelow(10)) for _ in range(6))
+
+    # Invalidate old tokens for this email
+    await OTPToken.find({"email": email}).delete()
+
+    token = OTPToken(
+        email=email,
+        otp_hash=get_password_hash(otp_code),
+        expires_at=datetime.now(UTC) + timedelta(minutes=15),
+    )
+    await token.insert()
+
+    from app.modules.dashboard.email_service import EmailService
+
+    EmailService.send_referee_otp(email=email, otp_code=otp_code)
+
+    return {"status": "ok", "message": "OTP sent to email"}
+
+
+@router.post("/referee/verify-otp")
+async def verify_referee_otp(payload: RefereeOTPVerify, response: Response) -> dict:
+    email = payload.email.lower()
+    token = await OTPToken.find_one({"email": email})
+
+    if not token or token.expires_at < datetime.now(UTC):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired OTP")
+
+    if token.attempts >= 5:
+        await token.delete()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Too many failed attempts. Please request a new OTP."
+        )
+
+    if not verify_password(payload.otp, token.otp_hash):
+        token.attempts += 1
+        await token.save()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired OTP")
+
+    # OTP is valid
+    await token.delete()
+
+    # Must re-verify sign-in eligibility just in case it was revoked in the last 15 minutes
+    allowed, is_client, is_referee = await may_sign_in(email)
+    if not allowed or not is_referee:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_AUTHORIZED)
+
+    user = await User.find_one(User.email == email)
+    if not user:
+        user = User(
+            email=email,
+            full_name=email.split("@")[
+                0
+            ],  # Fallback, RefereeUser name will sync in _link_referee_login
+            role=UserRole.referee,
+        )
+        await user.insert()
+
+    # Ensure role is correct if an existing Google account is used
+    if user.role != UserRole.referee:
+        user.role = UserRole.referee
+        await user.save()
+
+    await _link_referee_login(user)
+    _set_auth_cookie(response, str(user.id))
+
+    return {"status": "ok", "message": "Login successful"}

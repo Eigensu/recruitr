@@ -4,24 +4,40 @@ import logging
 import os
 from datetime import datetime
 
+import resend
+
 logger = logging.getLogger(__name__)
 
 
 class EmailService:
     @staticmethod
-    def _send_email(to: str, subject: str, body: str) -> None:
+    def _send_email(to: str, subject: str, body: str, secure_log: bool = False) -> None:
         """Internal helper to transmit email or log safely if unconfigured."""
-        smtp_url = os.getenv("SMTP_URL")
-        if not smtp_url:
+        api_key = os.getenv("RESEND_API_KEY")
+        from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+        if not api_key:
+            log_body = "*** REDACTED ***" if secure_log else body
             logger.warning(
                 "Email delivery infrastructure is implemented/configured, but "
                 "live delivery could not be verified because provider credentials are unavailable. "
-                f"Would have sent to={to}, subject='{subject}', body='{body}'"
+                f"Would have sent to={to}, subject='{subject}', body='{log_body}'"
             )
             return
 
-        logger.info(f"Sending email to {to} via SMTP: {subject}")
-        # Real SMTP implementation would go here...
+        resend.api_key = api_key
+        logger.info(f"Sending email to {to} via Resend: {subject}")
+        try:
+            resend.Emails.send(
+                {
+                    "from": from_email,
+                    "to": to,
+                    "subject": subject,
+                    "html": body.replace("\n", "<br>"),
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to send email via Resend: {e}")
 
     @classmethod
     def send_referee_actioned(
@@ -70,3 +86,16 @@ class EmailService:
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_referee_otp(cls, email: str, otp_code: str) -> None:
+        """Send OTP code securely."""
+        subject = "Your Binge Connect Login Code"
+        body = (
+            f"Hello,\n\n"
+            f"Your Binge Connect Referee Portal login code is: {otp_code}\n\n"
+            f"This code will expire in 15 minutes.\n"
+            f"If you did not request this code, you can safely ignore this email.\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body, secure_log=True)
