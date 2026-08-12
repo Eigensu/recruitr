@@ -25,6 +25,7 @@ from app.modules.recruitment.controller import (
     pipeline_router,
     positions_router,
     public_router,
+    referees_router,
     tags_router,
     teams_router,
 )
@@ -81,6 +82,7 @@ app.include_router(positions_router, prefix="/api/v1/positions", tags=["Position
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])
 app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
+app.include_router(referees_router, prefix="/api/v1/referees", tags=["Referees"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(referee_router)

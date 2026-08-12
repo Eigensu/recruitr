@@ -27,19 +27,36 @@ function SignInContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(initialErrorState);
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<"password" | "otp_request" | "otp_verify">("password");
+  const [otp, setOtp] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+
     try {
-      await apiFetch("/api/v1/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      router.push("/");
+      if (mode === "password") {
+        await apiFetch("/api/v1/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
+        router.push("/");
+      } else if (mode === "otp_request") {
+        await apiFetch("/api/v1/auth/referee/request-otp", {
+          method: "POST",
+          body: JSON.stringify({ email }),
+        });
+        setMode("otp_verify");
+      } else if (mode === "otp_verify") {
+        await apiFetch("/api/v1/auth/referee/verify-otp", {
+          method: "POST",
+          body: JSON.stringify({ email, otp }),
+        });
+        router.push("/referee");
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to sign in.");
+      setError(err instanceof Error ? err.message : "Authentication failed.");
     } finally {
       setIsLoading(false);
     }
@@ -183,89 +200,148 @@ function SignInContent() {
               </div>
             )}
 
-            <div className="anim-up d4">
-              <label
-                className="mb-1.5 block text-[13px] font-semibold tracking-wide text-charcoal"
-                htmlFor="si-email"
-              >
-                Email
-              </label>
-              <input
-                id="si-email"
-                type="email"
-                placeholder="Enter your email"
-                required
-                autoComplete="email"
-                className="block w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 text-sm text-charcoal outline-none transition-all placeholder:text-gray-400 focus:border-navy focus:ring-2 focus:ring-navy/10"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div className="anim-up d5">
-              <label
-                className="mb-1.5 block text-[13px] font-semibold tracking-wide text-charcoal"
-                htmlFor="si-pass"
-              >
-                Password
-              </label>
-              <div className="relative">
+            {mode === "password" || mode === "otp_request" ? (
+              <div className="anim-up d4">
+                <label
+                  className="mb-1.5 block text-[13px] font-semibold tracking-wide text-charcoal"
+                  htmlFor="si-email"
+                >
+                  Email
+                </label>
                 <input
-                  id="si-pass"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
+                  id="si-email"
+                  type="email"
+                  placeholder="Enter your email"
                   required
-                  autoComplete="current-password"
-                  className="block w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 pr-11 text-sm text-charcoal outline-none transition-all placeholder:text-gray-400 focus:border-navy focus:ring-2 focus:ring-navy/10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="email"
+                  className="block w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 text-sm text-charcoal outline-none transition-all placeholder:text-gray-400 focus:border-navy focus:ring-2 focus:ring-navy/10"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
+              </div>
+            ) : null}
+
+            {mode === "password" && (
+              <div className="anim-up d5">
+                <label
+                  className="mb-1.5 block text-[13px] font-semibold tracking-wide text-charcoal"
+                  htmlFor="si-pass"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="si-pass"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    required
+                    autoComplete="current-password"
+                    className="block w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 pr-11 text-sm text-charcoal outline-none transition-all placeholder:text-gray-400 focus:border-navy focus:ring-2 focus:ring-navy/10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-muted transition-colors hover:text-navy"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide" : "Show"}
+                  >
+                    {showPassword ? (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {mode === "otp_verify" && (
+              <div className="anim-up d5">
+                <label
+                  className="mb-1.5 block text-[13px] font-semibold tracking-wide text-charcoal"
+                  htmlFor="si-otp"
+                >
+                  6-Digit OTP Code
+                </label>
+                <p className="mb-3 text-xs text-muted">Sent to {email}</p>
+                <input
+                  id="si-otp"
+                  type="text"
+                  maxLength={6}
+                  placeholder="------"
+                  required
+                  className="block w-full rounded-[10px] border-[1.5px] border-gray-200 bg-white px-4 py-3 text-center text-2xl tracking-[0.5em] text-charcoal outline-none transition-all placeholder:text-gray-400 focus:border-navy focus:ring-2 focus:ring-navy/10"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\\D/g, ""))}
+                />
+              </div>
+            )}
+
+            {mode === "password" && (
+              <div className="flex items-center justify-between anim-up d6 mt-2">
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-muted transition-colors hover:text-navy"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? "Hide" : "Show"}
+                  onClick={() => setMode("otp_request")}
+                  className="text-[13px] font-medium text-navy hover:text-charcoal"
                 >
-                  {showPassword ? (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                      <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </svg>
-                  ) : (
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
+                  Referee Login
+                </button>
+                <Link href="#" className="text-[13px] font-medium text-navy hover:text-charcoal">
+                  Forgot Password
+                </Link>
+              </div>
+            )}
+
+            {mode === "otp_request" && (
+              <div className="flex items-center justify-start anim-up d6 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("password")}
+                  className="text-[13px] font-medium text-navy hover:text-charcoal"
+                >
+                  Back to Recruiter Login
                 </button>
               </div>
-            </div>
+            )}
 
-            <div className="flex items-center justify-end anim-up d6">
-              <Link href="#" className="text-[13px] font-medium text-navy hover:text-charcoal">
-                Forgot Password
-              </Link>
-            </div>
+            {mode === "otp_verify" && (
+              <div className="flex items-center justify-start anim-up d6 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("otp_request")}
+                  className="text-[13px] font-medium text-navy hover:text-charcoal"
+                >
+                  Change Email / Resend
+                </button>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -273,40 +349,52 @@ function SignInContent() {
               className="btn-shimmer mt-1 w-full cursor-pointer rounded-[10px] bg-navy px-6 py-3.5 font-subtitle text-sm font-bold tracking-wide text-white transition-all hover:-translate-y-0.5 hover:bg-navy-dark hover:shadow-lg active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70 anim-up d7"
               id="si-sub"
             >
-              {isLoading ? <span className="spinner" /> : "Sign In"}
+              {isLoading ? (
+                <span className="spinner" />
+              ) : mode === "otp_request" ? (
+                "Send OTP"
+              ) : mode === "otp_verify" ? (
+                "Verify & Login"
+              ) : (
+                "Sign In"
+              )}
             </button>
 
-            <div className="flex items-center gap-4 anim-up d8">
-              <span className="h-px flex-1 bg-gray-200" />
-              <span className="text-[13px] text-muted">or</span>
-              <span className="h-px flex-1 bg-gray-200" />
-            </div>
+            {mode === "password" && (
+              <>
+                <div className="flex items-center gap-4 anim-up d8">
+                  <span className="h-px flex-1 bg-gray-200" />
+                  <span className="text-[13px] text-muted">or</span>
+                  <span className="h-px flex-1 bg-gray-200" />
+                </div>
 
-            <a
-              href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/google/login`}
-              className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white px-6 py-3 text-sm font-medium text-charcoal transition-all hover:-translate-y-px hover:border-gray-300 hover:bg-light hover:shadow-sm anim-up d9"
-              id="si-g"
-            >
-              <svg width="18" height="18" viewBox="0 0 48 48">
-                <path
-                  fill="#EA4335"
-                  d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                />
-              </svg>
-              Sign In with Google
-            </a>
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/google/login`}
+                  className="flex w-full items-center justify-center gap-2.5 rounded-[10px] border-[1.5px] border-gray-200 bg-white px-6 py-3 text-sm font-medium text-charcoal transition-all hover:-translate-y-px hover:border-gray-300 hover:bg-light hover:shadow-sm anim-up d9"
+                  id="si-g"
+                >
+                  <svg width="18" height="18" viewBox="0 0 48 48">
+                    <path
+                      fill="#EA4335"
+                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M10.54 28.29c-.58-1.74-.91-3.62-.91-5.59s.33-3.85.91-5.59l-7.98-6.19C1.03 14.07 0 18.88 0 24s1.03 9.93 2.56 13.08l7.98-6.19z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M24 48c6.48 0 11.93-2.14 15.91-5.81l-7.73-6c-2.15 1.45-4.92 2.31-8.18 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                    />
+                  </svg>
+                  Continue with Google
+                </a>
+              </>
+            )}
           </form>
 
           <p className="mt-7 text-center text-sm text-muted anim-in d10">

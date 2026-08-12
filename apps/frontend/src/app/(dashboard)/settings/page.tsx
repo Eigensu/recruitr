@@ -14,6 +14,7 @@ import {
   IconMoon,
 } from "@tabler/icons-react";
 import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
+import RefereeSettingsTab from "@/components/settings/RefereeSettingsTab";
 import AutomationSettingsPanel from "@/components/settings/AutomationSettings";
 import ShareApplicationLink from "@/components/settings/ShareApplicationLink";
 import PasswordChange from "@/components/settings/PasswordChange";
@@ -121,7 +122,11 @@ export default function SettingsPage() {
     }
   }
 
-  const TABS = ["Preferences", ...(isMaintainer ? ["Team", "Automation"] : []), "Account"];
+  const TABS = [
+    "Preferences",
+    ...(isMaintainer ? ["Team", "Referees", "Automation"] : []),
+    "Account",
+  ];
   const [activeTab, setActiveTab] = useState("Preferences");
 
   async function handleLogout() {
@@ -448,8 +453,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {activeTab === "Team" && <TeamSettingsTab />}
-
+        {activeTab === "Team" && isMaintainer && <TeamSettingsTab />}
+        {activeTab === "Referees" && isMaintainer && <RefereeSettingsTab />}
         {activeTab === "Automation" && isMaintainer && <AutomationSettingsPanel />}
       </div>
     </div>

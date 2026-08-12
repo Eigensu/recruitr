@@ -51,3 +51,12 @@ class UserUpdate(BaseModel):
     """Payload for PATCH /auth/me."""
 
     full_name: str | None = Field(None, max_length=120)
+
+
+class RefereeOTPRequest(BaseModel):
+    email: EmailStr
+
+
+class RefereeOTPVerify(BaseModel):
+    email: EmailStr
+    otp: str
