@@ -26,6 +26,11 @@ export default async function DashboardLayout({
   // correcting itself once the response came back.
   const user = await getUserServer();
 
+  if (user?.role === "referee") {
+    const { redirect } = await import("next/navigation");
+    redirect("/referee");
+  }
+
   return (
     <ToastProvider>
       <RouteGuard>

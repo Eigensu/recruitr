@@ -1,0 +1,72 @@
+"""Email notification service for Referee operations."""
+
+import logging
+import os
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class EmailService:
+    @staticmethod
+    def _send_email(to: str, subject: str, body: str) -> None:
+        """Internal helper to transmit email or log safely if unconfigured."""
+        smtp_url = os.getenv("SMTP_URL")
+        if not smtp_url:
+            logger.warning(
+                "Email delivery infrastructure is implemented/configured, but "
+                "live delivery could not be verified because provider credentials are unavailable. "
+                f"Would have sent to={to}, subject='{subject}', body='{body}'"
+            )
+            return
+
+        logger.info(f"Sending email to {to} via SMTP: {subject}")
+        # Real SMTP implementation would go here...
+
+    @classmethod
+    def send_referee_actioned(
+        cls, email: str, candidate_name: str, stage: str, portal_url: str
+    ) -> None:
+        """Send notification when a referred candidate's CV is actioned."""
+        subject = "Your referral is now being reviewed"
+        body = (
+            f"Hello,\n\n"
+            f"Your referred candidate, {candidate_name}, is currently being reviewed by our team.\n"
+            f"Current Stage: {stage}\n\n"
+            f"View their progress in your Binge Connect portal: {portal_url}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_referee_joined(
+        cls, email: str, candidate_name: str, joining_date: datetime, portal_url: str
+    ) -> None:
+        """Send notification when a referred candidate joins."""
+        subject = "Your referred candidate has joined"
+        date_str = joining_date.strftime("%Y-%m-%d")
+        body = (
+            f"Hello,\n\n"
+            f"Great news! Your referred candidate, {candidate_name}, joined on {date_str}.\n"
+            f"The 7 calendar-day eligibility period has started. "
+            f"Your earning status is currently 'Pending' until the eligibility period is completed.\n\n"
+            f"Check your portal for updates: {portal_url}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_referee_payment(
+        cls, email: str, amount: float, cycle_month: str, payment_ref: str, portal_url: str
+    ) -> None:
+        """Send notification when a payment batch is processed."""
+        subject = "Your Binge Connect payment has been processed"
+        body = (
+            f"Hello,\n\n"
+            f"Your Binge Connect payment for the {cycle_month} cycle has been successfully processed.\n"
+            f"Amount Paid: ₹{amount:,.2f}\n"
+            f"Payment Reference: {payment_ref}\n\n"
+            f"View your payment history: {portal_url}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)

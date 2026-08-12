@@ -73,17 +73,26 @@ async def find_client_authorization(email: str):
     return await ClientUser.find_one({"email": email.strip().lower(), "is_active": True})
 
 
-async def may_sign_in(email: str) -> tuple[bool, bool]:
-    """(allowed, is_client) for an address arriving at sign-up or OAuth.
+async def find_referee_authorization(email: str):
+    """The active RefereeUser grant for this address, if an admin created one."""
+    from app.modules.recruitment.models import RefereeUser
+
+    return await RefereeUser.find_one({"email": email.strip().lower(), "is_active": True})
+
+
+async def may_sign_in(email: str) -> tuple[bool, bool, bool]:
+    """(allowed, is_client, is_referee) for an address arriving at sign-up or OAuth.
 
     Staff is checked first: an agency address that also appears on a client's
     contact list stays staff rather than being demoted to a client account.
     """
     if await may_hold_staff_account(email):
-        return True, False
+        return True, False, False
     if await find_client_authorization(email) is not None:
-        return True, True
-    return False, False
+        return True, True, False
+    if await find_referee_authorization(email) is not None:
+        return True, False, True
+    return False, False, False
 
 
 def warn_if_unconfigured() -> None:
