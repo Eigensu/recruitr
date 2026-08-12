@@ -116,7 +116,10 @@ function withQuery(path: string, query?: Record<string, QueryValue>) {
   return queryString ? `${path}?${queryString}` : path;
 }
 
-async function dashboardFetch<T>(path: string, query?: Record<string, QueryValue>): Promise<T> {
+export async function dashboardFetch<T>(
+  path: string,
+  query?: Record<string, QueryValue>,
+): Promise<T> {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore
     .getAll()
