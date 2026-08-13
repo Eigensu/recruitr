@@ -22,7 +22,7 @@ export default function SignOutButton() {
           sessionStorage.removeItem(key);
         }
       }
-      router.push("/sign-in");
+      window.location.href = "/sign-in";
     }
   };
 

@@ -29,7 +29,7 @@ export default function RefereePortal() {
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
-      router.push("/sign-in");
+      window.location.href = "/sign-in";
     }
   }
 
