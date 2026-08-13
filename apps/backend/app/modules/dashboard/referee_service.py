@@ -115,6 +115,49 @@ def calculate_incentive_amount(role_level: str, total_eligible_in_cycle: int) ->
     return 0.0
 
 
+async def update_eligibility_and_incentives(
+    brand_id: PydanticObjectId, referee_id: PydanticObjectId
+) -> None:
+    """Check +7 calendar days eligibility and update matrix for a specific referee."""
+    now = datetime.now(UTC)
+    today = now.date()
+    current_cycle_month = today.strftime("%Y-%m")
+
+    referrals = await ReferralRecord.find(
+        {
+            "brand_id": brand_id,
+            "referee_id": referee_id,
+            "payment_status": {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]},
+        }
+    ).to_list()
+
+    from collections import defaultdict
+
+    cycle_groups = defaultdict(list)
+
+    for r in referrals:
+        await sync_referral_with_mapping(r)
+
+        if r.joining_date and not r.joining_plus7_eligible:
+            eligible_date = (r.joining_date + timedelta(days=7)).date()
+            if eligible_date <= today:
+                r.joining_plus7_eligible = True
+                r.payment_status = PaymentStatus.owed.value
+                r.cycle_month = current_cycle_month
+                await r.save()
+
+        if r.joining_plus7_eligible and r.cycle_month:
+            cycle_groups[r.cycle_month].append(r)
+
+    for _cycle_month, cycle_refs in cycle_groups.items():
+        eligible_count = len(cycle_refs)
+        for r in cycle_refs:
+            new_incentive = calculate_incentive_amount(r.role_level or "Entry", eligible_count)
+            if r.incentive_amount != new_incentive:
+                r.incentive_amount = new_incentive
+                await r.save()
+
+
 async def process_daily_referee_updates() -> None:
     """Check +7 calendar days eligibility, update matrix, and send emails."""
     now = datetime.now(UTC)
