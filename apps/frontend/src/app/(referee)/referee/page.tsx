@@ -14,20 +14,18 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import { useRefereeData } from "@/hooks/useRefereeData";
+import { useApiFetch } from "@/lib/api";
 
 export default function RefereePortal() {
   const { summary, referrals, payments, isLoading, error } = useRefereeData();
   const router = useRouter();
+  const apiFetch = useApiFetch();
 
   async function handleLogout() {
     try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/auth/logout`,
-        {
-          method: "POST",
-          credentials: "include",
-        },
-      );
+      await apiFetch("/api/v1/auth/logout", {
+        method: "POST",
+      });
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {

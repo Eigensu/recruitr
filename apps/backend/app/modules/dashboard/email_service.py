@@ -1,5 +1,6 @@
 """Email notification service for Referee operations."""
 
+import html
 import logging
 import os
 from datetime import datetime
@@ -47,9 +48,9 @@ class EmailService:
         subject = "Your referral is now being reviewed"
         body = (
             f"Hello,\n\n"
-            f"Your referred candidate, {candidate_name}, is currently being reviewed by our team.\n"
-            f"Current Stage: {stage}\n\n"
-            f"View their progress in your Binge Connect portal: {portal_url}\n\n"
+            f"Your referred candidate, {html.escape(candidate_name)}, is currently being reviewed by our team.\n"
+            f"Current Stage: {html.escape(stage)}\n\n"
+            f"View their progress in your Binge Connect portal: {html.escape(portal_url)}\n\n"
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
@@ -63,10 +64,10 @@ class EmailService:
         date_str = joining_date.strftime("%Y-%m-%d")
         body = (
             f"Hello,\n\n"
-            f"Great news! Your referred candidate, {candidate_name}, joined on {date_str}.\n"
+            f"Great news! Your referred candidate, {html.escape(candidate_name)}, joined on {html.escape(date_str)}.\n"
             f"The 7 calendar-day eligibility period has started. "
             f"Your earning status is currently 'Pending' until the eligibility period is completed.\n\n"
-            f"Check your portal for updates: {portal_url}\n\n"
+            f"Check your portal for updates: {html.escape(portal_url)}\n\n"
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
@@ -79,10 +80,10 @@ class EmailService:
         subject = "Your Binge Connect payment has been processed"
         body = (
             f"Hello,\n\n"
-            f"Your Binge Connect payment for the {cycle_month} cycle has been successfully processed.\n"
+            f"Your Binge Connect payment for the {html.escape(cycle_month)} cycle has been successfully processed.\n"
             f"Amount Paid: ₹{amount:,.2f}\n"
-            f"Payment Reference: {payment_ref}\n\n"
-            f"View your payment history: {portal_url}\n\n"
+            f"Payment Reference: {html.escape(payment_ref)}\n\n"
+            f"View your payment history: {html.escape(portal_url)}\n\n"
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
@@ -93,7 +94,7 @@ class EmailService:
         subject = "Your Binge Connect Login Code"
         body = (
             f"Hello,\n\n"
-            f"Your Binge Connect Referee Portal login code is: {otp_code}\n\n"
+            f"Your Binge Connect Referee Portal login code is: {html.escape(otp_code)}\n\n"
             f"This code will expire in 15 minutes.\n"
             f"If you did not request this code, you can safely ignore this email.\n\n"
             f"Best,\nThe Binge Connect Team"
