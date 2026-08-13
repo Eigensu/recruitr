@@ -30,6 +30,7 @@ from app.modules.recruitment.models import (
     Mapping,
     Position,
     RecruiterTag,
+    RefereeUser,
     Team,
 )
 
@@ -61,6 +62,7 @@ async def init_test_db() -> AsyncGenerator[None, None]:
             ActivityLog,
             CandidateEvent,
             CandidateDocument,
+            RefereeUser,
             # Gamification
             RecruiterProfile,
             # Leaderboard
