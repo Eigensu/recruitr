@@ -94,7 +94,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "resend", specifier = ">=2.36.0" }]
+requires-dist = [{ name = "resend" }]
 
 [[package]]
 name = "idna"

@@ -21,4 +21,4 @@ celery[redis]>=5.4.0
 email-validator>=2.1.0
 dnspython>=2.6.1 # not directly required, pinned by Snyk to avoid a vulnerability
 idna>=3.15 # not directly required, pinned by Snyk to avoid a vulnerability
-resend>=2.36.0
+resend
