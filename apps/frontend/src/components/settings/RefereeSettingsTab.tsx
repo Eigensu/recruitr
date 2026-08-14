@@ -135,11 +135,10 @@ export default function RefereeSettingsTab() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-text-secondary mb-1">
-                    Email Address
+                    Email Address (Optional)
                   </label>
                   <input
                     type="email"
-                    required
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="jane@example.com"
@@ -159,7 +158,7 @@ export default function RefereeSettingsTab() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !inviteEmail.trim()}
+                  disabled={isSubmitting}
                   className="px-4 py-2 bg-navy dark:bg-yellow dark:text-navy text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? "Provisioning..." : "Provision Referee"}

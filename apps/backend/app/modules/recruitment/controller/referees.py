@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
 from app.dependencies import get_tenant, require_admin
@@ -68,6 +70,12 @@ async def invite_referee(tenant: _Tenant, payload: RefereeUserInvite):
     a User here would hand the address full agency access.
     """
     email = payload.email.strip().lower()
+    if not email:
+        # TODO(aagam): email is being made optional for referees; until that's
+        # properly modeled (nullable field + partial index), fall back to a
+        # unique placeholder so blank invites don't collide on the unique
+        # (brand_id, email) index.
+        email = f"referee-{uuid4().hex[:12]}@placeholder.eigensu.test"
 
     existing = await RefereeUser.find_one({"brand_id": tenant.brand_id, "email": email})
     if existing:
@@ -87,7 +95,12 @@ async def invite_referee(tenant: _Tenant, payload: RefereeUserInvite):
         role=payload.role,
         invited_by_id=tenant.employee_id,
     )
-    await doc.insert()
+    try:
+        await doc.insert()
+    except DuplicateKeyError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"{email} is already authorized as a referee"
+        ) from None
     return _to_user_response(doc)
 
 
