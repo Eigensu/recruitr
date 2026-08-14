@@ -53,35 +53,47 @@ async def get_dashboard_summary(
     brand_id: PydanticObjectId, referee_id: PydanticObjectId
 ) -> dict[str, Any]:
     """Calculate summary statistics for the referee's dashboard."""
+    from app.modules.recruitment.enums import CandidateEventType
+    from app.modules.recruitment.models import Candidate, CandidateEvent, Mapping
+
+    candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
+
+    cvs_shared = len(candidates)
+
+    cvs_actioned = 0
+    candidate_ids = [c.id for c in candidates]
+
+    if candidate_ids:
+        mappings = await Mapping.find(
+            {"brand_id": brand_id, "candidate_id": {"$in": candidate_ids}}
+        ).to_list()
+
+        mapped_candidate_ids = {m.candidate_id for m in mappings}
+
+        for c in candidates:
+            if c.id in mapped_candidate_ids:
+                cvs_actioned += 1
+                continue
+
+            has_activity = await CandidateEvent.find(
+                {
+                    "brand_id": brand_id,
+                    "candidate_id": c.id,
+                    "event_type": {
+                        "$nin": [CandidateEventType.applied.value, CandidateEventType.mapped.value]
+                    },
+                }
+            ).exists()
+
+            if has_activity:
+                cvs_actioned += 1
+
     referrals = await ReferralRecord.find(
         {"brand_id": brand_id, "referee_id": referee_id}
     ).to_list()
 
     for r in referrals:
         await sync_referral_with_mapping(r)
-
-    cvs_shared = len(referrals)
-
-    from app.modules.recruitment.enums import CandidateEventType
-    from app.modules.recruitment.models import CandidateEvent
-
-    cvs_actioned = 0
-    for r in referrals:
-        if r.kanban_stage != RefereeKanbanStage.cv_received.value:
-            cvs_actioned += 1
-            continue
-
-        has_activity = await CandidateEvent.find(
-            {
-                "brand_id": brand_id,
-                "candidate_id": r.candidate_id,
-                "position_id": r.position_id,
-                "event_type": {"$ne": CandidateEventType.mapped.value},
-            }
-        ).exists()
-
-        if has_activity:
-            cvs_actioned += 1
 
     accrued_earnings = sum(
         r.incentive_amount
@@ -243,37 +255,57 @@ async def get_referrals(
 ) -> list[dict[str, Any]]:
     """Get the candidate journey for the referee."""
     # DO NOT call update_eligibility_and_incentives here. This is a read-only endpoint.
+    from app.modules.recruitment.models import Candidate
+
+    candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
 
     referrals = await ReferralRecord.find(
         {"brand_id": brand_id, "referee_id": referee_id}
     ).to_list()
 
-    from app.modules.recruitment.models import Candidate
+    referral_map = {r.candidate_id: r for r in referrals}
 
     result = []
-    for r in referrals:
-        candidate = await Candidate.get(r.candidate_id)
-        candidate_name = candidate.full_name if candidate else "Unknown Candidate"
-
+    for candidate in candidates:
+        candidate_name = candidate.full_name if candidate.full_name else "Unknown Candidate"
         parts = candidate_name.split()
         masked_name = f"{parts[0]} {parts[-1][0]}." if len(parts) > 1 else candidate_name
 
-        result.append(
-            {
-                "id": str(r.id),
-                "candidate_name": masked_name,
-                "role_level": r.role_level,
-                "submission_date": r.submission_date,
-                "kanban_stage": r.kanban_stage,
-                "joining_date": r.joining_date,
-                "joining_plus7_eligible": r.joining_plus7_eligible,
-                "incentive_status": r.payment_status,
-                "incentive_amount": r.incentive_amount,
-                "payment_status": r.payment_status,
-                "payment_date": r.payment_date,
-            }
-        )
+        if candidate.id in referral_map:
+            r = referral_map[candidate.id]
+            result.append(
+                {
+                    "id": str(r.id),
+                    "candidate_name": masked_name,
+                    "role_level": r.role_level,
+                    "submission_date": r.submission_date,
+                    "kanban_stage": r.kanban_stage,
+                    "joining_date": r.joining_date,
+                    "joining_plus7_eligible": r.joining_plus7_eligible,
+                    "incentive_status": r.payment_status,
+                    "incentive_amount": r.incentive_amount,
+                    "payment_status": r.payment_status,
+                    "payment_date": r.payment_date,
+                }
+            )
+        else:
+            result.append(
+                {
+                    "id": str(candidate.id),
+                    "candidate_name": masked_name,
+                    "role_level": None,
+                    "submission_date": candidate.created_at,
+                    "kanban_stage": "CV Received",
+                    "joining_date": None,
+                    "joining_plus7_eligible": False,
+                    "incentive_status": "PENDING",
+                    "incentive_amount": 0.0,
+                    "payment_status": "PENDING",
+                    "payment_date": None,
+                }
+            )
 
+    result.sort(key=lambda x: x["submission_date"], reverse=True)
     return result
 
 
