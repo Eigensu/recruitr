@@ -166,8 +166,8 @@ async function ClientOverviewSection() {
               Your Pipeline at a Glance
             </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              A closer look at your open roles and where candidates stand, without digging
-              through every tab.
+              A closer look at your open roles and where candidates stand, without digging through
+              every tab.
             </p>
           </div>
 
@@ -226,9 +226,7 @@ export default async function DashboardPage() {
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                {isClient
-                  ? `Welcome, ${user?.client_name ?? "back"}`
-                  : "Recruitment Dashboard"}
+                {isClient ? `Welcome, ${user?.client_name ?? "back"}` : "Recruitment Dashboard"}
               </h1>
             </div>
             <div className="mt-1 shrink-0">

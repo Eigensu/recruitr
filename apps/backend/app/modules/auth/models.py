@@ -1,14 +1,14 @@
 """Beanie Document model for the User."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from beanie import Document, Replace, Update, before_event
 from pydantic import Field
 from pymongo import IndexModel
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """Access tier for a login user. Hierarchy: admin ⊇ maintainer ⊇ employee.
 
     - employee: regular recruiter; appears in the leaderboard and earns points.

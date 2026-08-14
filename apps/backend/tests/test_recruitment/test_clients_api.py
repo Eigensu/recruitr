@@ -15,7 +15,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_current_user_doc, get_tenant
+from app.dependencies import get_current_user_doc, get_tenant, get_viewer
 from app.main import app
 from app.modules.auth.models import UserRole
 from app.modules.recruitment.models import Client, Position
@@ -27,14 +27,26 @@ _EMP_A = PydanticObjectId()
 
 TENANT_A = TenantScope(brand_id=_BRAND_A, employee_id=_EMP_A)
 
-_ADMIN = SimpleNamespace(role=UserRole.admin, email="admin@test.com")
-_MAINTAINER = SimpleNamespace(role=UserRole.maintainer, email="boss@test.com")
+# Stand-ins for a User document. `id` is not optional: endpoints that resolve an
+# Employee read `user.id` directly (service_impl.resolve_employee_for_user),
+# unlike email/name/role which it reads defensively via getattr.
+_ADMIN = SimpleNamespace(
+    id=PydanticObjectId(), role=UserRole.admin, email="admin@test.com", full_name="Admin A"
+)
+_MAINTAINER = SimpleNamespace(
+    id=PydanticObjectId(), role=UserRole.maintainer, email="boss@test.com", full_name="Boss"
+)
 
 
 @pytest_asyncio.fixture
 async def admin_a():
     """Brand A client whose user is an admin — passes require_admin."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    # Not every endpoint these tests touch scopes through get_tenant:
+    # GET /positions/filters uses get_viewer (the staff-or-client path). Without
+    # this it resolves a real Employee from the stub user, finds no brand on it,
+    # and 403s with "User is not assigned to a brand".
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     app.dependency_overrides[get_current_user_doc] = lambda: _ADMIN
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
@@ -232,7 +244,16 @@ async def test_update_city_only_keeps_name(admin_a: AsyncClient) -> None:
     created = await _create(admin_a, "Hunger Inc", "Mumbai")
     res = await admin_a.patch(f"/api/v1/clients/{created['id']}", json={"city": "Pune"})
     assert res.status_code == 200
-    assert res.json() == {**created, "city": "Pune"}
+
+    # Timestamps are excluded rather than compared: POST serialises the value it
+    # holds in memory (microseconds, tz-aware → trailing "Z") while PATCH
+    # serialises what Mongo gave back (milliseconds, naive → no "Z"), so the two
+    # never match byte-for-byte even for a field neither request touched. Every
+    # other field is compared, which is what this test is actually about.
+    _TIMESTAMPS = {"created_at", "updated_at"}
+    without_timestamps = {k: v for k, v in res.json().items() if k not in _TIMESTAMPS}
+    expected = {k: v for k, v in {**created, "city": "Pune"}.items() if k not in _TIMESTAMPS}
+    assert without_timestamps == expected
 
 
 @pytest.mark.asyncio

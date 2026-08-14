@@ -20,6 +20,7 @@ from app.main import app
 from app.modules.auth.models import UserRole
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import TenantScope
+from tests.test_recruitment.payloads import candidate_payload
 
 _BRAND = PydanticObjectId()
 _PRIYA = PydanticObjectId()
@@ -30,14 +31,14 @@ AS_KARAN = TenantScope(brand_id=_BRAND, employee_id=_KARAN)
 AS_MANAGER = TenantScope(brand_id=_BRAND, employee_id=PydanticObjectId(), role=UserRole.maintainer)
 
 CV_LINK = "https://drive.example.com/cv/anita.pdf"
-PAYLOAD = {
-    "full_name": "Anita Rao",
-    "email": "anita@test.com",
-    "phone": "+91 98765 00002",
-    "experience_years": 4,
-    "skills": ["Mixology"],
-    "cv_link": CV_LINK,
-}
+PAYLOAD = candidate_payload(
+    full_name="Anita Rao",
+    email="anita@test.com",
+    phone="+91 98765 00002",
+    experience_years=4,
+    skills=["Mixology"],
+    cv_link=CV_LINK,
+)
 
 
 @pytest_asyncio.fixture

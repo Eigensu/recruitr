@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class BadgeRarityEnum(str, Enum):
+class BadgeRarityEnum(StrEnum):
     COMMON = "common"
     RARE = "rare"
     EPIC = "epic"

@@ -124,36 +124,14 @@ or run **Actions → Deploy UAT → Run workflow**.
 
 The run does three things in order:
 
-1. **Verify (advisory)** — ruff lint + format check, the pytest suite against a throwaway Mongo
-   replica set, and eslint on the frontend. Results land on the run summary but **do not block the
-   deploy** — see [Why verify is advisory](#why-verify-is-advisory).
+1. **Verify** — the full CI suite from `.github/workflows/ci.yml`, called as a reusable workflow so
+   a check added to CI gates UAT automatically. A failure here stops the deploy.
 2. **Deploy backend** — `railway up` into the `uat` environment, then polls
    `https://api.uat.recruitr.in/health` for up to five minutes.
 3. **Deploy frontend** — `vercel build --prod` + `vercel deploy --prebuilt --prod`.
 
 The frontend only ships if the backend answered `/health`, so UAT never ends up serving a new UI
 against a backend that failed to boot.
-
-## Why verify is advisory
-
-Every check in the verify job fails on `main` today, so wiring it as a blocking gate would have
-meant UAT could never deploy at all. Measured on `main` at the time this pipeline was written:
-
-| Check | State |
-| --- | --- |
-| `ruff check` | 4 errors — 3× UP042 (`class X(str, Enum)`), 1× unsorted imports in `fix_index.py` |
-| `ruff format --check` | 1 file unformatted |
-| `pytest` | 39 of 89 failing |
-| `pnpm --filter frontend lint` | 1 error — `set-state-in-effect` in `ClientMessagingBanner.tsx` |
-
-Most of the pytest failures are HTTP 422s: the fixtures build candidate payloads without a
-`communication` field the schema now requires. The remainder compare timestamps — Mongo truncates
-datetimes to milliseconds and drops the `Z`, so a value read back never equals the one just sent.
-None of that is caused by the UAT work; the pre-commit hook only lints *staged* files, so the rest
-of the tree drifted.
-
-Fixing those is worth its own PR. When it lands, delete the four `continue-on-error: true` lines
-in `.github/workflows/deploy-uat.yml` and the job becomes a real gate — no other change needed.
 
 ## Health
 
