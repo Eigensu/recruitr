@@ -177,6 +177,7 @@ class RefereeUser(Document):
 
     brand_id: PydanticObjectId
     email: str  # lowercased; unique within brand
+    connect_code: str = Field(unique=True)
     name: str | None = None
     role: str = "referee"
     user_id: PydanticObjectId | None = None  # FK → users._id, once they sign up
@@ -285,6 +286,8 @@ class Candidate(Document):
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     status: CandidateStatus = CandidateStatus.approved
+    # The referee who referred this candidate (if any) — FK → referee_users._id
+    referee_id: PydanticObjectId | None = None
     # The recruiter who put this person in the pool — FK → employees._id. Null
     # for public-form applications (nobody sourced them) and for records that
     # predate the field. Ownership gates who may open the CV: see

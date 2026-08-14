@@ -58,19 +58,3 @@ class User(Document):
                 partialFilterExpression={"google_id": {"$type": "string"}},
             ),
         ]
-
-
-class OTPToken(Document):
-    email: str
-    otp_hash: str
-    expires_at: datetime
-    attempts: int = 0
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    class Settings:
-        name = "otp_tokens"
-        indexes = [
-            IndexModel("email", unique=True),
-            # Automatically delete expired OTPs
-            IndexModel("expires_at", expireAfterSeconds=0),
-        ]

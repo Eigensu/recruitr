@@ -6,6 +6,7 @@ export interface RefereeUser {
   email: string;
   name: string | null;
   role: string;
+  connect_code: string;
   is_active: boolean;
   last_login: string | null;
   created_at: string;

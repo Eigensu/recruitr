@@ -10,6 +10,8 @@ import {
   IconSend,
   IconTargetArrow,
   IconUsers,
+  IconFileCv,
+  IconWallet,
 } from "@tabler/icons-react";
 
 export const KPI_ICON_MAP = {
@@ -25,6 +27,10 @@ export const KPI_ICON_MAP = {
   open_roles: IconBriefcase,
   in_process: IconUsers,
   avg_days_to_shortlist: IconClockHour4,
+  // Referee dashboard hero metrics
+  referee_cvs_shared: IconFileCv,
+  referee_cvs_actioned: IconBriefcase,
+  referee_earnings: IconWallet,
 } as const;
 
 export const ANALYTICS_ICON_MAP = {

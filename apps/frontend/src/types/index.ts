@@ -20,6 +20,8 @@ export interface UserInfo {
   /** Set only for the client role — the employer company this login is scoped to. */
   client_id?: string | null;
   client_name?: string | null;
+  /** Set only for the referee role. */
+  connect_code?: string | null;
 }
 
 // ── Referee Portal ─────────────────────────────────────────────────────────────

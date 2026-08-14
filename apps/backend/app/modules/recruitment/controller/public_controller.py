@@ -30,7 +30,7 @@ from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
-from app.modules.recruitment.models import Candidate
+from app.modules.recruitment.models import Candidate, RefereeUser
 from app.modules.recruitment.repository_impl import record_candidate_event
 from app.modules.recruitment.schemas import CandidateResponse, TenantScope
 from app.modules.recruitment.services.resume_service import process_resume_bytes
@@ -186,6 +186,12 @@ async def public_apply(
         parsed_exp,
     ) = await _process_resume_upload(resume, automation)
 
+    referee_id = None
+    if connect_code:
+        referee = await RefereeUser.find_one({"connect_code": connect_code, "is_active": True})
+        if referee:
+            referee_id = referee.id
+
     try:
         doc = Candidate(
             brand_id=target_brand_id,
@@ -207,6 +213,7 @@ async def public_apply(
             source="external",
             source_channel=source_channel,
             connect_code=connect_code,
+            referee_id=referee_id,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:

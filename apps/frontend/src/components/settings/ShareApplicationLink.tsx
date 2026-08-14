@@ -22,7 +22,9 @@ export default function ShareApplicationLink() {
   // content once the user has loaded, so guard rather than assume.
   const link =
     domain && typeof window !== "undefined"
-      ? `${window.location.origin}/form/${encodeURIComponent(domain)}`
+      ? `${window.location.origin}/form/${encodeURIComponent(domain)}${
+          user.connect_code ? `?connectCode=${encodeURIComponent(user.connect_code)}` : ""
+        }`
       : null;
 
   async function copy() {

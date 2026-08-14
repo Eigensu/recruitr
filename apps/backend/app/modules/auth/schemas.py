@@ -45,18 +45,11 @@ class UserInfoResponse(BaseModel):
     # signed-in client as someone who never finished onboarding.
     client_id: str | None = None
     client_name: str | None = None
+    # Referee context
+    connect_code: str | None = None
 
 
 class UserUpdate(BaseModel):
     """Payload for PATCH /auth/me."""
 
     full_name: str | None = Field(None, max_length=120)
-
-
-class RefereeOTPRequest(BaseModel):
-    email: EmailStr
-
-
-class RefereeOTPVerify(BaseModel):
-    email: EmailStr
-    otp: str

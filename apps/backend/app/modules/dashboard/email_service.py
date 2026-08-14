@@ -87,16 +87,3 @@ class EmailService:
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
-
-    @classmethod
-    def send_referee_otp(cls, email: str, otp_code: str) -> None:
-        """Send OTP code securely."""
-        subject = "Your Binge Connect Login Code"
-        body = (
-            f"Hello,\n\n"
-            f"Your Binge Connect Referee Portal login code is: {html.escape(otp_code)}\n\n"
-            f"This code will expire in 15 minutes.\n"
-            f"If you did not request this code, you can safely ignore this email.\n\n"
-            f"Best,\nThe Binge Connect Team"
-        )
-        cls._send_email(to=email, subject=subject, body=body, secure_log=True)

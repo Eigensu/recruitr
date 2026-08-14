@@ -7,7 +7,7 @@ from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
 from app.config import settings
-from app.modules.auth.models import OTPToken, User
+from app.modules.auth.models import User
 from app.modules.brands.models import Brand
 from app.modules.gamification.models import RecruiterProfile
 from app.modules.leaderboard.models import (
@@ -56,7 +56,6 @@ async def init_db() -> None:
     document_models = [
         # Auth
         User,
-        OTPToken,
         Brand,
         # Recruitment domain (unified, replaces old positions/candidates/pipeline modules)
         Counter,

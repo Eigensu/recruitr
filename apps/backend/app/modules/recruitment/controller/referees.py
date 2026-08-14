@@ -7,6 +7,7 @@ DELETE /referees/{id}          revoke a referee — admin only
 
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
@@ -44,10 +45,17 @@ def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
         name=doc.name,
         role=doc.role,
         is_active=doc.is_active,
+        connect_code=doc.connect_code,
         last_login=doc.last_login,
         created_at=doc.created_at,
         updated_at=doc.updated_at,
     )
+
+
+def _generate_connect_code() -> str:
+    # 8 characters, uppercase alphanumeric, exclude O, 0, I, 1, L
+    allowed_chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(random.choices(allowed_chars, k=8))
 
 
 @router.get("", response_model=list[RefereeUserResponse])
@@ -88,19 +96,29 @@ async def invite_referee(tenant: _Tenant, payload: RefereeUserInvite):
         await existing.set(_stamp({"is_active": True, "name": payload.name, "role": payload.role}))
         return _to_user_response(existing)
 
-    doc = RefereeUser(
-        brand_id=tenant.brand_id,
-        email=email,
-        name=payload.name,
-        role=payload.role,
-        invited_by_id=tenant.employee_id,
-    )
-    try:
-        await doc.insert()
-    except DuplicateKeyError:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"{email} is already authorized as a referee"
-        ) from None
+    while True:
+        doc = RefereeUser(
+            brand_id=tenant.brand_id,
+            email=email,
+            name=payload.name,
+            role=payload.role,
+            connect_code=_generate_connect_code(),
+            invited_by_id=tenant.employee_id,
+        )
+        try:
+            await doc.insert()
+            break
+        except DuplicateKeyError as exc:
+            if (
+                "email_1" in str(exc)
+                or "brand_id_1_email_1" in str(exc)
+                or f"'{email}'" in str(exc)
+            ):
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT, f"{email} is already authorized as a referee"
+                ) from None
+            # If the duplicate key is on connect_code, it will loop and try again.
+
     return _to_user_response(doc)
 
 

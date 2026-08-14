@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { IconAlertCircle, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { clientPublicApply } from "@/lib/api/candidates.client";
@@ -37,6 +38,12 @@ interface ApplicationFormProps {
   /** Bare agency id, for links that carry one without a resolvable domain.
    *  Used only when `brand` is absent, and renders no agency branding. */
   brandId?: string | null;
+  /** Whether this form is rendered inside the dashboard app. Strips the page shell. */
+  isEmbedded?: boolean;
+  /** Pre-fill the connect code, bypassing the URL search params. */
+  initialConnectCode?: string | null;
+  /** Pre-fill the source channel. */
+  initialSourceChannel?: string | null;
 }
 
 const inputCls =
@@ -126,11 +133,17 @@ function Section({
   );
 }
 
-export default function ApplicationForm({ brand, brandId }: Readonly<ApplicationFormProps>) {
+export default function ApplicationForm({ brand, brandId, isEmbedded, initialConnectCode, initialSourceChannel }: Readonly<ApplicationFormProps>) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const searchParams = useSearchParams();
+  const queryConnectCode = searchParams?.get("connectCode") ?? "";
+  
+  const startingConnectCode = initialConnectCode ?? queryConnectCode;
+  const startingSourceChannel = initialSourceChannel ?? (startingConnectCode ? "Connected by a Binge Partner" : "");
 
   const [form, setForm] = useState({
     fullName: "",
@@ -139,9 +152,9 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     city: "",
     currentRole: "",
     educationLevel: "",
-    sourceChannel: "",
+    sourceChannel: startingSourceChannel,
     sourceChannelOther: "",
-    connectCode: "",
+    connectCode: startingConnectCode,
   });
   const [resume, setResume] = useState<File | null>(null);
 
@@ -230,6 +243,21 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   );
 
   if (success) {
+    if (isEmbedded) {
+      return (
+        <div className="w-full max-w-2xl mx-auto rounded-2xl border border-border bg-surface p-8 text-center text-text-primary shadow-sm mt-8">
+          <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-green-500/10 text-green-600">
+            <IconCheck className="size-6" />
+          </div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
+            Application received
+          </h1>
+          <p className="mt-3 text-sm text-text-secondary">
+            Your candidate has been successfully submitted to {brand?.name ?? "the hiring team"}.
+          </p>
+        </div>
+      );
+    }
     return (
       <main className="relative flex min-h-dvh items-center justify-center bg-shell p-4 font-sans theme-transition">
         {/* This screen has no header, and it is where an applicant may sit for a
@@ -252,17 +280,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       </main>
     );
   }
-
-  return (
-    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
-      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
-        {masthead}
-        <ThemeToggle size="lg" />
-      </header>
-
-      <div className="flex justify-center px-4 pb-16 sm:px-6">
-        <div className="w-full max-w-2xl">
-          <div className="mb-7">
+  const formContent = (
+    <div className={`flex justify-center ${isEmbedded ? "" : "px-4 pb-16 sm:px-6"}`}>
+      <div className={`w-full ${isEmbedded ? "" : "max-w-2xl"}`}>
+        <div className="mb-7">
             <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
               Find Your Next Job
             </h1>
@@ -461,6 +482,19 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           </p>
         </div>
       </div>
+  );
+
+  if (isEmbedded) {
+    return formContent;
+  }
+
+  return (
+    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
+      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
+        {masthead}
+        <ThemeToggle size="lg" />
+      </header>
+      {formContent}
     </main>
   );
 }
