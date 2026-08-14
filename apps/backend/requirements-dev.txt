@@ -1,0 +1,8 @@
+# Development/CI dependencies — runtime deps plus the tooling needed to lint and
+# test. requirements.txt is the real dependency manifest for this app (uv.lock
+# tracks only the virtual project and pins nothing), so CI installs from here.
+-r requirements.txt
+
+pytest>=8.0.0
+pytest-asyncio>=0.24.0  # tests rely on asyncio_mode = "auto" from pyproject.toml
+ruff>=0.8.0

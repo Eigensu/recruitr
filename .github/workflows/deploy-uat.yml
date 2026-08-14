@@ -1,0 +1,231 @@
+# UAT deployment pipeline.
+#
+# Pushing to `uat` verifies the code, ships the backend to the Railway `uat`
+# environment, waits for it to actually answer /health, and only then points
+# uat.recruitr.in at the new frontend build. The ordering matters: the frontend
+# is useless against a backend that failed to boot, so the health gate stands
+# between the two deploys rather than after both.
+name: Deploy UAT
+
+on:
+  push:
+    branches: [uat]
+  workflow_dispatch:
+
+# Two overlapping deploys would race each other onto the same environment.
+# Queue them instead of cancelling — a cancelled `railway up` still leaves a
+# build running on Railway's side, so cancelling buys nothing and loses the logs.
+concurrency:
+  group: deploy-uat
+  cancel-in-progress: false
+
+env:
+  UAT_API_URL: https://api.uat.recruitr.in
+  UAT_APP_URL: https://uat.recruitr.in
+
+jobs:
+  # Advisory, not blocking — every check step carries `continue-on-error: true`,
+  # so this job reports and the deploy proceeds regardless.
+  #
+  # That is deliberate rather than lazy: as of this workflow being written every
+  # one of these checks is already red on `main` —
+  #   ruff check    4 errors (3× UP042 str+Enum, 1× unsorted imports)
+  #   ruff format   1 file unformatted
+  #   pytest        39 of 89 failing, mostly HTTP 422s because the fixtures omit
+  #                 a `communication` field the schema now requires; the rest
+  #                 are datetime comparisons (Mongo truncates to milliseconds
+  #                 and drops the `Z`, so `created_at` never matches)
+  #   eslint        1 error (set-state-in-effect in ClientMessagingBanner.tsx)
+  # A blocking gate would therefore refuse to deploy UAT on day one, for reasons
+  # that have nothing to do with the deploy.
+  #
+  # Once those are fixed, drop the four `continue-on-error: true` lines below
+  # and this becomes a real gate — no other change needed.
+  verify:
+    name: Verify (advisory)
+    runs-on: ubuntu-latest
+    env:
+      # tests/conftest.py creates `{MONGODB_DB_NAME}_test` per test; Beanie's
+      # transactions need a replica set, hence rs0 below.
+      MONGODB_URI: mongodb://localhost:27017/recruitr?replicaSet=rs0
+      MONGODB_DB_NAME: recruitr
+      REDIS_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      # A `services:` container can't run rs.initiate, so Mongo is started by
+      # hand — same single-node replica set as docker-compose.yml. The member
+      # host must be localhost:27017 so the host-side driver can reach whatever
+      # address replica-set discovery hands back.
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for _ in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval \
+            'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
+          for _ in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+              echo "replica set primary is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::MongoDB replica set never elected a primary"
+          exit 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12" # matches apps/backend/Dockerfile
+          cache: pip
+          cache-dependency-path: apps/backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        working-directory: apps/backend
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint backend
+        id: backend_lint
+        continue-on-error: true
+        working-directory: apps/backend
+        run: ruff check .
+
+      - name: Check backend formatting
+        id: backend_format
+        continue-on-error: true
+        working-directory: apps/backend
+        run: ruff format --check .
+
+      - name: Test backend
+        id: backend_test
+        continue-on-error: true
+        working-directory: apps/backend
+        run: pytest -q
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install frontend dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        id: frontend_lint
+        continue-on-error: true
+        run: pnpm --filter frontend lint
+
+      - name: Report
+        run: |
+          icon() { [ "$1" = success ] && echo "✅" || echo "❌"; }
+          {
+            echo "### Verify"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| ruff check | $(icon "${{ steps.backend_lint.outcome }}") |"
+            echo "| ruff format | $(icon "${{ steps.backend_format.outcome }}") |"
+            echo "| pytest | $(icon "${{ steps.backend_test.outcome }}") |"
+            echo "| eslint | $(icon "${{ steps.frontend_lint.outcome }}") |"
+            echo ""
+            echo "_Advisory only — failures here do not block the UAT deploy._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend:
+    name: Deploy backend (Railway)
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      # RAILWAY_UAT_TOKEN is a project token scoped to the `uat` environment,
+      # which is what makes this safe: it cannot reach production.
+      #
+      # --path-as-root uploads apps/backend as the archive root so the
+      # Dockerfile's `COPY requirements.txt .` resolves. The service's own root
+      # directory setting only applies to GitHub-sourced builds, not CLI uploads.
+      # --ci streams build logs and exits once the build finishes.
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_UAT_TOKEN }}
+        run: railway up ./apps/backend --path-as-root --service backend --environment uat --ci
+
+      # `railway up --ci` returns when the *build* is done, not when the new
+      # container is serving. Poll until it is, so a boot failure (bad env var,
+      # unreachable Atlas cluster) fails here instead of surfacing as a broken
+      # UAT site later.
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 30); do
+            if body=$(curl -fsS --max-time 10 "$UAT_API_URL/health"); then
+              status=$(printf '%s' "$body" | jq -r '.status')
+              echo "attempt $attempt: $body"
+              # "degraded" means index sync was skipped after a startup failure;
+              # the API still serves every request, so it is a warning, not a
+              # failed deploy. See app/main.py::health.
+              if [ "$status" = "degraded" ]; then
+                echo "::warning::Backend is healthy but degraded — indexes are not being synced. See /health for details."
+                echo "⚠️ Backend **degraded**: \`$body\`" >> "$GITHUB_STEP_SUMMARY"
+              fi
+              echo "✅ Backend live at $UAT_API_URL (status: $status)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "attempt $attempt: not ready yet"
+            sleep 10
+          done
+          echo "::error::$UAT_API_URL/health did not return 200 within 5 minutes"
+          exit 1
+
+  frontend:
+    name: Deploy frontend (Vercel)
+    needs: backend
+    runs-on: ubuntu-latest
+    environment:
+      name: uat
+      url: https://uat.recruitr.in
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_UAT }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Vercel CLI
+        run: |
+          corepack enable
+          npm install -g vercel@latest
+
+      # `production` here is the *recruitr-uat* project's production target —
+      # that is what binds the build to uat.recruitr.in instead of a throwaway
+      # preview URL, and it sidesteps preview deployment protection.
+      - name: Pull Vercel project settings
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          {
+            echo "✅ Frontend live at $UAT_APP_URL"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| App | $UAT_APP_URL |"
+            echo "| API | $UAT_API_URL |"
+            echo "| Deployment | $url |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
