@@ -9,7 +9,7 @@ server is started from.
 import secrets
 from pathlib import Path
 
-from pydantic import ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,7 +36,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── MongoDB ──
-    MONGODB_URI: str = "mongodb://localhost:27017/recruitr"
+    MONGODB_URI: str = Field(
+        default="mongodb://localhost:27017/recruitr",
+        validation_alias=AliasChoices("MONGODB_URI", "MONGO_URL"),
+    )
     MONGODB_DB_NAME: str = "recruitr"
     ALLOW_INDEX_DROPPING: bool = False
 

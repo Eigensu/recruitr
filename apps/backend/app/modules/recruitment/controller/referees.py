@@ -10,7 +10,6 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
@@ -79,11 +78,7 @@ async def invite_referee(tenant: _Tenant, payload: RefereeUserInvite):
     """
     email = payload.email.strip().lower()
     if not email:
-        # TODO(aagam): email is being made optional for referees; until that's
-        # properly modeled (nullable field + partial index), fall back to a
-        # unique placeholder so blank invites don't collide on the unique
-        # (brand_id, email) index.
-        email = f"referee-{uuid4().hex[:12]}@placeholder.eigensu.test"
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email is required to invite a referee.")
 
     existing = await RefereeUser.find_one({"brand_id": tenant.brand_id, "email": email})
     if existing:
