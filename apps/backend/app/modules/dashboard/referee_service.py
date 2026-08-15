@@ -1,6 +1,5 @@
 """Referee portal business logic and dashboard service."""
 
-import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -187,6 +186,7 @@ async def process_daily_referee_updates() -> None:
 
     referee_map = defaultdict(list)
 
+    from app.config import settings
     from app.modules.recruitment.models import Candidate
 
     for r in referrals:
@@ -201,7 +201,7 @@ async def process_daily_referee_updates() -> None:
                     email=ref_user.email,
                     candidate_name=candidate.full_name,
                     stage=r.kanban_stage,
-                    portal_url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/referee",
+                    portal_url=f"{settings.FRONTEND_URL}/referee",
                 )
                 r.notified_actioned = True
                 await r.save()
@@ -215,7 +215,7 @@ async def process_daily_referee_updates() -> None:
                     email=ref_user.email,
                     candidate_name=candidate.full_name,
                     joining_date=r.joining_date,
-                    portal_url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/referee",
+                    portal_url=f"{settings.FRONTEND_URL}/referee",
                 )
                 r.notified_joined = True
                 await r.save()
@@ -388,12 +388,14 @@ async def generate_payment_batch() -> None:
             # Send Email
             ref_user = await RefereeUser.get(referee_id)
             if ref_user and not batch.notified_paid:
+                from app.config import settings
+
                 EmailService.send_referee_payment(
                     email=ref_user.email,
                     amount=batch.total_amount,
                     cycle_month=batch.cycle_month,
                     payment_ref=batch.payment_reference,
-                    portal_url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/referee",
+                    portal_url=f"{settings.FRONTEND_URL}/referee",
                 )
                 batch.notified_paid = True
                 await batch.save()

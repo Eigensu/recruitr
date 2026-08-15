@@ -313,6 +313,7 @@ class Candidate(Document):
                 [("brand_id", 1), ("email", 1)],
                 unique=True,
                 partialFilterExpression={"email": {"$type": "string"}},
+                name="candidate_brand_email_partial",
             ),
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),

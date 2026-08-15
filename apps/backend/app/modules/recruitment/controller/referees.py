@@ -7,7 +7,7 @@ DELETE /referees/{id}          revoke a referee — admin only
 
 from __future__ import annotations
 
-import random
+import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import uuid4
@@ -55,7 +55,7 @@ def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
 def _generate_connect_code() -> str:
     # 8 characters, uppercase alphanumeric, exclude O, 0, I, 1, L
     allowed_chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    return "".join(random.choices(allowed_chars, k=8))
+    return "".join(secrets.choice(allowed_chars) for _ in range(8))
 
 
 @router.get("", response_model=list[RefereeUserResponse])

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import random
+import secrets
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _generate_connect_code() -> str:
     allowed_chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    return "".join(random.choices(allowed_chars, k=8))
+    return "".join(secrets.choice(allowed_chars) for _ in range(8))
 
 
 async def main():
