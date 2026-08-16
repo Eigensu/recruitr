@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { IconAlertCircle, IconCheck, IconChevronDown } from "@tabler/icons-react";
 import { clientPublicApply } from "@/lib/api/candidates.client";
@@ -37,6 +38,12 @@ interface ApplicationFormProps {
   /** Bare agency id, for links that carry one without a resolvable domain.
    *  Used only when `brand` is absent, and renders no agency branding. */
   brandId?: string | null;
+  /** Whether this form is rendered inside the dashboard app. Strips the page shell. */
+  isEmbedded?: boolean;
+  /** Pre-fill the connect code, bypassing the URL search params. */
+  initialConnectCode?: string | null;
+  /** Pre-fill the source channel. */
+  initialSourceChannel?: string | null;
 }
 
 const inputCls =
@@ -126,11 +133,75 @@ function Section({
   );
 }
 
-export default function ApplicationForm({ brand, brandId }: Readonly<ApplicationFormProps>) {
+type ApplicationFormState = {
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  currentRole: string;
+  educationLevel: string;
+  sourceChannel: string;
+  sourceChannelOther: string;
+  connectCode: string;
+};
+
+/** First message per field, keyed the way the inputs read it back. */
+function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string, string> {
+  const next: Record<string, string> = {};
+  issues.forEach((issue) => {
+    if (issue.path[0]) next[issue.path[0] as string] = issue.message;
+  });
+  return next;
+}
+
+/**
+ * The multipart body the public apply endpoint expects.
+ *
+ * Optional fields are omitted rather than sent empty: the API treats a present
+ * blank string as a real value and would store it over the candidate's record.
+ */
+function buildApplicationFormData(
+  validated: z.infer<typeof schema>,
+  form: ApplicationFormState,
+  targetBrandId: string | null,
+  resume: File | null,
+): FormData {
+  const formData = new FormData();
+  if (targetBrandId) formData.append("brand_id", targetBrandId);
+  formData.append("full_name", validated.fullName);
+  formData.append("email", validated.email);
+  formData.append("phone", validated.phone);
+  if (form.city) formData.append("city", form.city);
+  if (form.currentRole) formData.append("current_role", form.currentRole);
+  if (form.educationLevel) formData.append("education_level", form.educationLevel);
+  // "Other" carries no information on its own — send what they typed instead.
+  const channel =
+    form.sourceChannel === SOURCE_CHANNEL_OTHER
+      ? validated.sourceChannelOther
+      : form.sourceChannel;
+  if (channel) formData.append("source_channel", channel);
+  if (form.connectCode) formData.append("connect_code", form.connectCode);
+  if (resume) formData.append("resume", resume);
+  return formData;
+}
+
+export default function ApplicationForm({
+  brand,
+  brandId,
+  isEmbedded,
+  initialConnectCode,
+  initialSourceChannel,
+}: Readonly<ApplicationFormProps>) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const searchParams = useSearchParams();
+  const queryConnectCode = searchParams?.get("connectCode") ?? "";
+  
+  const startingConnectCode = initialConnectCode ?? queryConnectCode;
+  const startingSourceChannel = initialSourceChannel ?? (startingConnectCode ? "Connected by a Binge Partner" : "");
 
   const [form, setForm] = useState({
     fullName: "",
@@ -139,9 +210,9 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     city: "",
     currentRole: "",
     educationLevel: "",
-    sourceChannel: "",
+    sourceChannel: startingSourceChannel,
     sourceChannelOther: "",
-    connectCode: "",
+    connectCode: startingConnectCode,
   });
   const [resume, setResume] = useState<File | null>(null);
 
@@ -159,11 +230,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       sourceChannelOther: form.sourceChannelOther,
     });
     if (!parsed.success) {
-      const next: Record<string, string> = {};
-      parsed.error.issues.forEach((issue) => {
-        if (issue.path[0]) next[issue.path[0] as string] = issue.message;
-      });
-      setFieldErrors(next);
+      setFieldErrors(collectFieldErrors(parsed.error.issues));
       setError(null);
       return;
     }
@@ -172,22 +239,7 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
     setError(null);
     setFieldErrors({});
 
-    const formData = new FormData();
-    if (targetBrandId) formData.append("brand_id", targetBrandId);
-    formData.append("full_name", parsed.data.fullName);
-    formData.append("email", parsed.data.email);
-    formData.append("phone", parsed.data.phone);
-    if (form.city) formData.append("city", form.city);
-    if (form.currentRole) formData.append("current_role", form.currentRole);
-    if (form.educationLevel) formData.append("education_level", form.educationLevel);
-    // "Other" carries no information on its own — send what they typed instead.
-    const channel =
-      form.sourceChannel === SOURCE_CHANNEL_OTHER
-        ? parsed.data.sourceChannelOther
-        : form.sourceChannel;
-    if (channel) formData.append("source_channel", channel);
-    if (form.connectCode) formData.append("connect_code", form.connectCode);
-    if (resume) formData.append("resume", resume);
+    const formData = buildApplicationFormData(parsed.data, form, targetBrandId, resume);
 
     try {
       await clientPublicApply(formData);
@@ -230,6 +282,21 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
   );
 
   if (success) {
+    if (isEmbedded) {
+      return (
+        <div className="w-full max-w-2xl mx-auto rounded-2xl border border-border bg-surface p-8 text-center text-text-primary shadow-sm mt-8">
+          <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-green-500/10 text-green-600">
+            <IconCheck className="size-6" />
+          </div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
+            Application received
+          </h1>
+          <p className="mt-3 text-sm text-text-secondary">
+            Your candidate has been successfully submitted to {brand?.name ?? "the hiring team"}.
+          </p>
+        </div>
+      );
+    }
     return (
       <main className="relative flex min-h-dvh items-center justify-center bg-shell p-4 font-sans theme-transition">
         {/* This screen has no header, and it is where an applicant may sit for a
@@ -252,17 +319,10 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
       </main>
     );
   }
-
-  return (
-    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
-      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
-        {masthead}
-        <ThemeToggle size="lg" />
-      </header>
-
-      <div className="flex justify-center px-4 pb-16 sm:px-6">
-        <div className="w-full max-w-2xl">
-          <div className="mb-7">
+  const formContent = (
+    <div className={`flex justify-center ${isEmbedded ? "" : "px-4 pb-16 sm:px-6"}`}>
+      <div className={`w-full ${isEmbedded ? "" : "max-w-2xl"}`}>
+        <div className="mb-7">
             <h1 className="font-heading text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
               Find Your Next Job
             </h1>
@@ -461,6 +521,19 @@ export default function ApplicationForm({ brand, brandId }: Readonly<Application
           </p>
         </div>
       </div>
+  );
+
+  if (isEmbedded) {
+    return formContent;
+  }
+
+  return (
+    <main className="min-h-dvh bg-shell font-sans text-text-primary theme-transition">
+      <header className="flex items-center justify-between gap-3 px-5 py-5 sm:px-8">
+        {masthead}
+        <ThemeToggle size="lg" />
+      </header>
+      {formContent}
     </main>
   );
 }

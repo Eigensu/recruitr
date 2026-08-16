@@ -264,10 +264,11 @@ export function CityField(
   return <SelectField label="City *" options={CITIES} {...props} />;
 }
 
-export function AreaField(
-  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
-) {
-  return <TextField label="Area *" placeholder="e.g. Andheri" {...props} />;
+export function AreaField({
+  required = true,
+  ...props
+}: Readonly<{ value: string; onChange: (v: string) => void; error?: string; required?: boolean }>) {
+  return <TextField label={`Area${required ? " *" : ""}`} placeholder="e.g. Andheri" {...props} />;
 }
 
 export function GenderField(
@@ -276,10 +277,22 @@ export function GenderField(
   return <SelectField label="Gender *" options={GENDER_OPTIONS} {...props} />;
 }
 
-export function AgeField(
-  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
-) {
-  return <TextField label="Age *" type="number" min="1" placeholder="e.g. 25" {...props} />;
+/**
+ * Shared Age input.
+ */
+export function AgeField({
+  required = true,
+  ...props
+}: Readonly<{ value: string; onChange: (v: string) => void; error?: string; required?: boolean }>) {
+  return (
+    <TextField
+      label={`Age${required ? " *" : ""}`}
+      type="number"
+      min="1"
+      placeholder="e.g. 25"
+      {...props}
+    />
+  );
 }
 
 export function EducationField(

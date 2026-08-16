@@ -19,12 +19,14 @@ class UserRole(StrEnum):
       has no Employee record. get_tenant refuses this role outright, so every
       staff endpoint denies it by default and access has to be granted one
       endpoint at a time via get_viewer.
+    - referee: an external referee who refers candidates. Also not in hierarchy.
     """
 
     employee = "employee"
     maintainer = "maintainer"
     admin = "admin"
     client = "client"
+    referee = "referee"
 
 
 class User(Document):

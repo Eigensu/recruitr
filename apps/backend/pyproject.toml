@@ -3,6 +3,9 @@ name = "eigensu-api"
 version = "1.0.0"
 description = "Eigensu — Gamified Recruitment CRM API"
 requires-python = ">=3.11"
+dependencies = [
+    "resend",
+]
 
 [tool.ruff]
 target-version = "py311"

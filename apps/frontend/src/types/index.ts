@@ -5,7 +5,7 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export type UserRole = "employee" | "maintainer" | "admin" | "client";
+export type UserRole = "employee" | "maintainer" | "admin" | "client" | "referee";
 
 export interface UserInfo {
   user_id: string;
@@ -20,8 +20,39 @@ export interface UserInfo {
   /** Set only for the client role — the employer company this login is scoped to. */
   client_id?: string | null;
   client_name?: string | null;
+  /** Set only for the referee role. */
+  connect_code?: string | null;
 }
 
+// ── Referee Portal ─────────────────────────────────────────────────────────────
+
+export interface RefereeSummary {
+  cvs_shared: number;
+  cvs_actioned: number;
+  accrued_earnings: number;
+}
+
+export interface RefereeReferral {
+  id: string;
+  candidate_name: string;
+  role_level: string | null;
+  submission_date: string;
+  kanban_stage: string;
+  joining_date: string | null;
+  joining_plus7_eligible: boolean;
+  incentive_status: string;
+  incentive_amount: number | null;
+  payment_status: string;
+  payment_date: string | null;
+}
+
+export interface RefereePayment {
+  batch_id: string;
+  cycle_month: string;
+  total_amount: number;
+  paid_on: string;
+  payment_reference: string | null;
+}
 // ── Brands ───────────────────────────────────────────────────────────────────
 
 export interface Brand {
