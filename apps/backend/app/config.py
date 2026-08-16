@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     MONGODB_DB_NAME: str = "recruitr"
     ALLOW_INDEX_DROPPING: bool = False
 
+    # Startup resilience. pymongo's own default server-selection timeout is 30s,
+    # which is longer than gunicorn's patience for a worker that has not yet
+    # reported in, so a single attempt used to consume the entire boot window.
+    # Shorter attempts leave room to actually retry. The worst-case startup is
+    # ATTEMPTS × TIMEOUT plus the backoff between them, and gunicorn's `timeout`
+    # must stay above it — see gunicorn.conf.py.
+    MONGODB_SERVER_SELECTION_TIMEOUT_MS: PositiveInt = 10_000
+    MONGODB_INIT_ATTEMPTS: PositiveInt = 3
+    MONGODB_INIT_BACKOFF_SECONDS: float = 2.0
+
     # ── Auth (Custom JWT) ──
     JWT_SECRET: str = "changeme_in_production"
     SESSION_SECRET: str = ""
