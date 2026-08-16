@@ -13,6 +13,74 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard";
 
+/** Timeline dot: filled for the stage in progress, ticked for stages behind it. */
+function stageDotCls(isCurrent: boolean, isReached: boolean): string {
+  if (isCurrent) return "bg-yellow text-navy ring-4 ring-yellow/20";
+  if (isReached) return "bg-yellow text-navy";
+  return "bg-surface-2 text-transparent";
+}
+
+function stageLabelCls(isCurrent: boolean, isReached: boolean): string {
+  if (isCurrent) return "text-yellow";
+  if (isReached) return "text-text-primary";
+  return "text-text-muted";
+}
+
+interface EarningsStateProps {
+  paymentStatus: string;
+  kanbanStage: string;
+  amount?: number | null;
+}
+
+/**
+ * What the referee is owed for one referral.
+ *
+ * A joined candidate shows as Pending rather than as an amount: the incentive
+ * is only priced once the 7-day eligibility window closes, and quoting a figure
+ * before then would promise money that can still fall away.
+ */
+function EarningsState({ paymentStatus, kanbanStage, amount }: EarningsStateProps) {
+  // The API sends the PaymentStatus enum's own casing ("Paid"/"Owed"); compare
+  // case-insensitively so a spelling change server-side cannot silently drop
+  // this back to the "—" fallback.
+  const status = paymentStatus?.toLowerCase();
+
+  if (status === "paid") {
+    return (
+      <>
+        <div className="text-xl font-bold text-text-primary">
+          ₹{amount?.toLocaleString("en-IN")}
+        </div>
+        <div className="mt-1 flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+          <IconCircleCheck className="size-3" /> Paid
+        </div>
+      </>
+    );
+  }
+
+  if (status === "owed") {
+    return (
+      <>
+        <div className="text-xl font-bold text-yellow">₹{amount?.toLocaleString("en-IN")}</div>
+        <div className="mt-1 flex items-center gap-1 rounded-full bg-yellow/10 px-2 py-0.5 text-xs font-medium text-yellow">
+          <IconClock className="size-3" /> Owed
+        </div>
+      </>
+    );
+  }
+
+  if (kanbanStage === "Joined") {
+    return (
+      <>
+        <div className="text-sm font-medium text-text-secondary">Pending</div>
+        <div className="mt-1 text-[10px] text-text-muted text-right">Eligible after 7 days</div>
+      </>
+    );
+  }
+
+  return <div className="text-sm font-medium text-text-muted">—</div>;
+}
+
 export default function RefereePortal() {
   const { summary, referrals, payments, isLoading, error } = useRefereeData();
   const { user } = useCurrentUser();
@@ -57,7 +125,7 @@ export default function RefereePortal() {
           </div>
         </header>
 
-        {isLoading ? (
+        {isLoading && (
           <div className="space-y-8 animate-pulse">
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="h-32 rounded-2xl bg-surface-2" />
@@ -67,11 +135,15 @@ export default function RefereePortal() {
             <div className="h-64 rounded-2xl bg-surface-2" />
             <div className="h-48 rounded-2xl bg-surface-2" />
           </div>
-        ) : error ? (
+        )}
+
+        {!isLoading && error && (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-center text-red-600 dark:text-red-400">
             <p>Unable to load dashboard data. Please try again later.</p>
           </div>
-        ) : (
+        )}
+
+        {!isLoading && !error && (
           <>
             {/* SUMMARY TILES */}
             <div className="grid gap-4 sm:grid-cols-3 h-[180px]">
@@ -187,7 +259,10 @@ export default function RefereePortal() {
                                   const isPast = currentIndex >= i;
                                   const isCurrent = currentIndex === i;
                                   const isJoined = stage === "Joined";
+                                  // Screening Call is routinely skipped, so it
+                                  // never draws as completed even once passed.
                                   const isSkipped = stage === "Screening Call" && isPast;
+                                  const isReached = isPast && !isSkipped;
 
                                   return (
                                     <div
@@ -196,28 +271,24 @@ export default function RefereePortal() {
                                     >
                                       {i !== 0 && (
                                         <div
-                                          className={`absolute top-2.5 -left-1/2 w-full h-0.5 ${isPast && !isSkipped ? "bg-yellow" : "bg-border"}`}
+                                          className={`absolute top-2.5 -left-1/2 w-full h-0.5 ${isReached ? "bg-yellow" : "bg-border"}`}
                                         />
                                       )}
 
                                       <div
-                                        className={`relative z-10 flex size-5 items-center justify-center rounded-full text-[10px]
-                                          ${
-                                            isCurrent
-                                              ? "bg-yellow text-navy ring-4 ring-yellow/20"
-                                              : isPast && !isSkipped
-                                                ? "bg-yellow text-navy"
-                                                : "bg-surface-2 text-transparent"
-                                          }`}
+                                        className={`relative z-10 flex size-5 items-center justify-center rounded-full text-[10px] ${stageDotCls(
+                                          isCurrent,
+                                          isReached,
+                                        )}`}
                                       >
-                                        {isPast && !isSkipped && (
-                                          <IconCheck stroke={3} className="size-3" />
-                                        )}
+                                        {isReached && <IconCheck stroke={3} className="size-3" />}
                                       </div>
 
                                       <div
-                                        className={`mt-2 text-center text-[10px] font-medium max-w-[60px] leading-tight
-                                          ${isCurrent ? "text-yellow" : isPast && !isSkipped ? "text-text-primary" : "text-text-muted"}`}
+                                        className={`mt-2 text-center text-[10px] font-medium max-w-[60px] leading-tight ${stageLabelCls(
+                                          isCurrent,
+                                          isReached,
+                                        )}`}
                                       >
                                         {stage}
                                       </div>
@@ -237,36 +308,11 @@ export default function RefereePortal() {
 
                             {/* Earnings State */}
                             <div className="flex shrink-0 flex-col items-end sm:w-48">
-                              {candidate.payment_status === "paid" ? (
-                                <>
-                                  <div className="text-xl font-bold text-text-primary">
-                                    ₹{candidate.incentive_amount?.toLocaleString("en-IN")}
-                                  </div>
-                                  <div className="mt-1 flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
-                                    <IconCircleCheck className="size-3" /> Paid
-                                  </div>
-                                </>
-                              ) : candidate.payment_status === "owed" ? (
-                                <>
-                                  <div className="text-xl font-bold text-yellow">
-                                    ₹{candidate.incentive_amount?.toLocaleString("en-IN")}
-                                  </div>
-                                  <div className="mt-1 flex items-center gap-1 rounded-full bg-yellow/10 px-2 py-0.5 text-xs font-medium text-yellow">
-                                    <IconClock className="size-3" /> Owed
-                                  </div>
-                                </>
-                              ) : candidate.kanban_stage === "Joined" ? (
-                                <>
-                                  <div className="text-sm font-medium text-text-secondary">
-                                    Pending
-                                  </div>
-                                  <div className="mt-1 text-[10px] text-text-muted text-right">
-                                    Eligible after 7 days
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-sm font-medium text-text-muted">—</div>
-                              )}
+                              <EarningsState
+                                paymentStatus={candidate.payment_status}
+                                kanbanStage={candidate.kanban_stage}
+                                amount={candidate.incentive_amount}
+                              />
                             </div>
                           </div>
                         </div>

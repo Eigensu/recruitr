@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function RefereeLayout({ children }: { readonly children: React.ReactNode }) {
   const user = await getUserServer();
 
-  if (!user || user.role !== "referee") {
+  if (user?.role !== "referee") {
     redirect("/");
   }
 

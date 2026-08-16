@@ -29,6 +29,12 @@ from pymongo import MongoClient  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.modules.recruitment.utils.connect_code import generate_connect_code  # noqa: E402
 
+# Mongo cannot compare a missing field to a present one, so "has a code" is a
+# type test rather than an inequality — it catches the legacy rows (field
+# absent) and any row left with an explicit null, which is just as unusable.
+HAS_CODE = {"connect_code": {"$type": "string"}}
+MISSING_CODE = {"connect_code": {"$not": {"$type": "string"}}}
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -42,27 +48,21 @@ def main() -> int:
     print(f"Database: {settings.MONGODB_DB_NAME}\n")
 
     total = referees.count_documents({})
-    # $type catches the legacy rows (field absent) and any row left with an
-    # explicit null, which is just as unusable.
-    missing = list(
-        referees.find(
-            {"connect_code": {"$not": {"$type": "string"}}},
-            {"_id": 1, "email": 1},
-        )
-    )
+    missing = list(referees.find(MISSING_CODE, {"_id": 1, "email": 1}))
     print(f"Referees            : {total}")
     print(f"  without a code    : {len(missing)}")
 
-    taken = Counter(
-        doc["connect_code"]
-        for doc in referees.find({"connect_code": {"$type": "string"}}, {"connect_code": 1})
-    )
+    taken = Counter(doc["connect_code"] for doc in referees.find(HAS_CODE, {"connect_code": 1}))
     duplicates = {code: n for code, n in taken.items() if n > 1}
     if duplicates:
         # Reported rather than repaired: reassigning a code already in
         # circulation would silently break links referees have handed out.
+        # Non-zero exit, because the unique index cannot build over these and
+        # nothing downstream should treat the run as a clean pass.
         print(f"  duplicate codes   : {len(duplicates)} — {', '.join(sorted(duplicates))}")
         print("    Resolve these by hand; the unique index cannot build while they exist.")
+        client.close()
+        return 1
 
     if not missing:
         print("\nNothing to do.")
@@ -91,7 +91,7 @@ def main() -> int:
         # The filter repeats the "no code" condition so a concurrent sign-in
         # that already minted one is not overwritten with a second code.
         result = referees.update_one(
-            {"_id": oid, "connect_code": {"$not": {"$type": "string"}}},
+            {"_id": oid, **MISSING_CODE},
             {"$set": {"connect_code": code}},
         )
         if result.modified_count:
@@ -100,7 +100,7 @@ def main() -> int:
             print(f"    skipped {email} — a code was assigned while this ran")
 
     print(f"\nDone. Updated {updated} referee(s).")
-    still_missing = referees.count_documents({"connect_code": {"$not": {"$type": "string"}}})
+    still_missing = referees.count_documents(MISSING_CODE)
     print(f"Still without a code: {still_missing}")
     client.close()
     return 0

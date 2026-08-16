@@ -11,6 +11,12 @@ const USER_STATUS_STYLES: Record<string, string> = {
   Pending: "bg-yellow-100 text-yellow-800",
 };
 
+/** Provisioned but never signed in reads as Pending, not Active. */
+function refereeStatus(user: RefereeUser): string {
+  if (!user.is_active) return "Inactive";
+  return user.last_login ? "Active" : "Pending";
+}
+
 export default function RefereeSettingsTab() {
   const apiFetch = useApiFetch();
   const [users, setUsers] = useState<RefereeUser[]>([]);
@@ -121,10 +127,14 @@ export default function RefereeSettingsTab() {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">
+                  <label
+                    htmlFor="referee-invite-name"
+                    className="block text-xs font-medium text-text-secondary mb-1"
+                  >
                     Name (Optional)
                   </label>
                   <input
+                    id="referee-invite-name"
                     type="text"
                     value={inviteName}
                     onChange={(e) => setInviteName(e.target.value)}
@@ -134,11 +144,16 @@ export default function RefereeSettingsTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-text-secondary mb-1">
-                    Email Address (Optional)
+                  <label
+                    htmlFor="referee-invite-email"
+                    className="block text-xs font-medium text-text-secondary mb-1"
+                  >
+                    Email Address
                   </label>
                   <input
+                    id="referee-invite-email"
                     type="email"
+                    required
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="jane@example.com"
@@ -181,7 +196,7 @@ export default function RefereeSettingsTab() {
             </thead>
             <tbody className="divide-y divide-border">
               {users.map((u) => {
-                const status = u.is_active ? (u.last_login ? "Active" : "Pending") : "Inactive";
+                const status = refereeStatus(u);
                 return (
                   <tr key={u.id} className="hover:bg-surface-2/50 transition-colors">
                     <td className="px-4 py-3 font-medium text-text-primary">

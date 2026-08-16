@@ -133,7 +133,65 @@ function Section({
   );
 }
 
-export default function ApplicationForm({ brand, brandId, isEmbedded, initialConnectCode, initialSourceChannel }: Readonly<ApplicationFormProps>) {
+type ApplicationFormState = {
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  currentRole: string;
+  educationLevel: string;
+  sourceChannel: string;
+  sourceChannelOther: string;
+  connectCode: string;
+};
+
+/** First message per field, keyed the way the inputs read it back. */
+function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string, string> {
+  const next: Record<string, string> = {};
+  issues.forEach((issue) => {
+    if (issue.path[0]) next[issue.path[0] as string] = issue.message;
+  });
+  return next;
+}
+
+/**
+ * The multipart body the public apply endpoint expects.
+ *
+ * Optional fields are omitted rather than sent empty: the API treats a present
+ * blank string as a real value and would store it over the candidate's record.
+ */
+function buildApplicationFormData(
+  validated: z.infer<typeof schema>,
+  form: ApplicationFormState,
+  targetBrandId: string | null,
+  resume: File | null,
+): FormData {
+  const formData = new FormData();
+  if (targetBrandId) formData.append("brand_id", targetBrandId);
+  formData.append("full_name", validated.fullName);
+  formData.append("email", validated.email);
+  formData.append("phone", validated.phone);
+  if (form.city) formData.append("city", form.city);
+  if (form.currentRole) formData.append("current_role", form.currentRole);
+  if (form.educationLevel) formData.append("education_level", form.educationLevel);
+  // "Other" carries no information on its own — send what they typed instead.
+  const channel =
+    form.sourceChannel === SOURCE_CHANNEL_OTHER
+      ? validated.sourceChannelOther
+      : form.sourceChannel;
+  if (channel) formData.append("source_channel", channel);
+  if (form.connectCode) formData.append("connect_code", form.connectCode);
+  if (resume) formData.append("resume", resume);
+  return formData;
+}
+
+export default function ApplicationForm({
+  brand,
+  brandId,
+  isEmbedded,
+  initialConnectCode,
+  initialSourceChannel,
+}: Readonly<ApplicationFormProps>) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,11 +230,7 @@ export default function ApplicationForm({ brand, brandId, isEmbedded, initialCon
       sourceChannelOther: form.sourceChannelOther,
     });
     if (!parsed.success) {
-      const next: Record<string, string> = {};
-      parsed.error.issues.forEach((issue) => {
-        if (issue.path[0]) next[issue.path[0] as string] = issue.message;
-      });
-      setFieldErrors(next);
+      setFieldErrors(collectFieldErrors(parsed.error.issues));
       setError(null);
       return;
     }
@@ -185,22 +239,7 @@ export default function ApplicationForm({ brand, brandId, isEmbedded, initialCon
     setError(null);
     setFieldErrors({});
 
-    const formData = new FormData();
-    if (targetBrandId) formData.append("brand_id", targetBrandId);
-    formData.append("full_name", parsed.data.fullName);
-    formData.append("email", parsed.data.email);
-    formData.append("phone", parsed.data.phone);
-    if (form.city) formData.append("city", form.city);
-    if (form.currentRole) formData.append("current_role", form.currentRole);
-    if (form.educationLevel) formData.append("education_level", form.educationLevel);
-    // "Other" carries no information on its own — send what they typed instead.
-    const channel =
-      form.sourceChannel === SOURCE_CHANNEL_OTHER
-        ? parsed.data.sourceChannelOther
-        : form.sourceChannel;
-    if (channel) formData.append("source_channel", channel);
-    if (form.connectCode) formData.append("connect_code", form.connectCode);
-    if (resume) formData.append("resume", resume);
+    const formData = buildApplicationFormData(parsed.data, form, targetBrandId, resume);
 
     try {
       await clientPublicApply(formData);

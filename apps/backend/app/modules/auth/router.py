@@ -362,6 +362,63 @@ async def google_login(request: Request) -> RedirectResponse:
     return RedirectResponse(f"{_GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}")
 
 
+class _GoogleCallbackError(Exception):
+    """A callback that cannot proceed, carrying the slug the sign-in page renders."""
+
+    def __init__(self, slug: str) -> None:
+        super().__init__(slug)
+        self.slug = slug
+
+
+async def _google_identity(
+    request: Request,
+    code: str | None,
+    state: str | None,
+    error: str | None,
+) -> tuple[str, str, str | None]:
+    """(google_id, email, name) for a valid callback, or raise _GoogleCallbackError."""
+    if error:
+        raise _GoogleCallbackError("google_denied")
+
+    stored_state = request.session.pop("oauth_state", None)
+    if not state or state != stored_state:
+        raise _GoogleCallbackError("invalid_state")
+
+    if not code:
+        raise _GoogleCallbackError("missing_code")
+
+    profile = await _fetch_google_profile(code)
+    if profile is None:
+        raise _GoogleCallbackError("token_exchange_failed")
+
+    if profile.get("email_verified") is not True:
+        raise _GoogleCallbackError("email_unverified")
+
+    google_id = profile.get("sub")
+    email = (profile.get("email") or "").lower()
+    if not google_id or not email:
+        raise _GoogleCallbackError("userinfo_missing")
+
+    return google_id, email, profile.get("name")
+
+
+def _google_role(current: UserRole, is_client: bool, is_referee: bool) -> UserRole:
+    """The role a Google sign-in resolves to, which outranks the stored one."""
+    if is_client:
+        return UserRole.client
+    if is_referee:
+        return UserRole.referee
+    return current
+
+
+def _post_login_path(user: User, has_brand: bool, is_referee: bool) -> str:
+    if is_referee:
+        return "/referee"
+    if has_brand or user.role == UserRole.client:
+        return "/"
+    return "/onboarding"
+
+
 @router.get("/google/callback")
 async def google_callback(
     request: Request,
@@ -371,27 +428,10 @@ async def google_callback(
 ) -> RedirectResponse:
     frontend = settings.FRONTEND_URL
 
-    if error:
-        return RedirectResponse(f"{frontend}/sign-in?error=google_denied")
-
-    stored_state = request.session.pop("oauth_state", None)
-    if not state or state != stored_state:
-        return RedirectResponse(f"{frontend}/sign-in?error=invalid_state")
-
-    if not code:
-        return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
-
-    profile = await _fetch_google_profile(code)
-    if profile is None:
-        return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
-
-    if profile.get("email_verified") is not True:
-        return RedirectResponse(f"{frontend}/sign-in?error=email_unverified")
-
-    google_id = profile.get("sub")
-    email = (profile.get("email") or "").lower()
-    if not google_id or not email:
-        return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
+    try:
+        google_id, email, name = await _google_identity(request, code, state, error)
+    except _GoogleCallbackError as exc:
+        return RedirectResponse(f"{frontend}/sign-in?error={exc.slug}")
 
     # Gate before _find_or_create_google_user: a refused address must not leave
     # a User row behind. Anyone already provisioned passes regardless of domain,
@@ -402,24 +442,15 @@ async def google_callback(
     if not allowed:
         return RedirectResponse(f"{frontend}/sign-in?error=not_registered")
 
-    user, _ = await _find_or_create_google_user(google_id, email, profile.get("name"))
+    user, _ = await _find_or_create_google_user(google_id, email, name)
 
-    role = user.role
-    if is_client:
-        role = UserRole.client
-    elif is_referee:
-        role = UserRole.referee
-
+    role = _google_role(user.role, is_client, is_referee)
     if role != user.role:
         user.role = role
         await user.save()
 
     has_brand = await _ensure_employee(user)
 
-    if is_referee:
-        redirect_path = "/referee"
-    else:
-        redirect_path = "/" if (has_brand or user.role == UserRole.client) else "/onboarding"
-    redirect = RedirectResponse(f"{frontend}{redirect_path}")
+    redirect = RedirectResponse(f"{frontend}{_post_login_path(user, has_brand, is_referee)}")
     _set_auth_cookie(redirect, str(user.id))
     return redirect

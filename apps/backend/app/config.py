@@ -19,6 +19,10 @@ try:
 except IndexError:
     _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
+# Where the Next.js dev server runs. Both the CORS allow-list and the links
+# built into outbound emails default to it, and they have to agree.
+_LOCAL_FRONTEND = "http://localhost:3000"
+
 
 class Settings(BaseSettings):
     """Global application settings loaded from the root .env file."""
@@ -65,7 +69,7 @@ class Settings(BaseSettings):
     CLOUDINARY_WEBHOOK_SECRET: str = ""
 
     # ── CORS ──
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [_LOCAL_FRONTEND]
 
     # ── Google OAuth2 ──
     GOOGLE_CLIENT_ID: str = ""
@@ -73,7 +77,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # ── Frontend ──
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = _LOCAL_FRONTEND
 
     # ── Agency access ──
     # Comma-separated email domains whose addresses may hold a staff account,

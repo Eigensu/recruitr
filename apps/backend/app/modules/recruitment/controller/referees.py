@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, require_admin
+from app.dependencies import get_tenant, require_admin, require_maintainer
 from app.modules.recruitment.models import RefereeUser
 from app.modules.recruitment.schemas import (
     RefereeUserInvite,
@@ -30,6 +30,8 @@ _MAX_CODE_ATTEMPTS = 5
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
 # Gate that only lets admins through; raises 403 otherwise.
 _RequireAdmin = Depends(require_admin)
+# Reading the roster is maintainer-level; provisioning and revoking stay admin.
+_RequireMaintainer = Depends(require_maintainer)
 
 _ERR_USER_NOT_FOUND = "Referee user not found"
 
@@ -53,9 +55,14 @@ def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
     )
 
 
-@router.get("", response_model=list[RefereeUserResponse])
+@router.get("", response_model=list[RefereeUserResponse], dependencies=[_RequireMaintainer])
 async def list_referees(tenant: _Tenant):
-    """List all referees provisioned for this brand."""
+    """List all referees provisioned for this brand.
+
+    Maintainer-gated to match the Referees tab that calls it: the roster carries
+    every referee's email and connect code, which is not something an ordinary
+    recruiter has any reason to enumerate.
+    """
     docs = await RefereeUser.find({"brand_id": tenant.brand_id}).sort("email").to_list()
     return [_to_user_response(d) for d in docs]
 

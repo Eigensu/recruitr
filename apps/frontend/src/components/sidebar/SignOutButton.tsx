@@ -1,10 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useApiFetch } from "@/lib/api";
 
 export default function SignOutButton() {
-  const router = useRouter();
   const apiFetch = useApiFetch();
 
   const handleSignOut = async () => {
@@ -18,7 +16,7 @@ export default function SignOutButton() {
       // Safely remove only client messaging dismissals
       for (let i = sessionStorage.length - 1; i >= 0; i--) {
         const key = sessionStorage.key(i);
-        if (key && key.startsWith("dismissed_banners_")) {
+        if (key?.startsWith("dismissed_banners_")) {
           sessionStorage.removeItem(key);
         }
       }
@@ -28,6 +26,7 @@ export default function SignOutButton() {
 
   return (
     <button
+      type="button"
       onClick={handleSignOut}
       className="text-sm font-medium text-white hover:text-white transition-colors cursor-pointer"
     >

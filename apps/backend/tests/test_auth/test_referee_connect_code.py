@@ -10,7 +10,8 @@ rather than failing any check they could act on.
 from beanie import PydanticObjectId
 
 from app.modules.auth.access import find_referee_authorization
-from app.modules.recruitment.models import RefereeUser
+from app.modules.recruitment.enums import PaymentStatus, RefereeKanbanStage
+from app.modules.recruitment.models import RefereeUser, ReferralRecord
 from app.modules.recruitment.utils.connect_code import ensure_connect_code, generate_connect_code
 
 BRAND_ID = PydanticObjectId()
@@ -47,7 +48,8 @@ async def test_ensure_connect_code_mints_and_persists_one() -> None:
     grant = await find_referee_authorization(LEGACY_EMAIL)
     code = await ensure_connect_code(grant)
 
-    assert code and len(code) == 8
+    assert code is not None
+    assert len(code) == 8
     reloaded = await RefereeUser.get(oid)
     assert reloaded.connect_code == code
 
@@ -75,3 +77,27 @@ async def test_generated_codes_avoid_ambiguous_characters() -> None:
     codes = "".join(generate_connect_code() for _ in range(200))
 
     assert not set(codes) & set("O0I1L")
+
+
+async def test_new_referral_defaults_to_a_status_the_payment_jobs_select_on() -> None:
+    """A referral defaulted to an off-enum spelling is never priced or paid.
+
+    update_eligibility_and_incentives and the nightly job both select on
+    {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}, so a
+    default of "PENDING" would drop every new referral out of both.
+    """
+    record = ReferralRecord(
+        brand_id=BRAND_ID,
+        referee_id=PydanticObjectId(),
+        mapping_id=PydanticObjectId(),
+        candidate_id=PydanticObjectId(),
+        position_id=PydanticObjectId(),
+    )
+    await record.insert()
+
+    unpaid = await ReferralRecord.find(
+        {"payment_status": {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}}
+    ).to_list()
+
+    assert [r.id for r in unpaid] == [record.id]
+    assert record.kanban_stage == RefereeKanbanStage.cv_received.value

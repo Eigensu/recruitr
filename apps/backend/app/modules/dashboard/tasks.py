@@ -26,5 +26,5 @@ def daily_referee_processor() -> None:
     try:
         asyncio.run(_run())
         logger.info("Successfully completed dashboard.daily_referee_processor")
-    except Exception as e:
-        logger.error(f"Error in dashboard.daily_referee_processor: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Error in dashboard.daily_referee_processor")

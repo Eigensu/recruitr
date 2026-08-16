@@ -21,8 +21,10 @@ from app.modules.recruitment.enums import (
     Decision,
     EducationLevel,
     Gender,
+    PaymentStatus,
     PipelineStage,
     PositionStatus,
+    RefereeKanbanStage,
     Seniority,
 )
 
@@ -562,11 +564,15 @@ class ReferralRecord(Document):
     position_id: PydanticObjectId
     role_level: str | None = None
     submission_date: datetime = Field(default_factory=_utcnow)
-    kanban_stage: str = "CV Received"
+    kanban_stage: str = RefereeKanbanStage.cv_received.value
     joining_date: datetime | None = None
     joining_plus7_eligible: bool = False
     incentive_amount: float | None = None
-    payment_status: str = "PENDING"
+    # The enum's value, not a hand-written "PENDING": the eligibility and
+    # payment jobs select on {"$in": [PaymentStatus.pending.value, ...]}, so a
+    # record defaulted to a different spelling is silently never processed and
+    # the referee never accrues anything.
+    payment_status: str = PaymentStatus.pending.value
     payment_date: datetime | None = None
     cycle_month: str | None = None
     notified_actioned: bool = False

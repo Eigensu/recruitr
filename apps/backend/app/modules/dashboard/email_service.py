@@ -12,17 +12,19 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     @staticmethod
-    def _send_email(to: str, subject: str, body: str, secure_log: bool = False) -> None:
+    def _send_email(to: str, subject: str, body: str) -> None:
         """Internal helper to transmit email or log safely if unconfigured."""
         api_key = os.getenv("RESEND_API_KEY")
         from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
         if not api_key:
-            log_body = "*** REDACTED ***" if secure_log else body
+            # The body is never logged: these carry candidate names, joining
+            # dates and payment amounts, and an unconfigured environment is
+            # exactly the one whose logs are least likely to be protected.
             logger.warning(
                 "Email delivery infrastructure is implemented/configured, but "
                 "live delivery could not be verified because provider credentials are unavailable. "
-                f"Would have sent to={to}, subject='{subject}', body='{log_body}'"
+                f"Would have sent to={to}, subject='{subject}' (body redacted)"
             )
             return
 
@@ -37,8 +39,10 @@ class EmailService:
                     "html": body.replace("\n", "<br>"),
                 }
             )
-        except Exception as e:
-            logger.error(f"Failed to send email via Resend: {e}")
+        except Exception:
+            # Never re-raised: a notification that fails to send must not roll
+            # back the referral or payment write that triggered it.
+            logger.exception("Failed to send email via Resend")
 
     @classmethod
     def send_referee_actioned(

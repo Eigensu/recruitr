@@ -18,13 +18,16 @@ export default function ShareApplicationLink() {
   const [copyError, setCopyError] = useState<string | null>(null);
 
   const domain = user?.brand_domain;
+  // Referees carry a connect code so applications arriving through their copy of
+  // the link are credited back to them; staff have none and share a bare link.
+  const connectQuery = user?.connect_code
+    ? `?connectCode=${encodeURIComponent(user.connect_code)}`
+    : "";
   // window is unavailable during SSR; this component only renders client-side
   // content once the user has loaded, so guard rather than assume.
   const link =
     domain && typeof window !== "undefined"
-      ? `${window.location.origin}/form/${encodeURIComponent(domain)}${
-          user.connect_code ? `?connectCode=${encodeURIComponent(user.connect_code)}` : ""
-        }`
+      ? `${window.location.origin}/form/${encodeURIComponent(domain)}${connectQuery}`
       : null;
 
   async function copy() {

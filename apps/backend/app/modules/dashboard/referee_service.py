@@ -1,15 +1,23 @@
 """Referee portal business logic and dashboard service."""
 
 import secrets
-from datetime import UTC, datetime, timedelta
+from collections import defaultdict
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
+from app.config import settings
 from app.modules.dashboard.email_service import EmailService
 from app.modules.recruitment.enums import PaymentStatus, PipelineStage, RefereeKanbanStage
 from app.modules.recruitment.models import PaymentBatch, RefereeUser, ReferralRecord
+
+# Every referee email links back to the same portal landing page.
+PORTAL_URL = f"{settings.FRONTEND_URL}/referee"
+
+# Referrals still in play: not yet paid, so still worth syncing and pricing.
+UNPAID_STATUSES = {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}
 
 
 def map_stage_to_referee(internal_stage: str) -> str:
@@ -126,40 +134,48 @@ def calculate_incentive_amount(role_level: str, total_eligible_in_cycle: int) ->
     return 0.0
 
 
+async def _mark_eligible_if_due(r: ReferralRecord, today: date, cycle_month: str) -> None:
+    """Flip a referral to owed once it is 7 calendar days past the joining date."""
+    if not r.joining_date or r.joining_plus7_eligible:
+        return
+    if (r.joining_date + timedelta(days=7)).date() > today:
+        return
+
+    r.joining_plus7_eligible = True
+    r.payment_status = PaymentStatus.owed.value
+    r.cycle_month = cycle_month
+    await r.save()
+
+
+async def _reprice_cycle(cycle_refs: list[ReferralRecord]) -> None:
+    """Apply the payment matrix across one referee's referrals for one cycle.
+
+    The rate depends on how many of that referee's referrals landed in the same
+    cycle, so the whole group is priced together rather than one at a time.
+    """
+    eligible_count = len(cycle_refs)
+    for r in cycle_refs:
+        new_incentive = calculate_incentive_amount(r.role_level or "Entry", eligible_count)
+        if r.incentive_amount != new_incentive:
+            r.incentive_amount = new_incentive
+            await r.save()
+
+
 async def _process_referral_incentives(referrals: list[ReferralRecord]) -> None:
     """Check +7 calendar days eligibility and update matrix for a list of referrals."""
-    from collections import defaultdict
-
-    now = datetime.now(UTC)
-    today = now.date()
+    today = datetime.now(UTC).date()
     current_cycle_month = today.strftime("%Y-%m")
 
-    referee_map = defaultdict(list)
+    # Keyed by (referee, cycle): the matrix rate is per referee per month.
+    by_referee_cycle: dict[tuple, list[ReferralRecord]] = defaultdict(list)
 
     for r in referrals:
-        if r.joining_date and not r.joining_plus7_eligible:
-            eligible_date = (r.joining_date + timedelta(days=7)).date()
-            if eligible_date <= today:
-                r.joining_plus7_eligible = True
-                r.payment_status = PaymentStatus.owed.value
-                r.cycle_month = current_cycle_month
-                await r.save()
-
+        await _mark_eligible_if_due(r, today, current_cycle_month)
         if r.joining_plus7_eligible and r.cycle_month:
-            referee_map[r.referee_id].append(r)
+            by_referee_cycle[(r.referee_id, r.cycle_month)].append(r)
 
-    for _referee_id, refs in referee_map.items():
-        cycle_groups = defaultdict(list)
-        for r in refs:
-            cycle_groups[r.cycle_month].append(r)
-
-        for _cycle_month, cycle_refs in cycle_groups.items():
-            eligible_count = len(cycle_refs)
-            for r in cycle_refs:
-                new_incentive = calculate_incentive_amount(r.role_level or "Entry", eligible_count)
-                if r.incentive_amount != new_incentive:
-                    r.incentive_amount = new_incentive
-                    await r.save()
+    for cycle_refs in by_referee_cycle.values():
+        await _reprice_cycle(cycle_refs)
 
 
 async def update_eligibility_and_incentives(
@@ -170,7 +186,7 @@ async def update_eligibility_and_incentives(
         {
             "brand_id": brand_id,
             "referee_id": referee_id,
-            "payment_status": {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]},
+            "payment_status": UNPAID_STATUSES,
         }
     ).to_list()
 
@@ -180,49 +196,61 @@ async def update_eligibility_and_incentives(
     await _process_referral_incentives(referrals)
 
 
+async def _notify_actioned(r: ReferralRecord) -> None:
+    """Tell the referee their candidate has moved off the initial stage. Once only."""
+    from app.modules.recruitment.models import Candidate
+
+    if r.notified_actioned or r.kanban_stage == RefereeKanbanStage.cv_received.value:
+        return
+
+    ref_user = await RefereeUser.get(r.referee_id)
+    candidate = await Candidate.get(r.candidate_id)
+    if not ref_user or not candidate:
+        return
+
+    EmailService.send_referee_actioned(
+        email=ref_user.email,
+        candidate_name=candidate.full_name,
+        stage=r.kanban_stage,
+        portal_url=PORTAL_URL,
+    )
+    r.notified_actioned = True
+    await r.save()
+
+
+async def _notify_joined(r: ReferralRecord) -> None:
+    """Tell the referee their candidate joined. Once only."""
+    from app.modules.recruitment.models import Candidate
+
+    if r.notified_joined or not r.joining_date:
+        return
+
+    ref_user = await RefereeUser.get(r.referee_id)
+    candidate = await Candidate.get(r.candidate_id)
+    if not ref_user or not candidate:
+        return
+
+    EmailService.send_referee_joined(
+        email=ref_user.email,
+        candidate_name=candidate.full_name,
+        joining_date=r.joining_date,
+        portal_url=PORTAL_URL,
+    )
+    r.notified_joined = True
+    await r.save()
+
+
 async def process_daily_referee_updates() -> None:
     """Check +7 calendar days eligibility, update matrix, and send emails."""
-    # Find ALL referrals that are active but not yet paid (Pending or Owed)
-    # We do this globally to process all referees
-    referrals = await ReferralRecord.find(
-        {"payment_status": {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}}
-    ).to_list()
-
-    from app.config import settings
-    from app.modules.recruitment.models import Candidate
+    # Every referee's active referrals at once: this runs as a nightly job, not
+    # per request, so it is not scoped to a brand or a referee.
+    referrals = await ReferralRecord.find({"payment_status": UNPAID_STATUSES}).to_list()
 
     for r in referrals:
         await sync_referral_with_mapping(r)
+        await _notify_actioned(r)
+        await _notify_joined(r)
 
-        # 1. Actioned notification
-        if not r.notified_actioned and r.kanban_stage != RefereeKanbanStage.cv_received.value:
-            ref_user = await RefereeUser.get(r.referee_id)
-            candidate = await Candidate.get(r.candidate_id)
-            if ref_user and candidate:
-                EmailService.send_referee_actioned(
-                    email=ref_user.email,
-                    candidate_name=candidate.full_name,
-                    stage=r.kanban_stage,
-                    portal_url=f"{settings.FRONTEND_URL}/referee",
-                )
-                r.notified_actioned = True
-                await r.save()
-
-        # 2. Joined notification
-        if not r.notified_joined and r.joining_date:
-            ref_user = await RefereeUser.get(r.referee_id)
-            candidate = await Candidate.get(r.candidate_id)
-            if ref_user and candidate:
-                EmailService.send_referee_joined(
-                    email=ref_user.email,
-                    candidate_name=candidate.full_name,
-                    joining_date=r.joining_date,
-                    portal_url=f"{settings.FRONTEND_URL}/referee",
-                )
-                r.notified_joined = True
-                await r.save()
-
-    # 3. Process eligibility and incentives for all fetched referrals
     await _process_referral_incentives(referrals)
 
 
@@ -265,18 +293,21 @@ async def get_referrals(
                 }
             )
         else:
+            # A candidate the referee submitted that has no ReferralRecord yet.
+            # Statuses come from the enums, not literals: the portal and the
+            # payment jobs both compare against those exact values.
             result.append(
                 {
                     "id": str(candidate.id),
                     "candidate_name": masked_name,
                     "role_level": None,
                     "submission_date": candidate.created_at,
-                    "kanban_stage": "CV Received",
+                    "kanban_stage": RefereeKanbanStage.cv_received.value,
                     "joining_date": None,
                     "joining_plus7_eligible": False,
-                    "incentive_status": "PENDING",
+                    "incentive_status": PaymentStatus.pending.value,
                     "incentive_amount": 0.0,
-                    "payment_status": "PENDING",
+                    "payment_status": PaymentStatus.pending.value,
                     "payment_date": None,
                 }
             )
@@ -285,21 +316,20 @@ async def get_referrals(
     return result
 
 
-def is_bank_holiday(d: datetime) -> bool:
-    """
-    Check if the given date is a bank holiday.
+def is_bank_holiday(_date: datetime) -> bool:
+    """Whether the given date is a bank holiday.
 
-    LIMITATION: The project currently lacks an authoritative HRIS holiday
-    calendar source. Live bank-holiday detection remains configuration-dependent.
-    For now, this safely returns False to avoid fabricating holidays.
+    Always False, deliberately. There is no authoritative holiday calendar to
+    read — no HRIS feed and no configured list — and inventing one would move
+    real payment dates onto wrong days. The date argument is kept so callers
+    read correctly and so a real calendar can be dropped in behind them.
     """
-    # TODO: Integrate with actual company holiday configuration mechanism
     return False
 
 
 def _get_next_working_day(d: datetime) -> datetime:
     """Move to next working day if weekend or bank holiday."""
-    # 5 = Saturday, 6 = Sunday
+    # weekday() numbers Monday 0 through Sunday 6, so 5 and above is the weekend.
     while d.weekday() >= 5 or is_bank_holiday(d):
         d += timedelta(days=1)
     return d
@@ -327,51 +357,57 @@ async def generate_payment_batch() -> None:
         {"payment_status": PaymentStatus.owed.value, "cycle_month": target_cycle_month}
     ).to_list()
 
-    # Group by referee
-    from collections import defaultdict
-
-    by_referee = defaultdict(list)
+    by_referee: dict[tuple, list[ReferralRecord]] = defaultdict(list)
     for r in referrals:
         by_referee[(r.brand_id, r.referee_id)].append(r)
 
     for (brand_id, referee_id), refs in by_referee.items():
-        total = sum(r.incentive_amount for r in refs if r.incentive_amount)
-        if total > 0:
-            batch_id = f"PAY-{target_cycle_month}-{secrets.token_hex(4).upper()}"
-            batch = PaymentBatch(
-                brand_id=brand_id,
-                batch_id=batch_id,
-                cycle_month=target_cycle_month,
-                referee_id=referee_id,
-                total_amount=total,
-                paid_on=now,
-                payment_reference=f"REF-{batch_id}",
-            )
+        await _pay_referee_cycle(brand_id, referee_id, refs, target_cycle_month, now)
 
-            try:
-                # Idempotent insert thanks to unique index on (brand_id, referee_id, cycle_month)
-                await batch.insert()
-            except DuplicateKeyError:
-                # A worker already processed this referee's payment batch for this cycle
-                continue
 
-            # Update records
-            for r in refs:
-                r.payment_status = PaymentStatus.paid.value
-                r.payment_date = now
-                await r.save()
+async def _pay_referee_cycle(
+    brand_id: PydanticObjectId,
+    referee_id: PydanticObjectId,
+    refs: list[ReferralRecord],
+    cycle_month: str,
+    now: datetime,
+) -> None:
+    """Batch one referee's owed referrals for one cycle, then mark them paid."""
+    total = sum(r.incentive_amount for r in refs if r.incentive_amount)
+    if total <= 0:
+        return
 
-            # Send Email
-            ref_user = await RefereeUser.get(referee_id)
-            if ref_user and not batch.notified_paid:
-                from app.config import settings
+    batch_id = f"PAY-{cycle_month}-{secrets.token_hex(4).upper()}"
+    batch = PaymentBatch(
+        brand_id=brand_id,
+        batch_id=batch_id,
+        cycle_month=cycle_month,
+        referee_id=referee_id,
+        total_amount=total,
+        paid_on=now,
+        payment_reference=f"REF-{batch_id}",
+    )
 
-                EmailService.send_referee_payment(
-                    email=ref_user.email,
-                    amount=batch.total_amount,
-                    cycle_month=batch.cycle_month,
-                    payment_ref=batch.payment_reference,
-                    portal_url=f"{settings.FRONTEND_URL}/referee",
-                )
-                batch.notified_paid = True
-                await batch.save()
+    try:
+        # Idempotent insert thanks to unique index on (brand_id, referee_id, cycle_month)
+        await batch.insert()
+    except DuplicateKeyError:
+        # A worker already processed this referee's payment batch for this cycle
+        return
+
+    for r in refs:
+        r.payment_status = PaymentStatus.paid.value
+        r.payment_date = now
+        await r.save()
+
+    ref_user = await RefereeUser.get(referee_id)
+    if ref_user and not batch.notified_paid:
+        EmailService.send_referee_payment(
+            email=ref_user.email,
+            amount=batch.total_amount,
+            cycle_month=batch.cycle_month,
+            payment_ref=batch.payment_reference,
+            portal_url=PORTAL_URL,
+        )
+        batch.notified_paid = True
+        await batch.save()
