@@ -33,7 +33,7 @@ import {
 const schema = z
   .object({
     name: z.string().min(1, "Name is required"),
-    email: z.string().email("Valid email required").min(1, "Email is required"),
+    email: z.union([z.literal(""), z.string().email("Valid email required")]).optional(),
     phone: z.string().min(1, "Phone is required"),
     source: z.enum(["internal", "external"]),
     source_channel: z.string().optional(),
@@ -49,11 +49,11 @@ const schema = z
       z.number({ message: "Experience Years is required" }).min(0, "Must be 0 or more"),
     ),
     city: z.string().min(1, "City is required"),
-    area: z.string().min(1, "Area is required"),
+    area: z.string().optional(),
     gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
     age: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
-      z.number({ message: "Age is required" }).min(1, "Must be 1 or more"),
+      z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
     ),
     expected_salary: z.preprocess(
       (v) => (v === "" || v === undefined ? undefined : Number(v)),
@@ -252,7 +252,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.name}
       />
       <TextField
-        label="Email *"
+        label="Email"
         type="email"
         value={form.email}
         onChange={(email) => setForm((f) => ({ ...f, email }))}
@@ -298,6 +298,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.city}
       />
       <AreaField
+        required={false}
         value={form.area}
         onChange={(area) => setForm((f) => ({ ...f, area }))}
         error={errors.area}
@@ -308,6 +309,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         error={errors.gender}
       />
       <AgeField
+        required={false}
         value={form.age}
         onChange={(age) => setForm((f) => ({ ...f, age }))}
         error={errors.age}

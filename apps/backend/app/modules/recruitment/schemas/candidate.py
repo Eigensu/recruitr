@@ -59,7 +59,7 @@ class CandidateCreateStrict(CandidateCreate):
     This preserves CandidateCreate and CandidateUpdate as partials for legacy operations."""
 
     full_name: str = Field(..., min_length=1)
-    email: EmailStr = Field(...)
+    email: EmailStr | None = None
     phone: str = Field(..., min_length=1)
     source: str = Field(..., min_length=1)
     communication: str = Field(..., min_length=1)
@@ -70,9 +70,9 @@ class CandidateCreateStrict(CandidateCreate):
     current_role: str = Field(..., min_length=1)
     experience_years: float = Field(..., ge=0)
     city: str = Field(..., min_length=1)
-    area: str = Field(..., min_length=1)
+    area: str | None = None
     gender: Gender = Field(...)
-    age: int = Field(..., gt=0)
+    age: int | None = Field(default=None, gt=0)
     expected_salary: float = Field(..., ge=0)
     salary: float = Field(..., ge=0)
     notice_period: str = Field(..., min_length=1)
