@@ -67,6 +67,8 @@ async def _ensure_employee(user: User) -> bool:
     """
     if user.role == UserRole.client:
         return await _link_client_login(user)
+    if user.role == UserRole.referee:
+        return await _link_referee_login(user)
 
     try:
         from app.modules.recruitment.service import ensure_employee_for_user
@@ -97,6 +99,26 @@ async def _link_client_login(user: User) -> bool:
     return True
 
 
+async def _link_referee_login(user: User) -> bool:
+    """Attach the login to its RefereeUser grant and stamp the sign-in."""
+    from app.modules.auth.access import find_referee_authorization
+    from app.modules.recruitment.utils.connect_code import ensure_connect_code
+
+    grant = await find_referee_authorization(user.email)
+    if grant is None:
+        return False
+    await grant.set(
+        {
+            "user_id": user.id,
+            "name": grant.name or user.full_name,
+            "last_login": datetime.now(UTC),
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    await ensure_connect_code(grant)
+    return True
+
+
 # ── Standard email/password endpoints ────────────────────────────────────────
 
 
@@ -105,16 +127,23 @@ async def signup(user_in: UserCreate) -> dict:
     email = user_in.email.lower()
     # Checked before the existence probe so an outsider cannot use the differing
     # replies to work out which addresses are registered.
-    allowed, is_client = await may_sign_in(email)
+    allowed, is_client, is_referee = await may_sign_in(email)
     if not allowed:
         raise HTTPException(status.HTTP_403_FORBIDDEN, NOT_AUTHORIZED)
     if await User.find_one(User.email == email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered.")
+
+    role = UserRole.employee
+    if is_client:
+        role = UserRole.client
+    elif is_referee:
+        role = UserRole.referee
+
     user = User(
         email=email,
         hashed_password=get_password_hash(user_in.password),
         full_name=user_in.full_name,
-        role=UserRole.client if is_client else UserRole.employee,
+        role=role,
     )
     await user.insert()
     await _ensure_employee(user)
@@ -137,7 +166,7 @@ async def login(user_in: UserLogin, response: Response) -> dict:
 
     await _ensure_employee(user)
     _set_auth_cookie(response, str(user.id))
-    return {"status": "ok", "message": "Logged in successfully"}
+    return {"status": "ok", "message": "Logged in successfully", "role": user.role.value}
 
 
 @router.post("/logout")
@@ -188,6 +217,31 @@ async def read_user_me(
             brand_domain=brand.domain if brand else None,
             client_id=str(grant.client_id),
             client_name=employer.name if employer else None,
+        )
+
+    if user.role == UserRole.referee:
+        from app.modules.auth.access import find_referee_authorization
+        from app.modules.recruitment.utils.connect_code import ensure_connect_code
+
+        grant = await find_referee_authorization(user.email)
+        if grant is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "This account is no longer authorized as a referee.",
+            )
+        brand = await Brand.get(grant.brand_id)
+        return UserInfoResponse(
+            user_id=str(user.id),
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role.value,
+            brand_id=str(grant.brand_id),
+            brand_name=brand.name if brand else None,
+            brand_domain=brand.domain if brand else None,
+            # Minted here rather than left null: this is the response the portal
+            # reads the code from, and a referee predating the field would
+            # otherwise see an empty code on every page that offers to share it.
+            connect_code=await ensure_connect_code(grant),
         )
 
     employee = await Employee.find_one({"email": user.email.lower()})
@@ -308,6 +362,63 @@ async def google_login(request: Request) -> RedirectResponse:
     return RedirectResponse(f"{_GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}")
 
 
+class _GoogleCallbackError(Exception):
+    """A callback that cannot proceed, carrying the slug the sign-in page renders."""
+
+    def __init__(self, slug: str) -> None:
+        super().__init__(slug)
+        self.slug = slug
+
+
+async def _google_identity(
+    request: Request,
+    code: str | None,
+    state: str | None,
+    error: str | None,
+) -> tuple[str, str, str | None]:
+    """(google_id, email, name) for a valid callback, or raise _GoogleCallbackError."""
+    if error:
+        raise _GoogleCallbackError("google_denied")
+
+    stored_state = request.session.pop("oauth_state", None)
+    if not state or state != stored_state:
+        raise _GoogleCallbackError("invalid_state")
+
+    if not code:
+        raise _GoogleCallbackError("missing_code")
+
+    profile = await _fetch_google_profile(code)
+    if profile is None:
+        raise _GoogleCallbackError("token_exchange_failed")
+
+    if profile.get("email_verified") is not True:
+        raise _GoogleCallbackError("email_unverified")
+
+    google_id = profile.get("sub")
+    email = (profile.get("email") or "").lower()
+    if not google_id or not email:
+        raise _GoogleCallbackError("userinfo_missing")
+
+    return google_id, email, profile.get("name")
+
+
+def _google_role(current: UserRole, is_client: bool, is_referee: bool) -> UserRole:
+    """The role a Google sign-in resolves to, which outranks the stored one."""
+    if is_client:
+        return UserRole.client
+    if is_referee:
+        return UserRole.referee
+    return current
+
+
+def _post_login_path(user: User, has_brand: bool, is_referee: bool) -> str:
+    if is_referee:
+        return "/referee"
+    if has_brand or user.role == UserRole.client:
+        return "/"
+    return "/onboarding"
+
+
 @router.get("/google/callback")
 async def google_callback(
     request: Request,
@@ -317,46 +428,29 @@ async def google_callback(
 ) -> RedirectResponse:
     frontend = settings.FRONTEND_URL
 
-    if error:
-        return RedirectResponse(f"{frontend}/sign-in?error=google_denied")
-
-    stored_state = request.session.pop("oauth_state", None)
-    if not state or state != stored_state:
-        return RedirectResponse(f"{frontend}/sign-in?error=invalid_state")
-
-    if not code:
-        return RedirectResponse(f"{frontend}/sign-in?error=missing_code")
-
-    profile = await _fetch_google_profile(code)
-    if profile is None:
-        return RedirectResponse(f"{frontend}/sign-in?error=token_exchange_failed")
-
-    if profile.get("email_verified") is not True:
-        return RedirectResponse(f"{frontend}/sign-in?error=email_unverified")
-
-    google_id = profile.get("sub")
-    email = (profile.get("email") or "").lower()
-    if not google_id or not email:
-        return RedirectResponse(f"{frontend}/sign-in?error=userinfo_missing")
+    try:
+        google_id, email, name = await _google_identity(request, code, state, error)
+    except _GoogleCallbackError as exc:
+        return RedirectResponse(f"{frontend}/sign-in?error={exc.slug}")
 
     # Gate before _find_or_create_google_user: a refused address must not leave
     # a User row behind. Anyone already provisioned passes regardless of domain,
     # which is what keeps staff on personal addresses signing in.
     # "not_registered" is the code the sign-in page already renders friendly
     # copy for ("Your organization is not registered with Binge Consulting").
-    allowed, is_client = await may_sign_in(email)
+    allowed, is_client, is_referee = await may_sign_in(email)
     if not allowed:
         return RedirectResponse(f"{frontend}/sign-in?error=not_registered")
 
-    user, _ = await _find_or_create_google_user(google_id, email, profile.get("name"))
-    if is_client and user.role != UserRole.client:
-        user.role = UserRole.client
+    user, _ = await _find_or_create_google_user(google_id, email, name)
+
+    role = _google_role(user.role, is_client, is_referee)
+    if role != user.role:
+        user.role = role
         await user.save()
+
     has_brand = await _ensure_employee(user)
 
-    # A client never onboards a workspace — they either have a live grant or
-    # they are refused, so there is nothing for them to set up.
-    redirect_path = "/" if (has_brand or user.role == UserRole.client) else "/onboarding"
-    redirect = RedirectResponse(f"{frontend}{redirect_path}")
+    redirect = RedirectResponse(f"{frontend}{_post_login_path(user, has_brand, is_referee)}")
     _set_auth_cookie(redirect, str(user.id))
     return redirect

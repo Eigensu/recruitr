@@ -21,8 +21,10 @@ from app.modules.recruitment.enums import (
     Decision,
     EducationLevel,
     Gender,
+    PaymentStatus,
     PipelineStage,
     PositionStatus,
+    RefereeKanbanStage,
     Seniority,
 )
 
@@ -168,6 +170,50 @@ class ClientUser(Document):
         ]
 
 
+class RefereeUser(Document):
+    """An email authorized to use the referee portal.
+
+    Similar to ClientUser, this is an authorization grant. When the referee signs up
+    or logs in, their User account will be associated with this grant.
+    """
+
+    brand_id: PydanticObjectId
+    email: str  # lowercased; unique within brand
+    # Optional on read, always set on write: rows created before this field
+    # existed have no code, and a required field would fail to parse them —
+    # breaking the referee's login, since every sign-in loads this grant.
+    # utils/connect_code.py mints one lazily for those rows.
+    connect_code: str | None = None
+    name: str | None = None
+    role: str = "referee"
+    user_id: PydanticObjectId | None = None  # FK → users._id, once they sign up
+    last_login: datetime | None = None
+    is_active: bool = True
+    invited_by_id: PydanticObjectId | None = None  # FK → employees._id
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "referee_users"
+        indexes = [
+            IndexModel([("brand_id", 1), ("email", 1)], unique=True),
+            # Partial for the same reason as Candidate.email: a missing
+            # connect_code indexes as null for every legacy row, so a plain
+            # unique index would reject all but the first of them. The code is
+            # global, not per-brand — a public applicant types it with no brand
+            # in hand (see public_controller.public_apply).
+            IndexModel(
+                [("connect_code", 1)],
+                unique=True,
+                partialFilterExpression={"connect_code": {"$type": "string"}},
+            ),
+        ]
+
+
 # ── Position ───────────────────────────────────────────────────────────────────
 
 
@@ -256,6 +302,8 @@ class Candidate(Document):
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     status: CandidateStatus = CandidateStatus.approved
+    # The referee who referred this candidate (if any) — FK → referee_users._id
+    referee_id: PydanticObjectId | None = None
     # The recruiter who put this person in the pool — FK → employees._id. Null
     # for public-form applications (nobody sourced them) and for records that
     # predate the field. Ownership gates who may open the CV: see
@@ -281,6 +329,7 @@ class Candidate(Document):
                 [("brand_id", 1), ("email", 1)],
                 unique=True,
                 partialFilterExpression={"email": {"$type": "string"}},
+                name="candidate_brand_email_partial",
             ),
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
@@ -499,4 +548,76 @@ class ClientMessage(Document):
         indexes = [
             IndexModel([("brand_id", 1), ("start_at", 1), ("end_at", 1)]),
             IndexModel("target_client_ids"),
+        ]
+
+
+# ── Binge Connect ──────────────────────────────────────────────────────────────
+
+
+class ReferralRecord(Document):
+    """Tracks a candidate referred by a Referee User."""
+
+    brand_id: PydanticObjectId
+    referee_id: PydanticObjectId
+    mapping_id: PydanticObjectId
+    candidate_id: PydanticObjectId
+    position_id: PydanticObjectId
+    role_level: str | None = None
+    submission_date: datetime = Field(default_factory=_utcnow)
+    kanban_stage: str = RefereeKanbanStage.cv_received.value
+    joining_date: datetime | None = None
+    joining_plus7_eligible: bool = False
+    incentive_amount: float | None = None
+    # The enum's value, not a hand-written "PENDING": the eligibility and
+    # payment jobs select on {"$in": [PaymentStatus.pending.value, ...]}, so a
+    # record defaulted to a different spelling is silently never processed and
+    # the referee never accrues anything.
+    payment_status: str = PaymentStatus.pending.value
+    payment_date: datetime | None = None
+    cycle_month: str | None = None
+    notified_actioned: bool = False
+    notified_joined: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "referral_records"
+        indexes = [
+            IndexModel("brand_id"),
+            IndexModel("referee_id"),
+            IndexModel("mapping_id"),
+            IndexModel("candidate_id"),
+            IndexModel("position_id"),
+            IndexModel([("brand_id", 1), ("referee_id", 1)]),
+            IndexModel([("referee_id", 1), ("cycle_month", 1)]),
+            IndexModel("payment_status"),
+        ]
+
+
+class PaymentBatch(Document):
+    """Tracks a monthly payment run for a referee."""
+
+    batch_id: str
+    brand_id: PydanticObjectId
+    cycle_month: str
+    referee_id: PydanticObjectId
+    total_amount: float
+    paid_on: datetime
+    payment_reference: str
+    notified_paid: bool = False
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "payment_batches"
+        indexes = [
+            IndexModel([("brand_id", 1), ("referee_id", 1), ("cycle_month", 1)], unique=True),
         ]

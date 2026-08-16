@@ -16,6 +16,10 @@ from app.modules.recruitment.enums.pipeline_stage import (
 from app.modules.recruitment.enums.position_status import PositionStatus
 from app.modules.recruitment.enums.seniority import Seniority
 
+from .client_message import ClientMessageTarget, ClientMessageType
+from .payment_status import PaymentStatus
+from .referee_stage import RefereeKanbanStage
+
 __all__ = [
     "PipelineStage",
     "KANBAN_STAGES",
@@ -32,5 +36,6 @@ __all__ = [
     "Gender",
     "ClientMessageTarget",
     "ClientMessageType",
+    "RefereeKanbanStage",
+    "PaymentStatus",
 ]
-from .client_message import ClientMessageTarget, ClientMessageType

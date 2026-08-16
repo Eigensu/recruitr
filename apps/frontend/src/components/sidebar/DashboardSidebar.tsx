@@ -11,7 +11,12 @@ import {
   IconMoon,
   IconSun,
 } from "@tabler/icons-react";
-import { NAV_CONFIG, isNavItemActive, type NavItemConfig } from "@/components/sidebar/nav-config";
+import {
+  NAV_CONFIG,
+  REFEREE_NAV_CONFIG,
+  isNavItemActive,
+  type NavItemConfig,
+} from "@/components/sidebar/nav-config";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
@@ -169,15 +174,18 @@ export default function DashboardSidebar({ user }: { readonly user: UserInfo | n
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const isReferee = user?.role === "referee";
   const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
   const isClient = user?.role === "client";
 
-  const visibleConfigs: NavItemConfig[] = NAV_CONFIG.filter((item) => {
-    if (item.maintainerOnly && !isMaintainer) return false;
-    if (isClient && item.hideForClient) return false;
-    if (!isClient && item.clientOnly) return false;
-    return true;
-  });
+  const visibleConfigs: NavItemConfig[] = isReferee
+    ? REFEREE_NAV_CONFIG
+    : NAV_CONFIG.filter((item) => {
+        if (item.maintainerOnly && !isMaintainer) return false;
+        if (isClient && item.hideForClient) return false;
+        if (!isClient && item.clientOnly) return false;
+        return true;
+      });
 
   return (
     <>
@@ -203,7 +211,7 @@ export default function DashboardSidebar({ user }: { readonly user: UserInfo | n
 
           {/* Bottom: onboarding + theme toggle + user */}
           <div className="flex flex-col">
-            <OnboardingProgressCard progress={76} />
+            {!isReferee && <OnboardingProgressCard progress={76} />}
 
             <div className="mt-4 flex flex-col pt-2">
               <ThemeToggleRow />

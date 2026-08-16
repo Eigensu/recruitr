@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class CandidateStatus(str, Enum):
+class CandidateStatus(StrEnum):
     pending = "PENDING"
     approved = "APPROVED"
     rejected = "REJECTED"

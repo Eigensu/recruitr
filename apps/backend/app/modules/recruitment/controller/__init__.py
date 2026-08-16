@@ -7,6 +7,7 @@ from app.modules.recruitment.controller.clients import router as clients_router
 from app.modules.recruitment.controller.pipeline import router as pipeline_router
 from app.modules.recruitment.controller.positions import router as positions_router
 from app.modules.recruitment.controller.public_controller import router as public_router
+from app.modules.recruitment.controller.referees import router as referees_router
 from app.modules.recruitment.controller.tags import router as tags_router
 from app.modules.recruitment.controller.teams import router as teams_router
 
@@ -15,9 +16,10 @@ __all__ = [
     "candidates_router",
     "client_messaging_router",
     "clients_router",
-    "positions_router",
     "pipeline_router",
+    "positions_router",
+    "public_router",
+    "referees_router",
     "tags_router",
     "teams_router",
-    "public_router",
 ]
