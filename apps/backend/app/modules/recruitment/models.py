@@ -177,7 +177,11 @@ class RefereeUser(Document):
 
     brand_id: PydanticObjectId
     email: str  # lowercased; unique within brand
-    connect_code: str = Field(unique=True)
+    # Optional on read, always set on write: rows created before this field
+    # existed have no code, and a required field would fail to parse them —
+    # breaking the referee's login, since every sign-in loads this grant.
+    # utils/connect_code.py mints one lazily for those rows.
+    connect_code: str | None = None
     name: str | None = None
     role: str = "referee"
     user_id: PydanticObjectId | None = None  # FK → users._id, once they sign up
@@ -195,6 +199,16 @@ class RefereeUser(Document):
         name = "referee_users"
         indexes = [
             IndexModel([("brand_id", 1), ("email", 1)], unique=True),
+            # Partial for the same reason as Candidate.email: a missing
+            # connect_code indexes as null for every legacy row, so a plain
+            # unique index would reject all but the first of them. The code is
+            # global, not per-brand — a public applicant types it with no brand
+            # in hand (see public_controller.public_apply).
+            IndexModel(
+                [("connect_code", 1)],
+                unique=True,
+                partialFilterExpression={"connect_code": {"$type": "string"}},
+            ),
         ]
 
 

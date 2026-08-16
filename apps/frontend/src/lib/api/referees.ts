@@ -6,7 +6,9 @@ export interface RefereeUser {
   email: string;
   name: string | null;
   role: string;
-  connect_code: string;
+  // Null until assigned: referees provisioned before connect codes existed get
+  // one on their next sign-in, or from scripts/backfill_connect_codes.py.
+  connect_code: string | null;
   is_active: boolean;
   last_login: string | null;
   created_at: string;

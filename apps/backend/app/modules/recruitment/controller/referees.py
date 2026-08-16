@@ -7,7 +7,6 @@ DELETE /referees/{id}          revoke a referee — admin only
 
 from __future__ import annotations
 
-import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -22,8 +21,11 @@ from app.modules.recruitment.schemas import (
     RefereeUserResponse,
     TenantScope,
 )
+from app.modules.recruitment.utils.connect_code import ensure_connect_code, generate_connect_code
 
 router = APIRouter()
+
+_MAX_CODE_ATTEMPTS = 5
 
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
 # Gate that only lets admins through; raises 403 otherwise.
@@ -49,12 +51,6 @@ def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
         created_at=doc.created_at,
         updated_at=doc.updated_at,
     )
-
-
-def _generate_connect_code() -> str:
-    # 8 characters, uppercase alphanumeric, exclude O, 0, I, 1, L
-    allowed_chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-    return "".join(secrets.choice(allowed_chars) for _ in range(8))
 
 
 @router.get("", response_model=list[RefereeUserResponse])
@@ -89,32 +85,35 @@ async def invite_referee(tenant: _Tenant, payload: RefereeUserInvite):
         # Re-inviting a revoked address restores the original row rather than
         # tripping the unique index.
         await existing.set(_stamp({"is_active": True, "name": payload.name, "role": payload.role}))
+        await ensure_connect_code(existing)
         return _to_user_response(existing)
 
-    while True:
+    # Bounded, unlike an open `while True`: only a connect_code collision is
+    # worth another draw, and anything else that keeps raising would spin here
+    # forever holding the request open.
+    for _ in range(_MAX_CODE_ATTEMPTS):
         doc = RefereeUser(
             brand_id=tenant.brand_id,
             email=email,
             name=payload.name,
             role=payload.role,
-            connect_code=_generate_connect_code(),
+            connect_code=generate_connect_code(),
             invited_by_id=tenant.employee_id,
         )
         try:
             await doc.insert()
-            break
+            return _to_user_response(doc)
         except DuplicateKeyError as exc:
-            if (
-                "email_1" in str(exc)
-                or "brand_id_1_email_1" in str(exc)
-                or f"'{email}'" in str(exc)
-            ):
+            if "connect_code" not in str(exc):
                 raise HTTPException(
                     status.HTTP_409_CONFLICT, f"{email} is already authorized as a referee"
                 ) from None
-            # If the duplicate key is on connect_code, it will loop and try again.
+            # Collided with a live code — draw again.
 
-    return _to_user_response(doc)
+    raise HTTPException(
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "Could not allocate a connect code for this referee. Please try again.",
+    )
 
 
 @router.delete(

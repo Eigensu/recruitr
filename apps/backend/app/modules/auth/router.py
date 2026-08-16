@@ -102,6 +102,7 @@ async def _link_client_login(user: User) -> bool:
 async def _link_referee_login(user: User) -> bool:
     """Attach the login to its RefereeUser grant and stamp the sign-in."""
     from app.modules.auth.access import find_referee_authorization
+    from app.modules.recruitment.utils.connect_code import ensure_connect_code
 
     grant = await find_referee_authorization(user.email)
     if grant is None:
@@ -114,6 +115,7 @@ async def _link_referee_login(user: User) -> bool:
             "updated_at": datetime.now(UTC),
         }
     )
+    await ensure_connect_code(grant)
     return True
 
 
@@ -219,6 +221,7 @@ async def read_user_me(
 
     if user.role == UserRole.referee:
         from app.modules.auth.access import find_referee_authorization
+        from app.modules.recruitment.utils.connect_code import ensure_connect_code
 
         grant = await find_referee_authorization(user.email)
         if grant is None:
@@ -235,7 +238,10 @@ async def read_user_me(
             brand_id=str(grant.brand_id),
             brand_name=brand.name if brand else None,
             brand_domain=brand.domain if brand else None,
-            connect_code=grant.connect_code,
+            # Minted here rather than left null: this is the response the portal
+            # reads the code from, and a referee predating the field would
+            # otherwise see an empty code on every page that offers to share it.
+            connect_code=await ensure_connect_code(grant),
         )
 
     employee = await Employee.find_one({"email": user.email.lower()})
