@@ -1,14 +1,14 @@
 """Beanie Document model for the User."""
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from beanie import Document, Replace, Update, before_event
 from pydantic import Field
 from pymongo import IndexModel
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """Access tier for a login user. Hierarchy: admin ⊇ maintainer ⊇ employee.
 
     - employee: regular recruiter; appears in the leaderboard and earns points.
@@ -19,12 +19,14 @@ class UserRole(str, Enum):
       has no Employee record. get_tenant refuses this role outright, so every
       staff endpoint denies it by default and access has to be granted one
       endpoint at a time via get_viewer.
+    - referee: an external referee who refers candidates. Also not in hierarchy.
     """
 
     employee = "employee"
     maintainer = "maintainer"
     admin = "admin"
     client = "client"
+    referee = "referee"
 
 
 class User(Document):
