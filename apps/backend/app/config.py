@@ -9,7 +9,7 @@ server is started from.
 import secrets
 from pathlib import Path
 
-from pydantic import ValidationInfo, field_validator
+from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +18,10 @@ try:
     _ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 except IndexError:
     _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+# Where the Next.js dev server runs. Both the CORS allow-list and the links
+# built into outbound emails default to it, and they have to agree.
+_LOCAL_FRONTEND = "http://localhost:3000"
 
 
 class Settings(BaseSettings):
@@ -36,7 +40,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── MongoDB ──
-    MONGODB_URI: str = "mongodb://localhost:27017/recruitr"
+    MONGODB_URI: str = Field(
+        default="mongodb://localhost:27017/recruitr",
+        validation_alias=AliasChoices("MONGODB_URI", "MONGO_URL"),
+    )
     MONGODB_DB_NAME: str = "recruitr"
     ALLOW_INDEX_DROPPING: bool = False
 
@@ -72,7 +79,7 @@ class Settings(BaseSettings):
     CLOUDINARY_WEBHOOK_SECRET: str = ""
 
     # ── CORS ──
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [_LOCAL_FRONTEND]
 
     # ── Google OAuth2 ──
     GOOGLE_CLIENT_ID: str = ""
@@ -80,7 +87,7 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # ── Frontend ──
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str = _LOCAL_FRONTEND
 
     # ── Agency access ──
     # Comma-separated email domains whose addresses may hold a staff account,

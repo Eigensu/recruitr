@@ -10,6 +10,7 @@ import {
   IconBuildingStore,
   IconBuilding,
   IconMessage,
+  IconUserPlus,
 } from "@tabler/icons-react";
 
 export interface NavItemConfig {
@@ -21,6 +22,12 @@ export interface NavItemConfig {
   hideForClient?: boolean;
   clientOnly?: boolean;
 }
+
+export const REFEREE_NAV_CONFIG: NavItemConfig[] = [
+  { href: "/referee", label: "Dashboard", icon: IconLayoutDashboard, exact: true },
+  { href: "/referee/refer", label: "Refer Candidate", icon: IconUserPlus },
+  { href: "/referee/settings", label: "Settings", icon: IconSettings },
+];
 
 export const NAV_CONFIG: NavItemConfig[] = [
   { href: "/", label: "Dashboard", icon: IconLayoutDashboard, exact: true },

@@ -32,8 +32,11 @@ from app.modules.recruitment.models import (
     Counter,
     Employee,
     Mapping,
+    PaymentBatch,
     Position,
     RecruiterTag,
+    RefereeUser,
+    ReferralRecord,
     Team,
 )
 
@@ -157,6 +160,9 @@ async def init_db() -> None:
         ActivityLog,
         CandidateEvent,
         CandidateDocument,
+        RefereeUser,
+        ReferralRecord,
+        PaymentBatch,
         # Gamification
         RecruiterProfile,
         # Leaderboard

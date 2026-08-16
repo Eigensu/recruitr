@@ -27,19 +27,23 @@ function SignInContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(initialErrorState);
   const [isLoading, setIsLoading] = useState(false);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
+
     try {
-      await apiFetch("/api/v1/auth/login", {
+      const res = (await apiFetch("/api/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
-      });
-      router.push("/");
+      })) as { role?: string };
+      if (res.role === "referee") {
+        router.push("/referee");
+      } else {
+        router.push("/");
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to sign in.");
+      setError(err instanceof Error ? err.message : "Authentication failed.");
     } finally {
       setIsLoading(false);
     }
@@ -261,7 +265,7 @@ function SignInContent() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end anim-up d6">
+            <div className="flex items-center justify-end anim-up d6 mt-2">
               <Link href="#" className="text-[13px] font-medium text-navy hover:text-charcoal">
                 Forgot Password
               </Link>
@@ -298,14 +302,14 @@ function SignInContent() {
                 />
                 <path
                   fill="#FBBC05"
-                  d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                  d="M10.54 28.29c-.58-1.74-.91-3.62-.91-5.59s.33-3.85.91-5.59l-7.98-6.19C1.03 14.07 0 18.88 0 24s1.03 9.93 2.56 13.08l7.98-6.19z"
                 />
                 <path
                   fill="#34A853"
-                  d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                  d="M24 48c6.48 0 11.93-2.14 15.91-5.81l-7.73-6c-2.15 1.45-4.92 2.31-8.18 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
                 />
               </svg>
-              Sign In with Google
+              Continue with Google
             </a>
           </form>
 

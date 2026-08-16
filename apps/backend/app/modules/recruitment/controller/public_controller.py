@@ -30,7 +30,7 @@ from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
-from app.modules.recruitment.models import Candidate
+from app.modules.recruitment.models import Candidate, RefereeUser
 from app.modules.recruitment.repository_impl import record_candidate_event
 from app.modules.recruitment.schemas import CandidateResponse, TenantScope
 from app.modules.recruitment.services.resume_service import process_resume_bytes
@@ -186,6 +186,17 @@ async def public_apply(
         parsed_exp,
     ) = await _process_resume_upload(resume, automation)
 
+    # Codes are minted uppercase but typed by hand off a message or a screen, so
+    # match on the normalized form — a lowercased or padded code is the right
+    # code, and failing it silently costs the referee their attribution.
+    normalized_code = connect_code.strip().upper() if connect_code else None
+
+    referee_id = None
+    if normalized_code:
+        referee = await RefereeUser.find_one({"connect_code": normalized_code, "is_active": True})
+        if referee:
+            referee_id = referee.id
+
     try:
         doc = Candidate(
             brand_id=target_brand_id,
@@ -206,7 +217,8 @@ async def public_apply(
             # options) — "External" was invisible to the directory's filter.
             source="external",
             source_channel=source_channel,
-            connect_code=connect_code,
+            connect_code=normalized_code,
+            referee_id=referee_id,
             status=CandidateStatus.pending,
         )
     except ValidationError as e:

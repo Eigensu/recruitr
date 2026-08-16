@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.modules.leaderboard.tasks.activity_tasks",
         "app.modules.leaderboard.tasks.badge_tasks",
         "app.modules.leaderboard.tasks.periodic_tasks",
+        "app.modules.dashboard.tasks",
     ],
 )
 
@@ -30,6 +31,10 @@ celery_app.conf.update(
         "leaderboard-monthly-snapshot": {
             "task": "leaderboard.create_monthly_snapshot",
             "schedule": crontab(minute=0, hour=0, day_of_month=1),
+        },
+        "dashboard-daily-referee-processor": {
+            "task": "dashboard.daily_referee_processor",
+            "schedule": crontab(minute=0, hour=1),  # Runs daily at 01:00 UTC
         },
     },
 )

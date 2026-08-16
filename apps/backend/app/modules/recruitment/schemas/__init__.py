@@ -41,6 +41,10 @@ from app.modules.recruitment.schemas.position import (
     PositionUpdate,
     TopCandidateItem,
 )
+from app.modules.recruitment.schemas.referees import (
+    RefereeUserInvite,
+    RefereeUserResponse,
+)
 from app.modules.recruitment.schemas.shared import ResumeConfirm, TenantScope
 from app.modules.recruitment.schemas.tag import RecruiterTagCreate, RecruiterTagResponse
 from app.modules.recruitment.schemas.team import (
@@ -83,6 +87,8 @@ __all__ = [
     "ClientResponse",
     "ClientUserInvite",
     "ClientUserResponse",
+    "RefereeUserInvite",
+    "RefereeUserResponse",
     # Pipeline DTOs
     "PipelineBoard",
     "PipelineStageColumn",

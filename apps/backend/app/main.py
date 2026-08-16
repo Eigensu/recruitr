@@ -14,6 +14,7 @@ from app.dependencies import deny_clients
 from app.modules.auth.access import warn_if_unconfigured
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
+from app.modules.dashboard.referee_router import router as referee_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
@@ -24,6 +25,7 @@ from app.modules.recruitment.controller import (
     pipeline_router,
     positions_router,
     public_router,
+    referees_router,
     tags_router,
     teams_router,
 )
@@ -80,8 +82,10 @@ app.include_router(positions_router, prefix="/api/v1/positions", tags=["Position
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])
 app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
+app.include_router(referees_router, prefix="/api/v1/referees", tags=["Referees"])
 app.include_router(storage_router, prefix="/api/v1/storage", tags=["Storage"])
 app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(referee_router)
 # The leaderboard authenticates with get_current_user alone — it never resolves
 # a tenant, so nothing else would stop a client account reading our recruiters'
 # names and scores. Guarded at the router so endpoints added later inherit it.
