@@ -61,6 +61,12 @@ _BOOT_FAILURE_EXIT_CODE = 3
 _TOPOLOGY_MARKER = ", Topology Description:"
 _MAX_ERROR_CHARS = 500
 
+# 13 Unauthorized, 18 AuthenticationFailed. Not retried: the cluster answered,
+# so it is reachable, and it said no. Almost always a rotated password or a
+# dropped database user, neither of which fixes itself in the seconds a retry
+# would buy.
+_AUTH_REJECTED_CODES = frozenset({13, 18})
+
 
 def _brief(exc: BaseException) -> str:
     """Trim a pymongo error down to the part that identifies the failure."""
@@ -201,6 +207,29 @@ async def init_db() -> None:
                 delay,
             )
             await asyncio.sleep(delay)
+        except pymongo.errors.OperationFailure as e:
+            # Sits ahead of the generic handler for the message alone — an auth
+            # rejection is exactly as fatal. But "unexpected OperationFailure"
+            # reads as a bug in this code, and sends whoever is holding the
+            # pager looking for one. Naming the credential is the difference
+            # between a two-minute fix and an hour.
+            if e.code in _AUTH_REJECTED_CODES:
+                _abort_boot(
+                    "MongoDB rejected authentication (code %s): %s. Worker cannot start. "
+                    "Check the credentials in MONGODB_URI and that the database user still "
+                    "exists with access to %s.",
+                    e.code,
+                    _brief(e),
+                    settings.MONGODB_DB_NAME,
+                )
+            _abort_boot(
+                "MongoDB initialisation failed with an unexpected %s (code %s): %s. "
+                "Worker cannot start.",
+                type(e).__name__,
+                e.code,
+                _brief(e),
+                exc_info=True,
+            )
         except Exception as e:
             # Unexpected — keep a traceback, but this one starts here rather than
             # at the top of the lifespan, so it omits the nested router frames.
