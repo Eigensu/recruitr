@@ -18,6 +18,7 @@ from app.dependencies import get_tenant, require_maintainer
 from app.main import app
 from app.modules.recruitment.models import Client, Position
 from app.modules.recruitment.schemas import TenantScope
+from tests.test_recruitment.payloads import candidate_payload
 
 _BRAND = PydanticObjectId()
 _EMP = PydanticObjectId()
@@ -55,13 +56,13 @@ async def position() -> Position:
 async def _candidate(client: AsyncClient, email: str) -> str:
     res = await client.post(
         "/api/v1/candidates",
-        json={
-            "full_name": "Anita Rao",
-            "email": email,
-            "phone": "+91 98765 00003",
-            "experience_years": 4,
-            "skills": [],
-        },
+        json=candidate_payload(
+            full_name="Anita Rao",
+            email=email,
+            phone="+91 98765 00003",
+            experience_years=4,
+            skills=[],
+        ),
     )
     assert res.status_code == 201, res.text
     return res.json()["id"]

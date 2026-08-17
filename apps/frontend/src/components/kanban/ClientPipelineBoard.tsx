@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
-import { CLIENT_STAGES, CLIENT_STAGE_LABELS, type ClientStage } from "@/lib/constants/client-pipeline";
+import {
+  CLIENT_STAGES,
+  CLIENT_STAGE_LABELS,
+  type ClientStage,
+} from "@/lib/constants/client-pipeline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 

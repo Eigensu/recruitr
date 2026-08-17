@@ -49,6 +49,13 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
     // not a derived value, so this is exactly what an effect is for.
     const storageKey = `dismissed_banners_${userId}`;
     const dismissed = JSON.parse(sessionStorage.getItem(storageKey) || "[]");
+    // sessionStorage does not exist during SSR, so this cannot move into a lazy
+    // useState initialiser without the server rendering a different tree than
+    // the client hydrates. The cascading render the rule warns about is the
+    // single null → [] transition that keeps a dismissed banner from flashing.
+    // The rule-shaped fix is useSyncExternalStore, which needs a subscribe/
+    // notify pair because handleDismiss writes to the same key in this tab.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDismissedIds(dismissed);
   }, [userId]);
 
@@ -59,7 +66,8 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
 
   // Derived at render time instead of clamped via setState-in-effect, so
   // currentIndex never has to be "corrected" out-of-band when the list shrinks.
-  const safeIndex = activeMessages.length > 0 ? Math.min(currentIndex, activeMessages.length - 1) : 0;
+  const safeIndex =
+    activeMessages.length > 0 ? Math.min(currentIndex, activeMessages.length - 1) : 0;
 
   if (activeMessages.length === 0) return null;
 
@@ -75,7 +83,8 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
   };
 
   const nextMsg = () => setCurrentIndex((safeIndex + 1) % activeMessages.length);
-  const prevMsg = () => setCurrentIndex((safeIndex - 1 + activeMessages.length) % activeMessages.length);
+  const prevMsg = () =>
+    setCurrentIndex((safeIndex - 1 + activeMessages.length) % activeMessages.length);
 
   return (
     <AnimatePresence mode="wait">

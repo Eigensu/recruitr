@@ -1,0 +1,128 @@
+# Continuous integration for both apps.
+#
+# Runs on every pull request and on pushes to the long-lived branches, and is
+# also callable from other workflows (`workflow_call`) so deploy-uat.yml can
+# gate a deploy on exactly these checks rather than duplicating them.
+#
+# Backend and frontend run as separate jobs so a Python failure does not hide a
+# TypeScript one — and so the two run in parallel.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, uat]
+  workflow_call:
+
+# Superseded runs on the same ref are pointless here — unlike a deploy, nothing
+# is half-applied when a CI run is cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: mongodb://localhost:27017/recruitr?replicaSet=rs0
+      MONGODB_DB_NAME: recruitr
+      REDIS_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12" # matches apps/backend/Dockerfile
+          cache: pip
+          cache-dependency-path: apps/backend/requirements-dev.txt
+
+      - name: Install dependencies
+        working-directory: apps/backend
+        run: pip install -r requirements-dev.txt
+
+      # Lint before tests: a 10-second failure should not wait on a 3-minute
+      # suite. `continue-on-error` is deliberately absent — these pass on main
+      # and are meant to keep passing.
+      - name: Lint (ruff)
+        working-directory: apps/backend
+        run: ruff check .
+
+      - name: Format check (ruff)
+        working-directory: apps/backend
+        run: ruff format --check .
+
+      # tests/conftest.py builds `{MONGODB_DB_NAME}_test` per test and Beanie
+      # opens transactions, which Mongo only allows on a replica set. A plain
+      # `services:` container cannot run rs.initiate, so start it by hand — the
+      # same single-node rs0 as docker-compose.yml. The member host has to be
+      # localhost:27017 so the driver on the runner can reach whatever address
+      # replica-set discovery hands back.
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for _ in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec mongo mongosh --quiet --eval \
+            'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
+          for _ in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+              echo "replica set primary is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::MongoDB replica set never elected a primary"
+          exit 1
+
+      - name: Test (pytest)
+        working-directory: apps/backend
+        run: pytest -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint)
+        run: pnpm --filter frontend lint
+
+      - name: Format check (prettier)
+        run: pnpm --filter frontend format:check
+
+      - name: Typecheck (tsc)
+        run: pnpm --filter frontend typecheck
+
+      # `next build` catches what tsc cannot: bad server/client boundaries,
+      # imports that only resolve at build time, and route collisions.
+      - name: Build
+        run: pnpm --filter frontend build
+
+  workflows:
+    name: Workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The repo deploys itself from these files now, so a typo in one is a
+      # production concern. actionlint also runs shellcheck over every `run:`.
+      - name: Lint workflow files
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color

@@ -17,18 +17,19 @@ from app.dependencies import get_tenant
 from app.main import app
 from app.modules.recruitment.models import Client, Employee, Mapping, Position
 from app.modules.recruitment.schemas import TenantScope
+from tests.test_recruitment.payloads import candidate_payload
 
 _BRAND = PydanticObjectId()
 _EMP = PydanticObjectId()
 TENANT = TenantScope(brand_id=_BRAND, employee_id=_EMP)
 
-PAYLOAD = {
-    "full_name": "Anita Rao",
-    "email": "anita@test.com",
-    "phone": "+91 98765 00001",
-    "experience_years": 4,
-    "skills": ["Mixology"],
-}
+PAYLOAD = candidate_payload(
+    full_name="Anita Rao",
+    email="anita@test.com",
+    phone="+91 98765 00001",
+    experience_years=4,
+    skills=["Mixology"],
+)
 
 
 @pytest_asyncio.fixture
