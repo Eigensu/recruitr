@@ -28,6 +28,7 @@ import {
   unmapCandidateFromPosition,
   deletePosition,
   reopenPosition,
+  updatePositionApproval,
 } from "@/lib/api/positions";
 import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import type { ApiClientOption, ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
@@ -103,6 +104,7 @@ function PositionCard({
   onDelete,
   onReopen,
   onEdit,
+  onApprove,
 }: Readonly<{
   position: ApiPosition;
   isSelected: boolean;
@@ -111,11 +113,13 @@ function PositionCard({
   onDelete?: (id: string) => Promise<void>;
   onReopen?: (id: string) => Promise<void>;
   onEdit?: (position: ApiPosition) => void;
+  onApprove?: (id: string, status: string) => Promise<void>;
 }>) {
   const { setNodeRef, isOver } = useDroppable({ id: position.id });
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [reopening, setReopening] = React.useState(false);
+  const [approving, setApproving] = React.useState(false);
 
   const total = position.total_seats;
   const filled = position.mapped_count;
@@ -147,6 +151,17 @@ function PositionCard({
       await onReopen(position.id);
     } finally {
       setReopening(false);
+    }
+  }
+
+  async function handleApproveClick(e: React.MouseEvent, status: string) {
+    e.stopPropagation();
+    if (!onApprove) return;
+    setApproving(true);
+    try {
+      await onApprove(position.id, status);
+    } finally {
+      setApproving(false);
     }
   }
 
@@ -224,6 +239,26 @@ function PositionCard({
                 {reopening ? "…" : "Reopen"}
               </button>
             )}
+            {isMaintainer && position.approval_status === "pending" && onApprove && (
+              <div className="flex items-center gap-1 relative z-10 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => handleApproveClick(e, "approved")}
+                  disabled={approving}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-60"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleApproveClick(e, "rejected")}
+                  disabled={approving}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-60"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
           </div>
           <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
             {position.role}
@@ -292,9 +327,28 @@ function PositionCard({
 
       {/* Tags row */}
       <div className="flex flex-wrap gap-1.5 mb-3">
+        {position.approval_status && (
+          <span
+            className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full font-bold",
+              position.approval_status === "approved"
+                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                : position.approval_status === "rejected"
+                  ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                  : "bg-amber-500/10 text-amber-500 border border-amber-500/20",
+            )}
+          >
+            {position.approval_status.toUpperCase()}
+          </span>
+        )}
         {position.department && (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium">
             {position.department}
+          </span>
+        )}
+        {position.mumbai_area && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium flex items-center gap-0.5">
+            <IconMapPin className="size-2.5" /> {position.mumbai_area}
           </span>
         )}
         <span
@@ -748,6 +802,17 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
     toast(`Position "${updated.role}" updated`, "success");
   }
 
+  async function handleApprovePosition(id: string, status: string) {
+    try {
+      const apiFn = updatePositionApproval(apiFetch);
+      const updated = await apiFn(id, status);
+      setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+      toast(`Position ${status}`, "success");
+    } catch (err: unknown) {
+      toast(`Failed to update approval: ${(err as Error).message}`, "error");
+    }
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
@@ -810,16 +875,14 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
                 {!isClient && " Drag candidates onto a position to map them."}
               </p>
             </div>
-            {!isClient && (
-              <button
-                type="button"
-                onClick={() => setAddPositionOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
-              >
-                <IconPlus className="size-4" />
-                New Position
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setAddPositionOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow text-navy hover:bg-yellow-dark text-sm font-bold transition-all shadow-md shadow-yellow/10 shrink-0"
+            >
+              <IconPlus className="size-4" />
+              New Position
+            </button>
           </div>
         </div>
 
@@ -898,6 +961,7 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
                       onDelete={handleDeletePosition}
                       onReopen={handleReopenPosition}
                       onEdit={(p) => setEditingPosition(p)}
+                      onApprove={handleApprovePosition}
                     />
                   ))}
                 </div>

@@ -30,6 +30,7 @@ from app.modules.recruitment.schemas import (
     ClientOption,
     MapCandidateRequest,
     MapCandidateResponse,
+    PositionApprovalRequest,
     PositionCreate,
     PositionFiltersResponse,
     PositionListItem,
@@ -356,26 +357,36 @@ async def list_positions(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionListItem:
+async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionListItem:
+    from app.modules.auth.models import UserRole
+
+    if viewer.role == UserRole.client and not data.client_id:
+        data.client_id = str(viewer.client_id)
+
     # Verify client belongs to tenant and get details
     client_oid = to_object_id(data.client_id, "client_id")
     if not client_oid:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, _ERR_INVALID_CLIENT_ID)
 
+    if viewer.role == UserRole.client and viewer.client_id != client_oid:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Cannot create position for another organization"
+        )
+
     # is_active matters: an archived client is gone from the dropdowns, so it must
     # not accept new positions either.
     client_doc = await Client.find_one(
-        {"_id": client_oid, "brand_id": tenant.brand_id, "is_active": True}
+        {"_id": client_oid, "brand_id": viewer.brand_id, "is_active": True}
     )
     if not client_doc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or unauthorized client")
 
     reqs = _get_effective_requirements(data)
 
-    code = await generate_position_code(tenant.brand_id, client_doc.code)
+    code = await generate_position_code(viewer.brand_id, client_doc.code)
 
     doc = Position(
-        brand_id=tenant.brand_id,
+        brand_id=viewer.brand_id,
         code=code,
         client_id=client_oid,
         client_name=client_doc.name,
@@ -405,7 +416,7 @@ async def create_position(tenant: _Tenant, data: PositionCreate) -> PositionList
                 raise HTTPException(
                     status.HTTP_409_CONFLICT, "Position code already exists"
                 ) from None
-            doc.code = await generate_position_code(tenant.brand_id, client_doc.code)
+            doc.code = await generate_position_code(viewer.brand_id, client_doc.code)
 
     return PositionListItem(
         id=str(doc.id),
@@ -852,3 +863,27 @@ async def unmap_candidate_from_position(
     # bare delete here skipped.
     await service_unmap_candidate(scope=tenant, mapping=mapping)
     return {"success": True, "message": "Candidate unmapped"}
+
+
+@router.put("/{id}/approval")
+async def update_position_approval(
+    id: str,
+    req: PositionApprovalRequest,
+    tenant: _Tenant,
+):
+    from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
+
+    pos_oid = to_object_id(id)
+    doc = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
+
+    try:
+        status_enum = PositionApprovalStatus(req.approval_status)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid approval status") from None
+
+    doc.approval_status = status_enum
+    await doc.save()
+
+    return {"success": True, "approval_status": doc.approval_status}

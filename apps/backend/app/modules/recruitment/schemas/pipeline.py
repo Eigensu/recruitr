@@ -23,6 +23,11 @@ class StageMappingItem(BaseModel):
     match_score: float | None = None
     decision: str = "pending"
     mapped_at: datetime
+    interview_date: datetime | None = None
+    joining_date: datetime | None = None
+    offer_letter_url: str | None = None
+    salary_offered: float | None = None
+    dropped_notes: str | None = None
 
 
 class PipelineStageColumn(BaseModel):
@@ -57,3 +62,20 @@ class StageMoveResponse(BaseModel):
     decision: str = "pending"
     recruiter_score_delta: int = 0  # Varies by stage
     activity_id: str | None = None
+
+
+class PipelineSetInterviewRequest(BaseModel):
+    interview_date: datetime
+
+
+class PipelineUploadOfferRequest(BaseModel):
+    offer_letter_url: str
+    salary_offered: float
+
+
+class PipelineSetJoiningRequest(BaseModel):
+    joining_date: datetime
+
+
+class PipelineCandidateDroppedRequest(BaseModel):
+    dropped_notes: str

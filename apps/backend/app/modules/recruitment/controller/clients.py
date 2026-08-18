@@ -34,6 +34,7 @@ from app.modules.recruitment.repository import generate_client_code
 from app.modules.recruitment.schemas import (
     ClientCreate,
     ClientResponse,
+    ClientSelfUpdate,
     ClientUpdate,
     ClientUserInvite,
     ClientUserResponse,
@@ -281,6 +282,30 @@ async def get_my_client(viewer: _Viewer):
     doc = await Client.find_one({"_id": viewer.client_id, "brand_id": viewer.brand_id})
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_NOT_FOUND)
+    return await _with_counts(viewer, doc)
+
+
+@router.patch("/me", response_model=ClientResponse)
+async def update_my_client(viewer: _Viewer, payload: ClientSelfUpdate):
+    """Update the signed-in client's own company profile (logo and description)."""
+    if viewer.client_id is None:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only client accounts can update their company profile.",
+        )
+    doc = await Client.find_one({"_id": viewer.client_id, "brand_id": viewer.brand_id})
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_NOT_FOUND)
+
+    update_dict = payload.model_dump(exclude_unset=True)
+    if "logo_url" in update_dict:
+        doc.logo_url = update_dict["logo_url"]
+    if "brand_description" in update_dict:
+        doc.brand_description = update_dict["brand_description"]
+
+    if update_dict:
+        await doc.save()
+
     return await _with_counts(viewer, doc)
 
 

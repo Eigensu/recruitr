@@ -17,6 +17,8 @@ interface ClientProfile {
   code: string;
   city?: string;
   industry?: string;
+  logo_url?: string;
+  brand_description?: string;
   website?: string;
   contact_person?: string;
   contact_email?: string;
@@ -35,12 +37,18 @@ export default function CompanyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [brandDescription, setBrandDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     async function loadClient() {
       try {
-        // apiFetch returns the parsed body, not a Response — treating it as one
-        // made every load fail on `res.ok` being undefined.
-        setClient(await apiFetch<ClientProfile>("/api/v1/clients/me"));
+        const data = await apiFetch<ClientProfile>("/api/v1/clients/me");
+        setClient(data);
+        setLogoUrl(data.logo_url || "");
+        setBrandDescription(data.brand_description || "");
       } catch (err: unknown) {
         setError(apiErrorMessage(err, "Failed to load company profile."));
       } finally {
@@ -49,6 +57,25 @@ export default function CompanyProfilePage() {
     }
     void loadClient();
   }, [apiFetch]);
+
+  async function handleSave() {
+    try {
+      setSaving(true);
+      const updated = await apiFetch<ClientProfile>("/api/v1/clients/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          logo_url: logoUrl || null,
+          brand_description: brandDescription || null,
+        }),
+      });
+      setClient(updated);
+      setIsEditing(false);
+    } catch (err: unknown) {
+      alert(apiErrorMessage(err, "Failed to save company profile."));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -89,6 +116,31 @@ export default function CompanyProfilePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {!isEditing ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-3 py-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy/80 rounded border border-border transition-colors"
+            >
+              Edit Profile
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs font-semibold bg-navy text-white rounded hover:bg-navy/90 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          )}
           <div
             className={`px-3 py-1 rounded-full text-xs font-semibold ${client.is_active ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
           >
@@ -98,6 +150,56 @@ export default function CompanyProfilePage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Brand Profile */}
+        <div className="bg-surface border border-border rounded-xl p-5">
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider mb-4 border-b border-border pb-2">
+            Brand Profile
+          </h3>
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-xs text-text-muted uppercase tracking-wider mb-2">
+                Company Logo URL
+              </p>
+              {isEditing ? (
+                <input
+                  type="url"
+                  className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-navy"
+                  placeholder="https://example.com/logo.png"
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  disabled={saving}
+                />
+              ) : client.logo_url ? (
+                <img src={client.logo_url} alt="Logo" className="h-12 object-contain" />
+              ) : (
+                <p className="text-sm text-text-secondary italic">— No logo provided —</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-text-muted uppercase tracking-wider mb-2">
+                Brand Description
+              </p>
+              {isEditing ? (
+                <textarea
+                  className="w-full bg-canvas border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:border-navy min-h-[100px]"
+                  placeholder="Tell candidates about your company..."
+                  value={brandDescription}
+                  onChange={(e) => setBrandDescription(e.target.value)}
+                  disabled={saving}
+                />
+              ) : (
+                <p className="text-sm text-text-primary whitespace-pre-wrap">
+                  {client.brand_description || (
+                    <span className="italic text-text-secondary">
+                      — No brand description provided —
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Contact Details */}
           <div className="bg-surface border border-border rounded-xl p-5">

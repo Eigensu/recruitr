@@ -6,6 +6,7 @@ import {
   getDashboardClients,
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
+  getDashboardSourcing,
 } from "@/lib/api/dashboard";
 import { getEmployeesForDashboard } from "@/lib/api/employees";
 import type {
@@ -21,6 +22,7 @@ import type {
   PipelineStageMetric,
   RecruiterDashboardStat,
 } from "@/types/dashboard";
+import type { SourcingAnalyticsItem } from "@/types";
 
 const PIPELINE_STAGE_ORDER: PipelineStage[] = [
   "sourced",
@@ -427,12 +429,26 @@ export async function getClientProfilesData(): Promise<ClientProfileRow[]> {
     return items.map((item) => ({
       client_name: item.client_name,
       total_open_positions: item.total_open_positions,
-      total_candidates: item.total_candidates,
-      active_recruiters: item.active_recruiters,
-      last_activity: item.last_activity,
-      status: item.status,
+      total_candidates: item.total_candidates || 0,
+      active_recruiters: item.active_recruiters || 0,
+      last_activity: item.last_activity || null,
+      status: item.status || "active",
+      pipeline_candidates: item.pipeline_candidates || 0,
+      offers_accepted: item.offers_accepted || 0,
+      joined_candidates: item.joined_candidates || 0,
     }));
-  } catch {
+  } catch (error) {
+    console.error("Failed to load client profiles for dashboard:", error);
+    return [];
+  }
+}
+
+export async function getSourcingDashboardData(): Promise<SourcingAnalyticsItem[]> {
+  try {
+    const data = await getDashboardSourcing();
+    return data.metrics || [];
+  } catch (error) {
+    console.error("Failed to load sourcing data for dashboard:", error);
     return [];
   }
 }

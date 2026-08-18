@@ -13,7 +13,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, get_viewer
 from app.main import app
 from app.modules.recruitment.models import Client, Employee, Mapping, Position
 from app.modules.recruitment.schemas import TenantScope
@@ -28,15 +28,29 @@ PAYLOAD = {
     "phone": "+91 98765 00001",
     "experience_years": 4,
     "skills": ["Mixology"],
+    "communication": "Excellent",
+    "education": "Bachelor's",
+    "brand_experience": "Taj",
+    "department": "Service",
+    "specialization": "F&B",
+    "city": "Mumbai",
+    "gender": "female",
+    "current_role": "Manager",
+    "expected_salary": 1500000,
+    "notice_period": "30 Days",
+    "source": "internal",
+    "salary": 1200000,
 }
 
 
 @pytest_asyncio.fixture
 async def client_a():
     app.dependency_overrides[get_tenant] = lambda: TENANT
+    app.dependency_overrides[get_viewer] = lambda: TENANT
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 @pytest_asyncio.fixture

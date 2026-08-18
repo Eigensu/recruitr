@@ -8,10 +8,14 @@ export type ClientStage =
   | "decision_pending"
   | "offer"
   | "offer_accepted"
-  | "position_close";
+  | "position_close"
+  | "selected"
+  | "joined"
+  | "rejected"
+  | "candidate_dropped";
 
 // Exactly which stages a client is allowed to see — notably excluding
-// "rejected" and "on_hold", which are internal-only.
+// "on_hold", which is internal-only.
 export const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
   sourced: "Sourced",
   sent_to_client: "Sent to Client",
@@ -19,7 +23,11 @@ export const CLIENT_STAGE_LABELS: Record<ClientStage, string> = {
   decision_pending: "Decision Pending",
   offer: "Offer",
   offer_accepted: "Offer Accepted",
-  position_close: "Joined",
+  position_close: "Joined (Legacy)",
+  selected: "Selected",
+  joined: "Joined",
+  rejected: "Rejected",
+  candidate_dropped: "Candidate Dropped",
 };
 
 export const CLIENT_STAGES: ClientStage[] = [
@@ -30,4 +38,8 @@ export const CLIENT_STAGES: ClientStage[] = [
   "offer",
   "offer_accepted",
   "position_close",
+  "selected",
+  "joined",
+  "rejected",
+  "candidate_dropped",
 ];

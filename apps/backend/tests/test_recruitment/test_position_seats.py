@@ -14,7 +14,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant, require_maintainer
+from app.dependencies import get_tenant, get_viewer, require_maintainer
 from app.main import app
 from app.modules.recruitment.models import Client, Position
 from app.modules.recruitment.schemas import TenantScope
@@ -28,10 +28,12 @@ TENANT = TenantScope(brand_id=_BRAND, employee_id=_EMP)
 async def client_a():
     """Authenticated as a maintainer — reopening a position is gated on it."""
     app.dependency_overrides[get_tenant] = lambda: TENANT
+    app.dependency_overrides[get_viewer] = lambda: TENANT
     app.dependency_overrides[require_maintainer] = lambda: object()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
     app.dependency_overrides.pop(require_maintainer, None)
 
 
@@ -61,6 +63,18 @@ async def _candidate(client: AsyncClient, email: str) -> str:
             "phone": "+91 98765 00003",
             "experience_years": 4,
             "skills": [],
+            "communication": "Excellent",
+            "education": "Bachelor's",
+            "brand_experience": "Taj",
+            "department": "Service",
+            "specialization": "F&B",
+            "city": "Mumbai",
+            "gender": "female",
+            "current_role": "Manager",
+            "expected_salary": 1500000,
+            "notice_period": "30 Days",
+            "source": "internal",
+            "salary": 1200000,
         },
     )
     assert res.status_code == 201, res.text

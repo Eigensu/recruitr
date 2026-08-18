@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { ClientMessage } from "@/components/dashboard/ClientMessagingBanner";
+import type { DashboardSourcingResponse } from "@/types";
 import type { ApiPosition } from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -190,6 +191,10 @@ export function getDashboardOverview() {
   return dashboardFetch<ApiDashboardOverviewResponse>("/api/v1/dashboard/overview");
 }
 
+export function getDashboardSourcing() {
+  return dashboardFetch<DashboardSourcingResponse>("/api/v1/dashboard/sourcing");
+}
+
 export function getDashboardPipeline() {
   return dashboardFetch<ApiDashboardPipelineResponse>("/api/v1/dashboard/pipeline");
 }
@@ -238,12 +243,16 @@ export function getAllDashboardActivities(limit = 60) {
 }
 
 export interface ApiClientProfileRow {
+  client_id: string;
   client_name: string;
   total_open_positions: number;
   total_candidates: number;
   active_recruiters: number;
   last_activity: string | null;
   status: "active" | "on_hold" | "closed";
+  pipeline_candidates?: number;
+  offers_accepted?: number;
+  joined_candidates?: number;
 }
 
 export function getClientProfiles(query: Record<string, QueryValue> = {}) {

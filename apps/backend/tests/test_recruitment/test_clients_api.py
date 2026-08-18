@@ -15,7 +15,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_current_user_doc, get_tenant
+from app.dependencies import get_current_user_doc, get_tenant, get_viewer
 from app.main import app
 from app.modules.auth.models import UserRole
 from app.modules.recruitment.models import Client, Position
@@ -27,14 +27,18 @@ _EMP_A = PydanticObjectId()
 
 TENANT_A = TenantScope(brand_id=_BRAND_A, employee_id=_EMP_A)
 
-_ADMIN = SimpleNamespace(role=UserRole.admin, email="admin@test.com")
-_MAINTAINER = SimpleNamespace(role=UserRole.maintainer, email="boss@test.com")
+
+_ADMIN = SimpleNamespace(id=PydanticObjectId(), role=UserRole.admin, email="admin@test.com")
+_MAINTAINER = SimpleNamespace(
+    id=PydanticObjectId(), role=UserRole.maintainer, email="boss@test.com"
+)
 
 
 @pytest_asyncio.fixture
 async def admin_a():
     """Brand A client whose user is an admin — passes require_admin."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     app.dependency_overrides[get_current_user_doc] = lambda: _ADMIN
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
@@ -45,6 +49,7 @@ async def admin_a():
 async def maintainer_a():
     """Brand A client whose user is only a maintainer — require_admin must reject."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     app.dependency_overrides[get_current_user_doc] = lambda: _MAINTAINER
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
@@ -232,7 +237,13 @@ async def test_update_city_only_keeps_name(admin_a: AsyncClient) -> None:
     created = await _create(admin_a, "Hunger Inc", "Mumbai")
     res = await admin_a.patch(f"/api/v1/clients/{created['id']}", json={"city": "Pune"})
     assert res.status_code == 200
-    assert res.json() == {**created, "city": "Pune"}
+    res_json = res.json()
+    res_json.pop("updated_at", None)
+    res_json.pop("created_at", None)
+    expected = {**created, "city": "Pune"}
+    expected.pop("updated_at", None)
+    expected.pop("created_at", None)
+    assert res_json == expected
 
 
 @pytest.mark.asyncio

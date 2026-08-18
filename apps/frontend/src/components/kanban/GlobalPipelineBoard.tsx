@@ -62,8 +62,12 @@ const STAGE_LABELS: Record<KanbanStage, string> = {
   decision_pending: "Decision Pending",
   offer: "Offer",
   offer_accepted: "Offer Accepted",
-  position_close: "Joined",
+  position_close: "Joined (Legacy)",
+  selected: "Selected",
+  joined: "Joined",
   rejected: "Rejected",
+  candidate_dropped: "Candidate Dropped",
+  on_hold: "On Hold",
 };
 
 const ALL_STAGES: KanbanStage[] = [
@@ -74,7 +78,11 @@ const ALL_STAGES: KanbanStage[] = [
   "offer",
   "offer_accepted",
   "position_close",
+  "selected",
+  "joined",
   "rejected",
+  "candidate_dropped",
+  "on_hold",
 ];
 
 const selectStyle = {
@@ -140,15 +148,34 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
   // Apply client-side filters to board columns
   const filteredStages = useMemo(() => {
     if (!board) return [];
-    return board.stages.map((col) => ({
-      ...col,
-      mappings: col.mappings.filter((m) => {
-        if (filters.recruiter_id && m.employee_id !== filters.recruiter_id) return false;
-        if (filters.position_id && m.position_id !== filters.position_id) return false;
-        if (filters.client && m.position_client !== filters.client) return false;
+    const orderedStages = ALL_STAGES.map((s) => {
+      const found = board.stages.find((col) => col.stage === s);
+      return found || { stage: s, label: STAGE_LABELS[s], mappings: [] };
+    });
+
+    return orderedStages
+      .map((col) => ({
+        ...col,
+        mappings: col.mappings.filter((m) => {
+          if (filters.recruiter_id && m.employee_id !== filters.recruiter_id) return false;
+          if (filters.position_id && m.position_id !== filters.position_id) return false;
+          if (filters.client && m.position_client !== filters.client) return false;
+          return true;
+        }),
+      }))
+      .filter((col) => {
+        // Hide legacy columns if they are completely empty in the source board data
+        const isLegacy =
+          col.stage === "decision_pending" ||
+          col.stage === "offer" ||
+          col.stage === "offer_accepted" ||
+          col.stage === "position_close";
+        if (isLegacy) {
+          const originalCol = board.stages.find((c) => c.stage === col.stage);
+          if (!originalCol || originalCol.mappings.length === 0) return false;
+        }
         return true;
-      }),
-    }));
+      });
   }, [board, filters]);
 
   // Find the active drag card across all columns

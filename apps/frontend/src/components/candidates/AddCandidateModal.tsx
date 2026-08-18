@@ -19,6 +19,11 @@ const EMPTY_FORM = {
   previousCompany: "",
   experienceYears: "",
   skills: "",
+  department: "",
+  city: "",
+  expectedSalary: "",
+  sourceType: "internal", // internal or external
+  sourceChannel: "", // Sourcing Team or external ref
 };
 
 // Tailwind v4 input class reused across every field
@@ -49,6 +54,10 @@ export default function AddCandidateModal({
       phone: formData.phone.trim() || undefined,
       previous_company: formData.previousCompany.trim() || undefined,
       experience_years: Number(formData.experienceYears) || 0,
+      department: formData.department.trim() || undefined,
+      city: formData.city.trim() || undefined,
+      expected_salary: Number(formData.expectedSalary) || undefined,
+      source: formData.sourceType === "internal" ? formData.sourceChannel : "external",
       skills: formData.skills
         .split(",")
         .map((s) => s.trim())
@@ -203,6 +212,88 @@ export default function AddCandidateModal({
                       className={INPUT_CLS}
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="cand-dept" className={LABEL_CLS}>
+                      Department
+                    </label>
+                    <select
+                      id="cand-dept"
+                      value={formData.department}
+                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Select...</option>
+                      <option value="BOH">BOH</option>
+                      <option value="Service">Service</option>
+                      <option value="Corporate">Corporate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="cand-city" className={LABEL_CLS}>
+                      City
+                    </label>
+                    <input
+                      id="cand-city"
+                      type="text"
+                      placeholder="e.g. Mumbai"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="cand-salary" className={LABEL_CLS}>
+                      Expected Salary
+                    </label>
+                    <input
+                      id="cand-salary"
+                      type="number"
+                      placeholder="e.g. 50000"
+                      value={formData.expectedSalary}
+                      onChange={(e) => setFormData({ ...formData, expectedSalary: e.target.value })}
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="cand-source-type" className={LABEL_CLS}>
+                      Source Type
+                    </label>
+                    <select
+                      id="cand-source-type"
+                      value={formData.sourceType}
+                      onChange={(e) => setFormData({ ...formData, sourceType: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="internal">Internal (Sourcing Team)</option>
+                      <option value="external">External (Referral/Other)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="cand-source-channel" className={LABEL_CLS}>
+                    {formData.sourceType === "internal"
+                      ? "Sourcing Team Name"
+                      : "External Source Details"}
+                  </label>
+                  <input
+                    id="cand-source-channel"
+                    type="text"
+                    placeholder={
+                      formData.sourceType === "internal"
+                        ? "e.g. Team Alpha"
+                        : "e.g. LinkedIn, Connect Code"
+                    }
+                    value={formData.sourceChannel}
+                    onChange={(e) => setFormData({ ...formData, sourceChannel: e.target.value })}
+                    className={INPUT_CLS}
+                  />
                 </div>
 
                 <div>

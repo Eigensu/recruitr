@@ -5,6 +5,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.common.dtos.pagination import PaginatedResponse
+from app.modules.recruitment.enums.department import Department
+from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 
 
 class MappedPreview(BaseModel):
@@ -22,11 +24,13 @@ class PositionListItem(BaseModel):
     client_id: str
     client_name: str
     role: str
-    department: str | None = None
+    department: Department | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str
     status: str
+    approval_status: PositionApprovalStatus | None = None
     total_seats: int
     filled_seats: int
     remaining_seats: int
@@ -45,7 +49,8 @@ class PositionListItem(BaseModel):
 class PositionCreate(BaseModel):
     client_id: str
     role: str
-    department: str | None = None
+    department: Department | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str = "Mid"
@@ -58,16 +63,22 @@ class PositionCreate(BaseModel):
 
 class PositionUpdate(BaseModel):
     role: str | None = None
-    department: str | None = None
+    department: Department | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str | None = None
     requirements: list[str] | None = None
     total_seats: int | None = Field(default=None, ge=0)
     status: str | None = None
+    approval_status: PositionApprovalStatus | None = None
     assigned_employee_id: str | None = None
     target_close: datetime | None = None
     notes: str | None = None
+
+
+class PositionApprovalRequest(BaseModel):
+    approval_status: str
 
 
 class TopCandidateItem(BaseModel):

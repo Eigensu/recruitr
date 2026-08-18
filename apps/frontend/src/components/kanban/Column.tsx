@@ -13,7 +13,11 @@ const STAGE_ACCENT: Record<KanbanStage, string> = {
   offer: "text-yellow border-yellow/30 bg-yellow/5",
   offer_accepted: "text-emerald-400 border-emerald-500/30 bg-emerald-500/5",
   position_close: "text-teal-400 border-teal-500/30 bg-teal-500/5",
+  selected: "text-indigo-400 border-indigo-500/30 bg-indigo-500/5",
+  joined: "text-emerald-500 border-emerald-600/30 bg-emerald-600/5",
   rejected: "text-red-400 border-red-500/30 bg-red-500/5",
+  candidate_dropped: "text-red-600 border-red-700/30 bg-red-700/5",
+  on_hold: "text-gray-400 border-gray-500/30 bg-gray-500/5",
 };
 
 const STAGE_DOT: Record<KanbanStage, string> = {
@@ -24,7 +28,11 @@ const STAGE_DOT: Record<KanbanStage, string> = {
   offer: "bg-yellow",
   offer_accepted: "bg-emerald-400",
   position_close: "bg-teal-400",
+  selected: "bg-indigo-400",
+  joined: "bg-emerald-500",
   rejected: "bg-red-400",
+  candidate_dropped: "bg-red-600",
+  on_hold: "bg-gray-400",
 };
 
 interface Props {
@@ -32,9 +40,16 @@ interface Props {
   label: string;
   cards: PipelineCard[];
   readOnly?: boolean;
+  onCardClick?: (card: PipelineCard) => void;
 }
 
-export default function KanbanColumn({ stage, label, cards, readOnly }: Readonly<Props>) {
+export default function KanbanColumn({
+  stage,
+  label,
+  cards,
+  readOnly,
+  onCardClick,
+}: Readonly<Props>) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
     disabled: readOnly,
@@ -76,7 +91,12 @@ export default function KanbanColumn({ stage, label, cards, readOnly }: Readonly
         )}
       >
         {cards.map((card) => (
-          <KanbanCard key={card.mapping_id} card={card} readOnly={readOnly} />
+          <KanbanCard
+            key={card.mapping_id}
+            card={card}
+            readOnly={readOnly}
+            onCardClick={onCardClick}
+          />
         ))}
         {cards.length === 0 && (
           <div className="flex items-center justify-center h-16">

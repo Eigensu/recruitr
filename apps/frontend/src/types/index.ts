@@ -102,10 +102,12 @@ export interface ApiPosition {
   client_name: string;
   role: string;
   department: string | null;
+  mumbai_area: string | null;
   city: string | null;
   train_line: string | null;
   seniority: string;
   status: string; // "open" | "on_hold" | "closed"
+  approval_status: string | null;
   total_seats: number;
   filled_seats: number;
   remaining_seats: number;
@@ -210,7 +212,10 @@ export type PipelineStage =
   | "offer_accepted"
   | "position_close"
   | "rejected"
-  | "on_hold";
+  | "on_hold"
+  | "selected"
+  | "joined"
+  | "candidate_dropped";
 
 /** Canonical candidate returned by GET /api/v1/candidates */
 export interface ApiCandidate {
@@ -405,7 +410,11 @@ export type KanbanStage =
   | "offer"
   | "offer_accepted"
   | "position_close"
-  | "rejected";
+  | "rejected"
+  | "selected"
+  | "joined"
+  | "candidate_dropped"
+  | "on_hold";
 
 export interface PipelineCard {
   mapping_id: string;
@@ -421,6 +430,11 @@ export interface PipelineCard {
   match_score: number | null;
   decision: string;
   mapped_at: string;
+  interview_date: string | null;
+  joining_date: string | null;
+  offer_letter_url: string | null;
+  salary_offered: number | null;
+  dropped_notes: string | null;
 }
 
 export interface PipelineColumn {
@@ -439,4 +453,19 @@ export interface PublicBrand {
   id: string;
   name: string;
   logo_url: string | null;
+}
+
+export type Department = "BOH" | "Service" | "Corporate";
+
+export interface SourcingAnalyticsItem {
+  source: string;
+  source_channel: string;
+  count: number;
+  pipeline_candidates: number;
+  offers_accepted: number;
+  joined_candidates: number;
+}
+
+export interface DashboardSourcingResponse {
+  metrics: SourcingAnalyticsItem[];
 }

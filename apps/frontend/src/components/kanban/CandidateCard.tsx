@@ -10,6 +10,7 @@ interface Props {
   card: PipelineCard;
   isDragOverlay?: boolean;
   readOnly?: boolean;
+  onCardClick?: (card: PipelineCard) => void;
 }
 
 function scoreColor(score: number | null): string {
@@ -23,6 +24,7 @@ export default function KanbanCard({
   card,
   isDragOverlay = false,
   readOnly = false,
+  onCardClick,
 }: Readonly<Props>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.mapping_id,
@@ -84,22 +86,66 @@ export default function KanbanCard({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
-          {card.position_code}
-        </span>
-        {!readOnly && card.match_score !== null && (
-          <span
-            className={cn(
-              "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border",
-              scoreColor(card.match_score),
-            )}
-          >
-            <IconSparkles className="size-2.5" />
-            {Math.round(card.match_score * 100)}%
+      <div className="flex flex-col gap-1.5 mt-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
+            {card.position_code}
           </span>
+          {!readOnly && card.match_score !== null && (
+            <span
+              className={cn(
+                "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border",
+                scoreColor(card.match_score),
+              )}
+            >
+              <IconSparkles className="size-2.5" />
+              {Math.round(card.match_score * 100)}%
+            </span>
+          )}
+        </div>
+
+        {card.stage === "joined" && (
+          <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
+            {card.joining_date && (
+              <span className="text-[10px] text-text-muted">
+                Joined:{" "}
+                <strong className="text-emerald-400">
+                  {new Date(card.joining_date).toLocaleDateString()}
+                </strong>
+              </span>
+            )}
+            {card.salary_offered && (
+              <span className="text-[10px] text-text-muted">
+                Salary:{" "}
+                <strong className="text-yellow">₹{card.salary_offered.toLocaleString()}</strong>
+              </span>
+            )}
+          </div>
+        )}
+
+        {card.stage === "candidate_dropped" && card.dropped_notes && (
+          <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
+            <span className="text-[10px] text-text-muted italic break-words">
+              &quot;{card.dropped_notes}&quot;
+            </span>
+          </div>
         )}
       </div>
+
+      {/* Action Button for Client Portal */}
+      {onCardClick &&
+        card.stage !== "joined" &&
+        card.stage !== "rejected" &&
+        card.stage !== "candidate_dropped" && (
+          <div className="mt-3 pt-3 border-t border-border">
+            <button
+              onClick={() => onCardClick(card)}
+              className="w-full rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-400 hover:bg-indigo-500/20 transition-all"
+            >
+              Review Action
+            </button>
+          </div>
+        )}
     </div>
   );
 }

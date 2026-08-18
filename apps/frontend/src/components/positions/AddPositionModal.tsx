@@ -36,6 +36,7 @@ const EMPTY_FORM = {
   clientId: "",
   role: "",
   department: "",
+  mumbaiArea: "",
   city: "",
   seniority: "Mid",
   requirements: "",
@@ -48,6 +49,7 @@ function positionToForm(p: ApiPosition) {
     clientId: p.client_id,
     role: p.role,
     department: p.department ?? "",
+    mumbaiArea: p.mumbai_area ?? "",
     city: p.city ?? "",
     seniority: p.seniority,
     requirements: (p.requirements ?? []).join(", "),
@@ -143,6 +145,7 @@ export default function AddPositionModal({
         const payload: PositionUpdatePayload = {
           role: form.role.trim(),
           department: form.department.trim() || undefined,
+          mumbai_area: form.mumbaiArea.trim() || undefined,
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
@@ -157,6 +160,7 @@ export default function AddPositionModal({
           client_id: form.clientId,
           role: form.role.trim(),
           department: form.department.trim() || undefined,
+          mumbai_area: form.mumbaiArea.trim() || undefined,
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
@@ -351,15 +355,34 @@ export default function AddPositionModal({
                     <label htmlFor="pos-dept" className={LABEL_CLS}>
                       Department
                     </label>
-                    <input
+                    <select
                       id="pos-dept"
-                      type="text"
-                      placeholder="e.g. Kitchen"
                       value={form.department}
                       onChange={(e) => setForm({ ...form, department: e.target.value })}
                       className={INPUT_CLS}
+                    >
+                      <option value="">Select...</option>
+                      <option value="BOH">BOH</option>
+                      <option value="Service">Service</option>
+                      <option value="Corporate">Corporate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="pos-mumbai-area" className={LABEL_CLS}>
+                      Mumbai Area
+                    </label>
+                    <input
+                      id="pos-mumbai-area"
+                      type="text"
+                      placeholder="e.g. Andheri, Bandra"
+                      value={form.mumbaiArea}
+                      onChange={(e) => setForm({ ...form, mumbaiArea: e.target.value })}
+                      className={INPUT_CLS}
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="pos-city" className={LABEL_CLS}>
                       City

@@ -6,6 +6,7 @@ export interface PositionCreatePayload {
   client_id: string;
   role: string;
   department?: string;
+  mumbai_area?: string;
   city?: string;
   seniority?: string;
   requirements?: string[];
@@ -16,6 +17,7 @@ export interface PositionCreatePayload {
 export interface PositionUpdatePayload {
   role?: string;
   department?: string;
+  mumbai_area?: string;
   city?: string;
   seniority?: string;
   requirements?: string[];
@@ -110,3 +112,12 @@ export function updatePosition(
     body: JSON.stringify(payload),
   });
 }
+
+export const updatePositionApproval =
+  (apiFetch: ApiFetch) =>
+  async (positionId: string, approvalStatus: string): Promise<ApiPosition> => {
+    return apiFetch<ApiPosition>(`/api/v1/positions/${positionId}/approval`, {
+      method: "PUT",
+      body: JSON.stringify({ approval_status: approvalStatus }),
+    });
+  };

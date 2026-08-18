@@ -42,7 +42,11 @@ from app.modules.recruitment.repository_impl import (
 )
 from app.modules.recruitment.schemas import (
     PipelineBoard,
+    PipelineCandidateDroppedRequest,
+    PipelineSetInterviewRequest,
+    PipelineSetJoiningRequest,
     PipelineStageColumn,
+    PipelineUploadOfferRequest,
     StageMappingItem,
     StageMoveRequest,
     StageMoveResponse,
@@ -123,6 +127,9 @@ _STAGE_LABELS = {
     PipelineStage.position_close: "Joined",
     PipelineStage.rejected: "Rejected",
     PipelineStage.on_hold: "On Hold",
+    PipelineStage.selected: "Selected",
+    PipelineStage.joined: "Joined",
+    PipelineStage.candidate_dropped: "Candidate Dropped",
 }
 
 # ── Activity type constants ────────────────────────────────────────────────────
@@ -148,8 +155,11 @@ _SCORE_REJECTED = -2  # Rejected = -2
 
 
 async def _get_or_404(scope: TenantScope, mapping_id: str) -> Mapping:
+    from app.modules.recruitment.utils.scoping import scope_mapping_match
+
     oid = to_object_id(mapping_id, "mapping_id")
-    doc = await Mapping.find_one({"_id": oid, "brand_id": scope.brand_id})
+    match = await scope_mapping_match(scope, {"_id": oid, "brand_id": scope.brand_id})
+    doc = await Mapping.find_one(match)
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mapping not found")
     return doc
@@ -262,8 +272,13 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 employee_id=row.get("employee_id"),
                 stage=PipelineStage(stage_val),
                 match_score=row.get("match_score"),
-                decision=row.get("decision") or "pending",
-                mapped_at=row["mapped_at"],
+                decision=row.get("decision", "pending"),
+                mapped_at=row.get("mapped_at", row["_id"].generation_time),
+                interview_date=row.get("interview_date"),
+                joining_date=row.get("joining_date"),
+                offer_letter_url=row.get("offer_letter_url"),
+                salary_offered=row.get("salary_offered"),
+                dropped_notes=row.get("dropped_notes"),
             )
         )
 
@@ -285,13 +300,13 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
 
 @router.post("/mappings/{mapping_id}/move")
 async def move_mapping_to_stage(
-    tenant: _Tenant, mapping_id: str, req: StageMoveRequest
+    viewer: _Viewer, mapping_id: str, req: StageMoveRequest
 ) -> StageMoveResponse:
     """
     Move a mapping to a new stage (Kanban drag-drop).
     Logs activity and awards recruiter points based on stage transition.
     """
-    mapping = await _get_or_404(tenant, mapping_id)
+    mapping = await _get_or_404(viewer, mapping_id)
     old_stage = mapping.stage
 
     if old_stage == req.new_stage.value:
@@ -313,7 +328,7 @@ async def move_mapping_to_stage(
         mapping=mapping,
         new_stage=req.new_stage,
         decision=Decision.pending,
-        scope=tenant,
+        scope=viewer,
     )
 
     # move_stage already recomputes seats on the way *into* a terminal stage;
@@ -326,8 +341,8 @@ async def move_mapping_to_stage(
 
     # Log activity (fire-and-forget, idempotent)
     activity = ActivityLog(
-        brand_id=tenant.brand_id,
-        employee_id=tenant.employee_id,
+        brand_id=viewer.brand_id,
+        employee_id=viewer.employee_id,
         activity_type=_activity_type_for_stage(req.new_stage),
         target_entity_type="mapping",
         target_entity_id=str(mapping.id),
@@ -615,3 +630,68 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
         status=req.target_status,
         recruiter_daily_score=0,
     )
+
+
+@router.put("/mappings/{mapping_id}/interview-date")
+async def set_interview_date(
+    mapping_id: str,
+    req: PipelineSetInterviewRequest,
+    viewer: _Viewer,
+):
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.interview_date = req.interview_date
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/offer-letter")
+async def upload_offer_letter(
+    mapping_id: str,
+    req: PipelineUploadOfferRequest,
+    viewer: _Viewer,
+):
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.offer_letter_url = req.offer_letter_url
+    mapping.salary_offered = req.salary_offered
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/joining-date")
+async def set_joining_date(
+    mapping_id: str,
+    req: PipelineSetJoiningRequest,
+    viewer: _Viewer,
+):
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.joining_date = req.joining_date
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/dropped")
+async def drop_candidate(
+    mapping_id: str,
+    req: PipelineCandidateDroppedRequest,
+    viewer: _Viewer,
+):
+    from app.modules.recruitment.enums import Decision, PipelineStage
+    from app.modules.recruitment.repository_impl import move_stage
+
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.dropped_notes = req.dropped_notes
+    await mapping.save()
+
+    if mapping.stage != PipelineStage.candidate_dropped.value:
+        await move_stage(
+            mapping=mapping,
+            new_stage=PipelineStage.candidate_dropped,
+            decision=Decision.rejected,
+            scope=viewer,
+        )
+
+    return {"success": True}

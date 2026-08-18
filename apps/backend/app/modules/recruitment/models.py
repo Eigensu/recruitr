@@ -19,10 +19,12 @@ from app.modules.recruitment.enums import (
     ClientMessageTarget,
     ClientMessageType,
     Decision,
+    Department,
     EducationLevel,
     Gender,
     PaymentStatus,
     PipelineStage,
+    PositionApprovalStatus,
     PositionStatus,
     RefereeKanbanStage,
     Seniority,
@@ -105,6 +107,7 @@ class Client(Document):
     name: str  # "Hunger Inc"
     city: str | None = None
     logo_url: str | None = None
+    brand_description: str | None = None
     # Contact/CRM detail — all optional, all shown on the client detail page.
     industry: str | None = None
     website: str | None = None
@@ -223,7 +226,8 @@ class Position(Document):
     client_id: PydanticObjectId
     client_name: str  # denormalized for list rendering
     role: str
-    department: str | None = None
+    department: Department | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: Seniority = Seniority.mid
@@ -232,6 +236,7 @@ class Position(Document):
     filled_seats: int = 0
     remaining_seats: int = 0
     status: PositionStatus = PositionStatus.open
+    approval_status: PositionApprovalStatus | None = None  # e.g. "pending", "approved", "rejected"
     assigned_employee_id: PydanticObjectId | None = None
     date_opened: datetime = Field(default_factory=_utcnow)
     target_close: datetime | None = None
@@ -285,7 +290,7 @@ class Candidate(Document):
     communication: str | None = None
     education: str | None = None
     brand_experience: str | None = None
-    department: str | None = None
+    department: Department | None = None
     specialization: str | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
@@ -373,6 +378,12 @@ class Mapping(Document):
     decision: Decision = Decision.pending
     match_score: float | None = None  # snapshotted at map time (0..1)
     feedback: str | None = None
+    interview_date: datetime | None = None
+    joining_date: datetime | None = None
+    offer_letter_url: str | None = None
+    salary_offered: float | None = None
+    dropped_notes: str | None = None
+    reminders_sent: list[str] = Field(default_factory=list)
     history: list[StageEvent] = Field(default_factory=list)
     mapped_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)

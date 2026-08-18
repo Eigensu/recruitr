@@ -69,3 +69,52 @@ export async function fetchFilteredPipeline(
     rejected: cards.filter((c) => c.status === "rejected"),
   };
 }
+
+export async function setMappingInterviewDate(
+  mappingId: string,
+  interviewDate: string,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/interview-date`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ interview_date: interviewDate }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function uploadMappingOffer(mappingId: string, file: File): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/offer-letter`, {
+    method: "PUT",
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function setMappingJoiningDate(
+  mappingId: string,
+  joiningDate: string,
+  salaryOffered: number,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/joining-date`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ joining_date: joiningDate, salary_offered: salaryOffered }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+export async function setMappingDropped(mappingId: string, droppedNotes: string): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/dropped`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ dropped_notes: droppedNotes }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}

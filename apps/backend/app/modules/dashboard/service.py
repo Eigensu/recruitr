@@ -34,9 +34,11 @@ from app.modules.dashboard.schemas import (
     DashboardMappingPage,
     DashboardOverviewResponse,
     DashboardPipelineResponse,
+    DashboardSourcingResponse,
     EmployeeAnalyticsItem,
     MappingAnalyticsItem,
     PipelineStageMetric,
+    SourcingAnalyticsItem,
 )
 
 
@@ -105,6 +107,24 @@ async def get_pipeline(filters: DashboardFilters) -> DashboardPipelineResponse:
     response = DashboardPipelineResponse(
         stages=[PipelineStageMetric.model_validate(stage) for stage in payload["stages"]],
         total_candidates=payload["total_candidates"],
+    )
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
+    )
+    return response
+
+
+async def get_sourcing(filters: DashboardFilters) -> DashboardSourcingResponse:
+    cache_key = _cache_key("sourcing", filters)
+    cached = await dashboard_cache.get_json(cache_key)
+    if cached is not None:
+        return DashboardSourcingResponse.model_validate(cached)
+
+    from app.modules.dashboard.repository import fetch_sourcing
+
+    payload = await fetch_sourcing(filters)
+    response = DashboardSourcingResponse(
+        metrics=[SourcingAnalyticsItem.model_validate(m) for m in payload["metrics"]]
     )
     await dashboard_cache.set_json(
         cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS

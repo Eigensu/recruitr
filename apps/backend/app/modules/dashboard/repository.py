@@ -49,6 +49,7 @@ _SIZE = "$size"
 _FILTER = "$filter"
 _TO_STR = "$toString"
 _IF_NULL = "$ifNull"
+_GT = "$gt"
 
 # Field path constants (frequently referenced across pipelines)
 _F_STAGE = "$stage"
@@ -346,6 +347,112 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
             }
         )
     return {"stages": stages, "total_candidates": total}
+    return {"stages": stages, "total_candidates": total}
+
+
+async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:
+    brand_oid = _require_brand(filters)
+    candidate_match: dict[str, Any] = {"brand_id": brand_oid}
+
+    date_match = _date_range("created_at", filters.start_date, filters.end_date)
+    if date_match is not None:
+        candidate_match.update(date_match)
+
+    pipeline = [
+        {_MATCH: candidate_match},
+        {
+            _LOOKUP: {
+                "from": Mapping.Settings.name,
+                "localField": "_id",
+                "foreignField": "candidate_id",
+                "as": "cand_mappings",
+            }
+        },
+        {
+            _ADD_FIELDS: {
+                "has_mapping": {_COND: [{_GT: [{_SIZE: _VAR_CAND_MAPPINGS}, 0]}, 1, 0]},
+                "has_offer": {
+                    _COND: [
+                        {
+                            _GT: [
+                                {
+                                    _SIZE: {
+                                        _FILTER: {
+                                            "input": _VAR_CAND_MAPPINGS,
+                                            "as": "m",
+                                            "cond": {
+                                                "$in": [
+                                                    "$$m.stage",
+                                                    [
+                                                        PipelineStage.offer_accepted,
+                                                        PipelineStage.joined,
+                                                    ],
+                                                ]
+                                            },
+                                        }
+                                    }
+                                },
+                                0,
+                            ]
+                        },
+                        1,
+                        0,
+                    ]
+                },
+                "has_joined": {
+                    _COND: [
+                        {
+                            _GT: [
+                                {
+                                    _SIZE: {
+                                        _FILTER: {
+                                            "input": _VAR_CAND_MAPPINGS,
+                                            "as": "m",
+                                            "cond": {"$eq": ["$$m.stage", PipelineStage.joined]},
+                                        }
+                                    }
+                                },
+                                0,
+                            ]
+                        },
+                        1,
+                        0,
+                    ]
+                },
+            }
+        },
+        {
+            _GROUP: {
+                "_id": {"source": "$source", "source_channel": "$source_channel"},
+                "candidate_count": {"$sum": 1},
+                "pipeline_candidates": {"$sum": "$has_mapping"},
+                "offers_accepted": {"$sum": "$has_offer"},
+                "joined_candidates": {"$sum": "$has_joined"},
+            }
+        },
+    ]
+
+    # Needs _GT from operators
+    results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(
+        length=None
+    )
+    metrics = []
+    for item in results:
+        _id = item.get("_id", {})
+        metrics.append(
+            {
+                "source_type": _id.get("source"),
+                "source_channel": _id.get("source_channel"),
+                "candidate_count": item.get("candidate_count", 0),
+                "pipeline_candidates": item.get("pipeline_candidates", 0),
+                "offers_accepted": item.get("offers_accepted", 0),
+                "joined_candidates": item.get("joined_candidates", 0),
+            }
+        )
+
+    # Sort primarily by candidate count descending
+    metrics.sort(key=lambda x: x["candidate_count"], reverse=True)
+    return {"metrics": metrics}
 
 
 async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> dict[str, Any]:

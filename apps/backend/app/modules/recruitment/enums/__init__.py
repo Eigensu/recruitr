@@ -4,6 +4,7 @@ from app.modules.recruitment.enums.activity_type import ActivityType
 from app.modules.recruitment.enums.candidate_event_type import CandidateEventType
 from app.modules.recruitment.enums.candidate_status import CandidateStatus
 from app.modules.recruitment.enums.decision import Decision
+from app.modules.recruitment.enums.department import Department
 from app.modules.recruitment.enums.education_level import EducationLevel
 from app.modules.recruitment.enums.gender import Gender
 from app.modules.recruitment.enums.pipeline_stage import (
@@ -13,6 +14,7 @@ from app.modules.recruitment.enums.pipeline_stage import (
     TERMINAL_STAGES,
     PipelineStage,
 )
+from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 from app.modules.recruitment.enums.position_status import PositionStatus
 from app.modules.recruitment.enums.seniority import Seniority
 
@@ -38,4 +40,6 @@ __all__ = [
     "ClientMessageType",
     "RefereeKanbanStage",
     "PaymentStatus",
+    "Department",
+    "PositionApprovalStatus",
 ]
