@@ -29,6 +29,12 @@ class MaxLevelFilter(logging.Filter):
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 workers = int(os.getenv("WEB_CONCURRENCY", "4"))
 worker_class = "uvicorn.workers.UvicornWorker"
+# A worker sends no heartbeat to the master until its lifespan has finished, and
+# the lifespan waits on MongoDB. The 30s default is shorter than the database's
+# own retry budget, so the master would kill a worker that was still legitimately
+# retrying. Keep this above MONGODB_INIT_ATTEMPTS × the per-attempt server
+# selection timeout, plus the backoff between attempts (see app/config.py).
+timeout = int(os.getenv("WORKER_TIMEOUT", "120"))
 accesslog = "-"  # access logs to stdout
 errorlog = "-"  # diagnostics to stderr; the dict config below re-routes by level
 loglevel = os.getenv("LOG_LEVEL", "info")

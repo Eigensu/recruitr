@@ -8,7 +8,7 @@ import time
 import cloudinary
 import cloudinary.uploader
 import cloudinary.utils
-import fitz  # PyMuPDF
+import pymupdf  # the `fitz` import name is deprecated and warns on every import
 
 from app.config import settings
 
@@ -102,7 +102,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     if not file_bytes.startswith(b"%PDF-"):
         raise ValueError("Input is not a PDF file")
     try:
-        with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+        with pymupdf.open(stream=file_bytes, filetype="pdf") as doc:
             return "\n".join(page.get_text() for page in doc)
     except ValueError:
         raise
