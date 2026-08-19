@@ -227,6 +227,7 @@ class Position(Document):
     client_name: str  # denormalized for list rendering
     role: str
     department: Department | None = None
+    salary: str | None = None
     mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None

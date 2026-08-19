@@ -23,6 +23,7 @@ class StageMappingItem(BaseModel):
     match_score: float | None = None
     decision: str = "pending"
     mapped_at: datetime
+    stage_entered_at: datetime | None = None
     interview_date: datetime | None = None
     joining_date: datetime | None = None
     offer_letter_url: str | None = None
@@ -49,6 +50,11 @@ class StageMoveRequest(BaseModel):
     """Move a mapping to a new stage."""
 
     new_stage: PipelineStage
+    dropped_notes: str | None = None
+    offer_letter_url: str | None = None
+    joining_date: datetime | None = None
+    salary_offered: float | None = None
+    brand: str | None = None
 
 
 class StageMoveResponse(BaseModel):

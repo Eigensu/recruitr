@@ -41,5 +41,9 @@ celery_app.conf.update(
             "task": "recruitment.process_reminders",
             "schedule": crontab(minute=30, hour=1),  # Runs daily at 01:30 UTC
         },
+        "recruitment-joining-dates": {
+            "task": "recruitment.process_joining_dates",
+            "schedule": crontab(minute=0, hour=2),  # Runs daily at 02:00 UTC
+        },
     },
 )

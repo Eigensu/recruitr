@@ -117,3 +117,102 @@ def process_reminders() -> None:
         await _process_reminders_async()
 
     asyncio.run(run())
+
+
+@celery_app.task(name="recruitment.process_new_position_notifications")
+def process_new_position_notifications(
+    position_id: str, brand_id: str, created_by_name: str
+) -> None:
+    """Send notifications when a client creates a new position."""
+    from app.database import init_db
+    from app.modules.recruitment.enums.activity_type import ActivityType
+    from app.modules.recruitment.models import ActivityLog, Employee, Position
+
+    async def run():
+        await init_db()
+        from beanie import PydanticObjectId
+
+        pos = await Position.get(PydanticObjectId(position_id))
+        if not pos:
+            return
+
+        # 1. In-app notification via ActivityLog (for all recruiters in brand to see)
+        desc = f"Client {pos.client_name} created a new position: {pos.role} ({pos.total_seats} seats)."
+        activity = ActivityLog(
+            brand_id=PydanticObjectId(brand_id),
+            employee_id=None,
+            activity_type=ActivityType.position_created,
+            target_entity_type="position",
+            target_entity_id=position_id,
+            description=desc,
+        )
+        await activity.insert()
+
+        # 2. Email notification
+        # Fetch internal recipients (e.g. all active employees for this brand, or specific admins)
+        # For now, email all active employees in the brand to ensure someone sees it.
+        # Alternatively, we could email a configured master email.
+        employees = await Employee.find(
+            Employee.brand_id == PydanticObjectId(brand_id),
+            Employee.is_active == True,  # noqa: E712
+        ).to_list()
+
+        portal_url = f"{settings.FRONTEND_URL}/positions/{position_id}"
+
+        for emp in employees:
+            EmailService.send_new_position_notification(
+                email=emp.email,
+                role=pos.role,
+                client_name=pos.client_name,
+                category=pos.department.value if pos.department else "N/A",
+                salary=pos.salary,
+                seats=pos.total_seats,
+                city=pos.city,
+                mumbai_area=pos.mumbai_area,
+                seniority=pos.seniority.value if pos.seniority else "N/A",
+                created_by=created_by_name,
+                portal_url=portal_url,
+            )
+
+    asyncio.run(run())
+
+
+@celery_app.task(name="recruitment.process_joining_dates")
+def process_joining_dates() -> None:
+    """Run daily to auto-transition candidates who have reached their joining date."""
+    from app.database import init_db
+
+    async def run():
+        await init_db()
+        from datetime import UTC, datetime
+
+        from app.modules.recruitment.enums import Decision, PipelineStage
+        from app.modules.recruitment.models import Mapping
+        from app.modules.recruitment.repository_impl import move_stage
+        from app.modules.recruitment.schemas import TenantScope
+
+        now = datetime.now(UTC)
+
+        # Find candidates whose joining date is today or in the past, and who are currently selected
+        mappings_to_join = await Mapping.find(
+            Mapping.stage == PipelineStage.selected.value,
+            Mapping.joining_date != None,  # noqa: E711
+            Mapping.joining_date <= now,
+        ).to_list()
+
+        for mapping in mappings_to_join:
+            # We construct a mock system scope since this is a background job
+            # The employee_id is None since it's an automated action
+            sys_scope = TenantScope(brand_id=mapping.brand_id)
+
+            # Transition to position_close (Joined)
+            await move_stage(
+                mapping=mapping,
+                new_stage=PipelineStage.joined,
+                decision=Decision.pending,
+                scope=sys_scope,
+            )
+
+    import asyncio
+
+    asyncio.run(run())

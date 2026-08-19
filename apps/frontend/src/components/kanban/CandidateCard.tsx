@@ -11,6 +11,7 @@ interface Props {
   isDragOverlay?: boolean;
   readOnly?: boolean;
   onCardClick?: (card: PipelineCard) => void;
+  onStageChange?: (card: PipelineCard, newStage: string) => void;
 }
 
 function scoreColor(score: number | null): string {
@@ -25,6 +26,7 @@ export default function KanbanCard({
   isDragOverlay = false,
   readOnly = false,
   onCardClick,
+  onStageChange,
 }: Readonly<Props>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.mapping_id,
@@ -33,6 +35,21 @@ export default function KanbanCard({
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  const daysInStage = card.stage_entered_at
+    ? Math.floor(
+        (new Date().getTime() - new Date(card.stage_entered_at).getTime()) / (1000 * 3600 * 24),
+      )
+    : 0;
+
+  let badgeStyle = "text-emerald-400 bg-emerald-400/10 border-emerald-400/20";
+  if (daysInStage >= 2 && daysInStage <= 5) {
+    badgeStyle = "text-yellow bg-yellow/10 border-yellow/20";
+  } else if (daysInStage > 5) {
+    badgeStyle = "text-red-400 bg-red-400/10 border-red-400/20";
+  }
+
+  const daysLabel = daysInStage === 1 ? "1 day" : `${daysInStage} days`;
 
   return (
     <div
@@ -48,8 +65,8 @@ export default function KanbanCard({
         !isDragging &&
           !isDragOverlay &&
           !readOnly &&
-          "hover:border-border hover:shadow-sm cursor-grab",
-        "border-border",
+          "hover:border-border-strong hover:shadow-md cursor-grab",
+        "border-border/60",
       )}
     >
       {/* Drag handle */}
@@ -62,36 +79,31 @@ export default function KanbanCard({
         </div>
       )}
 
-      {/* Candidate */}
-      <div className="pr-4 mb-2">
-        <p className="text-sm font-semibold text-text-primary truncate leading-tight">
-          {card.candidate_name}
-        </p>
-        {!readOnly && (
-          <p className="text-[11px] text-text-muted truncate mt-0.5">{card.candidate_email}</p>
-        )}
-      </div>
-
-      {/* Position */}
-      <div className="flex items-center gap-1.5 mb-2.5">
-        <span className="text-[10px] font-medium text-text-secondary truncate">
-          {card.position_role}
+      {/* Candidate and Position Info */}
+      <div className="flex justify-between items-start mb-2 pr-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary truncate leading-tight">
+            {card.candidate_name}
+          </p>
+          <p className="text-[11px] font-medium text-text-secondary truncate mt-1.5">
+            {card.position_role}
+          </p>
+          <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
+        </div>
+        <span
+          className={cn(
+            "text-[10px] px-1.5 py-0.5 rounded-sm border whitespace-nowrap ml-2",
+            badgeStyle,
+          )}
+        >
+          {daysLabel}
         </span>
-        {!readOnly && (
-          <>
-            <span className="text-text-muted/40">·</span>
-            <span className="text-[10px] text-text-muted truncate">{card.position_client}</span>
-          </>
-        )}
       </div>
 
       {/* Footer */}
       <div className="flex flex-col gap-1.5 mt-2">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[9px] font-bold text-text-muted/60 uppercase tracking-wider">
-            {card.position_code}
-          </span>
-          {!readOnly && card.match_score !== null && (
+        {!readOnly && card.match_score !== null && (
+          <div className="flex justify-end gap-2">
             <span
               className={cn(
                 "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border",
@@ -101,8 +113,8 @@ export default function KanbanCard({
               <IconSparkles className="size-2.5" />
               {Math.round(card.match_score * 100)}%
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {card.stage === "joined" && (
           <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
@@ -133,19 +145,76 @@ export default function KanbanCard({
       </div>
 
       {/* Action Button for Client Portal */}
-      {onCardClick &&
-        card.stage !== "joined" &&
-        card.stage !== "rejected" &&
-        card.stage !== "candidate_dropped" && (
-          <div className="mt-3 pt-3 border-t border-border">
+      {onCardClick && (
+        <div className="mt-3 flex gap-2">
+          {card.stage === "sent_to_client" && onStageChange && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStageChange(card, "interview");
+                }}
+                className="flex-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2 py-1.5 text-[10px] font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1"
+              >
+                ✓ Select
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStageChange(card, "rejected");
+                }}
+                className="flex-1 rounded-lg bg-red-500/10 border border-red-500/20 px-2 py-1.5 text-[10px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
+              >
+                ✕ Reject
+              </button>
+            </>
+          )}
+          {card.stage === "interview" && onStageChange && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStageChange(card, "selected");
+                }}
+                className="flex-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-2 py-1.5 text-[10px] font-semibold text-indigo-400 hover:bg-indigo-500/20 transition-all flex items-center justify-center gap-1"
+              >
+                ✓ Select
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStageChange(card, "rejected");
+                }}
+                className="flex-1 rounded-lg bg-red-500/10 border border-red-500/20 px-2 py-1.5 text-[10px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
+              >
+                ✕ Reject
+              </button>
+            </>
+          )}
+          {card.stage === "selected" && (
             <button
               onClick={() => onCardClick(card)}
-              className="w-full rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-400 hover:bg-indigo-500/20 transition-all"
+              className="w-full rounded-lg bg-yellow/10 border border-yellow/20 px-3 py-1.5 text-[11px] font-semibold text-yellow hover:bg-yellow/20 transition-all"
             >
-              Review Action
+              Upload Offer Letter
             </button>
-          </div>
-        )}
+          )}
+        </div>
+      )}
+      {/* Internal User Action for Joined Candidates */}
+      {!readOnly && card.stage === "joined" && onStageChange && (
+        <div className="mt-3 pt-3 border-t border-border">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onStageChange(card, "rejected");
+            }}
+            className="w-full rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1"
+          >
+            Mark as Rejected
+          </button>
+        </div>
+      )}
     </div>
   );
 }

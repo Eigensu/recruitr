@@ -4,11 +4,10 @@ export type PipelineStage =
   | "sourced"
   | "sent_to_client"
   | "interview"
-  | "decision_pending"
-  | "offer"
-  | "offer_accepted"
-  | "position_close"
+  | "selected"
+  | "joined"
   | "rejected"
+  | "candidate_dropped"
   | "on_hold";
 
 export interface DashboardKpi {

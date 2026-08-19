@@ -142,7 +142,7 @@ async def test_client_can_create_position_for_own_org(client_1: AsyncClient):
         "/api/v1/positions",
         json={
             "client_id": str(_CLIENT_ID_1),
-            "role": "Role",
+            "role": "HR",
             "department": "Corporate",
             "city": "Remote",
             "seniority": "Mid",
@@ -158,7 +158,7 @@ async def test_client_cannot_create_position_for_other_org(client_1: AsyncClient
         "/api/v1/positions",
         json={
             "client_id": str(_CLIENT_ID_2),
-            "role": "Role",
+            "role": "HR",
             "department": "Corporate",
             "city": "Remote",
             "seniority": "Mid",
@@ -174,7 +174,7 @@ async def test_staff_can_create_position_for_any_org(staff_client: AsyncClient):
         "/api/v1/positions",
         json={
             "client_id": str(_CLIENT_ID_2),
-            "role": "Role",
+            "role": "HR",
             "department": "Corporate",
             "city": "Remote",
             "seniority": "Mid",
@@ -208,7 +208,7 @@ async def test_client_with_empty_client_id_can_create_own_position(client_1: Asy
         "/api/v1/positions",
         json={
             "client_id": "",
-            "role": "Role",
+            "role": "HR",
             "department": "Corporate",
             "city": "Remote",
             "seniority": "Mid",
@@ -226,7 +226,7 @@ async def test_unauthenticated_user_cannot_create_position():
             "/api/v1/positions",
             json={
                 "client_id": "",
-                "role": "Role",
+                "role": "HR",
                 "department": "Corporate",
                 "city": "Remote",
                 "seniority": "Mid",
@@ -234,3 +234,101 @@ async def test_unauthenticated_user_cannot_create_position():
             },
         )
         assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_client_cannot_create_position_without_category(client_1: AsyncClient):
+    res = await client_1.post(
+        "/api/v1/positions",
+        json={
+            "client_id": "",
+            "role": "Sous Chef",
+            "city": "Mumbai",
+            "seniority": "Mid",
+            "total_seats": 2,
+        },
+    )
+    assert res.status_code == 422
+    assert "Category (department) is required." in res.text
+
+
+@pytest.mark.asyncio
+async def test_client_cannot_create_position_with_invalid_role(client_1: AsyncClient):
+    res = await client_1.post(
+        "/api/v1/positions",
+        json={
+            "client_id": "",
+            "role": "Not a Real Role",
+            "department": "BOH",
+            "city": "Mumbai",
+            "seniority": "Mid",
+            "total_seats": 2,
+        },
+    )
+    assert res.status_code == 422
+    assert "is not valid for category" in res.text
+
+
+@pytest.mark.asyncio
+async def test_client_can_create_position_with_valid_role_and_salary(client_1: AsyncClient):
+    res = await client_1.post(
+        "/api/v1/positions",
+        json={
+            "client_id": "",
+            "role": "Sous Chef",
+            "department": "BOH",
+            "salary": "30k - 40k",
+            "city": "Mumbai",
+            "mumbai_area": "Bandra",
+            "seniority": "Mid",
+            "total_seats": 2,
+        },
+    )
+    assert res.status_code == 201
+    data = res.json()
+    assert data["salary"] == "30k - 40k"
+    assert data["mumbai_area"] == "Bandra"
+    assert data["total_seats"] == 2
+
+
+@pytest.mark.asyncio
+async def test_client_pipeline_integration(client_1: AsyncClient, seed_data: dict):
+    m1 = seed_data["m1"]
+
+    # 1. Try skipping to joined (should fail)
+    res = await client_1.post(f"/api/v1/pipeline/mappings/{m1}/move", json={"new_stage": "joined"})
+    assert res.status_code == 403
+
+    # Let's get the mapping to sent_to_client first (as staff or directly in DB)
+    from app.modules.recruitment.enums import PipelineStage
+    from app.modules.recruitment.models import Mapping
+
+    mapping = await Mapping.get(m1)
+    mapping.stage = PipelineStage.sent_to_client.value
+    await mapping.save()
+
+    # 2. Move to interview
+    res = await client_1.post(
+        f"/api/v1/pipeline/mappings/{m1}/move", json={"new_stage": "interview"}
+    )
+    assert res.status_code == 200
+
+    # 3. Move to selected
+    res = await client_1.post(
+        f"/api/v1/pipeline/mappings/{m1}/move", json={"new_stage": "selected"}
+    )
+    assert res.status_code == 200
+
+    # 4. Upload offer letter (allowed because it's selected)
+    res = await client_1.put(
+        f"/api/v1/pipeline/mappings/{m1}/offer-letter",
+        json={"offer_letter_url": "http://example.com/offer.pdf", "salary_offered": 50000},
+    )
+    assert res.status_code == 200
+
+    # 5. Set joining date (allowed because offer letter is present)
+    res = await client_1.put(
+        f"/api/v1/pipeline/mappings/{m1}/joining-date",
+        json={"joining_date": "2026-09-01T00:00:00Z"},
+    )
+    assert res.status_code == 200

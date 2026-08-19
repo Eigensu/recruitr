@@ -101,6 +101,7 @@ export interface ApiPosition {
   client_id: string;
   client_name: string;
   role: string;
+  salary: number | null;
   department: string | null;
   mumbai_area: string | null;
   city: string | null;
@@ -207,15 +208,11 @@ export type PipelineStage =
   | "sourced"
   | "sent_to_client"
   | "interview"
-  | "decision_pending"
-  | "offer"
-  | "offer_accepted"
-  | "position_close"
-  | "rejected"
-  | "on_hold"
   | "selected"
   | "joined"
-  | "candidate_dropped";
+  | "rejected"
+  | "candidate_dropped"
+  | "on_hold";
 
 /** Canonical candidate returned by GET /api/v1/candidates */
 export interface ApiCandidate {
@@ -273,6 +270,7 @@ export interface ApiCandidateMappingItem {
   stage: PipelineStage;
   match_score: number | null;
   mapped_at: string;
+  stage_entered_at?: string;
 }
 
 /** A recruiter as offered in a filter dropdown. */
@@ -406,10 +404,6 @@ export type KanbanStage =
   | "sourced"
   | "sent_to_client"
   | "interview"
-  | "decision_pending"
-  | "offer"
-  | "offer_accepted"
-  | "position_close"
   | "rejected"
   | "selected"
   | "joined"
@@ -430,6 +424,7 @@ export interface PipelineCard {
   match_score: number | null;
   decision: string;
   mapped_at: string;
+  stage_entered_at?: string;
   interview_date: string | null;
   joining_date: string | null;
   offer_letter_url: string | null;

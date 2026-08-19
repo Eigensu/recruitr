@@ -64,9 +64,9 @@ _VAR_CAND_MAPPINGS = "$cand_mappings"
 # ── Domain constants ───────────────────────────────────────────────────────────
 
 _ACTIVITY_STAGE_MAP: dict[PipelineStage, ActivityType] = {
-    PipelineStage.offer: ActivityType.offer_sent,
-    PipelineStage.offer_accepted: ActivityType.offer_accepted,
-    PipelineStage.position_close: ActivityType.joined,
+    PipelineStage.selected: ActivityType.offer_sent,
+    PipelineStage.selected: ActivityType.offer_accepted,
+    PipelineStage.joined: ActivityType.joined,
     PipelineStage.rejected: ActivityType.rejected,
 }
 
@@ -217,7 +217,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
                 "_id": None,
                 "candidates_in_pipeline": {"$sum": 1},
                 "offers_accepted": {
-                    "$sum": {_COND: [{"$eq": [_F_STAGE, PipelineStage.offer_accepted.value]}, 1, 0]}
+                    "$sum": {_COND: [{"$eq": [_F_STAGE, PipelineStage.selected.value]}, 1, 0]}
                 },
                 "action_needed_count": {
                     "$sum": {
@@ -228,8 +228,8 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
                                         "$in": [
                                             _F_STAGE,
                                             [
-                                                PipelineStage.decision_pending.value,
-                                                PipelineStage.offer.value,
+                                                PipelineStage.selected.value,
+                                                PipelineStage.selected.value,
                                             ],
                                         ]
                                     },
@@ -299,7 +299,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
 
     joined_match = dict(_base_mapping_match(filters, include_terminal=True))
     if filters.pipeline_stage is None:
-        joined_match["stage"] = PipelineStage.position_close.value
+        joined_match["stage"] = PipelineStage.joined.value
     joined_pipeline = [
         {_MATCH: joined_match},
         {_GROUP: {"_id": None, "joined_candidates": {"$sum": 1}}},
@@ -384,7 +384,7 @@ async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:
                                                 "$in": [
                                                     "$$m.stage",
                                                     [
-                                                        PipelineStage.offer_accepted,
+                                                        PipelineStage.selected,
                                                         PipelineStage.joined,
                                                     ],
                                                 ]
@@ -495,10 +495,8 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
                 "id": {_TO_STR: "$_id"},
                 "total_mappings": {_SIZE: _F_EMP_MAPPINGS},
                 "mappings": {
-                    "offers_sent": _stage_filter(_F_EMP_MAPPINGS, PipelineStage.offer.value),
-                    "joined_candidates": _stage_filter(
-                        _F_EMP_MAPPINGS, PipelineStage.position_close.value
-                    ),
+                    "offers_sent": _stage_filter(_F_EMP_MAPPINGS, PipelineStage.selected.value),
+                    "joined_candidates": _stage_filter(_F_EMP_MAPPINGS, PipelineStage.joined.value),
                     "rejected_candidates": _stage_filter(
                         _F_EMP_MAPPINGS, PipelineStage.rejected.value
                     ),
@@ -557,8 +555,8 @@ async def fetch_clients(filters: DashboardFilters, page: int, limit: int) -> dic
                         }
                     }
                 },
-                "offers_accepted": _stage_filter(_F_MAPPINGS, PipelineStage.offer_accepted.value),
-                "joined_candidates": _stage_filter(_F_MAPPINGS, PipelineStage.position_close.value),
+                "offers_accepted": _stage_filter(_F_MAPPINGS, PipelineStage.selected.value),
+                "joined_candidates": _stage_filter(_F_MAPPINGS, PipelineStage.joined.value),
             }
         },
         {_UNSET: ["mappings"]},

@@ -88,7 +88,7 @@ async def _map_and_join(client: AsyncClient, position: Position, candidate_id: s
     assert mapped.status_code in (200, 201), mapped.text
     mapping_id = mapped.json()["mapping_id"]
     moved = await client.post(
-        f"/api/v1/pipeline/mappings/{mapping_id}/move", json={"new_stage": "position_close"}
+        f"/api/v1/pipeline/mappings/{mapping_id}/move", json={"new_stage": "joined"}
     )
     assert moved.status_code == 200, moved.text
     return mapping_id

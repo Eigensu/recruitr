@@ -28,10 +28,6 @@ const PIPELINE_STAGE_ORDER: PipelineStage[] = [
   "sourced",
   "sent_to_client",
   "interview",
-  "decision_pending",
-  "offer",
-  "offer_accepted",
-  "position_close",
   "rejected",
   "on_hold",
 ];
@@ -117,8 +113,7 @@ function toneFromActivity(activityType: string): DashboardTone {
 
 function buildKpis(totals: DashboardTotals, pipelineStages: PipelineStageMetric[]): DashboardKpi[] {
   const sentToClient = pipelineStages.find((stage) => stage.stage === "sent_to_client")?.count ?? 0;
-  const offersAccepted =
-    pipelineStages.find((stage) => stage.stage === "offer_accepted")?.count ?? 0;
+  const offersAccepted = pipelineStages.find((stage) => stage.stage === "selected")?.count ?? 0;
   const dropped = pipelineStages.find((stage) => stage.stage === "rejected")?.count ?? 0;
 
   return [

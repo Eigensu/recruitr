@@ -136,3 +136,38 @@ class EmailService:
             f"Best,\nThe Recruitment Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_new_position_notification(
+        cls,
+        email: str,
+        role: str,
+        client_name: str,
+        category: str,
+        salary: str,
+        seats: int,
+        city: str,
+        mumbai_area: str,
+        seniority: str,
+        created_by: str,
+        portal_url: str,
+    ) -> None:
+        import html
+
+        subject = f"New Position Created — {role} — {client_name}"
+        body = (
+            f"Hello,\n\n"
+            f"A new position has been created in the Client Portal.\n\n"
+            f"Client: {html.escape(client_name)}\n"
+            f"Created By: {html.escape(created_by)}\n"
+            f"Role: {html.escape(role)}\n"
+            f"Category: {html.escape(category)}\n"
+            f"Salary: {html.escape(salary) if salary else 'N/A'}\n"
+            f"No. of Positions: {seats}\n"
+            f"City: {html.escape(city) if city else 'N/A'}\n"
+            f"Mumbai Area: {html.escape(mumbai_area) if mumbai_area else 'N/A'}\n"
+            f"Seniority: {html.escape(seniority)}\n\n"
+            f"View in Portal: {html.escape(portal_url)}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)

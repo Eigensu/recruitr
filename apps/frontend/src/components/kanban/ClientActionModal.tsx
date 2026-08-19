@@ -172,60 +172,69 @@ export default function ClientActionModal({
                     <label className="text-xs font-semibold text-text-muted uppercase">
                       Upload Offer Letter
                     </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="file"
-                        onChange={(e) => setOfferFile(e.target.files?.[0] || null)}
-                        className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs"
-                      />
-                      <button
-                        onClick={() =>
-                          handleAction(() => uploadMappingOffer(card.mapping_id, offerFile!))
-                        }
-                        disabled={loading || !offerFile}
-                        className="rounded-lg bg-yellow/10 border border-yellow/20 px-4 py-2 text-sm font-semibold text-yellow hover:bg-yellow/20 disabled:opacity-50"
-                      >
-                        Upload
-                      </button>
+                    <div className="flex flex-col gap-2">
+                      {card.offer_letter_url ? (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
+                          <IconCheck className="size-4" /> Offer Uploaded
+                        </div>
+                      ) : null}
+                      <div className="flex gap-2">
+                        <input
+                          type="file"
+                          onChange={(e) => setOfferFile(e.target.files?.[0] || null)}
+                          className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs"
+                        />
+                        <button
+                          onClick={() =>
+                            handleAction(() => uploadMappingOffer(card.mapping_id, offerFile!))
+                          }
+                          disabled={loading || !offerFile}
+                          className="rounded-lg bg-yellow/10 border border-yellow/20 px-4 py-2 text-sm font-semibold text-yellow hover:bg-yellow/20 disabled:opacity-50"
+                        >
+                          Upload
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="border-t border-border pt-4 space-y-2">
-                    <label className="text-xs font-semibold text-text-muted uppercase">
-                      Set Joining Details
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        value={joiningDate}
-                        onChange={(e) => setJoiningDate(e.target.value)}
-                        className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Salary Offered"
-                        value={salaryOffered}
-                        onChange={(e) => setSalaryOffered(e.target.value)}
-                        className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none"
-                      />
+                  {card.offer_letter_url && (
+                    <div className="border-t border-border pt-4 space-y-2">
+                      <label className="text-xs font-semibold text-text-muted uppercase">
+                        Set Joining Details
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="date"
+                          value={joiningDate}
+                          onChange={(e) => setJoiningDate(e.target.value)}
+                          className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Salary Offered"
+                          value={salaryOffered}
+                          onChange={(e) => setSalaryOffered(e.target.value)}
+                          className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none"
+                        />
+                      </div>
+                      <button
+                        onClick={() =>
+                          handleAction(async () => {
+                            await setMappingJoiningDate(
+                              card.mapping_id,
+                              new Date(joiningDate).toISOString(),
+                              Number(salaryOffered),
+                            );
+                            /* Stage transitions via background task */
+                          })
+                        }
+                        disabled={loading || !joiningDate || !salaryOffered}
+                        className="w-full mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
+                      >
+                        Save Details
+                      </button>
                     </div>
-                    <button
-                      onClick={() =>
-                        handleAction(async () => {
-                          await setMappingJoiningDate(
-                            card.mapping_id,
-                            new Date(joiningDate).toISOString(),
-                            Number(salaryOffered),
-                          );
-                          onStageChange("joined");
-                        })
-                      }
-                      disabled={loading || !joiningDate || !salaryOffered}
-                      className="w-full mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
-                    >
-                      Confirm Joined
-                    </button>
-                  </div>
+                  )}
 
                   <div className="border-t border-border pt-4 space-y-2">
                     <label className="text-xs font-semibold text-text-muted uppercase">

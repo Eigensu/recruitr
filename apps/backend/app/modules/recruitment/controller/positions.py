@@ -109,7 +109,6 @@ _AVAIL_SCORE_EXPR: dict = {
             {"case": {"$eq": [_F_CURRENT_STAGE, "sourced"]}, "then": 1.0},
             {"case": {"$eq": [_F_CURRENT_STAGE, "sent_to_client"]}, "then": 0.85},
             {"case": {"$eq": [_F_CURRENT_STAGE, "interview"]}, "then": 0.7},
-            {"case": {"$eq": [_F_CURRENT_STAGE, "decision_pending"]}, "then": 0.5},
             {"case": {"$eq": [_F_CURRENT_STAGE, "offer"]}, "then": 0.3},
         ],
         "default": 0.0,
@@ -392,6 +391,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
         client_name=client_doc.name,
         role=data.role,
         department=data.department,
+        salary=data.salary,
+        mumbai_area=data.mumbai_area,
         city=data.city,
         train_line=data.train_line,
         seniority=Seniority(data.seniority),
@@ -418,6 +419,14 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
                 ) from None
             doc.code = await generate_position_code(viewer.brand_id, client_doc.code)
 
+    if viewer.role == UserRole.client:
+        from app.modules.recruitment.tasks import process_new_position_notifications
+
+        # Fire and forget notification task
+        process_new_position_notifications.delay(
+            position_id=str(doc.id), brand_id=str(viewer.brand_id), created_by_name=client_doc.name
+        )
+
     return PositionListItem(
         id=str(doc.id),
         code=doc.code,
@@ -425,6 +434,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
         client_name=doc.client_name,
         role=doc.role,
         department=doc.department,
+        salary=doc.salary,
+        mumbai_area=doc.mumbai_area,
         city=doc.city,
         train_line=doc.train_line,
         seniority=doc.seniority,

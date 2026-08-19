@@ -98,7 +98,7 @@ _UNASSIGNED = "unassigned"
 # Stages that mean the candidate actually landed the job. Not TERMINAL_STAGES,
 # which also counts `rejected` — a rejection closes a mapping but is not a
 # placement, and must never show up under "companies this person joined".
-_PLACEMENT_STAGES = (PipelineStage.offer_accepted, PipelineStage.position_close)
+_PLACEMENT_STAGES = (PipelineStage.selected, PipelineStage.joined)
 
 
 # ── Background tasks ───────────────────────────────────────────────────────────

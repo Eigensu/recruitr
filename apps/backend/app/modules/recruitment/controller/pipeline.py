@@ -121,14 +121,10 @@ _STAGE_LABELS = {
     PipelineStage.sourced: "Sourced",
     PipelineStage.sent_to_client: "Sent to Client",
     PipelineStage.interview: "Interview",
-    PipelineStage.decision_pending: "Decision Pending",
-    PipelineStage.offer: "Offer",
-    PipelineStage.offer_accepted: "Offer Accepted",
-    PipelineStage.position_close: "Joined",
-    PipelineStage.rejected: "Rejected",
-    PipelineStage.on_hold: "On Hold",
     PipelineStage.selected: "Selected",
     PipelineStage.joined: "Joined",
+    PipelineStage.rejected: "Rejected",
+    PipelineStage.on_hold: "On Hold",
     PipelineStage.candidate_dropped: "Candidate Dropped",
 }
 
@@ -168,11 +164,9 @@ async def _get_or_404(scope: TenantScope, mapping_id: str) -> Mapping:
 def _score_for_stage(stage: PipelineStage) -> int:
     """Return recruiter score delta for transitioning to a stage."""
     match stage:
-        case PipelineStage.offer:
-            return _SCORE_OFFER_SENT
-        case PipelineStage.offer_accepted:
+        case PipelineStage.selected:
             return _SCORE_OFFER_ACCEPTED
-        case PipelineStage.position_close:
+        case PipelineStage.joined:
             return _SCORE_JOINED
         case PipelineStage.rejected:
             return _SCORE_REJECTED
@@ -183,11 +177,9 @@ def _score_for_stage(stage: PipelineStage) -> int:
 def _activity_type_for_stage(stage: PipelineStage) -> str:
     """Return activity type for logging stage transitions."""
     match stage:
-        case PipelineStage.offer:
-            return _ACTIVITY_OFFER_SENT
-        case PipelineStage.offer_accepted:
+        case PipelineStage.selected:
             return _ACTIVITY_OFFER_ACCEPTED
-        case PipelineStage.position_close:
+        case PipelineStage.joined:
             return _ACTIVITY_JOINED
         case PipelineStage.rejected:
             return _ACTIVITY_REJECTED
@@ -247,6 +239,12 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 "match_score": 1,
                 "decision": 1,
                 "mapped_at": 1,
+                "history": 1,
+                "interview_date": 1,
+                "joining_date": 1,
+                "offer_letter_url": 1,
+                "salary_offered": 1,
+                "dropped_notes": 1,
             }
         },
     ]
@@ -274,6 +272,9 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 match_score=row.get("match_score"),
                 decision=row.get("decision", "pending"),
                 mapped_at=row.get("mapped_at", row["_id"].generation_time),
+                stage_entered_at=row.get("history")[-1].get("at")
+                if row.get("history")
+                else row.get("mapped_at", row["_id"].generation_time),
                 interview_date=row.get("interview_date"),
                 joining_date=row.get("joining_date"),
                 offer_letter_url=row.get("offer_letter_url"),
@@ -319,6 +320,16 @@ async def move_mapping_to_stage(
             new_stage=req.new_stage,
             recruiter_score_delta=0,
         )
+
+    from app.modules.auth.models import UserRole
+
+    if viewer.role == UserRole.client:
+        allowed_transitions = {
+            PipelineStage.sent_to_client.value: [PipelineStage.interview, PipelineStage.rejected],
+            PipelineStage.interview.value: [PipelineStage.selected, PipelineStage.rejected],
+        }
+        if req.new_stage not in allowed_transitions.get(old_stage, []):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid stage transition for client")
 
     # Through the repository rather than a bare mapping.set(): that shortcut
     # skipped the mapping's own stage history, the permanent candidate history,
@@ -458,8 +469,8 @@ async def get_filtered_pipeline(
                                     "$in": [
                                         "$stage",
                                         [
-                                            PipelineStage.offer_accepted.value,
-                                            PipelineStage.position_close.value,
+                                            PipelineStage.selected.value,
+                                            PipelineStage.joined.value,
                                         ],
                                     ]
                                 },
@@ -546,7 +557,7 @@ async def get_top_candidates(
 
 _STATUS_TO_STAGE: dict[str, PipelineStage] = {
     "pending": PipelineStage.sourced,
-    "accepted": PipelineStage.offer_accepted,
+    "accepted": PipelineStage.selected,
     "rejected": PipelineStage.rejected,
 }
 
@@ -651,7 +662,15 @@ async def upload_offer_letter(
     req: PipelineUploadOfferRequest,
     viewer: _Viewer,
 ):
+    from app.modules.auth.models import UserRole
+
     mapping = await _get_or_404(viewer, mapping_id)
+
+    if viewer.role == UserRole.client and mapping.stage != PipelineStage.selected.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Offer letter can only be uploaded when candidate is selected",
+        )
 
     mapping.offer_letter_url = req.offer_letter_url
     mapping.salary_offered = req.salary_offered
@@ -665,7 +684,14 @@ async def set_joining_date(
     req: PipelineSetJoiningRequest,
     viewer: _Viewer,
 ):
+    from app.modules.auth.models import UserRole
+
     mapping = await _get_or_404(viewer, mapping_id)
+
+    if viewer.role == UserRole.client and not mapping.offer_letter_url:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Joining date can only be set after offer letter is uploaded"
+        )
 
     mapping.joining_date = req.joining_date
     await mapping.save()

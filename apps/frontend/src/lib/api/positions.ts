@@ -6,6 +6,7 @@ export interface PositionCreatePayload {
   client_id: string;
   role: string;
   department?: string;
+  salary?: string;
   mumbai_area?: string;
   city?: string;
   seniority?: string;
@@ -17,6 +18,7 @@ export interface PositionCreatePayload {
 export interface PositionUpdatePayload {
   role?: string;
   department?: string;
+  salary?: string;
   mumbai_area?: string;
   city?: string;
   seniority?: string;

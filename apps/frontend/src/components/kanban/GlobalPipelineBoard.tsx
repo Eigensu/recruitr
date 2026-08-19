@@ -23,12 +23,16 @@ async function fetchBoard(): Promise<PipelineBoardData> {
   return res.json();
 }
 
-async function moveMapping(mappingId: string, newStage: KanbanStage): Promise<void> {
+async function moveMapping(
+  mappingId: string,
+  newStage: KanbanStage,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
   const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/move`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ new_stage: newStage }),
+    body: JSON.stringify({ new_stage: newStage, ...extra }),
   });
   if (!res.ok) throw new Error(await res.text());
 }
@@ -59,10 +63,6 @@ const STAGE_LABELS: Record<KanbanStage, string> = {
   sourced: "Sourced",
   sent_to_client: "Sent to Client",
   interview: "Interview",
-  decision_pending: "Decision Pending",
-  offer: "Offer",
-  offer_accepted: "Offer Accepted",
-  position_close: "Joined (Legacy)",
   selected: "Selected",
   joined: "Joined",
   rejected: "Rejected",
@@ -74,10 +74,6 @@ const ALL_STAGES: KanbanStage[] = [
   "sourced",
   "sent_to_client",
   "interview",
-  "decision_pending",
-  "offer",
-  "offer_accepted",
-  "position_close",
   "selected",
   "joined",
   "rejected",
@@ -165,11 +161,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
       }))
       .filter((col) => {
         // Hide legacy columns if they are completely empty in the source board data
-        const isLegacy =
-          col.stage === "decision_pending" ||
-          col.stage === "offer" ||
-          col.stage === "offer_accepted" ||
-          col.stage === "position_close";
+        const isLegacy = false;
         if (isLegacy) {
           const originalCol = board.stages.find((c) => c.stage === col.stage);
           if (!originalCol || originalCol.mappings.length === 0) return false;
@@ -187,6 +179,30 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
     }
     return null;
   }, [activeDragId, board]);
+
+  async function handleStageChange(card: PipelineCard, newStage: string) {
+    try {
+      let extra = {};
+      if (newStage === "candidate_dropped") {
+        const notes = window.prompt("Reason for candidate drop:");
+        if (!notes) return;
+        extra = { dropped_notes: notes };
+      }
+      const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${card.mapping_id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ new_stage: newStage, ...extra }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // Refresh board
+      const data = await fetchBoard();
+      setBoard(data);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to change stage: " + err);
+    }
+  }
 
   function handleDragStart(e: DragStartEvent) {
     setActiveDragId(e.active.id as string);
@@ -222,7 +238,19 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
     });
 
     try {
-      await moveMapping(mappingId, newStage);
+      let extra = {};
+      if (newStage === "candidate_dropped") {
+        const notes = window.prompt("Reason for candidate drop:");
+        if (!notes) {
+          // Cancel drop if no reason is given
+          load();
+          return;
+        }
+        extra = { dropped_notes: notes };
+      }
+      // Wait, moveMapping only takes mappingId and newStage currently
+      // I should update moveMapping to take extra payload
+      await moveMapping(mappingId, newStage, extra);
     } catch {
       load(); // revert on failure
     }
@@ -329,6 +357,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
                 stage={col.stage as KanbanStage}
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
+                onStageChange={handleStageChange}
               />
             ))}
           </div>

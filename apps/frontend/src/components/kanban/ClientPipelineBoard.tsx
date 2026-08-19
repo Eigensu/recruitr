@@ -33,17 +33,11 @@ interface Filters {
 
 function mapToClientStage(stage: KanbanStage): ClientStage | null {
   switch (stage) {
-    case "sourced":
     case "sent_to_client":
     case "interview":
-    case "decision_pending":
-    case "offer":
-    case "offer_accepted":
-    case "position_close":
     case "selected":
     case "joined":
     case "rejected":
-    case "candidate_dropped":
       return stage;
     case "on_hold":
     default:
@@ -69,6 +63,22 @@ export default function ClientPipelineBoard({ positions }: Props) {
   // Modal state
   const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
 
+  async function handleStageChange(card: PipelineCard, newStage: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${card.mapping_id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ new_stage: newStage }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      load();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to change stage: " + err);
+    }
+  }
+
   function load() {
     fetchBoard()
       .then((data) => setBoard(data))
@@ -85,17 +95,11 @@ export default function ClientPipelineBoard({ positions }: Props) {
 
     // Initialize client stages
     const columns: Record<ClientStage, PipelineCard[]> = {
-      sourced: [],
       sent_to_client: [],
       interview: [],
-      decision_pending: [],
-      offer: [],
-      offer_accepted: [],
-      position_close: [],
       selected: [],
       joined: [],
       rejected: [],
-      candidate_dropped: [],
     };
 
     // Filter and map
@@ -174,6 +178,7 @@ export default function ClientPipelineBoard({ positions }: Props) {
                 cards={col.mappings}
                 readOnly={true}
                 onCardClick={(card) => setSelectedCard(card)}
+                onStageChange={handleStageChange}
               />
             ))}
           </div>
