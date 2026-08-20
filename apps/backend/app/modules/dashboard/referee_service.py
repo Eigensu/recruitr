@@ -20,18 +20,27 @@ PORTAL_URL = f"{settings.FRONTEND_URL}/referee"
 UNPAID_STATUSES = {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}
 
 
+# Stages that end a referral's forward progress; none maps to a referee step.
+_CLOSED_STAGES = (
+    PipelineStage.rejected,
+    PipelineStage.on_hold,
+    PipelineStage.candidate_dropped,
+)
+
+# One referee-facing step per forward PipelineStage. Terminal stages are absent
+# on purpose — see the skip list in sync_referral_with_mapping.
+_REFEREE_STAGE_BY_INTERNAL: dict[str, str] = {
+    PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
+    PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
+    PipelineStage.interview.value: RefereeKanbanStage.interview.value,
+    PipelineStage.selected.value: RefereeKanbanStage.selected.value,
+    PipelineStage.joined.value: RefereeKanbanStage.joined.value,
+}
+
+
 def map_stage_to_referee(internal_stage: str) -> str:
     """Map the internal ATS PipelineStage to the Referee-facing stage."""
-    mapping = {
-        PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
-        PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
-        PipelineStage.interview.value: RefereeKanbanStage.interview.value,
-        PipelineStage.selected.value: RefereeKanbanStage.interview.value,
-        PipelineStage.selected.value: RefereeKanbanStage.offer_extended.value,
-        PipelineStage.selected.value: RefereeKanbanStage.offer_accepted.value,
-        PipelineStage.joined.value: RefereeKanbanStage.joined.value,
-    }
-    return mapping.get(internal_stage, RefereeKanbanStage.cv_received.value)
+    return _REFEREE_STAGE_BY_INTERNAL.get(internal_stage, RefereeKanbanStage.cv_received.value)
 
 
 async def sync_referral_with_mapping(r: ReferralRecord) -> None:
@@ -42,8 +51,9 @@ async def sync_referral_with_mapping(r: ReferralRecord) -> None:
     if not mapping:
         return
 
-    # 1. Sync stage
-    if mapping.stage not in (PipelineStage.rejected, PipelineStage.on_hold):
+    # 1. Sync stage. A closed-out mapping has no referee-facing step to move to,
+    # so hold the last real one — syncing would reset the tracker to CV Received.
+    if mapping.stage not in _CLOSED_STAGES:
         r.kanban_stage = map_stage_to_referee(mapping.stage.value)
 
     # 2. Sync joining_date

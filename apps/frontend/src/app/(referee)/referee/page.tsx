@@ -90,16 +90,9 @@ export default function RefereePortal() {
   const { summary, referrals, payments, isLoading, error } = useRefereeData();
   const { user } = useCurrentUser();
 
-  // Define the exact 7 stages according to spec
-  const refereeStages = [
-    "CV Received",
-    "CV Reviewed",
-    "Screening Call",
-    "Interview Round(s)",
-    "Offer Extended",
-    "Offer Accepted",
-    "Joined",
-  ];
+  // One step per forward PipelineStage, mirroring map_stage_to_referee on the
+  // backend. Keep the two in step: a label absent there can never light up here.
+  const refereeStages = ["CV Received", "CV Reviewed", "Interview Round(s)", "Selected", "Joined"];
 
   return (
     <div
@@ -261,13 +254,9 @@ export default function RefereePortal() {
                             <div className="flex-1 overflow-x-auto scrollbar-none">
                               <div className="min-w-[500px] flex items-center justify-between">
                                 {refereeStages.map((stage, i) => {
-                                  const isPast = currentIndex >= i;
+                                  const isReached = currentIndex >= i;
                                   const isCurrent = currentIndex === i;
                                   const isJoined = stage === "Joined";
-                                  // Screening Call is routinely skipped, so it
-                                  // never draws as completed even once passed.
-                                  const isSkipped = stage === "Screening Call" && isPast;
-                                  const isReached = isPast && !isSkipped;
 
                                   return (
                                     <div
