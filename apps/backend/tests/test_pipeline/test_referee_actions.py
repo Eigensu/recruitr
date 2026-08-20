@@ -123,6 +123,95 @@ async def test_referee_cannot_touch_another_referees_referral(portal, seeded):
     assert (await Mapping.get(theirs.id)).stage == PipelineStage.sent_to_client
 
 
+async def test_unknown_mapping_is_refused(portal):
+    """A well-formed id that matches no referral is a 404, not a crash."""
+    res = await portal.post(_move_url(PydanticObjectId()), json={"new_stage": "interview"})
+
+    assert res.status_code == 404
+
+
+async def test_malformed_mapping_id_is_refused(portal):
+    res = await portal.post(_move_url("not-an-object-id"), json={"new_stage": "interview"})
+
+    assert res.status_code == 400
+
+
+async def test_referral_in_another_brand_is_refused(portal, seeded):
+    """Same referee id, different brand: the brand half of the check must bite.
+
+    A referee's grant is looked up per brand, so the referral row alone is not
+    enough — without brand_id in that query a referee carrying a grant in one
+    brand could reach their own referrals sitting in another.
+    """
+    other_brand = PydanticObjectId()
+    mine = seeded["mine"]
+
+    mapping = Mapping(
+        brand_id=other_brand,
+        candidate_id=PydanticObjectId(),
+        position_id=PydanticObjectId(),
+        employee_id=_EMP,
+        stage=PipelineStage.sent_to_client,
+    )
+    await mapping.insert()
+    await ReferralRecord(
+        brand_id=other_brand,
+        referee_id=mine["grant"].id,
+        mapping_id=mapping.id,
+        candidate_id=mapping.candidate_id,
+        position_id=mapping.position_id,
+    ).insert()
+
+    res = await portal.post(_move_url(mapping.id), json={"new_stage": "interview"})
+
+    assert res.status_code == 404
+    assert (await Mapping.get(mapping.id)).stage == PipelineStage.sent_to_client
+
+
+async def test_referral_pointing_at_a_foreign_mapping_is_refused(portal, seeded):
+    """Defence in depth: the referral is in-brand but the mapping it names is not.
+
+    Only reachable through inconsistent data, which is exactly when a bare
+    Mapping.get() would hand over a document from another tenant. Asserts the
+    second brand check in _own_referral_or_404 is load-bearing, not dead code.
+    """
+    foreign = Mapping(
+        brand_id=PydanticObjectId(),
+        candidate_id=PydanticObjectId(),
+        position_id=PydanticObjectId(),
+        employee_id=_EMP,
+        stage=PipelineStage.sent_to_client,
+    )
+    await foreign.insert()
+    await ReferralRecord(
+        brand_id=_BRAND,
+        referee_id=seeded["mine"]["grant"].id,
+        mapping_id=foreign.id,
+        candidate_id=foreign.candidate_id,
+        position_id=foreign.position_id,
+    ).insert()
+
+    res = await portal.post(_move_url(foreign.id), json={"new_stage": "interview"})
+
+    assert res.status_code == 404
+    assert (await Mapping.get(foreign.id)).stage == PipelineStage.sent_to_client
+
+
+async def test_offer_letter_is_refused_on_another_referees_referral(portal, seeded):
+    """The ownership gate guards the upload path too, not just the move path."""
+    theirs = seeded["theirs"]["mapping"]
+    theirs.stage = PipelineStage.selected
+    await theirs.save()
+
+    res = await portal.put(
+        f"/api/v1/referee-dashboard/referrals/{theirs.id}/offer-letter",
+        files={"file": ("offer.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    )
+
+    assert res.status_code == 404
+    assert (await Mapping.get(theirs.id)).offer_letter_url is None
+
+
 @pytest.mark.parametrize("target", ["joined", "selected", "sourced"])
 async def test_referee_cannot_skip_ahead(portal, seeded, target):
     """Only the two moves the client gets are legal from sent_to_client."""
