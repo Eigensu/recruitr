@@ -79,25 +79,26 @@ export default function KanbanCard({
         </div>
       )}
 
+      {/* Days in stage — pinned to the corner, clearing the drag handle */}
+      <span
+        className={cn(
+          "absolute top-2 text-[10px] px-1.5 py-0.5 rounded-sm border whitespace-nowrap",
+          readOnly ? "right-2" : "right-7",
+          badgeStyle,
+        )}
+      >
+        {daysLabel}
+      </span>
+
       {/* Candidate and Position Info */}
-      <div className="flex justify-between items-start mb-2 pr-4">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-text-primary truncate leading-tight">
-            {card.candidate_name}
-          </p>
-          <p className="text-[11px] font-medium text-text-secondary truncate mt-1.5">
-            {card.position_role}
-          </p>
-          <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
-        </div>
-        <span
-          className={cn(
-            "text-[10px] px-1.5 py-0.5 rounded-sm border whitespace-nowrap ml-2",
-            badgeStyle,
-          )}
-        >
-          {daysLabel}
-        </span>
+      <div className={cn("mb-2 min-w-0", readOnly ? "pr-16" : "pr-20")}>
+        <p className="text-sm font-semibold text-text-primary truncate leading-tight">
+          {card.candidate_name}
+        </p>
+        <p className="text-[11px] font-medium text-text-secondary truncate mt-1.5">
+          {card.position_role}
+        </p>
+        <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
       </div>
 
       {/* Footer */}
@@ -116,8 +117,8 @@ export default function KanbanCard({
           </div>
         )}
 
-        {card.stage === "joined" && (
-          <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
+        {card.stage === "joined" && (card.joining_date || card.salary_offered) && (
+          <div className="flex flex-col gap-1">
             {card.joining_date && (
               <span className="text-[10px] text-text-muted">
                 Joined:{" "}
@@ -136,7 +137,7 @@ export default function KanbanCard({
         )}
 
         {card.stage === "candidate_dropped" && card.dropped_notes && (
-          <div className="flex flex-col gap-1 pt-1.5 border-t border-border/50">
+          <div className="flex flex-col gap-1">
             <span className="text-[10px] text-text-muted italic break-words">
               &quot;{card.dropped_notes}&quot;
             </span>
@@ -203,7 +204,7 @@ export default function KanbanCard({
       )}
       {/* Internal User Action for Joined Candidates */}
       {!readOnly && card.stage === "joined" && onStageChange && (
-        <div className="mt-3 pt-3 border-t border-border">
+        <div className="mt-3">
           <button
             onClick={(e) => {
               e.stopPropagation();

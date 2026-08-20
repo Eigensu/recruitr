@@ -178,6 +178,24 @@ def _score_for_stage(stage: PipelineStage) -> int:
             return _SCORE_MOVED
 
 
+def _stage_entered_at(row: dict) -> datetime:
+    """When the mapping last entered the stage it is sitting in now.
+
+    Scans back for the newest history event matching the current stage rather
+    than trusting history[-1]: a stage set without going through move_stage
+    (seeded and migrated rows) writes no event, and the bare last event can
+    belong to a stage the mapping has since left. Falling back to mapped_at
+    then reads as "days since first mapped", which is what made a long-ago
+    referral show months in a stage it entered yesterday.
+    """
+    fallback = row.get("mapped_at") or row["_id"].generation_time
+    current = row.get("stage")
+    for event in reversed(row.get("history") or []):
+        if event.get("stage") == current:
+            return event.get("at") or fallback
+    return fallback
+
+
 def _activity_type_for_stage(stage: PipelineStage) -> str:
     """Return activity type for logging stage transitions."""
     match stage:
@@ -276,9 +294,7 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 match_score=row.get("match_score"),
                 decision=row.get("decision", "pending"),
                 mapped_at=row.get("mapped_at", row["_id"].generation_time),
-                stage_entered_at=row.get("history")[-1].get("at")
-                if row.get("history")
-                else row.get("mapped_at", row["_id"].generation_time),
+                stage_entered_at=_stage_entered_at(row),
                 interview_date=row.get("interview_date"),
                 joining_date=row.get("joining_date"),
                 offer_letter_url=row.get("offer_letter_url"),
