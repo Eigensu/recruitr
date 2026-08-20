@@ -37,6 +37,18 @@ function stageLabelCls(isCurrent: boolean, isReached: boolean): string {
   return "text-text-muted";
 }
 
+/** How a referral that has stopped moving is labelled, keyed on PipelineStage.
+ *
+ * kanban_stage deliberately freezes at the last real step when a referral is
+ * closed out, so the stepper alone shows a dead referral as merely paused
+ * partway along. Without this badge that reads as "still in progress".
+ */
+const CLOSED_STAGE_LABELS: Record<string, string> = {
+  rejected: "Not proceeding",
+  candidate_dropped: "Candidate withdrew",
+  on_hold: "On hold",
+};
+
 interface EarningsStateProps {
   paymentStatus: string;
   kanbanStage: string;
@@ -235,6 +247,9 @@ export default function RefereePortal() {
                     {referrals.map((candidate) => {
                       // Determine current index in the 7-stage array
                       const currentIndex = refereeStages.indexOf(candidate.kanban_stage);
+                      const closedLabel = candidate.pipeline_stage
+                        ? CLOSED_STAGE_LABELS[candidate.pipeline_stage]
+                        : undefined;
 
                       return (
                         <div
@@ -248,9 +263,16 @@ export default function RefereePortal() {
                           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                             {/* Candidate Info */}
                             <div className="space-y-1 sm:w-1/3">
-                              <h4 className="font-medium text-text-primary">
-                                {candidate.candidate_name}
-                              </h4>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-medium text-text-primary">
+                                  {candidate.candidate_name}
+                                </h4>
+                                {closedLabel && (
+                                  <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                                    {closedLabel}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
                                 <span>Role</span>
                                 {/* Without the fallback this read as a bare
