@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from beanie import PydanticObjectId
 from fastapi import HTTPException, status
@@ -232,6 +232,7 @@ async def move_stage(
     new_stage: PipelineStage,
     decision: Decision,
     scope: TenantScope,
+    actor: Literal["employee", "client", "system"] = "employee",
     **kwargs,
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
@@ -239,6 +240,14 @@ async def move_stage(
     Appends a StageEvent to the mapping's history, records the permanent
     candidate history entry, and updates the denormalized candidate stage.
     Does NOT handle gamification or cache invalidation — caller's responsibility.
+
+    `actor` distinguishes who triggered the move. `scope.employee_id` is only
+    ever set for a staff TenantScope (see schemas/shared.py) — for a client
+    dashboard action or the daily auto-join job it is None, and
+    `Mapping.employee_id` is a required field, so those callers must not
+    overwrite it. Passing actor="client"/"system" skips that `$set` key
+    instead, leaving the last recruiter who actually worked the mapping on
+    record.
     """
     now = datetime.now(UTC)
     from_stage = PipelineStage(mapping.stage) if mapping.stage else None
@@ -247,14 +256,16 @@ async def move_stage(
         from_stage=from_stage,
         decision=decision,
         by_employee_id=scope.employee_id,
+        actor=actor,
         at=now,
     )
-    set_fields = {
+    set_fields: dict = {
         "stage": new_stage.value,
         "decision": decision.value,
-        "employee_id": scope.employee_id,
         "updated_at": now,
     }
+    if actor == "employee":
+        set_fields["employee_id"] = scope.employee_id
 
     # Allow extra fields (like dropped_notes, joining_date, etc)
     for k, v in kwargs.items():

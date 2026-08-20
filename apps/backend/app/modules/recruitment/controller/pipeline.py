@@ -1,11 +1,15 @@
 """Pipeline/Kanban board API router — Phase D.
 
 Endpoints:
-  GET    /pipeline/board                    kanban board state (all stages + mappings)
-  POST   /pipeline/mappings/{id}/move       move mapping to new stage (with activity logging)
-  GET    /pipeline/filtered                 Kanban view filtered by position (frontend board)
-  GET    /pipeline/top-candidates           keyword-scored candidate suggestions
-  PATCH  /pipeline/match                    assign/move a candidate onto a position
+  GET    /pipeline/board                        kanban board state (all stages + mappings)
+  POST   /pipeline/mappings/{id}/move           move mapping to new stage (with activity logging)
+  GET    /pipeline/filtered                     Kanban view filtered by position (frontend board)
+  GET    /pipeline/top-candidates                keyword-scored candidate suggestions
+  PATCH  /pipeline/match                         assign/move a candidate onto a position
+  PUT    /pipeline/mappings/{id}/interview-date  set an interview date
+  PUT    /pipeline/mappings/{id}/offer-letter    record an uploaded offer letter
+  PUT    /pipeline/mappings/{id}/joining-date    set the joining date
+  PUT    /pipeline/mappings/{id}/dropped         mark a candidate dropped, with notes
 """
 
 from __future__ import annotations
@@ -340,6 +344,7 @@ async def move_mapping_to_stage(
         new_stage=req.new_stage,
         decision=Decision.pending,
         scope=viewer,
+        actor="client" if viewer.role == UserRole.client else "employee",
     )
 
     # move_stage already recomputes seats on the way *into* a terminal stage;
@@ -704,6 +709,7 @@ async def drop_candidate(
     req: PipelineCandidateDroppedRequest,
     viewer: _Viewer,
 ):
+    from app.modules.auth.models import UserRole
     from app.modules.recruitment.enums import Decision, PipelineStage
     from app.modules.recruitment.repository_impl import move_stage
 
@@ -718,6 +724,7 @@ async def drop_candidate(
             new_stage=PipelineStage.candidate_dropped,
             decision=Decision.rejected,
             scope=viewer,
+            actor="client" if viewer.role == UserRole.client else "employee",
         )
 
     return {"success": True}

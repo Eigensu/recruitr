@@ -12,6 +12,7 @@ export { default as PipelineStageItem } from "./molecules/PipelineStageItem";
 export { default as RecruiterLineItem } from "./molecules/RecruiterLineItem";
 export { default as ClientActivityTableRow } from "./molecules/ClientActivityTableRow";
 export { default as ActionNeededCallout } from "./molecules/ActionNeededCallout";
+export { default as NotificationBell } from "./molecules/NotificationBell";
 
 // Organisms
 export { default as AnalyticsWidgets } from "./organisms/AnalyticsWidgets";

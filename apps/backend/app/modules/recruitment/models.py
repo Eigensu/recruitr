@@ -7,6 +7,7 @@ The dashboard and leaderboard modules read from these same collections.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from beanie import Document, PydanticObjectId, Replace, Update, before_event
 from pydantic import BaseModel, Field
@@ -22,6 +23,7 @@ from app.modules.recruitment.enums import (
     Department,
     EducationLevel,
     Gender,
+    NotificationKind,
     PaymentStatus,
     PipelineStage,
     PositionApprovalStatus,
@@ -360,6 +362,11 @@ class StageEvent(BaseModel):
     from_stage: PipelineStage | None = None
     decision: Decision = Decision.pending
     by_employee_id: PydanticObjectId | None = None
+    # Who actually triggered the move: a recruiter, the client themselves
+    # (via the dashboard tick/cross), or the daily auto-join job. Defaults to
+    # "employee" so history entries written before this field existed keep
+    # reading as staff-authored, which is what they were.
+    actor: Literal["employee", "client", "system"] = "employee"
     at: datetime = Field(default_factory=_utcnow)
 
 
@@ -632,4 +639,35 @@ class PaymentBatch(Document):
         name = "payment_batches"
         indexes = [
             IndexModel([("brand_id", 1), ("referee_id", 1), ("cycle_month", 1)], unique=True),
+        ]
+
+
+# ── Notification ─────────────────────────────────────────────────────────────
+
+
+class Notification(Document):
+    """An in-app reminder for a pipeline action sitting unactioned too long.
+
+    client_id is None for a staff-wide notification (every employee in the
+    brand sees it) and set for a single client's notification — mirroring how
+    the PDF spec wants every action to have a client-side and a staff-side
+    fallback. One row per (mapping_id, kind, client_id): the reminder job
+    checks for an existing unread row before creating another, so a mapping
+    stuck for a week doesn't spam a new notification every run.
+    """
+
+    brand_id: PydanticObjectId
+    client_id: PydanticObjectId | None = None
+    mapping_id: PydanticObjectId
+    kind: NotificationKind
+    message: str
+    created_at: datetime = Field(default_factory=_utcnow)
+    read_at: datetime | None = None
+
+    class Settings:
+        name = "notifications"
+        indexes = [
+            IndexModel([("brand_id", 1), ("client_id", 1), ("read_at", 1)]),
+            IndexModel([("mapping_id", 1), ("kind", 1), ("client_id", 1)]),
+            IndexModel("created_at"),
         ]

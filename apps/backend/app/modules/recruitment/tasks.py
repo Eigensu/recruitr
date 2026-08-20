@@ -4,13 +4,29 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
+from beanie import PydanticObjectId
+
 from app.celery_app import celery_app
 from app.config import settings
 from app.modules.dashboard.email_service import EmailService
+from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.enums.pipeline_stage import PipelineStage
-from app.modules.recruitment.models import Candidate, ClientUser, Mapping, Position
+from app.modules.recruitment.models import Candidate, ClientUser, Mapping, Notification, Position
 
 logger = logging.getLogger(__name__)
+
+# reminder_type (this module's own vocabulary, tied to reminder_key prefixes
+# above) -> the in-app NotificationKind shown on the dashboard bell.
+_NOTIFICATION_KIND = {
+    "client_action": NotificationKind.awaiting_decision,
+    "interview_followup": NotificationKind.awaiting_interview_decision,
+    "offer_upload": NotificationKind.awaiting_offer_upload,
+}
+_NOTIFICATION_MESSAGE = {
+    "client_action": "is waiting on your decision to move to interview.",
+    "interview_followup": "is waiting on your post-interview decision.",
+    "offer_upload": "has been selected — upload their offer letter.",
+}
 
 
 async def _process_reminders_async() -> None:
@@ -60,16 +76,45 @@ async def _process_reminders_async() -> None:
             await mapping.save()
 
 
+async def _create_notification(
+    mapping: Mapping,
+    reminder_type: str,
+    client_id: PydanticObjectId | None,
+    candidate_name: str,
+) -> None:
+    """Insert one in-app reminder for the dashboard bell.
+
+    Called at most once per (mapping, reminder_type) — the caller only gets
+    here once per reminder_key via Mapping.reminders_sent, so no separate
+    idempotency check is needed here.
+    """
+    await Notification(
+        brand_id=mapping.brand_id,
+        client_id=client_id,
+        mapping_id=mapping.id,
+        kind=_NOTIFICATION_KIND[reminder_type],
+        message=f"{candidate_name} {_NOTIFICATION_MESSAGE[reminder_type]}",
+    ).insert()
+
+
 async def _send_client_reminders(mapping: Mapping, reminder_type: str) -> None:
+    candidate = await Candidate.get(mapping.candidate_id)
+    if not candidate:
+        return
+
+    # Staff-wide in-app fallback (client_id=None) — independent of whether
+    # this mapping has a client_id or any active client user yet, per the
+    # spec's "these functionalities also to exist with my team" requirement.
+    await _create_notification(mapping, reminder_type, None, candidate.full_name)
+
     if not mapping.client_id:
         return
 
+    # Client-facing in-app notification, alongside the existing email below.
+    await _create_notification(mapping, reminder_type, mapping.client_id, candidate.full_name)
+
     position = await Position.get(mapping.position_id)
     if not position:
-        return
-
-    candidate = await Candidate.get(mapping.candidate_id)
-    if not candidate:
         return
 
     # Find active client users for this client_id
@@ -205,12 +250,15 @@ def process_joining_dates() -> None:
             # The employee_id is None since it's an automated action
             sys_scope = TenantScope(brand_id=mapping.brand_id)
 
-            # Transition to position_close (Joined)
+            # Transition to position_close (Joined). actor="system" so
+            # move_stage() doesn't overwrite Mapping.employee_id (a required
+            # field) with the None on this scope.
             await move_stage(
                 mapping=mapping,
                 new_stage=PipelineStage.joined,
                 decision=Decision.pending,
                 scope=sys_scope,
+                actor="system",
             )
 
     import asyncio

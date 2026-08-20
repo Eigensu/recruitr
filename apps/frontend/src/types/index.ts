@@ -443,6 +443,20 @@ export interface PipelineBoardData {
   stages: PipelineColumn[];
 }
 
+export type NotificationKind =
+  | "awaiting_decision"
+  | "awaiting_interview_decision"
+  | "awaiting_offer_upload";
+
+export interface PipelineNotification {
+  id: string;
+  mapping_id: string;
+  kind: NotificationKind;
+  message: string;
+  created_at: string;
+  read_at: string | null;
+}
+
 /** Minimal agency identity exposed on unauthenticated surfaces (public form). */
 export interface PublicBrand {
   id: string;

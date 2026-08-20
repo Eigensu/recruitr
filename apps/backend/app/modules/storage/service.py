@@ -21,6 +21,7 @@ cloudinary.config(
 )
 
 RESUME_FOLDER = "eigensu/resumes"
+OFFER_LETTER_FOLDER = "eigensu/offers"
 
 
 def generate_upload_signature() -> dict:
@@ -54,11 +55,15 @@ def generate_upload_signature() -> dict:
     }
 
 
-def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
-    """Upload raw PDF bytes directly to Cloudinary from the backend.
+def upload_bytes_to_cloudinary(
+    pdf_bytes: bytes, filename: str, folder: str = RESUME_FOLDER
+) -> dict:
+    """Upload raw file bytes directly to Cloudinary from the backend.
 
-    Used by bulk-upload — does NOT use the signed browser-upload flow.
-    The file bytes are sent straight from the API server to Cloudinary.
+    Used by bulk-upload and the offer-letter flow — does NOT use the signed
+    browser-upload flow (that one is staff-only; see storage/router.py). The
+    file bytes are sent straight from the API server to Cloudinary, so no
+    upload credential is ever handed to the caller.
 
     Returns:
         The Cloudinary upload result dict (includes public_id, secure_url).
@@ -67,11 +72,20 @@ def upload_bytes_to_cloudinary(pdf_bytes: bytes, filename: str) -> dict:
     return cloudinary.uploader.upload(
         pdf_bytes,
         resource_type="raw",
-        folder=RESUME_FOLDER,
+        folder=folder,
         public_id=stem,
         overwrite=False,
         use_filename=True,
     )
+
+
+def upload_offer_letter(file_bytes: bytes, filename: str) -> dict:
+    """Upload an offer letter for a pipeline mapping.
+
+    Thin wrapper over upload_bytes_to_cloudinary, in its own folder so offer
+    letters don't mix with the resume pool.
+    """
+    return upload_bytes_to_cloudinary(file_bytes, filename, folder=OFFER_LETTER_FOLDER)
 
 
 def delete_cloudinary_asset(public_id: str) -> None:

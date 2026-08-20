@@ -8,6 +8,7 @@ import {
   ClientPositionsSnapshot,
   DashboardKpiCard,
   KpiGridSkeleton,
+  NotificationBell,
   PanelSkeleton,
   PipelinePieChart,
   RecruiterLineGraph,
@@ -244,7 +245,8 @@ export default async function DashboardPage() {
                 {isClient ? `Welcome, ${user?.client_name ?? "back"}` : "Recruitment Dashboard"}
               </h1>
             </div>
-            <div className="mt-1 shrink-0">
+            <div className="mt-1 flex shrink-0 items-center gap-2">
+              <NotificationBell />
               <ThemeToggle />
             </div>
           </div>
