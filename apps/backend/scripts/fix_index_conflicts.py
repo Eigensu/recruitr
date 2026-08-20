@@ -25,6 +25,7 @@ one-off repair, called out here so it isn't run blindly during peak traffic.
 import argparse
 import pathlib
 import sys
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -33,8 +34,24 @@ from pymongo import MongoClient  # noqa: E402
 from app.config import settings  # noqa: E402
 
 # Option keys that define an index's behavior (as opposed to bookkeeping
-# fields like 'v' or 'ns' that Mongo adds to the live listing).
+# fields like 'v' or 'ns' that Mongo adds to the live listing). Deliberately
+# excludes 'key' — that's compared separately in diff() and must never reach
+# create_index() as a kwarg (it's a positional arg there, not an option).
 COMPARABLE_KEYS = ["unique", "sparse", "partialFilterExpression", "expireAfterSeconds"]
+
+
+def _describe_uri(uri: str) -> str:
+    """A connection string with any embedded credentials stripped, safe to print.
+
+    mongodb:// URIs can carry a username:password same as mongodb+srv://, so
+    this sanitizes both rather than only special-casing Atlas.
+    """
+    parts = urlsplit(uri)
+    host = parts.hostname or "?"
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    label = "ATLAS (production)" if parts.scheme == "mongodb+srv" else host
+    return f"{label} [{parts.scheme}]"
 
 
 def declared_indexes() -> list[tuple[str, dict]]:
@@ -53,13 +70,38 @@ def declared_indexes() -> list[tuple[str, dict]]:
         st = getattr(model, "Settings", None)
         coll = getattr(st, "name", None)
         for im in getattr(st, "indexes", None) or []:
-            if coll:
-                out.append((coll, im.document))
+            if not coll:
+                continue
+            # Settings.indexes may also hold a bare field name or a
+            # [(field, direction), ...] list per Beanie's docs — only
+            # IndexModel has .document. Every index in this codebase is
+            # declared as IndexModel today; fail loudly with the model name
+            # rather than silently skipping if that ever changes, since a
+            # skipped index here reads as "already correct".
+            if not hasattr(im, "document"):
+                raise TypeError(
+                    f"{model.__name__}.Settings.indexes has a non-IndexModel entry "
+                    f"({im!r}) — this script only supports IndexModel-declared indexes."
+                )
+            out.append((coll, im.document))
     return out
 
 
 def diff(live: dict, want: dict) -> dict:
+    """Option and key-spec drift between a live index and its declared definition.
+
+    Key spec (which fields, and in what order/direction) is compared
+    separately from COMPARABLE_KEYS: it can't collMod, it can't be passed to
+    create_index() as a kwarg (that call takes it positionally), but drift in
+    it is exactly the kind of thing this script exists to catch — a model
+    that quietly gained or reordered a compound-index field previously read
+    as "already correct" because only unique/sparse/etc were compared.
+    """
     changed = {}
+    live_key = list((live.get("key") or {}).items())
+    want_key = list((want.get("key") or {}).items())
+    if live_key != want_key:
+        changed["key"] = (live_key, want_key)
     for key in COMPARABLE_KEYS:
         have, need = live.get(key), want.get(key)
         if have != need:
@@ -73,7 +115,7 @@ def main() -> int:
     args = ap.parse_args()
 
     uri = settings.MONGODB_URI
-    print(f"cluster : {'ATLAS (production)' if 'mongodb+srv' in uri else uri}")
+    print(f"cluster : {_describe_uri(uri)}")
     print(f"database: {settings.MONGODB_DB_NAME}")
     print(f"mode    : {'APPLY' if args.confirm else 'dry run (nothing will change)'}\n")
 
@@ -109,13 +151,26 @@ def main() -> int:
         return 0
 
     print()
+    failures = []
     for coll, want in todo:
         name = want["name"]
         key = list(want["key"].items())
         kwargs = {k: want[k] for k in COMPARABLE_KEYS if k in want}
         db[coll].drop_index(name)
-        db[coll].create_index(key, name=name, **kwargs)
+        try:
+            db[coll].create_index(key, name=name, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            # The old index is already gone at this point — that constraint
+            # (often uniqueness) is unenforced until this is re-run and
+            # succeeds. Reported explicitly rather than left to a stack trace,
+            # since which index is in that state matters for what to do next.
+            print(f"  FAILED {coll}.{name}: dropped but recreate failed ({exc}) — re-run to retry")
+            failures.append((coll, name))
+            continue
         print(f"  recreated {coll}.{name}")
+
+    if failures:
+        print(f"\n{len(failures)} index(es) failed to recreate — see FAILED lines above.")
 
     print("\nVerifying:")
     ok = True
