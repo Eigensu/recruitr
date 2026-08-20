@@ -64,7 +64,6 @@ _VAR_CAND_MAPPINGS = "$cand_mappings"
 # ── Domain constants ───────────────────────────────────────────────────────────
 
 _ACTIVITY_STAGE_MAP: dict[PipelineStage, ActivityType] = {
-    PipelineStage.selected: ActivityType.offer_sent,
     PipelineStage.selected: ActivityType.offer_accepted,
     PipelineStage.joined: ActivityType.joined,
     PipelineStage.rejected: ActivityType.rejected,
