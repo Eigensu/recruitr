@@ -14,12 +14,14 @@ import {
   RecruiterLineGraph,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
+import SourcingAnalyticsTable from "@/components/dashboard/organisms/SourcingAnalyticsTable";
 import {
   getDashboardAnalyticsData,
   getClientProfilesData,
   getDashboardOverview,
   getPipelineDashboardData,
   getRecruiterDashboardData,
+  getSourcingDashboardData,
 } from "@/lib/dashboard-data";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getUserServer } from "@/lib/api/auth.server";
@@ -76,6 +78,19 @@ async function ClientProfilesSection() {
   const rows = await getClientProfilesData();
 
   return <ClientProfilesTable rows={rows} />;
+}
+
+async function SourcingAnalyticsSection() {
+  const data = await getSourcingDashboardData();
+  const metrics = data.map((item) => ({
+    source_type: item.source,
+    source_channel: item.source_channel,
+    candidate_count: item.count,
+    pipeline_candidates: item.pipeline_candidates,
+    offers_accepted: item.offers_accepted,
+    joined_candidates: item.joined_candidates,
+  }));
+  return <SourcingAnalyticsTable metrics={metrics} />;
 }
 
 async function ClientOverviewSection() {
@@ -263,6 +278,10 @@ export default async function DashboardPage() {
 
             <Suspense fallback={<PanelSkeleton rows={8} />}>
               <ClientProfilesSection />
+            </Suspense>
+
+            <Suspense fallback={<PanelSkeleton rows={6} />}>
+              <SourcingAnalyticsSection />
             </Suspense>
           </>
         )}

@@ -642,9 +642,6 @@ const STAGE_LABELS: Record<string, string> = {
   sourced: "Sourced",
   sent_to_client: "Sent to client",
   interview: "Interview",
-  decision_pending: "Decision pending",
-  offer: "Offer",
-  offer_accepted: "Offer accepted",
   position_close: "Joined",
   rejected: "Rejected",
   on_hold: "On hold",
@@ -664,7 +661,7 @@ function formatDate(iso: string): string {
 }
 
 function PlacementRow({ placement }: Readonly<{ placement: ApiCandidatePlacement }>) {
-  const joined = placement.stage === "position_close";
+  const joined = placement.stage === "joined";
   return (
     <div className="flex items-start justify-between gap-2 rounded-xl border border-border bg-surface-panel p-3">
       <div className="min-w-0">

@@ -1,26 +1,25 @@
 """Pipeline/Kanban board API router — Phase D.
 
 Endpoints:
-  GET    /pipeline/board                       kanban board state (all stages + mappings)
-  POST   /pipeline/mappings/{id}/move          move mapping to new stage (with activity logging)
-  GET    /pipeline/filtered                    Kanban view filtered by position (frontend board)
-  GET    /pipeline/top-candidates               keyword-scored candidate suggestions
-  PATCH  /pipeline/match                        assign/move a candidate onto a position
-  POST   /pipeline/mappings/{id}/decision       client/staff tick-or-cross a mapping
-  POST   /pipeline/mappings/{id}/offer          upload an offer letter
-  POST   /pipeline/mappings/{id}/joining-date   set the joining date
-  POST   /pipeline/mappings/{id}/mark-not-joined  manual override when a candidate doesn't join
+  GET    /pipeline/board                        kanban board state (all stages + mappings)
+  POST   /pipeline/mappings/{id}/move           move mapping to new stage (with activity logging)
+  GET    /pipeline/filtered                     Kanban view filtered by position (frontend board)
+  GET    /pipeline/top-candidates                keyword-scored candidate suggestions
+  PATCH  /pipeline/match                         assign/move a candidate onto a position
+  PUT    /pipeline/mappings/{id}/interview-date  set an interview date
+  PUT    /pipeline/mappings/{id}/offer-letter    record an uploaded offer letter
+  PUT    /pipeline/mappings/{id}/joining-date    set the joining date
+  PUT    /pipeline/mappings/{id}/dropped         mark a candidate dropped, with notes
 """
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import re
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
@@ -44,15 +43,14 @@ from app.modules.recruitment.repository_impl import (
     move_stage,
     recompute_position_seats,
     record_candidate_event,
-    set_joining_date,
-    set_offer_document,
 )
 from app.modules.recruitment.schemas import (
-    DecisionRequest,
-    JoiningDateRequest,
-    MappingActionResponse,
     PipelineBoard,
+    PipelineCandidateDroppedRequest,
+    PipelineSetInterviewRequest,
+    PipelineSetJoiningRequest,
     PipelineStageColumn,
+    PipelineUploadOfferRequest,
     StageMappingItem,
     StageMoveRequest,
     StageMoveResponse,
@@ -60,7 +58,6 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
-from app.modules.storage.service import upload_offer_letter
 
 router = APIRouter()
 
@@ -128,12 +125,11 @@ _STAGE_LABELS = {
     PipelineStage.sourced: "Sourced",
     PipelineStage.sent_to_client: "Sent to Client",
     PipelineStage.interview: "Interview",
-    PipelineStage.decision_pending: "Decision Pending",
-    PipelineStage.offer: "Offer",
-    PipelineStage.offer_accepted: "Offer Accepted",
-    PipelineStage.position_close: "Joined",
+    PipelineStage.selected: "Selected",
+    PipelineStage.joined: "Joined",
     PipelineStage.rejected: "Rejected",
     PipelineStage.on_hold: "On Hold",
+    PipelineStage.candidate_dropped: "Candidate Dropped",
 }
 
 # ── Activity type constants ────────────────────────────────────────────────────
@@ -159,22 +155,10 @@ _SCORE_REJECTED = -2  # Rejected = -2
 
 
 async def _get_or_404(scope: TenantScope, mapping_id: str) -> Mapping:
+    from app.modules.recruitment.utils.scoping import scope_mapping_match
+
     oid = to_object_id(mapping_id, "mapping_id")
-    doc = await Mapping.find_one({"_id": oid, "brand_id": scope.brand_id})
-    if not doc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mapping not found")
-    return doc
-
-
-async def _get_viewer_mapping_or_404(viewer: TenantScope, mapping_id: str) -> Mapping:
-    """Same as _get_or_404, but scoped for a client-or-staff viewer.
-
-    Goes through scope_mapping_match (Position.client_id, not the denormalized
-    and sometimes-null Mapping.client_id) so a client can't reach another
-    employer's mapping by id — see utils/scoping.py.
-    """
-    oid = to_object_id(mapping_id, "mapping_id")
-    match = await scope_mapping_match(viewer, {"_id": oid, "brand_id": viewer.brand_id})
+    match = await scope_mapping_match(scope, {"_id": oid, "brand_id": scope.brand_id})
     doc = await Mapping.find_one(match)
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Mapping not found")
@@ -184,11 +168,9 @@ async def _get_viewer_mapping_or_404(viewer: TenantScope, mapping_id: str) -> Ma
 def _score_for_stage(stage: PipelineStage) -> int:
     """Return recruiter score delta for transitioning to a stage."""
     match stage:
-        case PipelineStage.offer:
-            return _SCORE_OFFER_SENT
-        case PipelineStage.offer_accepted:
+        case PipelineStage.selected:
             return _SCORE_OFFER_ACCEPTED
-        case PipelineStage.position_close:
+        case PipelineStage.joined:
             return _SCORE_JOINED
         case PipelineStage.rejected:
             return _SCORE_REJECTED
@@ -199,11 +181,9 @@ def _score_for_stage(stage: PipelineStage) -> int:
 def _activity_type_for_stage(stage: PipelineStage) -> str:
     """Return activity type for logging stage transitions."""
     match stage:
-        case PipelineStage.offer:
-            return _ACTIVITY_OFFER_SENT
-        case PipelineStage.offer_accepted:
+        case PipelineStage.selected:
             return _ACTIVITY_OFFER_ACCEPTED
-        case PipelineStage.position_close:
+        case PipelineStage.joined:
             return _ACTIVITY_JOINED
         case PipelineStage.rejected:
             return _ACTIVITY_REJECTED
@@ -263,9 +243,12 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 "match_score": 1,
                 "decision": 1,
                 "mapped_at": 1,
-                "updated_at": 1,
-                "offer_document_url": 1,
+                "history": 1,
+                "interview_date": 1,
                 "joining_date": 1,
+                "offer_letter_url": 1,
+                "salary_offered": 1,
+                "dropped_notes": 1,
             }
         },
     ]
@@ -291,11 +274,16 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 employee_id=row.get("employee_id"),
                 stage=PipelineStage(stage_val),
                 match_score=row.get("match_score"),
-                decision=row.get("decision") or "pending",
-                mapped_at=row["mapped_at"],
-                updated_at=row.get("updated_at"),
-                offer_document_url=row.get("offer_document_url"),
+                decision=row.get("decision", "pending"),
+                mapped_at=row.get("mapped_at", row["_id"].generation_time),
+                stage_entered_at=row.get("history")[-1].get("at")
+                if row.get("history")
+                else row.get("mapped_at", row["_id"].generation_time),
+                interview_date=row.get("interview_date"),
                 joining_date=row.get("joining_date"),
+                offer_letter_url=row.get("offer_letter_url"),
+                salary_offered=row.get("salary_offered"),
+                dropped_notes=row.get("dropped_notes"),
             )
         )
 
@@ -317,13 +305,13 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
 
 @router.post("/mappings/{mapping_id}/move")
 async def move_mapping_to_stage(
-    tenant: _Tenant, mapping_id: str, req: StageMoveRequest
+    viewer: _Viewer, mapping_id: str, req: StageMoveRequest
 ) -> StageMoveResponse:
     """
     Move a mapping to a new stage (Kanban drag-drop).
     Logs activity and awards recruiter points based on stage transition.
     """
-    mapping = await _get_or_404(tenant, mapping_id)
+    mapping = await _get_or_404(viewer, mapping_id)
     old_stage = mapping.stage
 
     if old_stage == req.new_stage.value:
@@ -337,6 +325,16 @@ async def move_mapping_to_stage(
             recruiter_score_delta=0,
         )
 
+    from app.modules.auth.models import UserRole
+
+    if viewer.role == UserRole.client:
+        allowed_transitions = {
+            PipelineStage.sent_to_client.value: [PipelineStage.interview, PipelineStage.rejected],
+            PipelineStage.interview.value: [PipelineStage.selected, PipelineStage.rejected],
+        }
+        if req.new_stage not in allowed_transitions.get(old_stage, []):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid stage transition for client")
+
     # Through the repository rather than a bare mapping.set(): that shortcut
     # skipped the mapping's own stage history, the permanent candidate history,
     # and the denormalized candidate.current_stage, so a card dragged across the
@@ -345,7 +343,8 @@ async def move_mapping_to_stage(
         mapping=mapping,
         new_stage=req.new_stage,
         decision=Decision.pending,
-        scope=tenant,
+        scope=viewer,
+        actor="client" if viewer.role == UserRole.client else "employee",
     )
 
     # move_stage already recomputes seats on the way *into* a terminal stage;
@@ -358,8 +357,8 @@ async def move_mapping_to_stage(
 
     # Log activity (fire-and-forget, idempotent)
     activity = ActivityLog(
-        brand_id=tenant.brand_id,
-        employee_id=tenant.employee_id,
+        brand_id=viewer.brand_id,
+        employee_id=viewer.employee_id,
         activity_type=_activity_type_for_stage(req.new_stage),
         target_entity_type="mapping",
         target_entity_id=str(mapping.id),
@@ -379,121 +378,6 @@ async def move_mapping_to_stage(
         recruiter_score_delta=score_delta,
         activity_id=str(activity.id) if activity else None,
     )
-
-
-# ── Client/staff dashboard actions ──────────────────────────────────────────
-# The tick/cross + offer/joining-date flow a client (or staff, as a fallback)
-# drives from the dashboard action widget, not the read-only /pipeline board.
-# Only the two gates below are valid targets — anything else 409s rather than
-# silently no-op'ing, since an out-of-order click here usually means two tabs
-# (or a client and a recruiter) raced each other.
-
-_DECISION_GATES: dict[PipelineStage, dict[str, tuple[PipelineStage, Decision]]] = {
-    PipelineStage.sent_to_client: {
-        "selected": (PipelineStage.interview, Decision.pending),
-        "rejected": (PipelineStage.rejected, Decision.rejected),
-    },
-    PipelineStage.decision_pending: {
-        "selected": (PipelineStage.offer, Decision.selected),
-        "rejected": (PipelineStage.rejected, Decision.rejected),
-    },
-}
-
-_ERR_NOT_AWAITING_DECISION = "This candidate isn't awaiting a decision right now."
-_ERR_NOT_AWAITING_OFFER = "This candidate isn't awaiting an offer letter right now."
-_ERR_OFFER_NOT_UPLOADED = "Upload the offer letter before setting a joining date."
-_ERR_NOT_AWAITING_JOIN = "This candidate isn't awaiting a joining date right now."
-
-
-def _mapping_action_response(mapping: Mapping) -> MappingActionResponse:
-    return MappingActionResponse(
-        mapping_id=str(mapping.id),
-        stage=PipelineStage(mapping.stage),
-        decision=mapping.decision or "pending",
-        offer_document_url=mapping.offer_document_url,
-        joining_date=mapping.joining_date,
-    )
-
-
-@router.post("/mappings/{mapping_id}/decision")
-async def decide_mapping(
-    viewer: _Viewer, mapping_id: str, req: DecisionRequest
-) -> MappingActionResponse:
-    """Tick ("selected") or cross ("rejected") a mapping at one of its two decision gates."""
-    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
-    gate = _DECISION_GATES.get(PipelineStage(mapping.stage))
-    if gate is None or mapping.decision != Decision.pending:
-        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_DECISION)
-
-    new_stage, new_decision = gate[req.decision]
-    await move_stage(
-        mapping=mapping,
-        new_stage=new_stage,
-        decision=new_decision,
-        scope=viewer,
-        actor="client" if viewer.is_client else "employee",
-    )
-    return _mapping_action_response(mapping)
-
-
-@router.post("/mappings/{mapping_id}/offer")
-async def upload_offer(
-    viewer: _Viewer, mapping_id: str, file: UploadFile = File(...)
-) -> MappingActionResponse:
-    """Upload the offer letter for a selected candidate.
-
-    Does not change stage by itself — setting a joining date (below) is what
-    advances the mapping to offer_accepted.
-    """
-    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
-    if PipelineStage(mapping.stage) != PipelineStage.offer:
-        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_OFFER)
-
-    file_bytes = await file.read()
-    result = await asyncio.to_thread(upload_offer_letter, file_bytes, file.filename or "offer")
-    await set_offer_document(mapping, result["secure_url"])
-    return _mapping_action_response(mapping)
-
-
-@router.post("/mappings/{mapping_id}/joining-date")
-async def set_mapping_joining_date(
-    viewer: _Viewer, mapping_id: str, req: JoiningDateRequest
-) -> MappingActionResponse:
-    """Set the joining date once an offer is uploaded — moves the mapping to offer_accepted.
-
-    The daily auto-join job (dashboard.auto_join_candidates) moves it on to
-    Joined once the date itself arrives.
-    """
-    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
-    if PipelineStage(mapping.stage) != PipelineStage.offer or not mapping.offer_document_url:
-        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_OFFER_NOT_UPLOADED)
-
-    await set_joining_date(mapping, req.joining_date)
-    await move_stage(
-        mapping=mapping,
-        new_stage=PipelineStage.offer_accepted,
-        decision=Decision.selected,
-        scope=viewer,
-        actor="client" if viewer.is_client else "employee",
-    )
-    return _mapping_action_response(mapping)
-
-
-@router.post("/mappings/{mapping_id}/mark-not-joined")
-async def mark_mapping_not_joined(viewer: _Viewer, mapping_id: str) -> MappingActionResponse:
-    """Manual override: the candidate didn't show up on their joining date."""
-    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
-    if PipelineStage(mapping.stage) != PipelineStage.offer_accepted:
-        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_JOIN)
-
-    await move_stage(
-        mapping=mapping,
-        new_stage=PipelineStage.rejected,
-        decision=Decision.rejected,
-        scope=viewer,
-        actor="client" if viewer.is_client else "employee",
-    )
-    return _mapping_action_response(mapping)
 
 
 # ── Aggregation helpers ────────────────────────────────────────────────────────
@@ -590,8 +474,8 @@ async def get_filtered_pipeline(
                                     "$in": [
                                         "$stage",
                                         [
-                                            PipelineStage.offer_accepted.value,
-                                            PipelineStage.position_close.value,
+                                            PipelineStage.selected.value,
+                                            PipelineStage.joined.value,
                                         ],
                                     ]
                                 },
@@ -678,7 +562,7 @@ async def get_top_candidates(
 
 _STATUS_TO_STAGE: dict[str, PipelineStage] = {
     "pending": PipelineStage.sourced,
-    "accepted": PipelineStage.offer_accepted,
+    "accepted": PipelineStage.selected,
     "rejected": PipelineStage.rejected,
 }
 
@@ -762,3 +646,85 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
         status=req.target_status,
         recruiter_daily_score=0,
     )
+
+
+@router.put("/mappings/{mapping_id}/interview-date")
+async def set_interview_date(
+    mapping_id: str,
+    req: PipelineSetInterviewRequest,
+    viewer: _Viewer,
+):
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.interview_date = req.interview_date
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/offer-letter")
+async def upload_offer_letter(
+    mapping_id: str,
+    req: PipelineUploadOfferRequest,
+    viewer: _Viewer,
+):
+    from app.modules.auth.models import UserRole
+
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    if viewer.role == UserRole.client and mapping.stage != PipelineStage.selected.value:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Offer letter can only be uploaded when candidate is selected",
+        )
+
+    mapping.offer_letter_url = req.offer_letter_url
+    mapping.salary_offered = req.salary_offered
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/joining-date")
+async def set_joining_date(
+    mapping_id: str,
+    req: PipelineSetJoiningRequest,
+    viewer: _Viewer,
+):
+    from app.modules.auth.models import UserRole
+
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    if viewer.role == UserRole.client and not mapping.offer_letter_url:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Joining date can only be set after offer letter is uploaded"
+        )
+
+    mapping.joining_date = req.joining_date
+    await mapping.save()
+    return {"success": True}
+
+
+@router.put("/mappings/{mapping_id}/dropped")
+async def drop_candidate(
+    mapping_id: str,
+    req: PipelineCandidateDroppedRequest,
+    viewer: _Viewer,
+):
+    from app.modules.auth.models import UserRole
+    from app.modules.recruitment.enums import Decision, PipelineStage
+    from app.modules.recruitment.repository_impl import move_stage
+
+    mapping = await _get_or_404(viewer, mapping_id)
+
+    mapping.dropped_notes = req.dropped_notes
+    await mapping.save()
+
+    if mapping.stage != PipelineStage.candidate_dropped.value:
+        await move_stage(
+            mapping=mapping,
+            new_stage=PipelineStage.candidate_dropped,
+            decision=Decision.rejected,
+            scope=viewer,
+            actor="client" if viewer.role == UserRole.client else "employee",
+        )
+
+    return {"success": True}

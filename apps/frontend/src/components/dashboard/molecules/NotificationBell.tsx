@@ -5,7 +5,7 @@ import { IconBell } from "@tabler/icons-react";
 import {
   clientFetchNotifications,
   clientMarkNotificationRead,
-} from "@/lib/api/pipeline-actions.client";
+} from "@/lib/api/notifications.client";
 import type { PipelineNotification } from "@/types";
 
 const POLL_MS = 60_000;

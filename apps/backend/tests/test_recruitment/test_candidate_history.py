@@ -13,7 +13,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, get_viewer
 from app.main import app
 from app.modules.recruitment.models import Client, Employee, Mapping, Position
 from app.modules.recruitment.schemas import TenantScope
@@ -28,15 +28,29 @@ PAYLOAD = {
     "phone": "+91 98765 00001",
     "experience_years": 4,
     "skills": ["Mixology"],
+    "communication": "Excellent",
+    "education": "Bachelor's",
+    "brand_experience": "Taj",
+    "department": "Service",
+    "specialization": "F&B",
+    "city": "Mumbai",
+    "gender": "female",
+    "current_role": "Manager",
+    "expected_salary": 1500000,
+    "notice_period": "30 Days",
+    "source": "internal",
+    "salary": 1200000,
 }
 
 
 @pytest_asyncio.fixture
 async def client_a():
     app.dependency_overrides[get_tenant] = lambda: TENANT
+    app.dependency_overrides[get_viewer] = lambda: TENANT
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 @pytest_asyncio.fixture
@@ -84,7 +98,7 @@ async def test_mapping_and_stage_moves_are_recorded(
     assert mapped.status_code in (200, 201), mapped.text
     mapping_id = mapped.json()["mapping_id"]
 
-    for stage in ("interview", "offer", "position_close"):
+    for stage in ("interview", "selected", "joined"):
         moved = await client_a.post(
             f"/api/v1/pipeline/mappings/{mapping_id}/move", json={"new_stage": stage}
         )
@@ -98,8 +112,8 @@ async def test_mapping_and_stage_moves_are_recorded(
     moves = [e for e in body["events"] if e["event_type"] == "stage_moved"]
     assert [(m["from_stage"], m["to_stage"]) for m in moves] == [
         ("sourced", "interview"),
-        ("interview", "offer"),
-        ("offer", "position_close"),
+        ("interview", "selected"),
+        ("selected", "joined"),
     ]
     # The company is on the entry itself, not looked up at read time.
     assert all(m["client_name"] == "Hunger Inc" for m in moves)
@@ -115,7 +129,7 @@ async def test_joining_a_company_becomes_a_placement(
     )
     await client_a.post(
         f"/api/v1/pipeline/mappings/{mapped.json()['mapping_id']}/move",
-        json={"new_stage": "position_close"},
+        json={"new_stage": "joined"},
     )
 
     body = (await client_a.get(f"/api/v1/candidates/{cid}/history")).json()
@@ -123,7 +137,7 @@ async def test_joining_a_company_becomes_a_placement(
     placement = body["placements"][0]
     assert placement["client_name"] == "Hunger Inc"
     assert placement["role"] == "Sous Chef"
-    assert placement["stage"] == "position_close"
+    assert placement["stage"] == "joined"
     assert placement["is_current"] is True
 
 
@@ -138,7 +152,7 @@ async def test_a_placement_survives_being_unmapped(
     )
     await client_a.post(
         f"/api/v1/pipeline/mappings/{mapped.json()['mapping_id']}/move",
-        json={"new_stage": "position_close"},
+        json={"new_stage": "joined"},
     )
 
     unmapped = await client_a.post(
@@ -173,7 +187,7 @@ async def test_a_placement_missing_both_timestamps_falls_back_to_created_at(
             "position_id": position.id,
             "client_id": position.client_id,
             "employee_id": _EMP,
-            "stage": "position_close",
+            "stage": "joined",
             "decision": "pending",
             "history": [],
             # mapped_at and updated_at deliberately omitted.

@@ -79,11 +79,10 @@ export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   sourced: "Added",
   sent_to_client: "Sent to Client",
   interview: "Interview",
-  decision_pending: "Result Awaited",
-  offer: "Offer Sent",
-  offer_accepted: "Offer Accepted",
-  position_close: "Joined",
+  selected: "Selected",
+  joined: "Joined",
   rejected: "Rejected",
+  candidate_dropped: "Candidate Dropped",
   on_hold: "On Hold",
 };
 

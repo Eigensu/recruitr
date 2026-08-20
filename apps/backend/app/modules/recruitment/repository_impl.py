@@ -121,8 +121,8 @@ async def recompute_position_seats(position_id: PydanticObjectId) -> None:
                 "position_id": position_id,
                 "stage": {
                     "$in": [
-                        PipelineStage.offer_accepted.value,
-                        PipelineStage.position_close.value,
+                        PipelineStage.selected.value,
+                        PipelineStage.joined.value,
                     ]
                 },
             }
@@ -233,6 +233,7 @@ async def move_stage(
     decision: Decision,
     scope: TenantScope,
     actor: Literal["employee", "client", "system"] = "employee",
+    **kwargs,
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
 
@@ -265,6 +266,13 @@ async def move_stage(
     }
     if actor == "employee":
         set_fields["employee_id"] = scope.employee_id
+
+    # Allow extra fields (like dropped_notes, joining_date, etc)
+    for k, v in kwargs.items():
+        if hasattr(mapping, k) and v is not None:
+            set_fields[k] = v
+            setattr(mapping, k, v)
+
     await Mapping.get_motor_collection().update_one(
         {"_id": mapping.id},
         {
@@ -291,36 +299,6 @@ async def move_stage(
     if new_stage in TERMINAL_STAGES:
         await recompute_position_seats(mapping.position_id)
 
-    return mapping
-
-
-async def set_offer_document(mapping: Mapping, offer_document_url: str) -> Mapping:
-    """Record an uploaded offer letter against a mapping. Does not change stage."""
-    now = datetime.now(UTC)
-    await Mapping.get_motor_collection().update_one(
-        {"_id": mapping.id},
-        {
-            "$set": {
-                "offer_document_url": offer_document_url,
-                "offer_uploaded_at": now,
-                "updated_at": now,
-            }
-        },
-    )
-    mapping.offer_document_url = offer_document_url
-    mapping.offer_uploaded_at = now
-    return mapping
-
-
-async def set_joining_date(mapping: Mapping, joining_date: datetime) -> Mapping:
-    """Record the candidate's joining date. Does not change stage — the caller
-    moves the mapping to offer_accepted via move_stage() alongside this."""
-    now = datetime.now(UTC)
-    await Mapping.get_motor_collection().update_one(
-        {"_id": mapping.id},
-        {"$set": {"joining_date": joining_date, "updated_at": now}},
-    )
-    mapping.joining_date = joining_date
     return mapping
 
 

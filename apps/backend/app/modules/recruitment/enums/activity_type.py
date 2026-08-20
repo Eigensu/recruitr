@@ -13,3 +13,4 @@ class ActivityType(StrEnum):
     joined = "joined"
     rejected = "rejected"
     unmapped = "unmapped"
+    position_created = "position_created"
