@@ -269,7 +269,7 @@ async def get_referrals(
 ) -> list[dict[str, Any]]:
     """Get the candidate journey for the referee."""
     # DO NOT call update_eligibility_and_incentives here. This is a read-only endpoint.
-    from app.modules.recruitment.models import Candidate
+    from app.modules.recruitment.models import Candidate, Mapping
 
     candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
 
@@ -279,6 +279,19 @@ async def get_referrals(
 
     referral_map = {r.candidate_id: r for r in referrals}
 
+    # kanban_stage freezes when a referral is rejected, dropped or put on hold
+    # (see sync_referral_with_mapping), so on its own it cannot say whether the
+    # candidate is still live. Carry the mapping's own stage through too: the
+    # portal's action buttons key off it, and without it a rejected referral
+    # would keep offering Select/Reject. Loaded in one query rather than per
+    # referral — this endpoint is polled.
+    mapping_by_id = {}
+    if referrals:
+        for m in await Mapping.find(
+            {"brand_id": brand_id, "_id": {"$in": [r.mapping_id for r in referrals]}}
+        ).to_list():
+            mapping_by_id[m.id] = m
+
     result = []
     for candidate in candidates:
         candidate_name = candidate.full_name if candidate.full_name else "Unknown Candidate"
@@ -287,9 +300,15 @@ async def get_referrals(
 
         if candidate.id in referral_map:
             r = referral_map[candidate.id]
+            mapping = mapping_by_id.get(r.mapping_id)
             result.append(
                 {
                     "id": str(r.id),
+                    "mapping_id": str(r.mapping_id),
+                    "pipeline_stage": (
+                        PipelineStage(mapping.stage).value if mapping is not None else None
+                    ),
+                    "offer_letter_url": mapping.offer_letter_url if mapping is not None else None,
                     "candidate_name": masked_name,
                     "role_level": r.role_level,
                     "submission_date": r.submission_date,
@@ -309,6 +328,10 @@ async def get_referrals(
             result.append(
                 {
                     "id": str(candidate.id),
+                    # No mapping yet, so nothing for the referee to act on.
+                    "mapping_id": None,
+                    "pipeline_stage": None,
+                    "offer_letter_url": None,
                     "candidate_name": masked_name,
                     "role_level": None,
                     "submission_date": candidate.created_at,

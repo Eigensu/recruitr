@@ -12,12 +12,20 @@ import { useRefereeData } from "@/hooks/useRefereeData";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard";
+import ReferralActions from "@/components/referee/ReferralActions";
 
-/** Timeline dot: filled for the stage in progress, ticked for stages behind it. */
+/** Timeline dot: filled for the stage in progress, ticked for stages behind it.
+ *
+ * A stage still ahead draws as a hollow ring, never as a filled disc: the row
+ * behind it is painted with --color-surface-2-val, so a `bg-surface-2` dot was
+ * exactly the same colour as its own background in both themes. It vanished,
+ * and because the dot sits above the connector line it punched a gap in the
+ * track wherever it sat — the stepper read as floating, disconnected dashes.
+ */
 function stageDotCls(isCurrent: boolean, isReached: boolean): string {
   if (isCurrent) return "bg-yellow text-navy ring-4 ring-yellow/20";
   if (isReached) return "bg-yellow text-navy";
-  return "bg-surface-2 text-transparent";
+  return "border-2 border-text-muted bg-surface-2 text-transparent";
 }
 
 function stageLabelCls(isCurrent: boolean, isReached: boolean): string {
@@ -87,7 +95,7 @@ function EarningsState({ paymentStatus, kanbanStage, amount }: EarningsStateProp
 }
 
 export default function RefereePortal() {
-  const { summary, referrals, payments, isLoading, error } = useRefereeData();
+  const { summary, referrals, payments, isLoading, error, refresh } = useRefereeData();
   const { user } = useCurrentUser();
 
   // One step per forward PipelineStage, mirroring map_stage_to_referee on the
@@ -204,7 +212,14 @@ export default function RefereePortal() {
                 </div>
               </div>
 
-              <div className="rounded-lg bg-surface-panel shadow-md shadow-black/30 p-5 theme-transition min-h-[300px] flex flex-col">
+              {/* The 300px floor is there to hold the empty state open; with
+                  referrals on screen it just left a slab of dead space under
+                  the last card. */}
+              <div
+                className={`rounded-lg bg-surface-panel shadow-md shadow-black/30 p-5 theme-transition flex flex-col ${
+                  referrals.length === 0 ? "min-h-[300px]" : ""
+                }`}
+              >
                 {referrals.length === 0 ? (
                   <div
                     className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center"
@@ -238,9 +253,16 @@ export default function RefereePortal() {
                               </h4>
                               <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
                                 <span>Role</span>
-                                {candidate.role_level && (
+                                {/* Without the fallback this read as a bare
+                                    "Role" with nothing after it whenever the
+                                    referral carries no role_level. */}
+                                {candidate.role_level ? (
                                   <span className="rounded-full bg-navy/10 dark:bg-white/10 px-2.5 py-0.5 text-xs font-medium text-text-primary">
                                     {candidate.role_level}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs italic text-text-muted">
+                                    not set yet
                                   </span>
                                 )}
                               </div>
@@ -252,7 +274,12 @@ export default function RefereePortal() {
 
                             {/* Status Timeline */}
                             <div className="flex-1 overflow-x-auto scrollbar-none">
-                              <div className="min-w-[500px] flex items-center justify-between">
+                              {/* items-start, not items-center: the two-line
+                                  labels ("CV Reviewed", "Interview Round(s)")
+                                  make their columns taller, and centring then
+                                  lifted those dots above the one-line ones so
+                                  the track stair-stepped across the row. */}
+                              <div className="min-w-[500px] flex items-start justify-between">
                                 {refereeStages.map((stage, i) => {
                                   const isReached = currentIndex >= i;
                                   const isCurrent = currentIndex === i;
@@ -265,7 +292,7 @@ export default function RefereePortal() {
                                     >
                                       {i !== 0 && (
                                         <div
-                                          className={`absolute top-2.5 -left-1/2 w-full h-0.5 ${isReached ? "bg-yellow" : "bg-border"}`}
+                                          className={`absolute top-2.5 -left-1/2 w-full h-0.5 ${isReached ? "bg-yellow" : "bg-text-muted/40"}`}
                                         />
                                       )}
 
@@ -279,7 +306,7 @@ export default function RefereePortal() {
                                       </div>
 
                                       <div
-                                        className={`mt-2 text-center text-[10px] font-medium max-w-[60px] leading-tight ${stageLabelCls(
+                                        className={`mt-2 min-h-[24px] max-w-[76px] px-1 text-center text-[10px] font-medium leading-tight ${stageLabelCls(
                                           isCurrent,
                                           isReached,
                                         )}`}
@@ -309,6 +336,8 @@ export default function RefereePortal() {
                               />
                             </div>
                           </div>
+
+                          <ReferralActions referral={candidate} onDone={refresh} />
                         </div>
                       );
                     })}
