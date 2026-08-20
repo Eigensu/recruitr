@@ -1,6 +1,7 @@
 """Pipeline and Kanban board DTOs."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -23,6 +24,9 @@ class StageMappingItem(BaseModel):
     match_score: float | None = None
     decision: str = "pending"
     mapped_at: datetime
+    updated_at: datetime | None = None
+    offer_document_url: str | None = None
+    joining_date: datetime | None = None
 
 
 class PipelineStageColumn(BaseModel):
@@ -57,3 +61,31 @@ class StageMoveResponse(BaseModel):
     decision: str = "pending"
     recruiter_score_delta: int = 0  # Varies by stage
     activity_id: str | None = None
+
+
+# ── Client/staff dashboard actions ──────────────────────────────────────────
+# The tick/cross + offer/joining-date flow a client (or staff, as a fallback)
+# drives from the dashboard action widget — see controller/pipeline.py's
+# "Mapping actions" section.
+
+
+class DecisionRequest(BaseModel):
+    """Tick ("selected") or cross ("rejected") on a mapping awaiting a decision."""
+
+    decision: Literal["selected", "rejected"]
+
+
+class JoiningDateRequest(BaseModel):
+    """Set the candidate's joining date once an offer has been uploaded."""
+
+    joining_date: datetime
+
+
+class MappingActionResponse(BaseModel):
+    """Result of a dashboard action (decision, offer upload, joining date, override)."""
+
+    mapping_id: str
+    stage: PipelineStage
+    decision: str
+    offer_document_url: str | None = None
+    joining_date: datetime | None = None

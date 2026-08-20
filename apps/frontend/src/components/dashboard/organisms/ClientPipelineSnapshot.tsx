@@ -1,11 +1,17 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { IconAlertCircle, IconArrowRight, IconLayoutKanban } from "@tabler/icons-react";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { cn } from "@/lib/utils";
+import { clientFetchPipelineBoard } from "@/lib/api/pipeline-actions.client";
+import PipelineActionRow, {
+  actionGateFor,
+} from "@/components/dashboard/molecules/PipelineActionRow";
 import type { ClientStage } from "@/lib/constants/client-pipeline";
+import type { PipelineCard } from "@/types";
 
 interface StageCount {
   stage: ClientStage;
@@ -19,12 +25,31 @@ interface ClientPipelineSnapshotProps {
   failed?: boolean;
 }
 
+const MAX_ACTION_ROWS = 5;
+
 export default function ClientPipelineSnapshot({
   stages,
   failed = false,
 }: ClientPipelineSnapshotProps) {
   const total = stages.reduce((sum, stage) => sum + stage.count, 0);
-  const maxCount = Math.max(...stages.map((s) => s.count), 1);
+  const [actionable, setActionable] = useState<PipelineCard[] | null>(null);
+  const [boardFailed, setBoardFailed] = useState(false);
+
+  const loadActionable = useCallback(() => {
+    clientFetchPipelineBoard()
+      .then((board) => {
+        const cards = board.stages.flatMap((col) => col.mappings).filter((c) => actionGateFor(c));
+        setActionable(cards);
+        setBoardFailed(false);
+      })
+      .catch(() => setBoardFailed(true));
+  }, []);
+
+  useEffect(() => {
+    loadActionable();
+  }, [loadActionable]);
+
+  const showAggregate = actionable === null || actionable.length === 0;
 
   return (
     <motion.section
@@ -72,8 +97,36 @@ export default function ClientPipelineSnapshot({
             Once candidates are sourced for your roles, they&apos;ll show up here.
           </p>
         </div>
+      ) : !showAggregate ? (
+        <div className="mt-5 flex-1 space-y-2.5 overflow-y-auto">
+          {actionable!.slice(0, MAX_ACTION_ROWS).map((card) => {
+            const gate = actionGateFor(card);
+            if (!gate) return null;
+            return (
+              <PipelineActionRow
+                key={card.mapping_id}
+                card={card}
+                gate={gate}
+                onUpdated={loadActionable}
+              />
+            );
+          })}
+          {actionable!.length > MAX_ACTION_ROWS && (
+            <Link
+              href="/pipeline"
+              className="block pt-1 text-center text-xs font-medium text-text-secondary hover:text-yellow"
+            >
+              +{actionable!.length - MAX_ACTION_ROWS} more awaiting action — view the full board
+            </Link>
+          )}
+        </div>
       ) : (
         <div className="mt-5 flex-1 space-y-3.5">
+          {boardFailed && (
+            <p className="text-xs" style={{ opacity: 0.5 }}>
+              Couldn&apos;t check for candidates awaiting your action.
+            </p>
+          )}
           {stages.map((stage) => (
             <div key={stage.stage}>
               <div className="flex items-center justify-between text-xs">
@@ -89,7 +142,9 @@ export default function ClientPipelineSnapshot({
                 <motion.div
                   className="h-full rounded-full bg-yellow"
                   initial={{ width: 0 }}
-                  whileInView={{ width: `${(stage.count / maxCount) * 100}%` }}
+                  whileInView={{
+                    width: `${(stage.count / Math.max(...stages.map((s) => s.count), 1)) * 100}%`,
+                  }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, ease: "easeOut" }}
                 />

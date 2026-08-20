@@ -17,6 +17,7 @@ from app.modules.recruitment.enums.position_status import PositionStatus
 from app.modules.recruitment.enums.seniority import Seniority
 
 from .client_message import ClientMessageTarget, ClientMessageType
+from .notification_kind import NotificationKind
 from .payment_status import PaymentStatus
 from .referee_stage import RefereeKanbanStage
 
@@ -38,4 +39,5 @@ __all__ = [
     "ClientMessageType",
     "RefereeKanbanStage",
     "PaymentStatus",
+    "NotificationKind",
 ]

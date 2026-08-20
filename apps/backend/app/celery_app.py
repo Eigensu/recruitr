@@ -36,5 +36,13 @@ celery_app.conf.update(
             "task": "dashboard.daily_referee_processor",
             "schedule": crontab(minute=0, hour=1),  # Runs daily at 01:00 UTC
         },
+        "dashboard-pipeline-action-reminders": {
+            "task": "dashboard.pipeline_action_reminders",
+            "schedule": crontab(minute=0),  # Runs hourly
+        },
+        "dashboard-auto-join-candidates": {
+            "task": "dashboard.auto_join_candidates",
+            "schedule": crontab(minute=30, hour=1),  # Runs daily at 01:30 UTC
+        },
     },
 )

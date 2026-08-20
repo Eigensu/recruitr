@@ -22,6 +22,9 @@ from app.modules.recruitment.schemas.client import (
     ClientUserResponse,
 )
 from app.modules.recruitment.schemas.pipeline import (
+    DecisionRequest,
+    JoiningDateRequest,
+    MappingActionResponse,
     PipelineBoard,
     PipelineStageColumn,
     StageMappingItem,
@@ -95,6 +98,9 @@ __all__ = [
     "StageMappingItem",
     "StageMoveRequest",
     "StageMoveResponse",
+    "DecisionRequest",
+    "JoiningDateRequest",
+    "MappingActionResponse",
     # Team & Tag DTOs
     "TeamCreate",
     "TeamUpdate",

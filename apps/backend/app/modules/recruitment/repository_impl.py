@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from beanie import PydanticObjectId
 from fastapi import HTTPException, status
@@ -232,12 +232,21 @@ async def move_stage(
     new_stage: PipelineStage,
     decision: Decision,
     scope: TenantScope,
+    actor: Literal["employee", "client", "system"] = "employee",
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
 
     Appends a StageEvent to the mapping's history, records the permanent
     candidate history entry, and updates the denormalized candidate stage.
     Does NOT handle gamification or cache invalidation — caller's responsibility.
+
+    `actor` distinguishes who triggered the move. `scope.employee_id` is only
+    ever set for a staff TenantScope (see schemas/shared.py) — for a client
+    dashboard action or the daily auto-join job it is None, and
+    `Mapping.employee_id` is a required field, so those callers must not
+    overwrite it. Passing actor="client"/"system" skips that `$set` key
+    instead, leaving the last recruiter who actually worked the mapping on
+    record.
     """
     now = datetime.now(UTC)
     from_stage = PipelineStage(mapping.stage) if mapping.stage else None
@@ -246,17 +255,20 @@ async def move_stage(
         from_stage=from_stage,
         decision=decision,
         by_employee_id=scope.employee_id,
+        actor=actor,
         at=now,
     )
+    set_fields: dict = {
+        "stage": new_stage.value,
+        "decision": decision.value,
+        "updated_at": now,
+    }
+    if actor == "employee":
+        set_fields["employee_id"] = scope.employee_id
     await Mapping.get_motor_collection().update_one(
         {"_id": mapping.id},
         {
-            "$set": {
-                "stage": new_stage.value,
-                "decision": decision.value,
-                "employee_id": scope.employee_id,
-                "updated_at": now,
-            },
+            "$set": set_fields,
             "$push": {"history": event.model_dump()},
         },
     )
@@ -279,6 +291,36 @@ async def move_stage(
     if new_stage in TERMINAL_STAGES:
         await recompute_position_seats(mapping.position_id)
 
+    return mapping
+
+
+async def set_offer_document(mapping: Mapping, offer_document_url: str) -> Mapping:
+    """Record an uploaded offer letter against a mapping. Does not change stage."""
+    now = datetime.now(UTC)
+    await Mapping.get_motor_collection().update_one(
+        {"_id": mapping.id},
+        {
+            "$set": {
+                "offer_document_url": offer_document_url,
+                "offer_uploaded_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+    mapping.offer_document_url = offer_document_url
+    mapping.offer_uploaded_at = now
+    return mapping
+
+
+async def set_joining_date(mapping: Mapping, joining_date: datetime) -> Mapping:
+    """Record the candidate's joining date. Does not change stage — the caller
+    moves the mapping to offer_accepted via move_stage() alongside this."""
+    now = datetime.now(UTC)
+    await Mapping.get_motor_collection().update_one(
+        {"_id": mapping.id},
+        {"$set": {"joining_date": joining_date, "updated_at": now}},
+    )
+    mapping.joining_date = joining_date
     return mapping
 
 

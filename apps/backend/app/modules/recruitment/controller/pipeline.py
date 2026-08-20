@@ -1,21 +1,26 @@
 """Pipeline/Kanban board API router — Phase D.
 
 Endpoints:
-  GET    /pipeline/board                    kanban board state (all stages + mappings)
-  POST   /pipeline/mappings/{id}/move       move mapping to new stage (with activity logging)
-  GET    /pipeline/filtered                 Kanban view filtered by position (frontend board)
-  GET    /pipeline/top-candidates           keyword-scored candidate suggestions
-  PATCH  /pipeline/match                    assign/move a candidate onto a position
+  GET    /pipeline/board                       kanban board state (all stages + mappings)
+  POST   /pipeline/mappings/{id}/move          move mapping to new stage (with activity logging)
+  GET    /pipeline/filtered                    Kanban view filtered by position (frontend board)
+  GET    /pipeline/top-candidates               keyword-scored candidate suggestions
+  PATCH  /pipeline/match                        assign/move a candidate onto a position
+  POST   /pipeline/mappings/{id}/decision       client/staff tick-or-cross a mapping
+  POST   /pipeline/mappings/{id}/offer          upload an offer letter
+  POST   /pipeline/mappings/{id}/joining-date   set the joining date
+  POST   /pipeline/mappings/{id}/mark-not-joined  manual override when a candidate doesn't join
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import re
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
@@ -39,8 +44,13 @@ from app.modules.recruitment.repository_impl import (
     move_stage,
     recompute_position_seats,
     record_candidate_event,
+    set_joining_date,
+    set_offer_document,
 )
 from app.modules.recruitment.schemas import (
+    DecisionRequest,
+    JoiningDateRequest,
+    MappingActionResponse,
     PipelineBoard,
     PipelineStageColumn,
     StageMappingItem,
@@ -50,6 +60,7 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
+from app.modules.storage.service import upload_offer_letter
 
 router = APIRouter()
 
@@ -155,6 +166,21 @@ async def _get_or_404(scope: TenantScope, mapping_id: str) -> Mapping:
     return doc
 
 
+async def _get_viewer_mapping_or_404(viewer: TenantScope, mapping_id: str) -> Mapping:
+    """Same as _get_or_404, but scoped for a client-or-staff viewer.
+
+    Goes through scope_mapping_match (Position.client_id, not the denormalized
+    and sometimes-null Mapping.client_id) so a client can't reach another
+    employer's mapping by id — see utils/scoping.py.
+    """
+    oid = to_object_id(mapping_id, "mapping_id")
+    match = await scope_mapping_match(viewer, {"_id": oid, "brand_id": viewer.brand_id})
+    doc = await Mapping.find_one(match)
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mapping not found")
+    return doc
+
+
 def _score_for_stage(stage: PipelineStage) -> int:
     """Return recruiter score delta for transitioning to a stage."""
     match stage:
@@ -237,6 +263,9 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 "match_score": 1,
                 "decision": 1,
                 "mapped_at": 1,
+                "updated_at": 1,
+                "offer_document_url": 1,
+                "joining_date": 1,
             }
         },
     ]
@@ -264,6 +293,9 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 match_score=row.get("match_score"),
                 decision=row.get("decision") or "pending",
                 mapped_at=row["mapped_at"],
+                updated_at=row.get("updated_at"),
+                offer_document_url=row.get("offer_document_url"),
+                joining_date=row.get("joining_date"),
             )
         )
 
@@ -347,6 +379,121 @@ async def move_mapping_to_stage(
         recruiter_score_delta=score_delta,
         activity_id=str(activity.id) if activity else None,
     )
+
+
+# ── Client/staff dashboard actions ──────────────────────────────────────────
+# The tick/cross + offer/joining-date flow a client (or staff, as a fallback)
+# drives from the dashboard action widget, not the read-only /pipeline board.
+# Only the two gates below are valid targets — anything else 409s rather than
+# silently no-op'ing, since an out-of-order click here usually means two tabs
+# (or a client and a recruiter) raced each other.
+
+_DECISION_GATES: dict[PipelineStage, dict[str, tuple[PipelineStage, Decision]]] = {
+    PipelineStage.sent_to_client: {
+        "selected": (PipelineStage.interview, Decision.pending),
+        "rejected": (PipelineStage.rejected, Decision.rejected),
+    },
+    PipelineStage.decision_pending: {
+        "selected": (PipelineStage.offer, Decision.selected),
+        "rejected": (PipelineStage.rejected, Decision.rejected),
+    },
+}
+
+_ERR_NOT_AWAITING_DECISION = "This candidate isn't awaiting a decision right now."
+_ERR_NOT_AWAITING_OFFER = "This candidate isn't awaiting an offer letter right now."
+_ERR_OFFER_NOT_UPLOADED = "Upload the offer letter before setting a joining date."
+_ERR_NOT_AWAITING_JOIN = "This candidate isn't awaiting a joining date right now."
+
+
+def _mapping_action_response(mapping: Mapping) -> MappingActionResponse:
+    return MappingActionResponse(
+        mapping_id=str(mapping.id),
+        stage=PipelineStage(mapping.stage),
+        decision=mapping.decision or "pending",
+        offer_document_url=mapping.offer_document_url,
+        joining_date=mapping.joining_date,
+    )
+
+
+@router.post("/mappings/{mapping_id}/decision")
+async def decide_mapping(
+    viewer: _Viewer, mapping_id: str, req: DecisionRequest
+) -> MappingActionResponse:
+    """Tick ("selected") or cross ("rejected") a mapping at one of its two decision gates."""
+    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
+    gate = _DECISION_GATES.get(PipelineStage(mapping.stage))
+    if gate is None or mapping.decision != Decision.pending:
+        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_DECISION)
+
+    new_stage, new_decision = gate[req.decision]
+    await move_stage(
+        mapping=mapping,
+        new_stage=new_stage,
+        decision=new_decision,
+        scope=viewer,
+        actor="client" if viewer.is_client else "employee",
+    )
+    return _mapping_action_response(mapping)
+
+
+@router.post("/mappings/{mapping_id}/offer")
+async def upload_offer(
+    viewer: _Viewer, mapping_id: str, file: UploadFile = File(...)
+) -> MappingActionResponse:
+    """Upload the offer letter for a selected candidate.
+
+    Does not change stage by itself — setting a joining date (below) is what
+    advances the mapping to offer_accepted.
+    """
+    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
+    if PipelineStage(mapping.stage) != PipelineStage.offer:
+        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_OFFER)
+
+    file_bytes = await file.read()
+    result = await asyncio.to_thread(upload_offer_letter, file_bytes, file.filename or "offer")
+    await set_offer_document(mapping, result["secure_url"])
+    return _mapping_action_response(mapping)
+
+
+@router.post("/mappings/{mapping_id}/joining-date")
+async def set_mapping_joining_date(
+    viewer: _Viewer, mapping_id: str, req: JoiningDateRequest
+) -> MappingActionResponse:
+    """Set the joining date once an offer is uploaded — moves the mapping to offer_accepted.
+
+    The daily auto-join job (dashboard.auto_join_candidates) moves it on to
+    Joined once the date itself arrives.
+    """
+    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
+    if PipelineStage(mapping.stage) != PipelineStage.offer or not mapping.offer_document_url:
+        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_OFFER_NOT_UPLOADED)
+
+    await set_joining_date(mapping, req.joining_date)
+    await move_stage(
+        mapping=mapping,
+        new_stage=PipelineStage.offer_accepted,
+        decision=Decision.selected,
+        scope=viewer,
+        actor="client" if viewer.is_client else "employee",
+    )
+    return _mapping_action_response(mapping)
+
+
+@router.post("/mappings/{mapping_id}/mark-not-joined")
+async def mark_mapping_not_joined(viewer: _Viewer, mapping_id: str) -> MappingActionResponse:
+    """Manual override: the candidate didn't show up on their joining date."""
+    mapping = await _get_viewer_mapping_or_404(viewer, mapping_id)
+    if PipelineStage(mapping.stage) != PipelineStage.offer_accepted:
+        raise HTTPException(status.HTTP_409_CONFLICT, _ERR_NOT_AWAITING_JOIN)
+
+    await move_stage(
+        mapping=mapping,
+        new_stage=PipelineStage.rejected,
+        decision=Decision.rejected,
+        scope=viewer,
+        actor="client" if viewer.is_client else "employee",
+    )
+    return _mapping_action_response(mapping)
 
 
 # ── Aggregation helpers ────────────────────────────────────────────────────────
