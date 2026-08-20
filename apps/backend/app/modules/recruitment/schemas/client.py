@@ -18,6 +18,8 @@ class ClientResponse(BaseModel):
     name: str
     city: str | None = None
     industry: str | None = None
+    logo_url: str | None = None
+    brand_description: str | None = None
     website: str | None = None
     contact_person: str | None = None
     contact_email: str | None = None
@@ -62,6 +64,11 @@ class ClientUpdate(BaseModel):
     allowed_domains: list[ClientText] | None = None
     allowed_emails: list[ClientText] | None = None
     is_active: bool | None = None
+
+
+class ClientSelfUpdate(BaseModel):
+    logo_url: str | None = None
+    brand_description: str | None = None
 
 
 class ClientUserResponse(BaseModel):

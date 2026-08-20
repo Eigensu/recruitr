@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
-import { CLIENT_STAGES, CLIENT_STAGE_LABELS, type ClientStage } from "@/lib/constants/client-pipeline";
+import {
+  CLIENT_STAGES,
+  CLIENT_STAGE_LABELS,
+  type ClientStage,
+} from "@/lib/constants/client-pipeline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -29,21 +33,21 @@ interface Filters {
 
 function mapToClientStage(stage: KanbanStage): ClientStage | null {
   switch (stage) {
-    case "sourced":
     case "sent_to_client":
     case "interview":
-    case "decision_pending":
-    case "offer":
-    case "offer_accepted":
-    case "position_close":
-      return stage;
+    case "selected":
+    case "joined":
     case "rejected":
+      return stage;
+    case "on_hold":
     default:
       return null;
   }
 }
 
 import { DndContext } from "@dnd-kit/core";
+
+import ClientActionModal from "./ClientActionModal";
 
 const selectStyle = {
   background: "var(--color-canvas-val)",
@@ -55,6 +59,25 @@ export default function ClientPipelineBoard({ positions }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Filters>({ position_id: "" });
+
+  // Modal state
+  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
+
+  async function handleStageChange(card: PipelineCard, newStage: string) {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${card.mapping_id}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ new_stage: newStage }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      load();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to change stage: " + err);
+    }
+  }
 
   function load() {
     fetchBoard()
@@ -72,13 +95,11 @@ export default function ClientPipelineBoard({ positions }: Props) {
 
     // Initialize client stages
     const columns: Record<ClientStage, PipelineCard[]> = {
-      sourced: [],
       sent_to_client: [],
       interview: [],
-      decision_pending: [],
-      offer: [],
-      offer_accepted: [],
-      position_close: [],
+      selected: [],
+      joined: [],
+      rejected: [],
     };
 
     // Filter and map
@@ -156,11 +177,33 @@ export default function ClientPipelineBoard({ positions }: Props) {
                 label={col.label}
                 cards={col.mappings}
                 readOnly={true}
+                onCardClick={(card) => setSelectedCard(card)}
+                onStageChange={handleStageChange}
               />
             ))}
           </div>
         </DndContext>
       )}
+
+      <ClientActionModal
+        isOpen={!!selectedCard}
+        onClose={() => setSelectedCard(null)}
+        card={selectedCard}
+        onStageChange={async (newStage) => {
+          if (!selectedCard) return;
+          const res = await fetch(
+            `${API_URL}/api/v1/pipeline/mappings/${selectedCard.mapping_id}/move`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ new_stage: newStage }),
+            },
+          );
+          if (!res.ok) throw new Error(await res.text());
+        }}
+        onActionComplete={() => load()}
+      />
     </div>
   );
 }

@@ -82,6 +82,18 @@ export interface CandidateCreatePayload {
   previous_company?: string;
   experience_years: number;
   skills: string[];
+  communication?: string;
+  education?: string;
+  brand_experience?: string;
+  department?: string;
+  specialization?: string;
+  city?: string;
+  gender?: string;
+  current_role?: string;
+  expected_salary?: number;
+  notice_period?: string;
+  source?: string;
+  salary?: number;
 }
 
 export interface CandidateUpdatePayload {
@@ -90,6 +102,18 @@ export interface CandidateUpdatePayload {
   previous_company?: string;
   experience_years?: number;
   skills?: string[];
+  communication?: string;
+  education?: string;
+  brand_experience?: string;
+  department?: string;
+  specialization?: string;
+  city?: string;
+  gender?: string;
+  current_role?: string;
+  expected_salary?: number;
+  notice_period?: string;
+  source?: string;
+  salary?: number;
 }
 
 function buildQuery(params: CandidateListParams): string {

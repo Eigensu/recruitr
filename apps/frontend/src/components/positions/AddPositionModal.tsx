@@ -36,6 +36,8 @@ const EMPTY_FORM = {
   clientId: "",
   role: "",
   department: "",
+  salary: "",
+  mumbaiArea: "",
   city: "",
   seniority: "Mid",
   requirements: "",
@@ -43,11 +45,90 @@ const EMPTY_FORM = {
   notes: "",
 };
 
+const ROLES_BY_CATEGORY: Record<string, string[]> = {
+  Service: [
+    "Bar Assistant",
+    "Bar Manager",
+    "Bar Supervisor",
+    "Barback",
+    "Barista",
+    "Bartender",
+    "Café Manager",
+    "Café Supervisor",
+    "Captain",
+    "Cashier",
+    "Counter Sales",
+    "Duty Manager",
+    "F&B Executive",
+    "F&B Supervisor",
+    "Floor Supervisor",
+    "Front Office Executive",
+    "GRE",
+    "Hostess",
+    "Mixologist",
+    "Outlet Manager",
+    "Shift Manager",
+    "Sommelier",
+    "Steward",
+    "Waiter / Server",
+    "RM",
+    "ARM",
+    "Head Bartender",
+    "Beverage Head",
+  ],
+  BOH: [
+    "CDP",
+    "Commi 1",
+    "Commi 2",
+    "Commi 3",
+    "DCDP",
+    "Executive Chef",
+    "Food Production Manager",
+    "Head Baker",
+    "Head Chef",
+    "Kitchen Supervisor",
+    "Packaging Assistant",
+    "Sous Chef",
+    "Staff Cook",
+    "Store Manager",
+    "Storekeeper",
+  ],
+  Corporate: [
+    "Accountant / Accounts",
+    "Admin / Back Office",
+    "Brand Manager",
+    "Business Development",
+    "Community Manager",
+    "Content Strategist",
+    "CRM",
+    "Data Analyst",
+    "EA / PA",
+    "F&B Controller",
+    "General Manager",
+    "Graphic Designer",
+    "HR",
+    "Lawyer",
+    "Marketing",
+    "MIS Executive",
+    "Operations Head",
+    "Payroll",
+    "PR",
+    "Project Manager",
+    "Purchase",
+    "Sales",
+    "Social Media",
+    "Supply Chain / SCM",
+    "Training Manager / L&D",
+  ],
+};
+
 function positionToForm(p: ApiPosition) {
   return {
     clientId: p.client_id,
     role: p.role,
     department: p.department ?? "",
+    salary: p.salary ?? "",
+    mumbaiArea: p.mumbai_area ?? "",
     city: p.city ?? "",
     seniority: p.seniority,
     requirements: (p.requirements ?? []).join(", "),
@@ -143,6 +224,8 @@ export default function AddPositionModal({
         const payload: PositionUpdatePayload = {
           role: form.role.trim(),
           department: form.department.trim() || undefined,
+          salary: String(form.salary).trim() || undefined,
+          mumbai_area: form.mumbaiArea.trim() || undefined,
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
@@ -157,6 +240,8 @@ export default function AddPositionModal({
           client_id: form.clientId,
           role: form.role.trim(),
           department: form.department.trim() || undefined,
+          salary: String(form.salary).trim() || undefined,
+          mumbai_area: form.mumbaiArea.trim() || undefined,
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
@@ -331,48 +416,117 @@ export default function AddPositionModal({
                   </div>
                 )}
 
-                <div>
-                  <label htmlFor="pos-role" className={LABEL_CLS}>
-                    Role *
-                  </label>
-                  <input
-                    id="pos-role"
-                    required
-                    type="text"
-                    placeholder="e.g. Sous Chef"
-                    value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    className={INPUT_CLS}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="pos-dept" className={LABEL_CLS}>
+                      Category *
+                    </label>
+                    <select
+                      id="pos-dept"
+                      required
+                      value={form.department}
+                      onChange={(e) => {
+                        setForm({ ...form, department: e.target.value, role: "" });
+                      }}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Select Category...</option>
+                      <option value="BOH">BOH</option>
+                      <option value="Service">Service</option>
+                      <option value="Corporate">Corporate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="pos-role" className={LABEL_CLS}>
+                      Role *
+                    </label>
+                    <select
+                      id="pos-role"
+                      required
+                      value={form.role}
+                      onChange={(e) => setForm({ ...form, role: e.target.value })}
+                      disabled={!form.department}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Select Role...</option>
+                      {form.department &&
+                        ROLES_BY_CATEGORY[form.department]?.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="pos-dept" className={LABEL_CLS}>
-                      Department
+                    <label htmlFor="pos-salary" className={LABEL_CLS}>
+                      Salary
                     </label>
                     <input
-                      id="pos-dept"
+                      id="pos-salary"
                       type="text"
-                      placeholder="e.g. Kitchen"
-                      value={form.department}
-                      onChange={(e) => setForm({ ...form, department: e.target.value })}
+                      placeholder="e.g. 30k - 40k"
+                      value={form.salary}
+                      onChange={(e) => setForm({ ...form, salary: e.target.value })}
                       className={INPUT_CLS}
                     />
                   </div>
                   <div>
+                    <label htmlFor="pos-seats" className={LABEL_CLS}>
+                      No. of Positions *
+                    </label>
+                    <input
+                      id="pos-seats"
+                      required
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={form.totalSeats}
+                      onChange={(e) => setForm({ ...form, totalSeats: e.target.value })}
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
                     <label htmlFor="pos-city" className={LABEL_CLS}>
-                      City
+                      Location / City
                     </label>
                     <input
                       id="pos-city"
                       type="text"
                       placeholder="e.g. Mumbai"
                       value={form.city}
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                      onChange={(e) => {
+                        const newCity = e.target.value;
+                        setForm({
+                          ...form,
+                          city: newCity,
+                          mumbaiArea:
+                            newCity.toLowerCase().trim() === "mumbai" ? form.mumbaiArea : "",
+                        });
+                      }}
                       className={INPUT_CLS}
                     />
                   </div>
+                  {form.city.toLowerCase().trim() === "mumbai" && (
+                    <div>
+                      <label htmlFor="pos-mumbai-area" className={LABEL_CLS}>
+                        Mumbai Area
+                      </label>
+                      <input
+                        id="pos-mumbai-area"
+                        type="text"
+                        placeholder="e.g. Andheri, Bandra"
+                        value={form.mumbaiArea}
+                        onChange={(e) => setForm({ ...form, mumbaiArea: e.target.value })}
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -392,33 +546,18 @@ export default function AddPositionModal({
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="pos-seats" className={LABEL_CLS}>
-                      Total Seats
+                    <label htmlFor="pos-req" className={LABEL_CLS}>
+                      Requirements
                     </label>
                     <input
-                      id="pos-seats"
-                      type="number"
-                      min="0"
-                      placeholder="1"
-                      value={form.totalSeats}
-                      onChange={(e) => setForm({ ...form, totalSeats: e.target.value })}
+                      id="pos-req"
+                      type="text"
+                      placeholder="e.g. Knife Skills, Food Safety"
+                      value={form.requirements}
+                      onChange={(e) => setForm({ ...form, requirements: e.target.value })}
                       className={INPUT_CLS}
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="pos-req" className={LABEL_CLS}>
-                    Requirements (comma-separated)
-                  </label>
-                  <input
-                    id="pos-req"
-                    type="text"
-                    placeholder="e.g. Knife Skills, Kitchen Ops, Food Safety"
-                    value={form.requirements}
-                    onChange={(e) => setForm({ ...form, requirements: e.target.value })}
-                    className={INPUT_CLS}
-                  />
                 </div>
 
                 <div>

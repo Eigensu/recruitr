@@ -37,6 +37,18 @@ PAYLOAD = {
     "experience_years": 4,
     "skills": ["Mixology"],
     "cv_link": CV_LINK,
+    "communication": "Excellent",
+    "education": "Bachelor's",
+    "brand_experience": "Taj",
+    "department": "Service",
+    "specialization": "F&B",
+    "city": "Mumbai",
+    "gender": "female",
+    "current_role": "Manager",
+    "expected_salary": 1500000,
+    "notice_period": "30 Days",
+    "source": "internal",
+    "salary": 1200000,
 }
 
 

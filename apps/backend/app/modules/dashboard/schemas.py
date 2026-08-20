@@ -63,6 +63,20 @@ class DashboardPipelineResponse(BaseModel):
     generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
 
 
+class SourcingAnalyticsItem(BaseModel):
+    source_type: str | None = None
+    source_channel: str | None = None
+    candidate_count: int = 0
+    pipeline_candidates: int = 0
+    offers_accepted: int = 0
+    joined_candidates: int = 0
+
+
+class DashboardSourcingResponse(BaseModel):
+    metrics: list[SourcingAnalyticsItem] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
+
+
 # ── Analytics item schemas ─────────────────────────────────────────────────────
 
 

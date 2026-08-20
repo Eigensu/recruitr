@@ -23,6 +23,12 @@ class StageMappingItem(BaseModel):
     match_score: float | None = None
     decision: str = "pending"
     mapped_at: datetime
+    stage_entered_at: datetime | None = None
+    interview_date: datetime | None = None
+    joining_date: datetime | None = None
+    offer_letter_url: str | None = None
+    salary_offered: float | None = None
+    dropped_notes: str | None = None
 
 
 class PipelineStageColumn(BaseModel):
@@ -44,6 +50,11 @@ class StageMoveRequest(BaseModel):
     """Move a mapping to a new stage."""
 
     new_stage: PipelineStage
+    dropped_notes: str | None = None
+    offer_letter_url: str | None = None
+    joining_date: datetime | None = None
+    salary_offered: float | None = None
+    brand: str | None = None
 
 
 class StageMoveResponse(BaseModel):
@@ -57,3 +68,20 @@ class StageMoveResponse(BaseModel):
     decision: str = "pending"
     recruiter_score_delta: int = 0  # Varies by stage
     activity_id: str | None = None
+
+
+class PipelineSetInterviewRequest(BaseModel):
+    interview_date: datetime
+
+
+class PipelineUploadOfferRequest(BaseModel):
+    offer_letter_url: str
+    salary_offered: float
+
+
+class PipelineSetJoiningRequest(BaseModel):
+    joining_date: datetime
+
+
+class PipelineCandidateDroppedRequest(BaseModel):
+    dropped_notes: str

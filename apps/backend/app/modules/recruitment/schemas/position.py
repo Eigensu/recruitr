@@ -2,9 +2,11 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.common.dtos.pagination import PaginatedResponse
+from app.modules.recruitment.enums.department import Department
+from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 
 
 class MappedPreview(BaseModel):
@@ -22,11 +24,14 @@ class PositionListItem(BaseModel):
     client_id: str
     client_name: str
     role: str
-    department: str | None = None
+    department: Department | None = None
+    salary: str | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str
     status: str
+    approval_status: PositionApprovalStatus | None = None
     total_seats: int
     filled_seats: int
     remaining_seats: int
@@ -45,29 +50,81 @@ class PositionListItem(BaseModel):
 class PositionCreate(BaseModel):
     client_id: str
     role: str
-    department: str | None = None
+    department: Department | None = None
+    salary: str | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str = "Mid"
     requirements: list[str] = Field(default_factory=list)
-    total_seats: int = Field(default=0, ge=0)
+    total_seats: int = Field(default=1, ge=1)
     date_opened: datetime | None = None
     target_close: datetime | None = None
     notes: str | None = None
 
+    @model_validator(mode="after")
+    def validate_category_and_role(self) -> "PositionCreate":
+        # Only enforce role mapping if a department is specified.
+        # This allows internal users to potentially bypass it if needed in the future,
+        # but the prompt specifically wants client flow to enforce it.
+        # The prompt says Category is required for the client portal.
+        # So we require department if role is provided and they must match.
+        from app.modules.recruitment.constants import ROLES_BY_CATEGORY
+
+        if self.department:
+            allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
+            if self.role not in allowed_roles:
+                raise ValueError(
+                    f"Role '{self.role}' is not valid for category '{self.department.value}'"
+                )
+        elif self.client_id is not None:
+            # If it's a client creating it (they pass client_id in the payload usually, wait, client_id is in PositionCreate)
+            # We enforce department is required
+            raise ValueError("Category (department) is required.")
+
+        # If city is provided and it is not mumbai, clear mumbai_area
+        if self.city is not None and self.city.strip().lower() != "mumbai":
+            self.mumbai_area = None
+
+        return self
+
 
 class PositionUpdate(BaseModel):
     role: str | None = None
-    department: str | None = None
+    department: Department | None = None
+    salary: str | None = None
+    mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
     seniority: str | None = None
     requirements: list[str] | None = None
     total_seats: int | None = Field(default=None, ge=0)
     status: str | None = None
+    approval_status: PositionApprovalStatus | None = None
     assigned_employee_id: str | None = None
     target_close: datetime | None = None
     notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_category_and_role(self) -> "PositionUpdate":
+        from app.modules.recruitment.constants import ROLES_BY_CATEGORY
+
+        if self.department and self.role:
+            allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
+            if self.role not in allowed_roles:
+                raise ValueError(
+                    f"Role '{self.role}' is not valid for category '{self.department.value}'"
+                )
+
+        # also if city is provided and it is not mumbai, clear mumbai_area if not explicitly provided
+        if self.city is not None and self.city.strip().lower() != "mumbai":
+            self.mumbai_area = None
+
+        return self
+
+
+class PositionApprovalRequest(BaseModel):
+    approval_status: str
 
 
 class TopCandidateItem(BaseModel):

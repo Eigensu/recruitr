@@ -26,10 +26,10 @@ def map_stage_to_referee(internal_stage: str) -> str:
         PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
         PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
         PipelineStage.interview.value: RefereeKanbanStage.interview.value,
-        PipelineStage.decision_pending.value: RefereeKanbanStage.interview.value,
-        PipelineStage.offer.value: RefereeKanbanStage.offer_extended.value,
-        PipelineStage.offer_accepted.value: RefereeKanbanStage.offer_accepted.value,
-        PipelineStage.position_close.value: RefereeKanbanStage.joined.value,
+        PipelineStage.selected.value: RefereeKanbanStage.interview.value,
+        PipelineStage.selected.value: RefereeKanbanStage.offer_extended.value,
+        PipelineStage.selected.value: RefereeKanbanStage.offer_accepted.value,
+        PipelineStage.joined.value: RefereeKanbanStage.joined.value,
     }
     return mapping.get(internal_stage, RefereeKanbanStage.cv_received.value)
 
@@ -47,9 +47,9 @@ async def sync_referral_with_mapping(r: ReferralRecord) -> None:
         r.kanban_stage = map_stage_to_referee(mapping.stage.value)
 
     # 2. Sync joining_date
-    if mapping.stage == PipelineStage.position_close and not r.joining_date:
+    if mapping.stage == PipelineStage.joined and not r.joining_date:
         for event in mapping.history:
-            if event.stage == PipelineStage.position_close:
+            if event.stage == PipelineStage.joined:
                 r.joining_date = event.at
                 break
 

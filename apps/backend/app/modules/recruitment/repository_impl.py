@@ -121,8 +121,8 @@ async def recompute_position_seats(position_id: PydanticObjectId) -> None:
                 "position_id": position_id,
                 "stage": {
                     "$in": [
-                        PipelineStage.offer_accepted.value,
-                        PipelineStage.position_close.value,
+                        PipelineStage.selected.value,
+                        PipelineStage.joined.value,
                     ]
                 },
             }
@@ -232,6 +232,7 @@ async def move_stage(
     new_stage: PipelineStage,
     decision: Decision,
     scope: TenantScope,
+    **kwargs,
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
 
@@ -248,15 +249,23 @@ async def move_stage(
         by_employee_id=scope.employee_id,
         at=now,
     )
+    set_fields = {
+        "stage": new_stage.value,
+        "decision": decision.value,
+        "employee_id": scope.employee_id,
+        "updated_at": now,
+    }
+
+    # Allow extra fields (like dropped_notes, joining_date, etc)
+    for k, v in kwargs.items():
+        if hasattr(mapping, k) and v is not None:
+            set_fields[k] = v
+            setattr(mapping, k, v)
+
     await Mapping.get_motor_collection().update_one(
         {"_id": mapping.id},
         {
-            "$set": {
-                "stage": new_stage.value,
-                "decision": decision.value,
-                "employee_id": scope.employee_id,
-                "updated_at": now,
-            },
+            "$set": set_fields,
             "$push": {"history": event.model_dump()},
         },
     )

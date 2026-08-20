@@ -108,10 +108,10 @@ _STAGE_WEIGHTS: list[tuple[PipelineStage, int]] = [
     (PipelineStage.sent_to_client, 18),
     (PipelineStage.rejected, 9),
     (PipelineStage.on_hold, 7),
-    (PipelineStage.offer, 10),
-    (PipelineStage.offer_accepted, 8),
-    (PipelineStage.position_close, 8),
-    (PipelineStage.decision_pending, 6),
+    (PipelineStage.selected, 10),
+    (PipelineStage.selected, 8),
+    (PipelineStage.joined, 8),
+    (PipelineStage.selected, 6),
 ]
 
 
@@ -314,7 +314,7 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
 
     joined_per_job: dict[ObjectId, int] = defaultdict(int)
     for mapping in mapping_docs:
-        if mapping["stage"] == PipelineStage.position_close.value:
+        if mapping["stage"] == PipelineStage.joined.value:
             joined_per_job[mapping["position_id"]] += 1
 
     for job in job_docs:
@@ -339,9 +339,9 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
     for mapping in mapping_docs:
         employee_id: ObjectId = mapping["employee_id"]
         total_per_employee[employee_id] += 1
-        if mapping["stage"] == PipelineStage.offer.value:
+        if mapping["stage"] == PipelineStage.selected.value:
             offer_sent_per_employee[employee_id] += 1
-        if mapping["stage"] == PipelineStage.position_close.value:
+        if mapping["stage"] == PipelineStage.joined.value:
             joined_per_employee[employee_id] += 1
         if mapping["stage"] == PipelineStage.rejected.value:
             rejected_per_employee[employee_id] += 1
@@ -367,9 +367,9 @@ async def seed_dashboard_data(reset: bool = True, seed: int = 20250119) -> None:
     for mapping in sorted(mapping_docs, key=lambda item: item["mapped_at"], reverse=True)[:180]:
         stage = PipelineStage(mapping["stage"])
         activity_type = {
-            PipelineStage.offer: ActivityType.offer_sent,
-            PipelineStage.offer_accepted: ActivityType.offer_accepted,
-            PipelineStage.position_close: ActivityType.joined,
+            PipelineStage.selected: ActivityType.offer_sent,
+            PipelineStage.selected: ActivityType.offer_accepted,
+            PipelineStage.joined: ActivityType.joined,
             PipelineStage.rejected: ActivityType.rejected,
         }.get(stage, ActivityType.mapped)
 

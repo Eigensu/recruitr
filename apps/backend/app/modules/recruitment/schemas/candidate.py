@@ -10,6 +10,7 @@ from app.common.dtos.pagination import PaginatedResponse
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
+    Department,
     Gender,
     PipelineStage,
 )
@@ -19,7 +20,7 @@ class CandidateStructuredTags(BaseModel):
     communication: str | None = None
     education: str | None = None
     brand_experience: str | None = None
-    department: str | None = None
+    department: Department | None = None
     specialization: str | None = None
 
     @model_validator(mode="after")
@@ -65,7 +66,7 @@ class CandidateCreateStrict(CandidateCreate):
     communication: str = Field(..., min_length=1)
     education: str = Field(..., min_length=1)
     brand_experience: str = Field(..., min_length=1)
-    department: str = Field(..., min_length=1)
+    department: Department = Field(...)
     specialization: str = Field(..., min_length=1)
     current_role: str = Field(..., min_length=1)
     experience_years: float = Field(..., ge=0)

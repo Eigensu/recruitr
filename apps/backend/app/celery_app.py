@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.modules.leaderboard.tasks.badge_tasks",
         "app.modules.leaderboard.tasks.periodic_tasks",
         "app.modules.dashboard.tasks",
+        "app.modules.recruitment.tasks",
     ],
 )
 
@@ -35,6 +36,14 @@ celery_app.conf.update(
         "dashboard-daily-referee-processor": {
             "task": "dashboard.daily_referee_processor",
             "schedule": crontab(minute=0, hour=1),  # Runs daily at 01:00 UTC
+        },
+        "recruitment-reminders": {
+            "task": "recruitment.process_reminders",
+            "schedule": crontab(minute=30, hour=1),  # Runs daily at 01:30 UTC
+        },
+        "recruitment-joining-dates": {
+            "task": "recruitment.process_joining_dates",
+            "schedule": crontab(minute=0, hour=2),  # Runs daily at 02:00 UTC
         },
     },
 )

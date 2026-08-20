@@ -13,12 +13,14 @@ import {
   RecruiterLineGraph,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
+import SourcingAnalyticsTable from "@/components/dashboard/organisms/SourcingAnalyticsTable";
 import {
   getDashboardAnalyticsData,
   getClientProfilesData,
   getDashboardOverview,
   getPipelineDashboardData,
   getRecruiterDashboardData,
+  getSourcingDashboardData,
 } from "@/lib/dashboard-data";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getUserServer } from "@/lib/api/auth.server";
@@ -75,6 +77,19 @@ async function ClientProfilesSection() {
   const rows = await getClientProfilesData();
 
   return <ClientProfilesTable rows={rows} />;
+}
+
+async function SourcingAnalyticsSection() {
+  const data = await getSourcingDashboardData();
+  const metrics = data.map((item) => ({
+    source_type: item.source,
+    source_channel: item.source_channel,
+    candidate_count: item.count,
+    pipeline_candidates: item.pipeline_candidates,
+    offers_accepted: item.offers_accepted,
+    joined_candidates: item.joined_candidates,
+  }));
+  return <SourcingAnalyticsTable metrics={metrics} />;
 }
 
 async function ClientOverviewSection() {
@@ -166,8 +181,8 @@ async function ClientOverviewSection() {
               Your Pipeline at a Glance
             </h2>
             <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-              A closer look at your open roles and where candidates stand, without digging
-              through every tab.
+              A closer look at your open roles and where candidates stand, without digging through
+              every tab.
             </p>
           </div>
 
@@ -226,9 +241,7 @@ export default async function DashboardPage() {
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
                 style={{ color: "var(--color-text-primary)" }}
               >
-                {isClient
-                  ? `Welcome, ${user?.client_name ?? "back"}`
-                  : "Recruitment Dashboard"}
+                {isClient ? `Welcome, ${user?.client_name ?? "back"}` : "Recruitment Dashboard"}
               </h1>
             </div>
             <div className="mt-1 shrink-0">
@@ -263,6 +276,10 @@ export default async function DashboardPage() {
 
             <Suspense fallback={<PanelSkeleton rows={8} />}>
               <ClientProfilesSection />
+            </Suspense>
+
+            <Suspense fallback={<PanelSkeleton rows={6} />}>
+              <SourcingAnalyticsSection />
             </Suspense>
           </>
         )}

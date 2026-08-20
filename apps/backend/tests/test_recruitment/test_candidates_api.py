@@ -11,7 +11,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant
+from app.dependencies import get_tenant, get_viewer
 from app.main import app
 from app.modules.recruitment.models import Candidate, Mapping, Position
 from app.modules.recruitment.schemas import TenantScope
@@ -31,18 +31,22 @@ TENANT_B = TenantScope(brand_id=_BRAND_B, employee_id=_EMP_B)
 async def client_a():
     """FastAPI test client authenticated as brand A."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 @pytest_asyncio.fixture
 async def client_b():
     """FastAPI test client authenticated as brand B (for isolation tests)."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_B
+    app.dependency_overrides[get_viewer] = lambda: TENANT_B
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -54,6 +58,18 @@ BASE_PAYLOAD = {
     "previous_company": "Taj Hotels",
     "experience_years": 3,
     "skills": ["Guest Relations", "POS", "Billing"],
+    "communication": "Excellent",
+    "education": "Bachelor's",
+    "brand_experience": "Taj",
+    "department": "Service",
+    "specialization": "F&B",
+    "city": "Mumbai",
+    "gender": "female",
+    "current_role": "Manager",
+    "expected_salary": 1500000,
+    "notice_period": "30 Days",
+    "source": "internal",
+    "salary": 1200000,
 }
 
 
@@ -102,7 +118,24 @@ async def test_list_search_by_name(client_a: AsyncClient) -> None:
 async def test_list_search_by_skill(client_a: AsyncClient) -> None:
     await _create_via_api(client_a)  # has "Guest Relations"
     await _create_via_api(
-        client_a, {"email": "chef@test.com", "full_name": "Chef X", "skills": ["Cooking"]}
+        client_a,
+        {
+            "email": "chef@test.com",
+            "full_name": "Chef X",
+            "skills": ["Cooking"],
+            "communication": "Excellent",
+            "education": "Bachelor's",
+            "brand_experience": "Taj",
+            "department": "Service",
+            "specialization": "F&B",
+            "city": "Mumbai",
+            "gender": "female",
+            "current_role": "Manager",
+            "expected_salary": 1500000,
+            "notice_period": "30 Days",
+            "source": "internal",
+            "salary": 1200000,
+        },
     )
 
     res = await client_a.get("/api/v1/candidates?search=Guest+Relations")
@@ -212,7 +245,7 @@ async def test_create_persists_every_submitted_field(client_a: AsyncClient) -> N
         "expected_salary": 85000,
         "notice_period": "30 days",
         "salary": 60000,
-        "source": "external",
+        "source": "internal",
         "source_channel": "LinkedIn",
         "current_role": "Guest Relations Manager",
         "city": "Mumbai",
@@ -234,7 +267,7 @@ async def test_create_persists_every_submitted_field(client_a: AsyncClient) -> N
     assert doc is not None
     assert doc.expected_salary == 85000
     assert doc.notice_period == "30 days"
-    assert doc.source == "external"
+    assert doc.source == "internal"
     assert doc.source_channel == "LinkedIn"
 
 
@@ -266,7 +299,23 @@ async def test_update_candidate(client_a: AsyncClient) -> None:
 
     res = await client_a.patch(
         f"/api/v1/candidates/{cid}",
-        json={"full_name": "Priya Pillai", "experience_years": 4, "skills": ["Mixology"]},
+        json={
+            "full_name": "Priya Pillai",
+            "experience_years": 4,
+            "skills": ["Mixology"],
+            "communication": "Excellent",
+            "education": "Bachelor's",
+            "brand_experience": "Taj",
+            "department": "Service",
+            "specialization": "F&B",
+            "city": "Mumbai",
+            "gender": "female",
+            "current_role": "Manager",
+            "expected_salary": 1500000,
+            "notice_period": "30 Days",
+            "source": "internal",
+            "salary": 1200000,
+        },
     )
     assert res.status_code == 200
     body = res.json()
@@ -291,8 +340,7 @@ async def test_update_persists_role_and_compensation_fields(client_a: AsyncClien
         "salary": 60000,
         "expected_salary": 92000,
         "notice_period": "60 days",
-        "source": "external",
-        "source_channel": "Naukri",
+        "source": "internal",
     }
     res = await client_a.patch(f"/api/v1/candidates/{cid}", json=patch)
     assert res.status_code == 200
@@ -378,6 +426,7 @@ async def test_brand_a_cannot_read_brand_b_candidate() -> None:
     """A candidate created in brand B must be invisible to brand A."""
     # Step 1: create as brand B
     app.dependency_overrides[get_tenant] = lambda: TENANT_B
+    app.dependency_overrides[get_viewer] = lambda: TENANT_B
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as cb:
         res_b = await cb.post("/api/v1/candidates", json=BASE_PAYLOAD)
         assert res_b.status_code == 201
@@ -385,6 +434,7 @@ async def test_brand_a_cannot_read_brand_b_candidate() -> None:
 
     # Step 2: query as brand A
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ca:
         list_res = await ca.get("/api/v1/candidates")
         assert list_res.status_code == 200
@@ -394,38 +444,45 @@ async def test_brand_a_cannot_read_brand_b_candidate() -> None:
         assert detail_res.status_code == 404
 
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 @pytest.mark.asyncio
 async def test_same_email_allowed_in_different_brands() -> None:
     """Email uniqueness is per-brand; the same email is valid in brand A and B."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ca:
         res_a = await ca.post("/api/v1/candidates", json=BASE_PAYLOAD)
         assert res_a.status_code == 201
 
     app.dependency_overrides[get_tenant] = lambda: TENANT_B
+    app.dependency_overrides[get_viewer] = lambda: TENANT_B
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as cb:
         res_b = await cb.post("/api/v1/candidates", json=BASE_PAYLOAD)
         assert res_b.status_code == 201
 
     assert res_a.json()["id"] != res_b.json()["id"]
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 @pytest.mark.asyncio
 async def test_candidate_mappings_not_accessible_cross_brand() -> None:
     """Brand A cannot read the mappings of brand B's candidate."""
     app.dependency_overrides[get_tenant] = lambda: TENANT_B
+    app.dependency_overrides[get_viewer] = lambda: TENANT_B
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as cb:
         created_b = await _create_via_api(cb)
 
     app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ca:
         res = await ca.get(f"/api/v1/candidates/{created_b['id']}/mappings")
         assert res.status_code == 404
 
     app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 # ── Resume confirm ─────────────────────────────────────────────────────────────
@@ -437,9 +494,14 @@ async def test_confirm_resume(client_a: AsyncClient) -> None:
     cid = created["id"]
     assert created["resume_url"] is None
 
+    from app.config import settings
+
+    cloud_name = settings.CLOUDINARY_CLOUD_NAME or "test"
+    valid_url = f"https://res.cloudinary.com/{cloud_name}/abc123.pdf"
+
     res = await client_a.post(
         f"/api/v1/candidates/{cid}/resume",
-        json={"resume_public_id": "resumes/abc123", "resume_url": "https://cdn.test/abc123.pdf"},
+        json={"resume_public_id": "resumes/abc123", "resume_url": valid_url},
     )
     assert res.status_code == 200
-    assert res.json()["resume_url"] == "https://cdn.test/abc123.pdf"
+    assert res.json()["resume_url"] == valid_url

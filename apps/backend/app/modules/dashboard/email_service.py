@@ -91,3 +91,83 @@ class EmailService:
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_client_action_reminder(
+        cls, email: str, candidate_name: str, position_code: str, portal_url: str
+    ) -> None:
+        """Send a reminder to a client when a candidate has been pending action."""
+        subject = f"Action Required: Candidate {candidate_name} pending review"
+        body = (
+            f"Hello,\n\n"
+            f"The candidate {html.escape(candidate_name)} has been waiting for your review on position {html.escape(position_code)} for over 2 days.\n\n"
+            f"Please log in to your portal to review their profile and update their status:\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Recruitment Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_interview_followup(
+        cls, email: str, candidate_name: str, position_code: str, portal_url: str
+    ) -> None:
+        """Send an interview follow-up reminder to a client."""
+        subject = f"Action Required: Interview feedback for {candidate_name}"
+        body = (
+            f"Hello,\n\n"
+            f"An interview was scheduled for {html.escape(candidate_name)} on position {html.escape(position_code)} over 2 days ago.\n\n"
+            f"Please log in to your portal to submit your feedback and update their status (Selected / Rejected):\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Recruitment Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_offer_upload_reminder(
+        cls, email: str, candidate_name: str, position_code: str, portal_url: str
+    ) -> None:
+        """Send an offer letter upload reminder to a client."""
+        subject = f"Action Required: Offer letter pending for {candidate_name}"
+        body = (
+            f"Hello,\n\n"
+            f"The candidate {html.escape(candidate_name)} was marked as Selected for position {html.escape(position_code)} over 2 days ago, but an offer letter has not been uploaded yet.\n\n"
+            f"Please log in to your portal to upload the offer letter and proceed with their onboarding:\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Recruitment Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_new_position_notification(
+        cls,
+        email: str,
+        role: str,
+        client_name: str,
+        category: str,
+        salary: str,
+        seats: int,
+        city: str,
+        mumbai_area: str,
+        seniority: str,
+        created_by: str,
+        portal_url: str,
+    ) -> None:
+        import html
+
+        subject = f"New Position Created — {role} — {client_name}"
+        body = (
+            f"Hello,\n\n"
+            f"A new position has been created in the Client Portal.\n\n"
+            f"Client: {html.escape(client_name)}\n"
+            f"Created By: {html.escape(created_by)}\n"
+            f"Role: {html.escape(role)}\n"
+            f"Category: {html.escape(category)}\n"
+            f"Salary: {html.escape(salary) if salary else 'N/A'}\n"
+            f"No. of Positions: {seats}\n"
+            f"City: {html.escape(city) if city else 'N/A'}\n"
+            f"Mumbai Area: {html.escape(mumbai_area) if mumbai_area else 'N/A'}\n"
+            f"Seniority: {html.escape(seniority)}\n\n"
+            f"View in Portal: {html.escape(portal_url)}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)

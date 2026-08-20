@@ -39,9 +39,9 @@ _STAGE_MAP: dict[str, str] = {
     "rejected": PipelineStage.rejected.value,
     "dropped": PipelineStage.rejected.value,
     "hold": PipelineStage.on_hold.value,
-    "offer_sent": PipelineStage.offer.value,
-    "offer_accepted": PipelineStage.offer_accepted.value,
-    "joined": PipelineStage.position_close.value,
+    "offer_sent": "offer",
+    "offer_accepted": "offer_accepted",
+    "joined": "position_close",
 }
 
 _STATUS_MAP: dict[str, str] = {
@@ -234,11 +234,11 @@ async def migrate() -> None:
                                 },
                                 {
                                     "case": {"$eq": ["$current_stage", "offer_sent"]},
-                                    "then": PipelineStage.offer.value,
+                                    "then": "offer",
                                 },
                                 {
                                     "case": {"$eq": ["$current_stage", "joined"]},
-                                    "then": PipelineStage.position_close.value,
+                                    "then": "position_close",
                                 },
                                 {
                                     "case": {"$eq": ["$current_stage", "dropped"]},

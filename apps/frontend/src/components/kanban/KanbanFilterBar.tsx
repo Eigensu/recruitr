@@ -8,24 +8,11 @@ interface Employee {
   name: string;
 }
 
-const PIPELINE_STAGES = [
-  "sourced",
-  "sent_to_client",
-  "interview",
-  "decision_pending",
-  "offer",
-  "offer_accepted",
-  "position_close",
-  "rejected",
-  "on_hold",
-];
+const PIPELINE_STAGES = ["sourced", "sent_to_client", "interview", "rejected", "on_hold"];
 const STAGE_LABELS: Record<string, string> = {
   sourced: "Sourced",
   sent_to_client: "Sent to Client",
   interview: "Interview",
-  decision_pending: "Decision Pending",
-  offer: "Offer",
-  offer_accepted: "Offer Accepted",
   position_close: "Joined",
   rejected: "Rejected",
   on_hold: "On Hold",
