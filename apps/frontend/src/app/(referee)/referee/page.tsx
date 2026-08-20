@@ -21,7 +21,10 @@ function stageDotCls(isCurrent: boolean, isReached: boolean): string {
 }
 
 function stageLabelCls(isCurrent: boolean, isReached: boolean): string {
-  if (isCurrent) return "text-yellow";
+  // Brand yellow reads fine on the dark theme's navy surfaces but is close to
+  // unreadable as small text on the light theme's near-white cards — darken it
+  // for light mode and keep the bright brand color for dark mode.
+  if (isCurrent) return "text-amber-800 dark:text-yellow";
   if (isReached) return "text-text-primary";
   return "text-text-muted";
 }
@@ -61,8 +64,10 @@ function EarningsState({ paymentStatus, kanbanStage, amount }: EarningsStateProp
   if (status === "owed") {
     return (
       <>
-        <div className="text-xl font-bold text-yellow">₹{amount?.toLocaleString("en-IN")}</div>
-        <div className="mt-1 flex items-center gap-1 rounded-full bg-yellow/10 px-2 py-0.5 text-xs font-medium text-yellow">
+        <div className="text-xl font-bold text-amber-800 dark:text-yellow">
+          ₹{amount?.toLocaleString("en-IN")}
+        </div>
+        <div className="mt-1 flex items-center gap-1 rounded-full bg-yellow/10 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-yellow">
           <IconClock className="size-3" /> Owed
         </div>
       </>
@@ -146,7 +151,7 @@ export default function RefereePortal() {
         {!isLoading && !error && (
           <>
             {/* SUMMARY TILES */}
-            <div className="grid gap-4 sm:grid-cols-3 h-[180px]">
+            <div className="grid gap-4 sm:grid-cols-3 sm:h-[180px]">
               <DashboardKpiCard
                 index={0}
                 metric={{
@@ -178,7 +183,7 @@ export default function RefereePortal() {
                   helper: "Eligible total to be paid",
                   tone: "yellow",
                   trend: "Eligible",
-                  suffix: "₹",
+                  prefix: "₹",
                 }}
               />
             </div>
@@ -294,7 +299,7 @@ export default function RefereePortal() {
                                       </div>
 
                                       {isJoined && candidate.joining_date && isCurrent && (
-                                        <div className="mt-1 text-[9px] text-yellow/70">
+                                        <div className="mt-1 text-[9px] text-amber-800/80 dark:text-yellow/70">
                                           {new Date(candidate.joining_date).toLocaleDateString(
                                             "en-GB",
                                           )}

@@ -20,6 +20,8 @@ export interface DashboardKpi {
   trend: string;
   /** Unit shown after the animated number, e.g. "days". */
   suffix?: string;
+  /** Symbol shown before the animated number, e.g. "₹". */
+  prefix?: string;
 }
 
 export interface PipelineStageMetric {
