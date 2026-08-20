@@ -347,7 +347,6 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
             }
         )
     return {"stages": stages, "total_candidates": total}
-    return {"stages": stages, "total_candidates": total}
 
 
 async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:
