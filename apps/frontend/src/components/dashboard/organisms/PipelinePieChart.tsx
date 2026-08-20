@@ -73,6 +73,7 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
 
           return (
             <button
+              type="button"
               key={stage.stage}
               className="flex w-full items-center gap-2 outline-none"
               style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}

@@ -118,6 +118,7 @@ export default function CompanyProfilePage() {
         <div className="flex items-center gap-3">
           {!isEditing ? (
             <button
+              type="button"
               onClick={() => setIsEditing(true)}
               className="px-3 py-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy/80 rounded border border-border transition-colors"
             >
@@ -126,6 +127,7 @@ export default function CompanyProfilePage() {
           ) : (
             <>
               <button
+                type="button"
                 onClick={() => setIsEditing(false)}
                 className="px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary"
                 disabled={saving}
@@ -133,6 +135,7 @@ export default function CompanyProfilePage() {
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSave}
                 disabled={saving}
                 className="px-3 py-1.5 text-xs font-semibold bg-navy text-white rounded hover:bg-navy/90 disabled:opacity-50"

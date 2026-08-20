@@ -178,6 +178,17 @@ _NOISE_RE = re.compile(
 _YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 
+def _log_safe(filename: str) -> str:
+    """Make an uploaded filename safe to write into a log line.
+
+    The name comes straight from the client, so a newline in it would let the
+    uploader forge whole log entries. Control characters go, and the result is
+    capped so one upload cannot flood a line.
+    """
+    cleaned = "".join(ch for ch in filename if ch.isprintable())
+    return cleaned[:120] if cleaned else "<unnamed>"
+
+
 def _name_from_filename(filename: str) -> str:
     """Derive a best-guess candidate name from a resume filename.
 
@@ -594,7 +605,7 @@ async def bulk_upload_resumes(
                     )
 
         except OperationFailure as exc:
-            _log.exception("Bulk upload: MongoDB operation failed for %s", filename)
+            _log.exception("Bulk upload: MongoDB operation failed for %s", _log_safe(filename))
             failed.append(
                 BulkUploadFailure(
                     filename=filename,
@@ -602,7 +613,7 @@ async def bulk_upload_resumes(
                 )
             )
         except Exception as exc:
-            _log.exception("Bulk upload: unexpected error for %s", filename)
+            _log.exception("Bulk upload: unexpected error for %s", _log_safe(filename))
             failed.append(
                 BulkUploadFailure(filename=filename, reason=f"Unexpected server error: {exc}")
             )

@@ -105,6 +105,7 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
           {activeMessages.length > 1 && (
             <div className="flex items-center gap-1 mr-4 bg-black/5 dark:bg-white/5 rounded-full px-2 py-1">
               <button
+                type="button"
                 onClick={prevMsg}
                 className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors"
                 aria-label="Previous message"
@@ -115,6 +116,7 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
                 {safeIndex + 1} / {activeMessages.length}
               </span>
               <button
+                type="button"
                 onClick={nextMsg}
                 className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors"
                 aria-label="Next message"
@@ -125,6 +127,7 @@ export function ClientMessagingBanner({ messages, userId }: BannerProps) {
           )}
 
           <button
+            type="button"
             onClick={handleDismiss}
             className="p-1.5 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
             aria-label="Dismiss message"
