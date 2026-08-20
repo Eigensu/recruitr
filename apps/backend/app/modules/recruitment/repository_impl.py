@@ -396,6 +396,18 @@ async def record_candidate_event(
 # ── Activity log ───────────────────────────────────────────────────────────────
 
 
+async def candidate_display_name(candidate_id: PydanticObjectId) -> str:
+    """Name to put in an activity-log line for a candidate.
+
+    The feed renders `description` as its headline, so a line that names only
+    the stage leaves the reader guessing who moved. Falls back rather than
+    blanking: the row is read long after the fact, and the candidate may have
+    been deleted by then.
+    """
+    doc = await Candidate.get(candidate_id)
+    return doc.full_name if doc and doc.full_name else "Unknown candidate"
+
+
 async def log_activity(
     *,
     scope: TenantScope,

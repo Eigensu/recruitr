@@ -1,6 +1,7 @@
 """Recruitment data access layer — re-exports from repository_impl."""
 
 from app.modules.recruitment.repository_impl import (
+    candidate_display_name,
     create_employee,
     create_mapping,
     delete_mapping,
@@ -23,6 +24,7 @@ from app.modules.recruitment.repository_impl import (
 )
 
 __all__ = [
+    "candidate_display_name",
     "create_employee",
     "create_mapping",
     "delete_mapping",

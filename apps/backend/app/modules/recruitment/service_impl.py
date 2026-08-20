@@ -20,6 +20,7 @@ from app.modules.recruitment.enums import (
 )
 from app.modules.recruitment.models import Employee, Mapping, Position
 from app.modules.recruitment.repository import (
+    candidate_display_name,
     create_employee,
     delete_mapping,
     find_employee_by_email,
@@ -113,7 +114,10 @@ async def map_candidate(
             activity_type=ActivityType.mapped,
             target_entity_type="candidate",
             target_entity_id=str(candidate_id),
-            description=(f"Mapped to {position.role} @ {position.client_name}"),
+            description=(
+                f"Mapped {await candidate_display_name(candidate_id)} "
+                f"to {position.role} @ {position.client_name}"
+            ),
         )
 
     await _invalidate_caches(scope.brand_id)
@@ -153,7 +157,9 @@ async def unmap_candidate(*, scope: TenantScope, mapping: Mapping) -> None:
             activity_type=ActivityType.unmapped,
             target_entity_type="candidate",
             target_entity_id=str(mapping.candidate_id),
-            description="Unmapped from position",
+            description=(
+                f"Unmapped {await candidate_display_name(mapping.candidate_id)} from position"
+            ),
         )
 
     await _invalidate_caches(scope.brand_id)
@@ -210,7 +216,10 @@ async def advance_stage(
             activity_type=activity_type,
             target_entity_type="candidate",
             target_entity_id=str(mapping.candidate_id),
-            description=f"Stage moved to {new_stage.value.replace('_', ' ')}",
+            description=(
+                f"Moved {await candidate_display_name(mapping.candidate_id)} "
+                f"to {new_stage.value.replace('_', ' ')}"
+            ),
         )
 
     await _invalidate_caches(scope.brand_id)
