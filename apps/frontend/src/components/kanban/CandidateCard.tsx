@@ -151,6 +151,7 @@ export default function KanbanCard({
           {card.stage === "sent_to_client" && onStageChange && (
             <>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onStageChange(card, "interview");
@@ -160,6 +161,7 @@ export default function KanbanCard({
                 ✓ Select
               </button>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onStageChange(card, "rejected");
@@ -173,6 +175,7 @@ export default function KanbanCard({
           {card.stage === "interview" && onStageChange && (
             <>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onStageChange(card, "selected");
@@ -182,6 +185,7 @@ export default function KanbanCard({
                 ✓ Select
               </button>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onStageChange(card, "rejected");
@@ -194,6 +198,7 @@ export default function KanbanCard({
           )}
           {card.stage === "selected" && (
             <button
+              type="button"
               onClick={() => onCardClick(card)}
               className="w-full rounded-lg bg-yellow/10 border border-yellow/20 px-3 py-1.5 text-[11px] font-semibold text-yellow hover:bg-yellow/20 transition-all"
             >
@@ -206,6 +211,7 @@ export default function KanbanCard({
       {!readOnly && card.stage === "joined" && onStageChange && (
         <div className="mt-3">
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onStageChange(card, "rejected");
