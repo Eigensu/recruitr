@@ -130,7 +130,9 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
         }
       }
     }
-    return out.sort();
+    // localeCompare, not the default sort: that compares UTF-16 code units, so
+    // any client name outside plain ASCII lands in the wrong place.
+    return out.sort((a, b) => a.localeCompare(b));
   }, [positions, board]);
 
   // Positions offered in the dropdown, narrowed to the selected client. The

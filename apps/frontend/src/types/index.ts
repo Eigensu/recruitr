@@ -34,6 +34,13 @@ export interface RefereeSummary {
 
 export interface RefereeReferral {
   id: string;
+  /** The pipeline mapping to act on. Null until the candidate has been mapped. */
+  mapping_id: string | null;
+  /** The internal PipelineStage, which the referee-facing kanban_stage cannot
+   *  stand in for: kanban_stage freezes on rejection, so only this says whether
+   *  the candidate is still live and which actions are legal. */
+  pipeline_stage: string | null;
+  offer_letter_url: string | null;
   candidate_name: string;
   role_level: string | null;
   submission_date: string;

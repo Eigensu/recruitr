@@ -74,13 +74,12 @@ class PipelineSetInterviewRequest(BaseModel):
     interview_date: datetime
 
 
-class PipelineUploadOfferRequest(BaseModel):
-    offer_letter_url: str
-    salary_offered: float
-
-
 class PipelineSetJoiningRequest(BaseModel):
     joining_date: datetime
+    # The client portal collects the salary alongside the joining date and has
+    # always sent it here; the field was simply never declared, so pydantic
+    # dropped it and Mapping.salary_offered stayed null forever.
+    salary_offered: float | None = None
 
 
 class PipelineCandidateDroppedRequest(BaseModel):

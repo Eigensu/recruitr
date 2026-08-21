@@ -170,7 +170,6 @@ async def unmap_candidate(*, scope: TenantScope, mapping: Mapping) -> None:
 
 # Maps a target stage to (ActivityType for log, ActivityTypeEnum for gamification)
 _STAGE_ACTIVITY: dict[PipelineStage, ActivityType] = {
-    PipelineStage.selected: ActivityType.offer_sent,
     PipelineStage.selected: ActivityType.offer_accepted,
     PipelineStage.joined: ActivityType.joined,
     PipelineStage.rejected: ActivityType.rejected,

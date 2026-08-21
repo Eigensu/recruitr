@@ -535,6 +535,7 @@ function DraggableCandidateCard({
           <span className="text-[10px] text-text-muted truncate">{cand.email}</span>
           {!isClient && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleMap();
@@ -1004,6 +1005,7 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedPositionId(null);
                           setCandidateSearch("");

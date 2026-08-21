@@ -232,7 +232,7 @@ async def move_stage(
     new_stage: PipelineStage,
     decision: Decision,
     scope: TenantScope,
-    actor: Literal["employee", "client", "system"] = "employee",
+    actor: Literal["employee", "client", "referee", "system"] = "employee",
     **kwargs,
 ) -> Mapping:
     """Transition a mapping to a new pipeline stage.
@@ -243,11 +243,11 @@ async def move_stage(
 
     `actor` distinguishes who triggered the move. `scope.employee_id` is only
     ever set for a staff TenantScope (see schemas/shared.py) — for a client
-    dashboard action or the daily auto-join job it is None, and
-    `Mapping.employee_id` is a required field, so those callers must not
-    overwrite it. Passing actor="client"/"system" skips that `$set` key
-    instead, leaving the last recruiter who actually worked the mapping on
-    record.
+    dashboard action, a referee portal action, or the daily auto-join job it is
+    None, and `Mapping.employee_id` is a required field, so those callers must
+    not overwrite it. Passing actor="client"/"referee"/"system" skips that
+    `$set` key instead, leaving the last recruiter who actually worked the
+    mapping on record.
     """
     now = datetime.now(UTC)
     from_stage = PipelineStage(mapping.stage) if mapping.stage else None

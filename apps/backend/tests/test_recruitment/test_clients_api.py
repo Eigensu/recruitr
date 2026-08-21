@@ -196,13 +196,26 @@ async def test_new_client_is_offered_by_position_filters(admin_a: AsyncClient) -
 
 @pytest.mark.asyncio
 async def test_archived_client_cannot_receive_new_positions(admin_a: AsyncClient) -> None:
-    created = await _create(admin_a, "Hunger Inc")
-    assert (await admin_a.delete(f"/api/v1/clients/{created['id']}")).status_code == 204
+    archived = await _create(admin_a, "Hunger Inc")
+    live = await _create(admin_a, "Feeder Co")
 
-    res = await admin_a.post(
-        "/api/v1/positions", json={"client_id": created["id"], "role": "Sous Chef"}
-    )
-    assert res.status_code == 400
+    def body(client_id: str) -> dict:
+        return {"client_id": client_id, "role": "Sous Chef", "department": "BOH"}
+
+    # Post the same shape at a live client first, so a rejected payload cannot
+    # masquerade as a rejected client. Without this the test asserted 400 while
+    # actually getting 422 — PositionCreate grew a required department and the
+    # request stopped reaching the archived-client check at all, leaving the
+    # guard untested. The control runs against a *second* client because
+    # archiving is refused with 409 once a client owns a position.
+    accepted = await admin_a.post("/api/v1/positions", json=body(live["id"]))
+    assert accepted.status_code in (200, 201), accepted.text
+
+    assert (await admin_a.delete(f"/api/v1/clients/{archived['id']}")).status_code == 204
+
+    res = await admin_a.post("/api/v1/positions", json=body(archived["id"]))
+    assert res.status_code == 400, res.text
+    assert "client" in res.json()["detail"].lower()
 
 
 # ── Update ─────────────────────────────────────────────────────────────────────

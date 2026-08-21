@@ -21,6 +21,7 @@ export default function LeaderboardError({ error, reset }: ErrorProps) {
         <h2 className="font-heading text-2xl text-white mb-2">Leaderboard Unavailable</h2>
         <p className="text-sm text-white/50 mb-6">Something went wrong loading the leaderboard.</p>
         <button
+          type="button"
           onClick={reset}
           className="rounded-lg bg-yellow px-5 py-2.5 text-sm font-bold text-navy hover:bg-yellow/90 transition-colors"
         >

@@ -20,18 +20,27 @@ PORTAL_URL = f"{settings.FRONTEND_URL}/referee"
 UNPAID_STATUSES = {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}
 
 
+# Stages that end a referral's forward progress; none maps to a referee step.
+_CLOSED_STAGES = (
+    PipelineStage.rejected,
+    PipelineStage.on_hold,
+    PipelineStage.candidate_dropped,
+)
+
+# One referee-facing step per forward PipelineStage. Terminal stages are absent
+# on purpose — see the skip list in sync_referral_with_mapping.
+_REFEREE_STAGE_BY_INTERNAL: dict[str, str] = {
+    PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
+    PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
+    PipelineStage.interview.value: RefereeKanbanStage.interview.value,
+    PipelineStage.selected.value: RefereeKanbanStage.selected.value,
+    PipelineStage.joined.value: RefereeKanbanStage.joined.value,
+}
+
+
 def map_stage_to_referee(internal_stage: str) -> str:
     """Map the internal ATS PipelineStage to the Referee-facing stage."""
-    mapping = {
-        PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
-        PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
-        PipelineStage.interview.value: RefereeKanbanStage.interview.value,
-        PipelineStage.selected.value: RefereeKanbanStage.interview.value,
-        PipelineStage.selected.value: RefereeKanbanStage.offer_extended.value,
-        PipelineStage.selected.value: RefereeKanbanStage.offer_accepted.value,
-        PipelineStage.joined.value: RefereeKanbanStage.joined.value,
-    }
-    return mapping.get(internal_stage, RefereeKanbanStage.cv_received.value)
+    return _REFEREE_STAGE_BY_INTERNAL.get(internal_stage, RefereeKanbanStage.cv_received.value)
 
 
 async def sync_referral_with_mapping(r: ReferralRecord) -> None:
@@ -42,8 +51,9 @@ async def sync_referral_with_mapping(r: ReferralRecord) -> None:
     if not mapping:
         return
 
-    # 1. Sync stage
-    if mapping.stage not in (PipelineStage.rejected, PipelineStage.on_hold):
+    # 1. Sync stage. A closed-out mapping has no referee-facing step to move to,
+    # so hold the last real one — syncing would reset the tracker to CV Received.
+    if mapping.stage not in _CLOSED_STAGES:
         r.kanban_stage = map_stage_to_referee(mapping.stage.value)
 
     # 2. Sync joining_date
@@ -259,7 +269,7 @@ async def get_referrals(
 ) -> list[dict[str, Any]]:
     """Get the candidate journey for the referee."""
     # DO NOT call update_eligibility_and_incentives here. This is a read-only endpoint.
-    from app.modules.recruitment.models import Candidate
+    from app.modules.recruitment.models import Candidate, Mapping
 
     candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
 
@@ -269,6 +279,19 @@ async def get_referrals(
 
     referral_map = {r.candidate_id: r for r in referrals}
 
+    # kanban_stage freezes when a referral is rejected, dropped or put on hold
+    # (see sync_referral_with_mapping), so on its own it cannot say whether the
+    # candidate is still live. Carry the mapping's own stage through too: the
+    # portal's action buttons key off it, and without it a rejected referral
+    # would keep offering Select/Reject. Loaded in one query rather than per
+    # referral — this endpoint is polled.
+    mapping_by_id = {}
+    if referrals:
+        for m in await Mapping.find(
+            {"brand_id": brand_id, "_id": {"$in": [r.mapping_id for r in referrals]}}
+        ).to_list():
+            mapping_by_id[m.id] = m
+
     result = []
     for candidate in candidates:
         candidate_name = candidate.full_name if candidate.full_name else "Unknown Candidate"
@@ -277,9 +300,15 @@ async def get_referrals(
 
         if candidate.id in referral_map:
             r = referral_map[candidate.id]
+            mapping = mapping_by_id.get(r.mapping_id)
             result.append(
                 {
                     "id": str(r.id),
+                    "mapping_id": str(r.mapping_id),
+                    "pipeline_stage": (
+                        PipelineStage(mapping.stage).value if mapping is not None else None
+                    ),
+                    "offer_letter_url": mapping.offer_letter_url if mapping is not None else None,
                     "candidate_name": masked_name,
                     "role_level": r.role_level,
                     "submission_date": r.submission_date,
@@ -299,6 +328,10 @@ async def get_referrals(
             result.append(
                 {
                     "id": str(candidate.id),
+                    # No mapping yet, so nothing for the referee to act on.
+                    "mapping_id": None,
+                    "pipeline_stage": None,
+                    "offer_letter_url": None,
                     "candidate_name": masked_name,
                     "role_level": None,
                     "submission_date": candidate.created_at,
