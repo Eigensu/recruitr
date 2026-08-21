@@ -156,6 +156,13 @@ def main() -> int:
     remaining = [m for m in mappings.find({}, {"stage": 1, "history": 1}) if _needs_backfill(m)]
     print(f"Still without an event for their stage: {len(remaining)}")
     client.close()
+
+    # Short of the plan means a concurrent move wrote an event mid-run. Nothing
+    # is corrupted, but the run was not the one that was reviewed, so exit
+    # non-zero rather than let automation read it as a clean pass.
+    if updated < len(planned):
+        print(f"WARNING: {len(planned) - updated} planned update(s) were skipped. Re-run.")
+        return 1
     return 0
 
 

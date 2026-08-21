@@ -40,6 +40,7 @@ from app.modules.recruitment.models import (
     StageEvent,
 )
 from app.modules.recruitment.repository_impl import (
+    candidate_display_name,
     move_stage,
     recompute_position_seats,
     record_candidate_event,
@@ -371,14 +372,19 @@ async def move_mapping_to_stage(
     # Calculate recruiter score
     score_delta = _score_for_stage(req.new_stage)
 
-    # Log activity (fire-and-forget, idempotent)
+    # Log activity (fire-and-forget, idempotent). The feed shows description as
+    # its headline, so it names the candidate — "Moved to Selected" on its own
+    # leaves the reader with no idea who moved.
     activity = ActivityLog(
         brand_id=viewer.brand_id,
         employee_id=viewer.employee_id,
         activity_type=_activity_type_for_stage(req.new_stage),
         target_entity_type="mapping",
         target_entity_id=str(mapping.id),
-        description=(f"Moved to {_STAGE_LABELS[req.new_stage]}"),
+        description=(
+            f"Moved {await candidate_display_name(mapping.candidate_id)} "
+            f"to {_STAGE_LABELS[req.new_stage]}"
+        ),
     )
     # Best-effort activity log: if this fails, the stage move still succeeds
     with contextlib.suppress(Exception):
