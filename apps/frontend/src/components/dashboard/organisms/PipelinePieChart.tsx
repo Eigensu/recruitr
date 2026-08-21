@@ -1,17 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useInView, useReducedMotion } from "motion/react";
+import { motion, useInView } from "motion/react";
 import { IconChartFunnel } from "@tabler/icons-react";
+import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { clientFetchDashboardPipeline } from "@/lib/api/dashboard.client";
-import {
-  buildPipelineStages,
-  formatPipelinePercent,
-  FUNNEL_GROUPS,
-  PIPELINE_FUNNEL_ORDER,
-  PIPELINE_STAGE_COLORS,
-} from "@/lib/pipeline-funnel";
+import { buildPipelineStages, PIPELINE_STAGE_COLORS } from "@/lib/pipeline-funnel";
 import type { RecruiterOption } from "@/lib/pipeline-funnel";
 import { cn } from "@/lib/utils";
 import type { PipelineStageMetric } from "@/types/dashboard";
@@ -34,75 +29,39 @@ const SELECT_STYLE = {
   border: "1px solid var(--color-border-val)",
 };
 
-function GroupHeading({ label }: Readonly<{ label: string }>) {
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className="text-[10px] font-semibold uppercase tracking-[0.16em]"
-        style={{ color: "var(--color-text-secondary)" }}
-      >
-        {label}
-      </span>
-      <span
-        className="h-px flex-1"
-        style={{ background: "color-mix(in srgb, currentColor 12%, transparent)" }}
-      />
-    </div>
-  );
-}
-
-function StageRow({
-  stage,
-  widthPct,
-  animate,
-  delay,
+function FunnelShell({
+  children,
+  chartRef,
+  filter,
+  subtitle,
 }: Readonly<{
-  stage: PipelineStageMetric;
-  widthPct: number;
-  animate: boolean;
-  delay: number;
+  children: React.ReactNode;
+  chartRef: React.Ref<HTMLDivElement>;
+  filter?: React.ReactNode;
+  subtitle: string;
 }>) {
-  const isEmpty = stage.count === 0;
-
   return (
-    <li className="flex flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span
-          className="truncate text-[13px]"
-          style={{ color: isEmpty ? "var(--color-text-secondary)" : "var(--color-text-primary)" }}
-        >
-          {stage.label}
-        </span>
-        <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-          <span
-            className="text-sm font-semibold"
-            style={{ color: isEmpty ? "var(--color-text-secondary)" : "var(--color-text-primary)" }}
-          >
-            {stage.count}
-          </span>
-          <span
-            className="w-9 text-right text-[11px]"
-            style={{ color: "var(--color-text-secondary)" }}
-          >
-            {formatPipelinePercent(stage.percent)}
-          </span>
-        </span>
+    <section
+      ref={chartRef}
+      className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
+      style={{ color: "var(--color-text-primary)" }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-xl" style={{ color: "var(--color-text-primary)" }}>
+            Pipeline Funnel
+          </h2>
+          <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            {subtitle}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {filter}
+          <IconChartFunnel className="size-6 shrink-0 text-yellow" />
+        </div>
       </div>
-
-      <div
-        aria-hidden="true"
-        className="h-2 w-full overflow-hidden rounded-full"
-        style={{ background: "color-mix(in srgb, currentColor 9%, transparent)" }}
-      >
-        <motion.div
-          className="h-full rounded-full"
-          style={{ background: PIPELINE_STAGE_COLORS[stage.stage] }}
-          initial={{ width: 0 }}
-          animate={{ width: animate ? `${widthPct}%` : 0 }}
-          transition={{ duration: 0.5, delay, ease: "easeOut" }}
-        />
-      </div>
-    </li>
+      {children}
+    </section>
   );
 }
 
@@ -111,10 +70,10 @@ export default function PipelinePieChart({
   recruiters = [],
 }: Readonly<PipelinePieChartProps>) {
   const chartRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(chartRef, { once: true, amount: 0.3 });
-  const prefersReducedMotion = useReducedMotion();
+  const isInView = useInView(chartRef, { once: true, amount: 0.42 });
   const requestRef = useRef<AbortController | null>(null);
   const [applied, setApplied] = useState<AppliedFilter | null>(null);
+  const [activeStage, setActiveStage] = useState(initialStages[0]?.stage);
   const [recruiterId, setRecruiterId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -163,100 +122,135 @@ export default function PipelinePieChart({
       });
   }
 
-  const byStage = new Map(stages.map((stage) => [stage.stage, stage]));
-  const total = stages.reduce((sum, stage) => sum + stage.count, 0);
-  // Bars are scaled against the busiest stage, so the widest one always fills
-  // the track and the small ones stay legible next to it.
-  const maxCount = stages.reduce((max, stage) => Math.max(max, stage.count), 1);
-  const shouldAnimate = isInView && !prefersReducedMotion;
-  const rowOrder = new Map(PIPELINE_FUNNEL_ORDER.map((stage, index) => [stage, index]));
+  const filter =
+    recruiters.length > 0 ? (
+      <select
+        value={recruiterId}
+        onChange={(event) => handleRecruiterChange(event.target.value)}
+        className="max-w-40 rounded-lg px-2 py-1.5 text-xs outline-none"
+        style={SELECT_STYLE}
+        aria-label="Filter pipeline funnel by recruiter"
+      >
+        <option value="">All Recruiters</option>
+        {recruiters.map((recruiter) => (
+          <option key={recruiter.id} value={recruiter.id}>
+            {recruiter.name}
+          </option>
+        ))}
+      </select>
+    ) : null;
 
-  return (
-    <section
-      ref={chartRef}
-      className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
-      style={{ color: "var(--color-text-primary)" }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="font-heading text-xl">Pipeline Funnel</h2>
-          <p className="mt-1 truncate text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            {subtitle}
+  const maxCount = stages.reduce((max, s) => Math.max(max, s.count), 1);
+  const active = stages.find((stage) => stage.stage === activeStage) ?? stages[0];
+
+  if (!stages.length) {
+    return (
+      <FunnelShell chartRef={chartRef} filter={filter} subtitle={subtitle}>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm" style={{ opacity: 0.5 }}>
+            No pipeline data available.
           </p>
         </div>
-        <IconChartFunnel className="size-6 shrink-0 text-yellow" />
-      </div>
+      </FunnelShell>
+    );
+  }
 
-      <div
-        className={cn(
-          "mt-4 flex flex-wrap items-center gap-2",
-          recruiters.length > 0 ? "justify-between" : "justify-end",
-        )}
-      >
-        {recruiters.length > 0 && (
-          <select
-            value={recruiterId}
-            onChange={(event) => handleRecruiterChange(event.target.value)}
-            className="min-w-0 max-w-full rounded-lg px-2 py-1.5 text-xs"
-            style={SELECT_STYLE}
-            aria-label="Filter pipeline funnel by recruiter"
-          >
-            <option value="">All recruiters</option>
-            {recruiters.map((recruiter) => (
-              <option key={recruiter.id} value={recruiter.id}>
-                {recruiter.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <p className="text-xs tabular-nums" style={{ color: "var(--color-text-secondary)" }}>
-          <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>
-            {total}
-          </span>{" "}
-          {total === 1 ? "candidate" : "candidates"}
-        </p>
-      </div>
-
+  return (
+    <FunnelShell chartRef={chartRef} filter={filter} subtitle={subtitle}>
       {loadFailed && (
         <p className="mt-3 text-xs" style={{ color: "var(--color-card-negative-text)" }}>
           Couldn&apos;t load this recruiter&apos;s funnel — showing every recruiter instead.
         </p>
       )}
 
-      {total === 0 ? (
-        <div className="flex flex-1 items-center justify-center py-8">
-          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            No candidates mapped to a stage yet.
+      <div
+        className="mt-4 flex flex-1 flex-col justify-center gap-1.5 transition-opacity"
+        style={{ opacity: isLoading ? 0.45 : 1 }}
+        aria-busy={isLoading}
+      >
+        {stages.map((stage, index) => {
+          const widthPct = (stage.count / maxCount) * 100;
+          const color = PIPELINE_STAGE_COLORS[stage.stage];
+          const isActive = stage.stage === activeStage;
+
+          return (
+            <button
+              type="button"
+              key={stage.stage}
+              className="flex w-full items-center gap-2 outline-none"
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              onMouseEnter={() => setActiveStage(stage.stage)}
+              onFocus={() => setActiveStage(stage.stage)}
+              aria-label={`${stage.label}: ${stage.count} candidates, ${stage.percent}% of pipeline`}
+            >
+              <span
+                className="w-24 shrink-0 truncate text-right text-xs transition-opacity"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  opacity: isActive ? 1 : 0.55,
+                }}
+              >
+                {stage.label}
+              </span>
+
+              <div className="flex h-6 flex-1 items-center justify-center">
+                <motion.div
+                  className="relative flex h-full items-center justify-center overflow-hidden rounded-sm"
+                  style={{ background: color, opacity: isActive ? 1 : 0.7 }}
+                  initial={{ width: "0%" }}
+                  animate={isInView ? { width: `${Math.max(widthPct, 1.5)}%` } : { width: "0%" }}
+                  transition={{ duration: 0.55, delay: index * 0.07, ease: "easeOut" }}
+                >
+                  {isActive && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="whitespace-nowrap px-1.5 text-xs font-semibold text-white drop-shadow"
+                    >
+                      {stage.count}
+                    </motion.span>
+                  )}
+                </motion.div>
+              </div>
+
+              <span
+                className="w-10 shrink-0 text-left text-xs font-medium tabular-nums transition-opacity"
+                style={{
+                  color: "var(--color-text-secondary)",
+                  opacity: isActive ? 1 : 0.55,
+                }}
+              >
+                {stage.percent}%
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="mt-4 flex items-center justify-between rounded-lg px-4 py-3"
+        style={{ background: "var(--color-surface-2-val)" }}
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ opacity: 0.6 }}>
+            Selected
+          </p>
+          <p className="mt-1 font-heading text-2xl">
+            <AnimatedNumber value={active?.count ?? 0} />
+          </p>
+          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+            {active?.label ?? "—"}
           </p>
         </div>
-      ) : (
-        <div
-          className="mt-5 flex flex-1 flex-col justify-between gap-5 transition-opacity"
-          style={{ opacity: isLoading ? 0.45 : 1 }}
-          aria-busy={isLoading}
-        >
-          {FUNNEL_GROUPS.map((group) => (
-            <div key={group.id} className="flex flex-col gap-3">
-              <GroupHeading label={group.label} />
-              <ul className="flex flex-col gap-3">
-                {group.stages.map((stageId) => {
-                  const stage = byStage.get(stageId);
-                  if (!stage) return null;
-                  return (
-                    <StageRow
-                      key={stageId}
-                      stage={stage}
-                      widthPct={(stage.count / maxCount) * 100}
-                      animate={shouldAnimate}
-                      delay={(rowOrder.get(stageId) ?? 0) * 0.05}
-                    />
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+        <div className="text-right">
+          <p className="font-heading text-2xl">
+            <AnimatedNumber value={active?.percent ?? 0} suffix="%" />
+          </p>
+          <p className="text-xs" style={{ opacity: 0.6 }}>
+            of pipeline
+          </p>
         </div>
-      )}
-    </section>
+      </div>
+    </FunnelShell>
   );
 }
