@@ -19,6 +19,7 @@ from app.modules.dashboard.repository import (
     fetch_mappings,
     fetch_overview,
     fetch_pipeline,
+    fetch_stage_timing,
 )
 from app.modules.dashboard.schemas import (
     ActivityAnalyticsItem,
@@ -35,6 +36,7 @@ from app.modules.dashboard.schemas import (
     DashboardOverviewResponse,
     DashboardPipelineResponse,
     DashboardSourcingResponse,
+    DashboardStageTimingResponse,
     EmployeeAnalyticsItem,
     MappingAnalyticsItem,
     PipelineStageMetric,
@@ -108,6 +110,20 @@ async def get_pipeline(filters: DashboardFilters) -> DashboardPipelineResponse:
         stages=[PipelineStageMetric.model_validate(stage) for stage in payload["stages"]],
         total_candidates=payload["total_candidates"],
     )
+    await dashboard_cache.set_json(
+        cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
+    )
+    return response
+
+
+async def get_stage_timing(filters: DashboardFilters) -> DashboardStageTimingResponse:
+    cache_key = _cache_key("stage_timing", filters)
+    cached = await dashboard_cache.get_json(cache_key)
+    if cached is not None:
+        return DashboardStageTimingResponse.model_validate(cached)
+
+    payload = await fetch_stage_timing(filters)
+    response = DashboardStageTimingResponse.model_validate(payload)
     await dashboard_cache.set_json(
         cache_key, response.model_dump(mode="json"), settings.REDIS_CACHE_TTL_SECONDS
     )

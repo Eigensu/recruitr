@@ -68,12 +68,36 @@ export interface DashboardTotals {
   avgDaysToShortlist: number;
 }
 
+export interface AnalyticsBreakdownRow {
+  label: string;
+  value: string;
+}
+
 export interface DashboardAnalyticsWidget {
   id: string;
   label: string;
   value: string;
   helper: string;
   tone: DashboardTone;
+  /** Per-row detail behind the headline number; renders under the helper. */
+  breakdown?: AnalyticsBreakdownRow[];
+}
+
+export interface StageTimingMetric {
+  stage: PipelineStage;
+  label: string;
+  avgDays: number;
+  count: number;
+}
+
+export interface StageTimingSummary {
+  stages: StageTimingMetric[];
+  avgDaysInStage: number;
+  avgDaysToAction: number;
+  actionMoves: number;
+  candidatesWaiting: number;
+  stalledCount: number;
+  stalledAfterDays: number;
 }
 
 export interface DashboardDemoData {

@@ -63,6 +63,26 @@ class DashboardPipelineResponse(BaseModel):
     generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
 
 
+class StageTimingItem(BaseModel):
+    stage: PipelineStage
+    label: str
+    avg_days: float = 0.0
+    count: int = 0
+
+
+class DashboardStageTimingResponse(BaseModel):
+    """Where the pipeline is slow: dwell time per stage, and time to act."""
+
+    stages: list[StageTimingItem] = Field(default_factory=list)
+    avg_days_in_stage: float = 0.0
+    avg_days_to_action: float = 0.0
+    action_moves: int = 0
+    candidates_waiting: int = 0
+    stalled_count: int = 0
+    stalled_after_days: int = 0
+    generated_at: datetime = Field(default_factory=partial(datetime.now, UTC))
+
+
 class SourcingAnalyticsItem(BaseModel):
     source_type: str | None = None
     source_channel: str | None = None

@@ -7,8 +7,10 @@ import {
   getDashboardOverview as getApiDashboardOverview,
   getDashboardPipeline,
   getDashboardSourcing,
+  getDashboardStageTiming,
 } from "@/lib/api/dashboard";
 import { getEmployeesForDashboard } from "@/lib/api/employees";
+import { buildPipelineStages, type RecruiterOption } from "@/lib/pipeline-funnel";
 import type {
   ClientActivityRow,
   ClientProfileRow,
@@ -21,16 +23,19 @@ import type {
   PipelineStage,
   PipelineStageMetric,
   RecruiterDashboardStat,
+  StageTimingSummary,
 } from "@/types/dashboard";
 import type { SourcingAnalyticsItem } from "@/types";
 
-const PIPELINE_STAGE_ORDER: PipelineStage[] = [
-  "sourced",
-  "sent_to_client",
-  "interview",
-  "rejected",
-  "on_hold",
-];
+const EMPTY_STAGE_TIMING: StageTimingSummary = {
+  stages: [],
+  avgDaysInStage: 0,
+  avgDaysToAction: 0,
+  actionMoves: 0,
+  candidatesWaiting: 0,
+  stalledCount: 0,
+  stalledAfterDays: 0,
+};
 
 const DEFAULT_TOTALS: DashboardTotals = {
   openPositions: 0,
@@ -64,7 +69,10 @@ function cloneDashboardDemoData(data: DashboardDemoData): DashboardDemoData {
     clients: data.clients.map((item) => ({ ...item })),
     activity: data.activity.map((item) => ({ ...item })),
     totals: { ...data.totals },
-    analytics: data.analytics.map((item) => ({ ...item })),
+    analytics: data.analytics.map((item) => ({
+      ...item,
+      breakdown: item.breakdown?.map((row) => ({ ...row })),
+    })),
   };
 }
 
@@ -114,7 +122,7 @@ function toneFromActivity(activityType: string): DashboardTone {
 function buildKpis(totals: DashboardTotals, pipelineStages: PipelineStageMetric[]): DashboardKpi[] {
   const sentToClient = pipelineStages.find((stage) => stage.stage === "sent_to_client")?.count ?? 0;
   const offersAccepted = pipelineStages.find((stage) => stage.stage === "selected")?.count ?? 0;
-  const dropped = pipelineStages.find((stage) => stage.stage === "rejected")?.count ?? 0;
+  const dropped = pipelineStages.find((stage) => stage.stage === "candidate_dropped")?.count ?? 0;
 
   return [
     {
@@ -184,7 +192,54 @@ function buildKpis(totals: DashboardTotals, pipelineStages: PipelineStageMetric[
   ];
 }
 
-function buildAnalytics(totals: DashboardTotals): DashboardAnalyticsWidget[] {
+/** Headline values stay bare numbers, like the other widgets — the label
+ *  carries the unit. Prose and breakdown rows spell it out. */
+function daysPhrase(value: number) {
+  return `${value.toFixed(1)} days`;
+}
+
+function buildStageTimingWidgets(timing: StageTimingSummary): DashboardAnalyticsWidget[] {
+  const slowest = timing.stages.reduce<StageTimingSummary["stages"][number] | null>(
+    (worst, stage) =>
+      stage.count > 0 && (!worst || stage.avgDays > worst.avgDays) ? stage : worst,
+    null,
+  );
+
+  return [
+    {
+      id: "avg_stage_days",
+      label: "Avg Days in Stage",
+      value: timing.avgDaysInStage.toFixed(1),
+      helper: slowest
+        ? `Slowest: ${slowest.label} at ${daysPhrase(slowest.avgDays)}`
+        : "No candidates waiting in an open stage",
+      tone: "neutral",
+      // Only stages someone is actually waiting in — an empty stage has no
+      // wait to report, and a zero row would read as "instant".
+      breakdown: timing.stages
+        .filter((stage) => stage.count > 0)
+        .map((stage) => ({
+          label: `${stage.label} (${stage.count})`,
+          value: `${stage.avgDays.toFixed(1)}d`,
+        })),
+    },
+    {
+      id: "avg_time_to_action",
+      label: "Avg Days to Action",
+      value: timing.avgDaysToAction.toFixed(1),
+      helper:
+        timing.actionMoves > 0
+          ? `Across ${timing.actionMoves} stage moves · ${timing.stalledCount} waiting over ${timing.stalledAfterDays} days`
+          : "No stage moves recorded yet",
+      tone: timing.stalledCount > 0 ? "red" : "green",
+    },
+  ];
+}
+
+function buildAnalytics(
+  totals: DashboardTotals,
+  timing: StageTimingSummary,
+): DashboardAnalyticsWidget[] {
   const fillRate = safeRatio(totals.seatsFilled, totals.totalSeats) * 100;
   const pipelineDepth = safeRatio(totals.inPipeline, totals.openPositions);
   const joinConversion = safeRatio(totals.joined, totals.inPipeline) * 100;
@@ -218,23 +273,8 @@ function buildAnalytics(totals: DashboardTotals): DashboardAnalyticsWidget[] {
       helper: "Open seats still to close",
       tone: "neutral",
     },
+    ...buildStageTimingWidgets(timing),
   ];
-}
-
-function buildPipelineStages(
-  apiStages: Array<{ stage: string; label: string; count: number; percent: number }>,
-): PipelineStageMetric[] {
-  const stageMap = new Map(apiStages.map((stage) => [stage.stage, stage]));
-
-  return PIPELINE_STAGE_ORDER.map((stage) => {
-    const source = stageMap.get(stage);
-    return {
-      stage,
-      label: source?.label ?? PIPELINE_STAGE_LABELS[stage],
-      count: source?.count ?? 0,
-      percent: source?.percent ?? 0,
-    };
-  });
 }
 
 function buildRecruiters(
@@ -301,6 +341,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     employeesResult,
     mappingsResult,
     activitiesResult,
+    stageTimingResult,
   ] = await Promise.allSettled([
     getApiDashboardOverview(),
     getDashboardPipeline(),
@@ -308,6 +349,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     getEmployeesForDashboard(100),
     getAllDashboardMappings(),
     getAllDashboardActivities(60),
+    getDashboardStageTiming(),
   ]);
 
   if (overviewResult.status === "rejected") {
@@ -328,6 +370,9 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   if (activitiesResult.status === "rejected") {
     console.error("Dashboard activities fetch failed:", activitiesResult.reason);
   }
+  if (stageTimingResult.status === "rejected") {
+    console.error("Dashboard stage timing fetch failed:", stageTimingResult.reason);
+  }
 
   const overview = overviewResult.status === "fulfilled" ? overviewResult.value : null;
   const pipeline = pipelineResult.status === "fulfilled" ? pipelineResult.value : null;
@@ -335,6 +380,23 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   const employees = employeesResult.status === "fulfilled" ? employeesResult.value : [];
   const mappings = mappingsResult.status === "fulfilled" ? mappingsResult.value : [];
   const activities = activitiesResult.status === "fulfilled" ? activitiesResult.value : [];
+  const stageTiming: StageTimingSummary =
+    stageTimingResult.status === "fulfilled"
+      ? {
+          stages: stageTimingResult.value.stages.map((stage) => ({
+            stage: stage.stage as PipelineStage,
+            label: stage.label,
+            avgDays: stage.avg_days,
+            count: stage.count,
+          })),
+          avgDaysInStage: stageTimingResult.value.avg_days_in_stage,
+          avgDaysToAction: stageTimingResult.value.avg_days_to_action,
+          actionMoves: stageTimingResult.value.action_moves,
+          candidatesWaiting: stageTimingResult.value.candidates_waiting,
+          stalledCount: stageTimingResult.value.stalled_count,
+          stalledAfterDays: stageTimingResult.value.stalled_after_days,
+        }
+      : EMPTY_STAGE_TIMING;
 
   const totals: DashboardTotals = overview
     ? {
@@ -372,7 +434,7 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
     clients,
     activity: buildActivity(activities),
     totals,
-    analytics: buildAnalytics(totals),
+    analytics: buildAnalytics(totals, stageTiming),
   };
 }
 
@@ -398,6 +460,19 @@ export async function getDashboardOverview() {
 export async function getPipelineDashboardData() {
   const data = await loadDashboardDemoData();
   return data.pipelineStages;
+}
+
+/** Options for the pipeline funnel's recruiter filter. Staff-only endpoint. */
+export async function getRecruiterFilterOptions(): Promise<RecruiterOption[]> {
+  try {
+    const employees = await getEmployeesForDashboard(100);
+    return employees
+      .map((employee) => ({ id: employee.id, name: employee.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error("Failed to load recruiters for the pipeline funnel filter:", error);
+    return [];
+  }
 }
 
 export async function getRecruiterDashboardData() {
