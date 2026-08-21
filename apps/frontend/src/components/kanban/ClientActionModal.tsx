@@ -74,6 +74,7 @@ export default function ClientActionModal({
                 Review Action: {card.candidate_name}
               </h2>
               <button
+                type="button"
                 onClick={onClose}
                 className="rounded-lg p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-primary transition-colors"
               >
@@ -99,6 +100,7 @@ export default function ClientActionModal({
               {(card.stage === "sourced" || card.stage === "sent_to_client") && (
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => handleAction(() => Promise.resolve(onStageChange("interview")))}
                     disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
@@ -106,6 +108,7 @@ export default function ClientActionModal({
                     <IconCheck className="size-4" /> Approve for Interview
                   </button>
                   <button
+                    type="button"
                     onClick={() => handleAction(() => Promise.resolve(onStageChange("rejected")))}
                     disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
@@ -130,6 +133,7 @@ export default function ClientActionModal({
                         className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none"
                       />
                       <button
+                        type="button"
                         onClick={() =>
                           handleAction(() =>
                             setMappingInterviewDate(
@@ -148,6 +152,7 @@ export default function ClientActionModal({
 
                   <div className="border-t border-border pt-4 flex gap-3">
                     <button
+                      type="button"
                       onClick={() => handleAction(() => Promise.resolve(onStageChange("selected")))}
                       disabled={loading}
                       className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-4 py-2 text-sm font-semibold text-indigo-400 hover:bg-indigo-500/20 transition-all disabled:opacity-50"
@@ -155,6 +160,7 @@ export default function ClientActionModal({
                       <IconCheck className="size-4" /> Mark Selected
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleAction(() => Promise.resolve(onStageChange("rejected")))}
                       disabled={loading}
                       className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
@@ -185,6 +191,7 @@ export default function ClientActionModal({
                           className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs"
                         />
                         <button
+                          type="button"
                           onClick={() =>
                             handleAction(() => uploadMappingOffer(card.mapping_id, offerFile!))
                           }
@@ -218,6 +225,7 @@ export default function ClientActionModal({
                         />
                       </div>
                       <button
+                        type="button"
                         onClick={() =>
                           handleAction(async () => {
                             await setMappingJoiningDate(
@@ -247,6 +255,7 @@ export default function ClientActionModal({
                       className="w-full rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-text-primary focus:border-yellow focus:outline-none min-h-20"
                     />
                     <button
+                      type="button"
                       onClick={() =>
                         handleAction(async () => {
                           await setMappingDropped(card.mapping_id, droppedNotes);

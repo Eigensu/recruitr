@@ -60,10 +60,10 @@ export default function ClientMessagingPage() {
 
     const formatLocalDatetime = (date: Date) => {
       const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
       return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
@@ -114,6 +114,7 @@ export default function ClientMessagingPage() {
           <p className="text-sm text-gray-500">Manage banners displayed to clients.</p>
         </div>
         <button
+          type="button"
           onClick={() => setShowForm(!showForm)}
           className="flex items-center gap-2 px-4 py-2 bg-black text-white dark:bg-white dark:text-black rounded-md hover:opacity-90 transition-opacity text-sm font-medium"
         >
@@ -286,6 +287,7 @@ export default function ClientMessagingPage() {
                     </td>
                     <td className="p-4 text-right">
                       <button
+                        type="button"
                         onClick={() => handleDelete(msg._id)}
                         className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded"
                       >

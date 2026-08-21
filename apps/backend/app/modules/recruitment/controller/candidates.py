@@ -485,7 +485,7 @@ async def bulk_upload_resumes(
     updated = 0
     failed: list[BulkUploadFailure] = []
 
-    for upload in files:
+    for idx, upload in enumerate(files, 1):
         filename = upload.filename or "unknown"
         try:
             file_bytes = await upload.read()
@@ -594,7 +594,9 @@ async def bulk_upload_resumes(
                     )
 
         except OperationFailure as exc:
-            _log.exception("Bulk upload: MongoDB operation failed for %s", filename)
+            _log.exception(
+                "Bulk upload: MongoDB operation failed for file %d of %d", idx, len(files)
+            )
             failed.append(
                 BulkUploadFailure(
                     filename=filename,
@@ -602,7 +604,7 @@ async def bulk_upload_resumes(
                 )
             )
         except Exception as exc:
-            _log.exception("Bulk upload: unexpected error for %s", filename)
+            _log.exception("Bulk upload: unexpected error for file %d of %d", idx, len(files))
             failed.append(
                 BulkUploadFailure(filename=filename, reason=f"Unexpected server error: {exc}")
             )
