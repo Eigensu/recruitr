@@ -1,4 +1,3 @@
-import { PIPELINE_STAGE_LABELS } from "@/components/common/constants/dashboard-constants";
 import type { PipelineStage, PipelineStageMetric } from "@/types/dashboard";
 
 /**
@@ -7,35 +6,57 @@ import type { PipelineStage, PipelineStageMetric } from "@/types/dashboard";
  * free of server-only imports (`next/headers` via lib/api/*).
  */
 
-/** Stages the dashboard funnel renders, top to bottom. */
-export const PIPELINE_FUNNEL_ORDER: PipelineStage[] = [
-  "sourced",
-  "sent_to_client",
-  "interview",
-  "rejected",
-  "candidate_dropped",
-  "on_hold",
-];
+/**
+ * The funnel's two groups, splitting on the same line the backend does:
+ * TERMINAL_STAGES close a mapping's lifecycle, everything else is still live.
+ * Every stage appears in one of them, so the percentages add up to the whole
+ * pipeline instead of to whatever subset happened to be on screen.
+ */
+export const FUNNEL_GROUPS: ReadonlyArray<{ id: string; label: string; stages: PipelineStage[] }> =
+  [
+    {
+      id: "open",
+      label: "Still open",
+      stages: ["sourced", "sent_to_client", "interview", "selected", "on_hold"],
+    },
+    { id: "closed", label: "Closed", stages: ["joined", "rejected", "candidate_dropped"] },
+  ];
+
+/** Stages the funnel renders, top to bottom. */
+export const PIPELINE_FUNNEL_ORDER: PipelineStage[] = FUNNEL_GROUPS.flatMap(
+  (group) => group.stages,
+);
 
 /**
- * CHART_COLORS entries pinned per stage rather than taken by row index, so a
- * bar keeps its colour when the funnel is refiltered and the two drop-off
- * stages read as drop-offs.
+ * Owned here rather than taken from the API, whose labels come out of a
+ * `.title()` call — "Sent To Client", "Candidate Dropped". Sentence case, and
+ * short enough to sit beside a count in a narrow panel.
+ */
+export const PIPELINE_FUNNEL_LABELS: Record<PipelineStage, string> = {
+  sourced: "Sourced",
+  sent_to_client: "Sent to client",
+  interview: "Interview",
+  selected: "Selected",
+  joined: "Joined",
+  rejected: "Rejected",
+  candidate_dropped: "Dropped",
+  on_hold: "On hold",
+};
+
+/**
+ * Colour carries the outcome, not the row number: warming yellows as a
+ * candidate advances, green for a hire, red and orange for the two ways out,
+ * grey for paused. Pinned per stage so a bar keeps its colour when refiltered.
  */
 export const PIPELINE_STAGE_COLORS: Record<PipelineStage, string> = {
-  sourced: "#60A5FA",
-  sent_to_client: "#F3FF54",
-  interview: "#C084FC",
-  selected: "#2DD4BF",
+  sourced: "rgba(243, 255, 84, 0.38)",
+  sent_to_client: "rgba(243, 255, 84, 0.62)",
+  interview: "rgba(243, 255, 84, 0.82)",
+  selected: "#F3FF54",
   joined: "#3DDC97",
   rejected: "#FF8A8A",
   candidate_dropped: "#FB923C",
   on_hold: "#94A3B8",
-};
-
-/** Shorter than the API's "Candidate Dropped", which the bar label truncates. */
-const FUNNEL_LABEL_OVERRIDES: Partial<Record<PipelineStage, string>> = {
-  candidate_dropped: "Dropped",
 };
 
 export interface ApiPipelineStage {
@@ -57,9 +78,16 @@ export function buildPipelineStages(apiStages: ApiPipelineStage[]): PipelineStag
     const source = stageMap.get(stage);
     return {
       stage,
-      label: FUNNEL_LABEL_OVERRIDES[stage] ?? source?.label ?? PIPELINE_STAGE_LABELS[stage],
+      label: PIPELINE_FUNNEL_LABELS[stage],
       count: source?.count ?? 0,
       percent: source?.percent ?? 0,
     };
   });
+}
+
+/** Whole percents at a glance; anything present but tiny stays visible as <1%. */
+export function formatPipelinePercent(percent: number): string {
+  if (percent <= 0) return "0%";
+  if (percent < 1) return "<1%";
+  return `${Math.round(percent)}%`;
 }
