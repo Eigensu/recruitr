@@ -291,8 +291,20 @@ async def test_client_can_create_position_with_valid_role_and_salary(client_1: A
     assert data["total_seats"] == 2
 
 
+@pytest_asyncio.fixture
+def stub_cloudinary(monkeypatch):
+    """Keep offer-letter uploads off the network."""
+    from app.modules.storage import service as storage_service
+
+    monkeypatch.setattr(
+        storage_service,
+        "upload_offer_letter",
+        lambda *_a, **_kw: {"secure_url": "https://cdn.test/offer.pdf"},
+    )
+
+
 @pytest.mark.asyncio
-async def test_client_pipeline_integration(client_1: AsyncClient, seed_data: dict):
+async def test_client_pipeline_integration(client_1: AsyncClient, seed_data: dict, stub_cloudinary):
     m1 = seed_data["m1"]
 
     # 1. Try skipping to joined (should fail)
@@ -319,16 +331,18 @@ async def test_client_pipeline_integration(client_1: AsyncClient, seed_data: dic
     )
     assert res.status_code == 200
 
-    # 4. Upload offer letter (allowed because it's selected)
+    # 4. Upload offer letter (allowed because it's selected). Multipart, which
+    # is what the portal has always sent — this step used to post JSON and pass
+    # against a contract no caller used, which is how the 422 went unnoticed.
     res = await client_1.put(
         f"/api/v1/pipeline/mappings/{m1}/offer-letter",
-        json={"offer_letter_url": "http://example.com/offer.pdf", "salary_offered": 50000},
+        files={"file": ("offer.pdf", b"%PDF-1.4 fake", "application/pdf")},
     )
     assert res.status_code == 200
 
     # 5. Set joining date (allowed because offer letter is present)
     res = await client_1.put(
         f"/api/v1/pipeline/mappings/{m1}/joining-date",
-        json={"joining_date": "2026-09-01T00:00:00Z"},
+        json={"joining_date": "2026-09-01T00:00:00Z", "salary_offered": 50000},
     )
     assert res.status_code == 200
