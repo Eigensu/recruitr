@@ -1,59 +1,44 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { IconChartFunnel } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
-import {
-  CHART_COLORS,
-  DASHBOARD_PANEL_CLASS,
-} from "@/components/common/constants/dashboard-constants";
+import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
+import { clientFetchDashboardPipeline } from "@/lib/api/dashboard.client";
+import { buildPipelineStages, PIPELINE_STAGE_COLORS } from "@/lib/pipeline-funnel";
+import type { RecruiterOption } from "@/lib/pipeline-funnel";
 import { cn } from "@/lib/utils";
 import type { PipelineStageMetric } from "@/types/dashboard";
 
 interface PipelinePieChartProps {
   stages: PipelineStageMetric[];
+  /** Populates the recruiter filter; omit to render the funnel unfiltered. */
+  recruiters?: RecruiterOption[];
 }
 
-export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartProps>) {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(chartRef, { once: true, amount: 0.42 });
-  const [activeStage, setActiveStage] = useState(stages[0]?.stage);
-  const maxCount = stages.reduce((max, s) => Math.max(max, s.count), 1);
-  const active = stages.find((stage) => stage.stage === activeStage) ?? stages[0];
+const SELECT_STYLE = {
+  background: "var(--color-canvas-val)",
+  color: "var(--color-text-primary)",
+  border: "1px solid var(--color-border-val)",
+};
 
-  if (!stages.length) {
-    return (
-      <section
-        ref={chartRef}
-        className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
-        style={{ color: "var(--color-text-primary)" }}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-heading text-xl">Pipeline Funnel</h2>
-            <p className="mt-1 text-sm" style={{ opacity: 0.6 }}>
-              Candidate flow through pipeline stages
-            </p>
-          </div>
-          <IconChartFunnel className="size-6 text-yellow" />
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm" style={{ opacity: 0.5 }}>
-            No pipeline data available.
-          </p>
-        </div>
-      </section>
-    );
-  }
-
+function FunnelShell({
+  children,
+  chartRef,
+  filter,
+}: Readonly<{
+  children: React.ReactNode;
+  chartRef: React.Ref<HTMLDivElement>;
+  filter?: React.ReactNode;
+}>) {
   return (
     <section
       ref={chartRef}
       className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
       style={{ color: "var(--color-text-primary)" }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-heading text-xl" style={{ color: "var(--color-text-primary)" }}>
             Pipeline Funnel
@@ -62,13 +47,114 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
             Candidate flow through pipeline stages
           </p>
         </div>
-        <IconChartFunnel className="size-6 text-yellow" />
+        <div className="flex items-center gap-2">
+          {filter}
+          <IconChartFunnel className="size-6 shrink-0 text-yellow" />
+        </div>
       </div>
+      {children}
+    </section>
+  );
+}
 
-      <div className="mt-4 flex flex-1 flex-col justify-center gap-1.5">
+export default function PipelinePieChart({
+  stages: initialStages,
+  recruiters = [],
+}: Readonly<PipelinePieChartProps>) {
+  const chartRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(chartRef, { once: true, amount: 0.42 });
+  const requestRef = useRef<AbortController | null>(null);
+  const [filteredStages, setFilteredStages] = useState<PipelineStageMetric[] | null>(null);
+  const [activeStage, setActiveStage] = useState(initialStages[0]?.stage);
+  const [recruiterId, setRecruiterId] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  // The server-rendered props stand until a recruiter is picked, and again the
+  // moment the filter is cleared.
+  const stages = recruiterId && filteredStages ? filteredStages : initialStages;
+
+  useEffect(() => () => requestRef.current?.abort(), []);
+
+  function handleRecruiterChange(nextId: string) {
+    requestRef.current?.abort();
+    setRecruiterId(nextId);
+    setLoadFailed(false);
+
+    if (!nextId) {
+      requestRef.current = null;
+      setFilteredStages(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setIsLoading(true);
+
+    clientFetchDashboardPipeline(nextId, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) setFilteredStages(buildPipelineStages(response.stages));
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        console.error("Failed to filter the pipeline funnel by recruiter:", error);
+        setLoadFailed(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+  }
+
+  const filter =
+    recruiters.length > 0 ? (
+      <select
+        value={recruiterId}
+        onChange={(event) => handleRecruiterChange(event.target.value)}
+        className="max-w-40 rounded-lg px-2 py-1.5 text-xs outline-none"
+        style={SELECT_STYLE}
+        aria-label="Filter pipeline funnel by recruiter"
+      >
+        <option value="">All Recruiters</option>
+        {recruiters.map((recruiter) => (
+          <option key={recruiter.id} value={recruiter.id}>
+            {recruiter.name}
+          </option>
+        ))}
+      </select>
+    ) : null;
+
+  const maxCount = stages.reduce((max, s) => Math.max(max, s.count), 1);
+  const active = stages.find((stage) => stage.stage === activeStage) ?? stages[0];
+
+  if (!stages.length) {
+    return (
+      <FunnelShell chartRef={chartRef} filter={filter}>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm" style={{ opacity: 0.5 }}>
+            No pipeline data available.
+          </p>
+        </div>
+      </FunnelShell>
+    );
+  }
+
+  return (
+    <FunnelShell chartRef={chartRef} filter={filter}>
+      {loadFailed && (
+        <p className="mt-3 text-xs" style={{ color: "var(--color-card-negative-text)" }}>
+          Couldn&apos;t load this recruiter&apos;s funnel. Showing the last loaded numbers.
+        </p>
+      )}
+
+      <div
+        className="mt-4 flex flex-1 flex-col justify-center gap-1.5 transition-opacity"
+        style={{ opacity: isLoading ? 0.45 : 1 }}
+        aria-busy={isLoading}
+      >
         {stages.map((stage, index) => {
           const widthPct = (stage.count / maxCount) * 100;
-          const color = CHART_COLORS[index % CHART_COLORS.length] ?? "#FFFFFF";
+          const color = PIPELINE_STAGE_COLORS[stage.stage];
           const isActive = stage.stage === activeStage;
 
           return (
@@ -148,6 +234,6 @@ export default function PipelinePieChart({ stages }: Readonly<PipelinePieChartPr
           </p>
         </div>
       </div>
-    </section>
+    </FunnelShell>
   );
 }

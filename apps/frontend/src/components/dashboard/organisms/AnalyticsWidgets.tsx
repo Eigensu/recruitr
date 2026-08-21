@@ -12,14 +12,16 @@ import {
 import { cn } from "@/lib/utils";
 import type { DashboardAnalyticsWidget } from "@/types/dashboard";
 
+// Splits "58%", "4.1 days" or "12" into the number to animate and whatever
+// unit trails it, spacing included.
 const parseAnimatedValue = (value: string) => {
-  const suffix = value.endsWith("%") ? "%" : "";
-  const numericValue = Number(value.replace("%", ""));
+  const match = /^(-?[\d,]+(?:\.\d+)?)(.*)$/.exec(value.trim());
+  const numericValue = Number(match?.[1].replace(/,/g, ""));
 
   return {
     value: Number.isFinite(numericValue) ? numericValue : 0,
     decimals: value.includes(".") ? 1 : 0,
-    suffix,
+    suffix: match?.[2] ?? "",
   };
 };
 
@@ -92,6 +94,23 @@ export default function AnalyticsWidgets({ widgets }: Readonly<AnalyticsWidgetsP
               <p className="mt-4 text-sm" style={{ opacity: 0.7 }}>
                 {widget.helper}
               </p>
+
+              {widget.breakdown && widget.breakdown.length > 0 && (
+                <dl
+                  className="mt-3 space-y-1 border-t pt-3 text-xs"
+                  style={{
+                    borderColor: "color-mix(in srgb, currentColor 20%, transparent)",
+                    opacity: 0.8,
+                  }}
+                >
+                  {widget.breakdown.map((row) => (
+                    <div key={row.label} className="flex items-baseline justify-between gap-3">
+                      <dt className="truncate">{row.label}</dt>
+                      <dd className="shrink-0 font-semibold tabular-nums">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </motion.article>
           );
         })}

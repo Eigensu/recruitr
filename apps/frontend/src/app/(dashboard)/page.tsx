@@ -21,9 +21,9 @@ import {
   getDashboardOverview,
   getPipelineDashboardData,
   getRecruiterDashboardData,
+  getRecruiterFilterOptions,
   getSourcingDashboardData,
 } from "@/lib/dashboard-data";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getUserServer } from "@/lib/api/auth.server";
 import type { DashboardKpi } from "@/types/dashboard";
 import {
@@ -63,9 +63,12 @@ async function AnalyticsSection() {
 }
 
 async function PipelinePieSection() {
-  const stages = await getPipelineDashboardData();
+  const [stages, recruiters] = await Promise.all([
+    getPipelineDashboardData(),
+    getRecruiterFilterOptions(),
+  ]);
 
-  return <PipelinePieChart stages={stages} />;
+  return <PipelinePieChart stages={stages} recruiters={recruiters} />;
 }
 
 async function RecruiterLineSection() {
@@ -247,7 +250,6 @@ export default async function DashboardPage() {
             </div>
             <div className="mt-1 flex shrink-0 items-center gap-2">
               <NotificationBell />
-              <ThemeToggle />
             </div>
           </div>
         </header>

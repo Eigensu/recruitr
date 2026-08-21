@@ -18,6 +18,7 @@ from app.modules.dashboard.schemas import (
     DashboardOverviewResponse,
     DashboardPipelineResponse,
     DashboardSourcingResponse,
+    DashboardStageTimingResponse,
 )
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.schemas import TenantScope
@@ -93,6 +94,20 @@ async def get_pipeline(
     pipeline_stage: _Stage = None,
 ) -> DashboardPipelineResponse:
     return await service.get_pipeline(
+        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
+    )
+
+
+@router.get("/stage-timing")
+async def get_stage_timing(
+    tenant: _Viewer,
+    employee_id: _EmployeeId = None,
+    start_date: _StartDate = None,
+    end_date: _EndDate = None,
+    client_id: _ClientId = None,
+    pipeline_stage: _Stage = None,
+) -> DashboardStageTimingResponse:
+    return await service.get_stage_timing(
         _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
     )
 

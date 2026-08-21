@@ -7,6 +7,7 @@ strict per-brand tenant isolation required by the spec (§2.3).
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +18,7 @@ from app.modules.dashboard.schemas import DashboardFilters
 from app.modules.recruitment.enums import (
     INACTIVE_STAGES,
     PIPELINE_ORDER,
+    TERMINAL_STAGES,
     ActivityType,
     PipelineStage,
     PositionStatus,
@@ -347,7 +349,191 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
             }
         )
     return {"stages": stages, "total_candidates": total}
-    return {"stages": stages, "total_candidates": total}
+
+
+# ── Stage timing ───────────────────────────────────────────────────────────────
+
+# Stages a candidate can be *waiting* in. The terminal three are excluded: time
+# since a mapping was rejected or joined is not a queue anyone can drain.
+_TIMING_STAGES: list[PipelineStage] = [s for s in PIPELINE_ORDER if s not in TERMINAL_STAGES]
+
+# A mapping sitting this long in one stage counts as stalled.
+_STALLED_AFTER_DAYS = 7
+
+_MS_PER_DAY = 1000 * 60 * 60 * 24
+
+# When the mapping entered the stage it sits in now. Mirrors _stage_entered_at
+# in recruitment/controller/pipeline.py: take the newest history event for the
+# current stage, falling back to mapped_at for rows written before history
+# existed (a bare history[-1] can belong to a stage already left).
+_STAGE_ENTERED_AT: dict[str, Any] = {
+    "$let": {
+        "vars": {
+            "entry": {
+                "$last": {
+                    "$sortArray": {
+                        "input": {
+                            _FILTER: {
+                                "input": {_IF_NULL: ["$history", []]},
+                                "as": "h",
+                                "cond": {
+                                    "$and": [
+                                        {"$eq": ["$$h.stage", _F_STAGE]},
+                                        {"$ne": [{_IF_NULL: ["$$h.at", None]}, None]},
+                                    ]
+                                },
+                            }
+                        },
+                        "sortBy": {"at": 1},
+                    }
+                }
+            }
+        },
+        "in": {_IF_NULL: ["$$entry.at", "$mapped_at"]},
+    }
+}
+
+_DAYS_IN_STAGE: dict[str, Any] = {
+    "$divide": [
+        {
+            "$dateDiff": {
+                "startDate": "$stage_entered_at",
+                "endDate": "$$NOW",
+                "unit": "millisecond",
+            }
+        },
+        _MS_PER_DAY,
+    ]
+}
+
+
+async def _fetch_stage_dwell(mapping_match: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-stage average of how long the mappings sitting there have waited."""
+    pipeline = [
+        {_MATCH: {**mapping_match, "stage": {"$in": [s.value for s in _TIMING_STAGES]}}},
+        {_ADD_FIELDS: {"stage_entered_at": _STAGE_ENTERED_AT}},
+        {_ADD_FIELDS: {"days_in_stage": _DAYS_IN_STAGE}},
+        {
+            _GROUP: {
+                "_id": _F_STAGE,
+                "count": {"$sum": 1},
+                "avg_days": {"$avg": "$days_in_stage"},
+                "stalled": {
+                    "$sum": {
+                        _COND: [{"$gte": ["$days_in_stage", _STALLED_AFTER_DAYS]}, 1, 0],
+                    }
+                },
+            }
+        },
+    ]
+    return await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+
+
+async def _fetch_action_gaps(mapping_match: dict[str, Any]) -> dict[str, Any]:
+    """Average gap between consecutive stage moves — how fast someone acted.
+
+    Reads completed transitions out of `history` rather than the current wait,
+    so it answers "once a candidate lands somewhere, how long until they are
+    moved on" over every move the filter covers.
+    """
+    events = {
+        "$sortArray": {
+            "input": {
+                _FILTER: {
+                    "input": {_IF_NULL: ["$history", []]},
+                    "as": "h",
+                    "cond": {"$ne": [{_IF_NULL: ["$$h.at", None]}, None]},
+                }
+            },
+            "sortBy": {"at": 1},
+        }
+    }
+    pipeline = [
+        {_MATCH: mapping_match},
+        {_ADD_FIELDS: {"events": events}},
+        {
+            _ADD_FIELDS: {
+                "gaps": {
+                    "$map": {
+                        "input": {"$range": [1, {_SIZE: "$events"}]},
+                        "as": "i",
+                        "in": {
+                            "$divide": [
+                                {
+                                    "$dateDiff": {
+                                        "startDate": {
+                                            "$getField": {
+                                                "field": "at",
+                                                "input": {
+                                                    "$arrayElemAt": [
+                                                        "$events",
+                                                        {"$subtract": ["$$i", 1]},
+                                                    ]
+                                                },
+                                            }
+                                        },
+                                        "endDate": {
+                                            "$getField": {
+                                                "field": "at",
+                                                "input": {"$arrayElemAt": ["$events", "$$i"]},
+                                            }
+                                        },
+                                        "unit": "millisecond",
+                                    }
+                                },
+                                _MS_PER_DAY,
+                            ]
+                        },
+                    }
+                }
+            }
+        },
+        {"$unwind": "$gaps"},
+        {_GROUP: {"_id": None, "avg_days": {"$avg": "$gaps"}, "moves": {"$sum": 1}}},
+    ]
+    result = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    return result[0] if result else {}
+
+
+async def fetch_stage_timing(filters: DashboardFilters) -> dict[str, Any]:
+    """How long candidates sit in each stage, and how quickly they get moved on."""
+    mapping_match = _base_mapping_match(filters, include_terminal=True)
+    dwell_rows, action = await asyncio.gather(
+        _fetch_stage_dwell(mapping_match),
+        _fetch_action_gaps(mapping_match),
+    )
+
+    by_stage = {row["_id"]: row for row in dwell_rows if row.get("_id")}
+    stages: list[dict[str, Any]] = []
+    weighted_days = 0.0
+    waiting = 0
+    stalled = 0
+
+    for stage in _TIMING_STAGES:
+        row = by_stage.get(stage.value, {})
+        count = int(row.get("count", 0))
+        avg_days = float(row.get("avg_days") or 0.0)
+        stages.append(
+            {
+                "stage": stage,
+                "label": _humanize_stage(stage),
+                "avg_days": round(avg_days, 1),
+                "count": count,
+            }
+        )
+        weighted_days += avg_days * count
+        waiting += count
+        stalled += int(row.get("stalled", 0))
+
+    return {
+        "stages": stages,
+        "avg_days_in_stage": 0.0 if waiting == 0 else round(weighted_days / waiting, 1),
+        "avg_days_to_action": round(float(action.get("avg_days") or 0.0), 1),
+        "action_moves": int(action.get("moves", 0)),
+        "candidates_waiting": waiting,
+        "stalled_count": stalled,
+        "stalled_after_days": _STALLED_AFTER_DAYS,
+    }
 
 
 async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:

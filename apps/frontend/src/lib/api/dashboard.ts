@@ -52,6 +52,22 @@ export interface ApiDashboardPipelineResponse {
   generated_at: string;
 }
 
+export interface ApiDashboardStageTimingResponse {
+  stages: Array<{
+    stage: string;
+    label: string;
+    avg_days: number;
+    count: number;
+  }>;
+  avg_days_in_stage: number;
+  avg_days_to_action: number;
+  action_moves: number;
+  candidates_waiting: number;
+  stalled_count: number;
+  stalled_after_days: number;
+  generated_at: string;
+}
+
 export interface ApiDashboardEmployeeItem {
   id: string;
   name: string;
@@ -197,6 +213,10 @@ export function getDashboardSourcing() {
 
 export function getDashboardPipeline() {
   return dashboardFetch<ApiDashboardPipelineResponse>("/api/v1/dashboard/pipeline");
+}
+
+export function getDashboardStageTiming() {
+  return dashboardFetch<ApiDashboardStageTimingResponse>("/api/v1/dashboard/stage-timing");
 }
 
 export function getDashboardEmployees(query: Record<string, QueryValue> = {}) {

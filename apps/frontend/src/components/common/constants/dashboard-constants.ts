@@ -5,6 +5,7 @@ import {
   IconCheck,
   IconCircleX,
   IconClockHour4,
+  IconHourglass,
   IconPercentage,
   IconRoute,
   IconSend,
@@ -38,6 +39,8 @@ export const ANALYTICS_ICON_MAP = {
   pipeline_depth: IconRoute,
   join_conversion: IconTargetArrow,
   seat_gap: IconChartDots3,
+  avg_stage_days: IconHourglass,
+  avg_time_to_action: IconClockHour4,
 } as const;
 
 export const DASHBOARD_COLORS = {
