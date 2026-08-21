@@ -92,7 +92,18 @@ export async function uploadMappingOffer(mappingId: string, file: File): Promise
     credentials: "include",
     body: formData,
   });
-  if (!res.ok) throw new Error(await res.text());
+  // The endpoint rejects a non-PDF (400) and an oversize file (413) with a
+  // readable `detail`; res.text() would put the raw JSON in front of the user.
+  if (!res.ok) {
+    let detail = "Could not upload the offer letter.";
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // Non-JSON error body — keep the generic message.
+    }
+    throw new Error(detail);
+  }
 }
 
 export async function setMappingJoiningDate(

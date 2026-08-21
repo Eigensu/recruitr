@@ -187,6 +187,7 @@ export default function ClientActionModal({
                       <div className="flex gap-2">
                         <input
                           type="file"
+                          accept="application/pdf,.pdf"
                           onChange={(e) => setOfferFile(e.target.files?.[0] || null)}
                           className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs"
                         />

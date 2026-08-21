@@ -15,6 +15,7 @@ from app.modules.recruitment.models import Mapping, RefereeUser, ReferralRecord
 from app.modules.recruitment.repository_impl import move_stage
 from app.modules.recruitment.schemas import TenantScope
 from app.modules.storage import service as storage_service
+from app.modules.storage.uploads import read_offer_letter
 
 router = APIRouter(prefix="/api/v1/referee-dashboard", tags=["Referee Dashboard"])
 
@@ -96,8 +97,6 @@ _ALLOWED_TRANSITIONS: dict[str, tuple[PipelineStage, ...]] = {
     PipelineStage.sent_to_client.value: (PipelineStage.interview, PipelineStage.rejected),
     PipelineStage.interview.value: (PipelineStage.selected, PipelineStage.rejected),
 }
-
-_MAX_OFFER_BYTES = 10 * 1024 * 1024
 
 
 class RefereeStageMoveRequest(BaseModel):
@@ -205,18 +204,7 @@ async def upload_own_referral_offer(
             "An offer letter can only be uploaded once the candidate is selected.",
         )
 
-    filename = file.filename or "offer-letter.pdf"
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only PDF offer letters are accepted")
-
-    file_bytes = await file.read()
-    # UploadFile.size is not populated by every ASGI server, so the length of
-    # what was actually read is the check that always runs.
-    if len(file_bytes) > _MAX_OFFER_BYTES:
-        raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Offer letter too large (max 10MB)"
-        )
-
+    file_bytes, filename = await read_offer_letter(file)
     result = storage_service.upload_offer_letter(file_bytes, filename)
     mapping.offer_letter_url = result.get("secure_url")
     await mapping.save()

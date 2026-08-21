@@ -7,7 +7,7 @@ Endpoints:
   GET    /pipeline/top-candidates                keyword-scored candidate suggestions
   PATCH  /pipeline/match                         assign/move a candidate onto a position
   PUT    /pipeline/mappings/{id}/interview-date  set an interview date
-  PUT    /pipeline/mappings/{id}/offer-letter    record an uploaded offer letter
+  PUT    /pipeline/mappings/{id}/offer-letter    upload an offer letter (multipart PDF)
   PUT    /pipeline/mappings/{id}/joining-date    set the joining date
   PUT    /pipeline/mappings/{id}/dropped         mark a candidate dropped, with notes
 """
@@ -19,7 +19,7 @@ import re
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
@@ -50,7 +50,6 @@ from app.modules.recruitment.schemas import (
     PipelineSetInterviewRequest,
     PipelineSetJoiningRequest,
     PipelineStageColumn,
-    PipelineUploadOfferRequest,
     StageMappingItem,
     StageMoveRequest,
     StageMoveResponse,
@@ -58,6 +57,8 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
+from app.modules.storage import service as storage_service
+from app.modules.storage.uploads import read_offer_letter
 
 router = APIRouter()
 
@@ -680,9 +681,22 @@ async def set_interview_date(
 @router.put("/mappings/{mapping_id}/offer-letter")
 async def upload_offer_letter(
     mapping_id: str,
-    req: PipelineUploadOfferRequest,
     viewer: _Viewer,
+    file: Annotated[UploadFile, File(description="Offer letter PDF")],
 ):
+    """Attach an offer letter to a mapping.
+
+    Takes the file itself. This used to take {offer_letter_url, salary_offered}
+    as JSON while the only caller — the client portal's action modal — posted
+    multipart, so every client upload 422'd and the whole selected -> joined
+    flow was dead behind it: the "Set Joining Details" block only renders once
+    offer_letter_url is set, and set_joining_date refuses a client without one.
+
+    Multipart is the right side to settle on rather than the URL shape, because
+    a client cannot produce a Cloudinary URL in the first place — see
+    storage/uploads.py. The salary moved to set_joining_date, which is where
+    the portal actually collects it.
+    """
     from app.modules.auth.models import UserRole
 
     mapping = await _get_or_404(viewer, mapping_id)
@@ -693,10 +707,12 @@ async def upload_offer_letter(
             "Offer letter can only be uploaded when candidate is selected",
         )
 
-    mapping.offer_letter_url = req.offer_letter_url
-    mapping.salary_offered = req.salary_offered
+    file_bytes, filename = await read_offer_letter(file)
+    result = storage_service.upload_offer_letter(file_bytes, filename)
+
+    mapping.offer_letter_url = result.get("secure_url")
     await mapping.save()
-    return {"success": True}
+    return {"success": True, "offer_letter_url": mapping.offer_letter_url}
 
 
 @router.put("/mappings/{mapping_id}/joining-date")
@@ -715,6 +731,8 @@ async def set_joining_date(
         )
 
     mapping.joining_date = req.joining_date
+    if req.salary_offered is not None:
+        mapping.salary_offered = req.salary_offered
     await mapping.save()
     return {"success": True}
 

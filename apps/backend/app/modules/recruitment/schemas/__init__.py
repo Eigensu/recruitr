@@ -28,7 +28,6 @@ from app.modules.recruitment.schemas.pipeline import (
     PipelineSetInterviewRequest,
     PipelineSetJoiningRequest,
     PipelineStageColumn,
-    PipelineUploadOfferRequest,
     StageMappingItem,
     StageMoveRequest,
     StageMoveResponse,
@@ -106,7 +105,6 @@ __all__ = [
     "PipelineCandidateDroppedRequest",
     "PipelineSetInterviewRequest",
     "PipelineSetJoiningRequest",
-    "PipelineUploadOfferRequest",
     # Team & Tag DTOs
     "TeamCreate",
     "TeamUpdate",
