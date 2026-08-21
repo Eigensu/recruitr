@@ -39,9 +39,10 @@ function stageLabelCls(isCurrent: boolean, isReached: boolean): string {
 
 /** How a referral that has stopped moving is labelled, keyed on PipelineStage.
  *
- * kanban_stage deliberately freezes at the last real step when a referral is
- * closed out, so the stepper alone shows a dead referral as merely paused
- * partway along. Without this badge that reads as "still in progress".
+ * A rejected or withdrawn referral rewinds to CV Reviewed, and one on hold
+ * freezes at the step it reached, so in every closed-out case the stepper alone
+ * shows a dead referral as merely sitting partway along. Without this badge that
+ * reads as "still in progress".
  */
 const CLOSED_STAGE_LABELS: Record<string, string> = {
   rejected: "Not proceeding",

@@ -224,10 +224,11 @@ async def test_referee_cannot_skip_ahead(portal, seeded, target):
 
 
 async def test_rejecting_does_not_regress_the_tracker(portal, seeded):
-    """A rejected referral holds its last real step instead of resetting.
+    """A rejected referral falls back to CV Reviewed, not to CV Received.
 
-    sync_referral_with_mapping skips closed stages precisely so the referee's
-    journey view does not snap back to "CV Received" the moment someone says no.
+    Rejection is out of play, so the tracker does not keep advertising progress —
+    but the CV did reach a client, and that much stays true. The portal marks the
+    referral dead with a "Not proceeding" badge keyed on the pipeline stage.
     """
     mapping = seeded["mine"]["mapping"]
     referral = seeded["mine"]["referral"]

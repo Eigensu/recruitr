@@ -108,6 +108,9 @@ async def map_candidate(
     # Gamification — fire-and-forget
     await _credit_gamification(scope, mapping, PipelineStage.sourced)
 
+    # Referral ledger — fire-and-forget, same rule as gamification
+    await _open_referral_record(mapping)
+
     if scope.is_recruiter:
         await log_activity(
             scope=scope,
@@ -264,6 +267,24 @@ async def _credit_gamification(scope: TenantScope, mapping: Mapping, stage: Pipe
             scope.employee_id,
             mapping.id,
             stage.value,
+        )
+
+
+async def _open_referral_record(mapping: Mapping) -> None:
+    """Start the Binge Connect ledger entry if this candidate came from a referee.
+
+    Best-effort, like gamification: a referee-portal bookkeeping failure must
+    never roll back the mapping the recruiter just made.
+    """
+    try:
+        from app.modules.dashboard.referee_service import ensure_referral_record
+
+        await ensure_referral_record(mapping)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Referral record creation failed for mapping=%s candidate=%s",
+            mapping.id,
+            mapping.candidate_id,
         )
 
 
