@@ -363,10 +363,11 @@ class StageEvent(BaseModel):
     decision: Decision = Decision.pending
     by_employee_id: PydanticObjectId | None = None
     # Who actually triggered the move: a recruiter, the client themselves
-    # (via the dashboard tick/cross), or the daily auto-join job. Defaults to
+    # (via the dashboard tick/cross), the referee who sourced the candidate
+    # (via the Binge Connect portal), or the daily auto-join job. Defaults to
     # "employee" so history entries written before this field existed keep
     # reading as staff-authored, which is what they were.
-    actor: Literal["employee", "client", "system"] = "employee"
+    actor: Literal["employee", "client", "referee", "system"] = "employee"
     at: datetime = Field(default_factory=_utcnow)
 
 
