@@ -17,6 +17,12 @@ interface PipelinePieChartProps {
   recruiters?: RecruiterOption[];
 }
 
+/** Stages fetched for one recruiter, tagged with whose they are. */
+interface AppliedFilter {
+  recruiterId: string;
+  stages: PipelineStageMetric[];
+}
+
 const SELECT_STYLE = {
   background: "var(--color-canvas-val)",
   color: "var(--color-text-primary)",
@@ -27,10 +33,12 @@ function FunnelShell({
   children,
   chartRef,
   filter,
+  subtitle,
 }: Readonly<{
   children: React.ReactNode;
   chartRef: React.Ref<HTMLDivElement>;
   filter?: React.ReactNode;
+  subtitle: string;
 }>) {
   return (
     <section
@@ -44,7 +52,7 @@ function FunnelShell({
             Pipeline Funnel
           </h2>
           <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            Candidate flow through pipeline stages
+            {subtitle}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -64,15 +72,21 @@ export default function PipelinePieChart({
   const chartRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(chartRef, { once: true, amount: 0.42 });
   const requestRef = useRef<AbortController | null>(null);
-  const [filteredStages, setFilteredStages] = useState<PipelineStageMetric[] | null>(null);
+  const [applied, setApplied] = useState<AppliedFilter | null>(null);
   const [activeStage, setActiveStage] = useState(initialStages[0]?.stage);
   const [recruiterId, setRecruiterId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  // The server-rendered props stand until a recruiter is picked, and again the
-  // moment the filter is cleared.
-  const stages = recruiterId && filteredStages ? filteredStages : initialStages;
+  // Only ever render numbers we know belong to the current selection: a
+  // pending or failed request falls back to the unfiltered server data rather
+  // than leaving the previous recruiter's funnel under someone else's name.
+  // The subtitle says which of the two is on screen.
+  const showingFiltered = applied !== null && applied.recruiterId === recruiterId;
+  const stages = showingFiltered ? applied.stages : initialStages;
+  const subtitle = showingFiltered
+    ? `Candidate flow for ${recruiters.find((r) => r.id === recruiterId)?.name ?? "this recruiter"}`
+    : "Candidate flow across all recruiters";
 
   useEffect(() => () => requestRef.current?.abort(), []);
 
@@ -83,7 +97,7 @@ export default function PipelinePieChart({
 
     if (!nextId) {
       requestRef.current = null;
-      setFilteredStages(null);
+      setApplied(null);
       setIsLoading(false);
       return;
     }
@@ -94,7 +108,9 @@ export default function PipelinePieChart({
 
     clientFetchDashboardPipeline(nextId, controller.signal)
       .then((response) => {
-        if (!controller.signal.aborted) setFilteredStages(buildPipelineStages(response.stages));
+        if (!controller.signal.aborted) {
+          setApplied({ recruiterId: nextId, stages: buildPipelineStages(response.stages) });
+        }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -129,7 +145,7 @@ export default function PipelinePieChart({
 
   if (!stages.length) {
     return (
-      <FunnelShell chartRef={chartRef} filter={filter}>
+      <FunnelShell chartRef={chartRef} filter={filter} subtitle={subtitle}>
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm" style={{ opacity: 0.5 }}>
             No pipeline data available.
@@ -140,10 +156,10 @@ export default function PipelinePieChart({
   }
 
   return (
-    <FunnelShell chartRef={chartRef} filter={filter}>
+    <FunnelShell chartRef={chartRef} filter={filter} subtitle={subtitle}>
       {loadFailed && (
         <p className="mt-3 text-xs" style={{ color: "var(--color-card-negative-text)" }}>
-          Couldn&apos;t load this recruiter&apos;s funnel. Showing the last loaded numbers.
+          Couldn&apos;t load this recruiter&apos;s funnel — showing every recruiter instead.
         </p>
       )}
 
