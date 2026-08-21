@@ -11,6 +11,13 @@ import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+/**
+ * Endpoints that are unauthenticated by design, where a 401 means "the
+ * credentials in this request were wrong" rather than "an existing session
+ * expired" — so it must not be redirected/relabeled by the global handler.
+ */
+const UNAUTHENTICATED_PATHS = new Set(["/api/v1/auth/login"]);
+
 /** Thrown by apiFetch when the server returns 403 Forbidden. */
 export class ForbiddenError extends Error {
   constructor() {
@@ -61,7 +68,7 @@ export function useApiFetch() {
       });
 
       if (!res.ok) {
-        if (res.status === 401) {
+        if (res.status === 401 && !UNAUTHENTICATED_PATHS.has(path)) {
           router.replace("/sign-in");
           throw new Error("Session expired");
         }

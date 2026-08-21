@@ -3,7 +3,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useApiFetch } from "@/lib/api";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import "../auth.css";
 
 /** Turn an ?error= code from the OAuth callback into something readable. */
@@ -43,7 +43,7 @@ function SignInContent() {
         router.push("/");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Authentication failed.");
+      setError(apiErrorMessage(err, "Authentication failed."));
     } finally {
       setIsLoading(false);
     }
