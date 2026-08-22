@@ -487,9 +487,9 @@ async def get_referrals(
     # Every mapping for every one of this referee's candidates, in one query —
     # this endpoint is polled, so it must not go per-referral. Serves two needs:
     # the timeline stage is resolved across all of a candidate's mappings, while
-    # the portal's action buttons still key off the referral's own mapping (a
-    # rejected one must stop offering Select/Reject), which is indexed by id
-    # below out of the same result.
+    # pipeline_stage reports the referral's own mapping, which is what tells the
+    # portal a referral is dead rather than merely paused. Indexed by id below
+    # out of the same result.
     mappings_by_candidate = await _mappings_by_candidate(brand_id, [c.id for c in candidates])
     mapping_by_id = {m.id: m for grouped in mappings_by_candidate.values() for m in grouped}
 
@@ -511,11 +511,9 @@ async def get_referrals(
             result.append(
                 {
                     "id": str(r.id),
-                    "mapping_id": str(r.mapping_id),
                     "pipeline_stage": (
                         PipelineStage(mapping.stage).value if mapping is not None else None
                     ),
-                    "offer_letter_url": mapping.offer_letter_url if mapping is not None else None,
                     "candidate_name": masked_name,
                     "role_level": r.role_level,
                     "submission_date": r.submission_date,
@@ -536,10 +534,8 @@ async def get_referrals(
             result.append(
                 {
                     "id": str(candidate.id),
-                    # No mapping yet, so nothing for the referee to act on.
-                    "mapping_id": None,
+                    # Not in a client's pipeline yet, so nothing has closed it out.
                     "pipeline_stage": None,
-                    "offer_letter_url": None,
                     "candidate_name": masked_name,
                     "role_level": None,
                     "submission_date": candidate.created_at,

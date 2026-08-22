@@ -12,7 +12,6 @@ import { useRefereeData } from "@/hooks/useRefereeData";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard";
-import ReferralActions from "@/components/referee/ReferralActions";
 
 /** Timeline dot: filled for the stage in progress, ticked for stages behind it.
  *
@@ -108,7 +107,7 @@ function EarningsState({ paymentStatus, kanbanStage, amount }: EarningsStateProp
 }
 
 export default function RefereePortal() {
-  const { summary, referrals, payments, isLoading, error, refresh } = useRefereeData();
+  const { summary, referrals, payments, isLoading, error } = useRefereeData();
   const { user } = useCurrentUser();
 
   // One step per forward PipelineStage, mirroring map_stage_to_referee on the
@@ -364,8 +363,6 @@ export default function RefereePortal() {
                               />
                             </div>
                           </div>
-
-                          <ReferralActions referral={candidate} onDone={refresh} />
                         </div>
                       );
                     })}

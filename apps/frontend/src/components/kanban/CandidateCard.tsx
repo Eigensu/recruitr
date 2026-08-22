@@ -145,8 +145,12 @@ export default function KanbanCard({
         )}
       </div>
 
-      {/* Action Button for Client Portal */}
-      {onCardClick && (
+      {/* Select / Reject, on both the client's pipeline and the recruiter's.
+          Gated on onStageChange rather than onCardClick: the decision is the
+          same one on either board, but only the client board opens a card
+          modal, so hanging these off onCardClick left the recruiter with
+          drag-and-drop as the sole way to take them. */}
+      {!readOnly && (onStageChange || onCardClick) && (
         <div className="mt-3 flex gap-2">
           {card.stage === "sent_to_client" && onStageChange && (
             <>
@@ -196,7 +200,7 @@ export default function KanbanCard({
               </button>
             </>
           )}
-          {card.stage === "selected" && (
+          {card.stage === "selected" && onCardClick && (
             <button
               type="button"
               onClick={() => onCardClick(card)}
