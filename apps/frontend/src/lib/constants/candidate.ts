@@ -62,7 +62,15 @@ export const STRUCTURED_EDUCATION_OPTIONS = [
 
 export const BRAND_EXPERIENCE_OPTIONS = ["Low", "Mid", "Premium"] as const;
 
-export const DEPARTMENT_OPTIONS = ["Kitchen", "FOH", "Corporate"] as const;
+/**
+ * Values must match the backend Department enum exactly (BOH | Service | Corporate)
+ * — it rejects anything else — so only the labels are free to differ.
+ */
+export const DEPARTMENT_OPTIONS = [
+  { value: "BOH", label: "Kitchen (BOH)" },
+  { value: "Service", label: "Front of House (Service)" },
+  { value: "Corporate", label: "Corporate" },
+] as const;
 
 /**
  * Establishment tag. Values must match the backend EstablishmentTag enum
@@ -77,8 +85,8 @@ export const ESTABLISHMENT_TAG_OPTIONS = [
 ] as const;
 
 export const SPECIALIZATION_OPTIONS: Record<string, string[]> = {
-  Kitchen: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
-  FOH: ["Service", "Guest Relations", "Bar", "Coffee", "Operations"],
+  BOH: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
+  Service: ["Service", "Guest Relations", "Bar", "Coffee", "Operations"],
   Corporate: [
     "HR",
     "Accounts & Finance",
