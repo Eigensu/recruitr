@@ -11,17 +11,26 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.modules.dashboard.referee_service import (
+    calculate_incentive_amount,
     ensure_referral_record,
     get_referrals,
     resolve_referee_stage,
     sync_referral_with_mapping,
 )
-from app.modules.recruitment.enums import PipelineStage, RefereeKanbanStage
-from app.modules.recruitment.models import Candidate, Mapping, ReferralRecord, StageEvent
+from app.modules.recruitment.enums import PipelineStage, RefereeKanbanStage, Seniority
+from app.modules.recruitment.models import (
+    Candidate,
+    Mapping,
+    Position,
+    ReferralRecord,
+    StageEvent,
+)
 
 _BRAND = PydanticObjectId()
 _REFEREE = PydanticObjectId()
@@ -49,11 +58,12 @@ async def _mapping(
     stage: PipelineStage,
     history: list[tuple[PipelineStage, float]] | None = None,
     mapped_days_ago: float = 30.0,
+    position_id: PydanticObjectId | None = None,
 ) -> Mapping:
     doc = Mapping(
         brand_id=_BRAND,
         candidate_id=candidate.id,
-        position_id=PydanticObjectId(),
+        position_id=position_id or PydanticObjectId(),
         employee_id=_EMP,
         stage=stage,
         mapped_at=_ago(mapped_days_ago),
@@ -262,3 +272,67 @@ async def test_portal_prefers_live_mappings_over_a_stale_cached_stage(
     referrals = await get_referrals(_BRAND, _REFEREE)
 
     assert referrals[0]["kanban_stage"] == RefereeKanbanStage.selected.value
+
+
+# ── what a referral is worth ──────────────────────────────────────────────────
+
+
+async def test_role_level_records_the_positions_seniority(candidate: Candidate) -> None:
+    """Left unset, a Junior referral used to price at zero."""
+    position = await Position(
+        brand_id=_BRAND,
+        code="P-SEN",
+        client_id=PydanticObjectId(),
+        client_name="Client",
+        role="Sous Chef",
+        seniority=Seniority.junior,
+        total_seats=1,
+        remaining_seats=1,
+    ).insert()
+    mapping = await _mapping(candidate, stage=PipelineStage.sourced, position_id=position.id)
+
+    record = await ensure_referral_record(mapping)
+
+    assert record.role_level == Seniority.junior.value
+
+
+@pytest.mark.parametrize(
+    ("role_level", "expected"),
+    [
+        (Seniority.junior.value, (1000.0, 1200.0, 1500.0)),
+        (Seniority.mid.value, (800.0, 1000.0, 1200.0)),
+        (Seniority.senior.value, (1000.0, 1200.0, 1500.0)),
+        # Records written before role_level was populated, and tier names as the
+        # matrix itself spells them — both still have to price.
+        (None, (1000.0, 1200.0, 1500.0)),
+        ("Entry", (1000.0, 1200.0, 1500.0)),
+    ],
+)
+def test_every_seniority_prices_by_volume(role_level, expected) -> None:
+    """No seniority falls through to zero, whatever the cycle volume."""
+    assert calculate_incentive_amount(role_level, 1) == expected[0]
+    assert calculate_incentive_amount(role_level, 3) == expected[1]
+    assert calculate_incentive_amount(role_level, 5) == expected[2]
+
+
+async def test_a_concurrent_second_mapping_cannot_open_a_second_ledger_entry(
+    candidate: Candidate,
+) -> None:
+    """The find_one guard loses a race; the unique index is what actually holds.
+
+    Two entries for one referred candidate would pay the referee twice.
+    """
+    first = await ensure_referral_record(await _mapping(candidate, stage=PipelineStage.sourced))
+
+    duplicate = ReferralRecord(
+        brand_id=_BRAND,
+        referee_id=_REFEREE,
+        mapping_id=PydanticObjectId(),
+        candidate_id=candidate.id,
+        position_id=PydanticObjectId(),
+    )
+    with pytest.raises(DuplicateKeyError):
+        await duplicate.insert()
+
+    assert await ReferralRecord.find({"candidate_id": candidate.id}).count() == 1
+    assert first is not None

@@ -15,6 +15,7 @@ from app.modules.recruitment.enums import (
     PaymentStatus,
     PipelineStage,
     RefereeKanbanStage,
+    Seniority,
 )
 from app.modules.recruitment.models import PaymentBatch, RefereeUser, ReferralRecord
 
@@ -142,7 +143,7 @@ async def ensure_referral_record(mapping: "Mapping") -> ReferralRecord | None:
     existing record for a candidate already mapped to another position: the
     ledger entry is per referred candidate, not per mapping.
     """
-    from app.modules.recruitment.models import Candidate
+    from app.modules.recruitment.models import Candidate, Position
 
     candidate = await Candidate.get(mapping.candidate_id)
     if not candidate or not candidate.referee_id:
@@ -154,21 +155,32 @@ async def ensure_referral_record(mapping: "Mapping") -> ReferralRecord | None:
     if existing:
         return existing
 
-    # role_level is left unset rather than guessed from the position's seniority:
-    # the incentive matrix prices "Entry"/"Mid" and Position carries
-    # Junior/Mid/Senior, so writing the seniority straight through would price a
-    # Junior referral at zero. Unset falls back to Entry pricing, which is what
-    # every referral is already priced at today.
+    # The position's own seniority, which is what the referee sees on their
+    # portal; _matrix_tier turns it into a rate at pricing time.
+    position = await Position.get(mapping.position_id)
+    role_level = position.seniority.value if position else None
+
     record = ReferralRecord(
         brand_id=mapping.brand_id,
         referee_id=candidate.referee_id,
         mapping_id=mapping.id,
         candidate_id=mapping.candidate_id,
         position_id=mapping.position_id,
+        role_level=role_level,
         submission_date=candidate.created_at,
         kanban_stage=resolve_referee_stage([mapping]).value,
     )
-    await record.insert()
+
+    try:
+        # Idempotent thanks to the unique index on (brand_id, candidate_id). The
+        # find_one above is the common path; this is the race where a candidate
+        # is mapped to two positions at once, which without the index would open
+        # two ledger entries and pay the referee twice for one referral.
+        await record.insert()
+    except DuplicateKeyError:
+        return await ReferralRecord.find_one(
+            {"brand_id": mapping.brand_id, "candidate_id": mapping.candidate_id}
+        )
     return record
 
 
@@ -293,23 +305,46 @@ async def get_dashboard_summary(
     }
 
 
-def calculate_incentive_amount(role_level: str, total_eligible_in_cycle: int) -> float:
+# What one referral pays, by tier and by how many of that referee's referrals
+# landed in the same cycle: (1-2, 3-4, 5+). Senior carries its own row rather
+# than sharing Entry's so that repricing it later is a one-line edit here.
+_INCENTIVE_MATRIX: dict[str, tuple[float, float, float]] = {
+    "Entry": (1000.0, 1200.0, 1500.0),
+    "Mid": (800.0, 1000.0, 1200.0),
+    "Senior": (1000.0, 1200.0, 1500.0),
+}
+
+# Positions carry a Seniority; the matrix is written in tiers. Junior is the
+# entry tier, and the other two line up by name.
+_TIER_BY_SENIORITY: dict[str, str] = {
+    Seniority.junior.value: "Entry",
+    Seniority.mid.value: "Mid",
+    Seniority.senior.value: "Senior",
+}
+
+
+def _matrix_tier(role_level: str | None) -> str:
+    """Normalise a stored role_level onto a tier the matrix actually prices.
+
+    role_level holds the position's Seniority ("Junior"/"Mid"/"Senior"), which is
+    what the referee sees on their portal. Records written before that was
+    populated hold a tier name directly, or nothing at all — both still have to
+    price, so a tier passes straight through and anything unrecognised falls back
+    to Entry, which is what an unset role_level has always been priced at.
+    """
+    if role_level in _INCENTIVE_MATRIX:
+        return role_level
+    return _TIER_BY_SENIORITY.get(role_level or "", "Entry")
+
+
+def calculate_incentive_amount(role_level: str | None, total_eligible_in_cycle: int) -> float:
     """Determine the incentive amount based on the payment matrix."""
-    if role_level == "Entry":
-        if total_eligible_in_cycle >= 5:
-            return 1500.0
-        elif total_eligible_in_cycle >= 3:
-            return 1200.0
-        else:
-            return 1000.0
-    elif role_level == "Mid":
-        if total_eligible_in_cycle >= 5:
-            return 1200.0
-        elif total_eligible_in_cycle >= 3:
-            return 1000.0
-        else:
-            return 800.0
-    return 0.0
+    one_or_two, three_or_four, five_plus = _INCENTIVE_MATRIX[_matrix_tier(role_level)]
+    if total_eligible_in_cycle >= 5:
+        return five_plus
+    if total_eligible_in_cycle >= 3:
+        return three_or_four
+    return one_or_two
 
 
 async def _mark_eligible_if_due(r: ReferralRecord, today: date, cycle_month: str) -> None:
@@ -333,7 +368,7 @@ async def _reprice_cycle(cycle_refs: list[ReferralRecord]) -> None:
     """
     eligible_count = len(cycle_refs)
     for r in cycle_refs:
-        new_incentive = calculate_incentive_amount(r.role_level or "Entry", eligible_count)
+        new_incentive = calculate_incentive_amount(r.role_level, eligible_count)
         if r.incentive_amount != new_incentive:
             r.incentive_amount = new_incentive
             await r.save()

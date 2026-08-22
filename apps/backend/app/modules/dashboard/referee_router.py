@@ -60,6 +60,14 @@ async def get_summary(user: Annotated[User, Depends(get_current_referee)]):
 @router.get("/referrals")
 async def get_referrals(user: Annotated[User, Depends(get_current_referee)]):
     grant = await get_referee_grant(user)
+
+    # Open any ledger entry this referee is still missing before reading. The
+    # portal happens to load /summary alongside this, which would also do it, but
+    # a referral that accrues nothing until a sibling endpoint is called is a
+    # coupling worth not having. Deliberately only the backfill, not
+    # update_eligibility_and_incentives — see the note in get_referrals.
+    await referee_service.backfill_missing_referral_records(grant.brand_id, grant.id)
+
     referrals = await referee_service.get_referrals(grant.brand_id, grant.id)
     return referrals
 

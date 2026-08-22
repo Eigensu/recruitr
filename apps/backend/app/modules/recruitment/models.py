@@ -607,6 +607,9 @@ class ReferralRecord(Document):
     class Settings:
         name = "referral_records"
         indexes = [
+            # One ledger entry per referred candidate, not per mapping: a
+            # candidate put forward to a second client must not accrue twice.
+            IndexModel([("brand_id", 1), ("candidate_id", 1)], unique=True),
             IndexModel("brand_id"),
             IndexModel("referee_id"),
             IndexModel("mapping_id"),
