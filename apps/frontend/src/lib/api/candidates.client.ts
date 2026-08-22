@@ -44,6 +44,7 @@ export async function clientCreateCandidate(data: {
   brand_experience?: string;
   department?: string;
   specialization?: string;
+  establishment_tag?: string;
   cv_link?: string;
   current_role?: string;
   experience_years?: number;
@@ -82,6 +83,7 @@ export async function clientUpdateCandidate(
     brand_experience: string;
     department: string;
     specialization: string;
+    establishment_tag: string;
     cv_link: string;
     current_role: string;
     expected_salary: number;

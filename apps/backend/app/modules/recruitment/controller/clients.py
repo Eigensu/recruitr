@@ -58,6 +58,7 @@ _CODE_RETRIES = 5
 _EDITABLE_TEXT = (
     "city",
     "industry",
+    "establishment_tag",
     "website",
     "contact_person",
     "contact_email",
@@ -141,6 +142,7 @@ def _to_response(
         name=client.name,
         city=client.city,
         industry=client.industry,
+        establishment_tag=client.establishment_tag,
         website=client.website,
         contact_person=client.contact_person,
         contact_email=client.contact_email,

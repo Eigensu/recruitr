@@ -25,6 +25,7 @@ import {
   type Client,
   type ClientUser,
 } from "@/lib/api/clients";
+import { ESTABLISHMENT_TAG_OPTIONS } from "@/lib/constants/candidate";
 
 // Chip colours per authorization state. A lookup beats a nested ternary:
 // adding a state is one line and cannot reorder the existing branches.
@@ -86,6 +87,52 @@ function Field({
           />
           {hint && <p className="text-xs text-text-muted">{hint}</p>}
         </>
+      ) : (
+        <p className="text-text-primary break-words">{value || "—"}</p>
+      )}
+    </div>
+  );
+}
+
+/** Like Field, but a dropdown over a fixed option list instead of free text. */
+function SelectField({
+  id,
+  label,
+  value,
+  editing,
+  onChange,
+  options,
+  placeholder = "Select...",
+  className = "",
+}: Readonly<{
+  id: string;
+  label: string;
+  value: string;
+  editing: boolean;
+  onChange: (value: string) => void;
+  options: readonly { value: string; label: string }[];
+  placeholder?: string;
+  className?: string;
+}>) {
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      <label htmlFor={id} className="block text-sm font-medium text-text-secondary">
+        {label}
+      </label>
+      {editing ? (
+        <select
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={INPUT_CLASS}
+        >
+          <option value="">{placeholder}</option>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       ) : (
         <p className="text-text-primary break-words">{value || "—"}</p>
       )}
@@ -259,6 +306,14 @@ function CompanyInfoPanel({
           editing={isEditing}
           placeholder="Hospitality"
           onChange={(v) => setEditForm({ ...editForm, industry: v })}
+        />
+        <SelectField
+          id="client-establishment-tag"
+          label="Establishment Tag"
+          value={shown.establishment_tag ?? ""}
+          editing={isEditing}
+          options={ESTABLISHMENT_TAG_OPTIONS}
+          onChange={(v) => setEditForm({ ...editForm, establishment_tag: v })}
         />
         <Field
           id="client-website"
@@ -454,6 +509,7 @@ function useClientDetails(id: string) {
       name: client.name,
       city: client.city || "",
       industry: client.industry || "",
+      establishment_tag: client.establishment_tag || "",
       website: client.website || "",
       contact_person: client.contact_person || "",
       contact_email: client.contact_email || "",
@@ -472,6 +528,7 @@ function useClientDetails(id: string) {
         name: editForm.name,
         city: editForm.city ?? undefined,
         industry: editForm.industry ?? undefined,
+        establishment_tag: editForm.establishment_tag ?? undefined,
         website: editForm.website ?? undefined,
         contact_person: editForm.contact_person ?? undefined,
         contact_email: editForm.contact_email ?? undefined,

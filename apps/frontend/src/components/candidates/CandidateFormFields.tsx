@@ -24,6 +24,7 @@ import {
   BRAND_EXPERIENCE_OPTIONS,
   DEPARTMENT_OPTIONS,
   SPECIALIZATION_OPTIONS,
+  ESTABLISHMENT_TAG_OPTIONS,
   GENDER_OPTIONS,
   CANDIDATE_SOURCES,
 } from "@/lib/constants/candidate";
@@ -542,6 +543,12 @@ export function DepartmentField(
   return <SelectField label="Department *" options={DEPARTMENT_OPTIONS} {...props} />;
 }
 
+export function EstablishmentTagField(
+  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
+) {
+  return <SelectField label="Establishment Tag" options={ESTABLISHMENT_TAG_OPTIONS} {...props} />;
+}
+
 export function SpecializationField({
   department,
   value,
@@ -580,6 +587,7 @@ export function StructuredCandidateTags({
     brand_experience?: string;
     department?: string;
     specialization?: string;
+    establishment_tag?: string;
   };
   errors?: Record<string, string>;
   onChange: (updates: Partial<typeof form>) => void;
@@ -611,6 +619,11 @@ export function StructuredCandidateTags({
         value={form.specialization || ""}
         onChange={(v) => onChange({ specialization: v })}
         error={errors?.specialization}
+      />
+      <EstablishmentTagField
+        value={form.establishment_tag || ""}
+        onChange={(v) => onChange({ establishment_tag: v })}
+        error={errors?.establishment_tag}
       />
     </>
   );
