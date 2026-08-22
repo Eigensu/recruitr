@@ -7,6 +7,7 @@ import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import { listClients, createClient, type Client } from "@/lib/api/clients";
 import { Skeleton } from "@/components/common/skeletons/Skeleton";
+import { ESTABLISHMENT_TAG_OPTIONS } from "@/lib/constants/candidate";
 
 // Fixed identities for the loading placeholders. Using the map index as a key
 // makes React tie each element to a position rather than to a thing.
@@ -25,7 +26,7 @@ export default function ClientsPage() {
   const [userFilter, setUserFilter] = useState<"all" | "has_users" | "no_users">("all");
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [newClient, setNewClient] = useState({ name: "", city: "" });
+  const [newClient, setNewClient] = useState({ name: "", city: "", establishment_tag: "" });
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -57,13 +58,14 @@ export default function ClientsPage() {
       const created = await createClient(apiFetch, {
         name,
         city: newClient.city.trim() || undefined,
+        establishment_tag: newClient.establishment_tag || undefined,
       });
       setClients((prev) =>
         [...prev.filter((c) => c.id !== created.id), created].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
       );
-      setNewClient({ name: "", city: "" });
+      setNewClient({ name: "", city: "", establishment_tag: "" });
       setIsCreateModalOpen(false);
       toast(`Client "${created.name}" created`, "success");
       // Optional: router.push(`/clients/${created.id}`)
@@ -83,6 +85,7 @@ export default function ClientsPage() {
           c.code,
           c.city,
           c.industry,
+          c.establishment_tag,
           c.website,
           c.contact_person,
           c.contact_email,
@@ -299,6 +302,29 @@ export default function ClientsPage() {
                   className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-navy dark:focus:ring-yellow focus:outline-none"
                   placeholder="e.g. New York"
                 />
+              </div>
+              <div>
+                <label
+                  htmlFor="new-client-establishment-tag"
+                  className="block text-sm font-medium text-text-primary mb-1"
+                >
+                  Establishment Tag (Optional)
+                </label>
+                <select
+                  id="new-client-establishment-tag"
+                  value={newClient.establishment_tag}
+                  onChange={(e) =>
+                    setNewClient({ ...newClient, establishment_tag: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:ring-2 focus:ring-navy dark:focus:ring-yellow focus:outline-none cursor-pointer"
+                >
+                  <option value="">Select...</option>
+                  {ESTABLISHMENT_TAG_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="mt-2 flex justify-end gap-2">
                 <button

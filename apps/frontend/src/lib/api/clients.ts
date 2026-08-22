@@ -6,6 +6,7 @@ export interface Client {
   name: string;
   city: string | null;
   industry?: string | null;
+  establishment_tag?: string | null;
   website?: string | null;
   contact_person?: string | null;
   contact_email?: string | null;
@@ -26,6 +27,7 @@ export interface ClientCreatePayload {
   name: string;
   city?: string;
   industry?: string;
+  establishment_tag?: string;
   website?: string;
   contact_person?: string;
   contact_email?: string;
@@ -38,6 +40,7 @@ export interface ClientUpdatePayload {
   name?: string;
   city?: string;
   industry?: string;
+  establishment_tag?: string;
   website?: string;
   contact_person?: string;
   contact_email?: string;

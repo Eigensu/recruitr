@@ -64,6 +64,18 @@ export const BRAND_EXPERIENCE_OPTIONS = ["Low", "Mid", "Premium"] as const;
 
 export const DEPARTMENT_OPTIONS = ["Kitchen", "FOH", "Corporate"] as const;
 
+/**
+ * Establishment tag. Values must match the backend EstablishmentTag enum
+ * exactly — it rejects anything else — so only the labels are free to differ.
+ */
+export const ESTABLISHMENT_TAG_OPTIONS = [
+  { value: "Cafe", label: "Cafe" },
+  { value: "QSR", label: "QSR" },
+  { value: "Restaurant", label: "Restaurant" },
+  { value: "Hotel", label: "Hotel" },
+  { value: "Other", label: "Other" },
+] as const;
+
 export const SPECIALIZATION_OPTIONS: Record<string, string[]> = {
   Kitchen: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
   FOH: ["Service", "Guest Relations", "Bar", "Coffee", "Operations"],
