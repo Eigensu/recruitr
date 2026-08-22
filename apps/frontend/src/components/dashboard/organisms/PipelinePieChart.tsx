@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useInView } from "motion/react";
-import { IconChartFunnel } from "@tabler/icons-react";
+import { IconChartFunnel, IconChevronDown } from "@tabler/icons-react";
 import AnimatedNumber from "@/components/dashboard/atoms/AnimatedNumber";
 import { DASHBOARD_PANEL_CLASS } from "@/components/common/constants/dashboard-constants";
 import { clientFetchDashboardPipeline } from "@/lib/api/dashboard.client";
@@ -27,6 +27,8 @@ const SELECT_STYLE = {
   background: "var(--color-canvas-val)",
   color: "var(--color-text-primary)",
   border: "1px solid var(--color-border-val)",
+  appearance: "none" as const,
+  WebkitAppearance: "none" as const,
 };
 
 function FunnelShell({
@@ -46,8 +48,8 @@ function FunnelShell({
       className={cn(DASHBOARD_PANEL_CLASS, "flex h-full flex-col p-5")}
       style={{ color: "var(--color-text-primary)" }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="font-heading text-xl" style={{ color: "var(--color-text-primary)" }}>
             Pipeline Funnel
           </h2>
@@ -55,9 +57,9 @@ function FunnelShell({
             {subtitle}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {filter}
-          <IconChartFunnel className="size-6 shrink-0 text-yellow" />
+          <IconChartFunnel className="size-5 shrink-0 text-yellow" />
         </div>
       </div>
       {children}
@@ -124,20 +126,26 @@ export default function PipelinePieChart({
 
   const filter =
     recruiters.length > 0 ? (
-      <select
-        value={recruiterId}
-        onChange={(event) => handleRecruiterChange(event.target.value)}
-        className="max-w-40 rounded-lg px-2 py-1.5 text-xs outline-none"
-        style={SELECT_STYLE}
-        aria-label="Filter pipeline funnel by recruiter"
-      >
-        <option value="">All Recruiters</option>
-        {recruiters.map((recruiter) => (
-          <option key={recruiter.id} value={recruiter.id}>
-            {recruiter.name}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          value={recruiterId}
+          onChange={(event) => handleRecruiterChange(event.target.value)}
+          className="max-w-28 truncate rounded-full py-1.5 pr-6 pl-3 text-xs font-medium outline-none transition-colors sm:max-w-32"
+          style={SELECT_STYLE}
+          aria-label="Filter pipeline funnel by recruiter"
+        >
+          <option value="">All Recruiters</option>
+          {recruiters.map((recruiter) => (
+            <option key={recruiter.id} value={recruiter.id}>
+              {recruiter.name}
+            </option>
+          ))}
+        </select>
+        <IconChevronDown
+          className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2"
+          style={{ color: "var(--color-text-secondary)" }}
+        />
+      </div>
     ) : null;
 
   const maxCount = stages.reduce((max, s) => Math.max(max, s.count), 1);
@@ -193,7 +201,7 @@ export default function PipelinePieChart({
                 {stage.label}
               </span>
 
-              <div className="flex h-6 flex-1 items-center justify-center">
+              <div className="flex h-6 flex-1 items-center justify-start">
                 <motion.div
                   className="relative flex h-full items-center justify-center overflow-hidden rounded-sm"
                   style={{ background: color, opacity: isActive ? 1 : 0.7 }}

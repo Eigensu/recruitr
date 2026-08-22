@@ -296,7 +296,12 @@ export default function RefereePortal() {
                             </div>
 
                             {/* Status Timeline */}
-                            <div className="flex-1 overflow-x-auto scrollbar-none">
+                            {/* py-2: the current-stage dot's ring-4 glow bleeds
+                                4px past its box via box-shadow, and setting
+                                overflow-x here implicitly forces overflow-y to
+                                clip too — without padding that glow got cut
+                                off at the top/bottom edges. */}
+                            <div className="flex-1 overflow-x-auto scrollbar-none py-2">
                               {/* items-start, not items-center: the two-line
                                   labels ("CV Reviewed", "Interview Round(s)")
                                   make their columns taller, and centring then
