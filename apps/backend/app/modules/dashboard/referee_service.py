@@ -3,15 +3,24 @@
 import secrets
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.config import settings
 from app.modules.dashboard.email_service import EmailService
-from app.modules.recruitment.enums import PaymentStatus, PipelineStage, RefereeKanbanStage
+from app.modules.recruitment.enums import (
+    REFEREE_STAGE_ORDER,
+    PaymentStatus,
+    PipelineStage,
+    RefereeKanbanStage,
+    Seniority,
+)
 from app.modules.recruitment.models import PaymentBatch, RefereeUser, ReferralRecord
+
+if TYPE_CHECKING:
+    from app.modules.recruitment.models import Mapping
 
 # Every referee email links back to the same portal landing page.
 PORTAL_URL = f"{settings.FRONTEND_URL}/referee"
@@ -20,49 +29,220 @@ PORTAL_URL = f"{settings.FRONTEND_URL}/referee"
 UNPAID_STATUSES = {"$in": [PaymentStatus.pending.value, PaymentStatus.owed.value]}
 
 
-# Stages that end a referral's forward progress; none maps to a referee step.
-_CLOSED_STAGES = (
-    PipelineStage.rejected,
-    PipelineStage.on_hold,
-    PipelineStage.candidate_dropped,
-)
+# A held mapping is the one case with no stage of its own to show: the hold is
+# temporary and the candidate is still in play, so the timeline freezes at
+# whatever it last reached rather than moving.
+_FROZEN_STAGES = (PipelineStage.on_hold,)
 
-# One referee-facing step per forward PipelineStage. Terminal stages are absent
-# on purpose — see the skip list in sync_referral_with_mapping.
-_REFEREE_STAGE_BY_INTERNAL: dict[str, str] = {
-    PipelineStage.sourced.value: RefereeKanbanStage.cv_received.value,
-    PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed.value,
-    PipelineStage.interview.value: RefereeKanbanStage.interview.value,
-    PipelineStage.selected.value: RefereeKanbanStage.selected.value,
-    PipelineStage.joined.value: RefereeKanbanStage.joined.value,
+# What the referee sees for each internal recruiter stage.
+#
+# Two pairs deliberately collapse onto one step. sourced and sent_to_client are
+# both "CV Reviewed": from the referee's side the meaningful event is that their
+# CV reached a client, and the split between mapped and formally sent is internal
+# detail they cannot act on. rejected and candidate_dropped both fall back to
+# "CV Reviewed" because the referral is out of play — leaving it parked at
+# "Interview Round(s)" would keep showing progress that no longer exists.
+#
+# "CV Received" is absent on purpose: it is the state of a candidate with no
+# mapping at all, which is resolved from the absence of mappings, not from a
+# stage. See resolve_referee_stage.
+_REFEREE_STAGE_BY_INTERNAL: dict[str, RefereeKanbanStage] = {
+    PipelineStage.sourced.value: RefereeKanbanStage.cv_reviewed,
+    PipelineStage.sent_to_client.value: RefereeKanbanStage.cv_reviewed,
+    PipelineStage.interview.value: RefereeKanbanStage.interview,
+    PipelineStage.selected.value: RefereeKanbanStage.selected,
+    PipelineStage.joined.value: RefereeKanbanStage.joined,
+    PipelineStage.rejected.value: RefereeKanbanStage.cv_reviewed,
+    PipelineStage.candidate_dropped.value: RefereeKanbanStage.cv_reviewed,
 }
 
 
 def map_stage_to_referee(internal_stage: str) -> str:
-    """Map the internal ATS PipelineStage to the Referee-facing stage."""
-    return _REFEREE_STAGE_BY_INTERNAL.get(internal_stage, RefereeKanbanStage.cv_received.value)
+    """Map one internal ATS PipelineStage to the Referee-facing stage."""
+    return _REFEREE_STAGE_BY_INTERNAL.get(internal_stage, RefereeKanbanStage.cv_reviewed).value
+
+
+def _stage_for_mapping(mapping: "Mapping") -> RefereeKanbanStage:
+    """The referee-facing stage a single mapping is currently worth.
+
+    A frozen (on-hold) mapping reports the last stage it actually reached, read
+    back out of its own history, instead of snapping to a default.
+    """
+    if mapping.stage in _FROZEN_STAGES:
+        for event in reversed(mapping.history):
+            if event.stage not in _FROZEN_STAGES:
+                return _REFEREE_STAGE_BY_INTERNAL.get(
+                    event.stage.value, RefereeKanbanStage.cv_reviewed
+                )
+    return _REFEREE_STAGE_BY_INTERNAL.get(mapping.stage.value, RefereeKanbanStage.cv_reviewed)
+
+
+def resolve_referee_stage(mappings: list["Mapping"]) -> RefereeKanbanStage:
+    """The stage the referee portal shows for one candidate.
+
+    A candidate can be in play with several clients at once — one Mapping per
+    position — so the furthest-along mapping wins. A drop at one client never
+    hides live progress at another; it only pulls the timeline back when it is
+    the only mapping the candidate has.
+
+    No mappings at all means the CV has been submitted but not yet put in front
+    of a client, which is the one case that reads as CV Received.
+    """
+    if not mappings:
+        return RefereeKanbanStage.cv_received
+    return max((_stage_for_mapping(m) for m in mappings), key=REFEREE_STAGE_ORDER.index)
+
+
+async def _candidate_mappings(
+    brand_id: PydanticObjectId, candidate_id: PydanticObjectId
+) -> list["Mapping"]:
+    from app.modules.recruitment.models import Mapping
+
+    return await Mapping.find({"brand_id": brand_id, "candidate_id": candidate_id}).to_list()
+
+
+async def _mappings_by_candidate(
+    brand_id: PydanticObjectId, candidate_ids: list[PydanticObjectId]
+) -> dict[PydanticObjectId, list["Mapping"]]:
+    """Every mapping for a set of candidates, grouped, in one query."""
+    from app.modules.recruitment.models import Mapping
+
+    if not candidate_ids:
+        return {}
+
+    grouped: dict[PydanticObjectId, list[Mapping]] = defaultdict(list)
+    for m in await Mapping.find(
+        {"brand_id": brand_id, "candidate_id": {"$in": candidate_ids}}
+    ).to_list():
+        grouped[m.candidate_id].append(m)
+    return grouped
+
+
+def _joined_at(mappings: list["Mapping"]) -> datetime | None:
+    """When the candidate actually joined, taken from the mapping that got them there."""
+    for m in mappings:
+        if m.stage != PipelineStage.joined:
+            continue
+        for event in m.history:
+            if event.stage == PipelineStage.joined:
+                return event.at
+        if m.joining_date:
+            return m.joining_date
+    return None
+
+
+async def ensure_referral_record(mapping: "Mapping") -> ReferralRecord | None:
+    """Open a referral ledger entry when a referee's candidate is mapped.
+
+    The ReferralRecord is what the portal's earnings column and the whole payment
+    pipeline hang off; without one a referral accrues nothing no matter how far
+    the candidate goes. Map time is the right moment to open it because that is
+    when the referral first becomes worth money — the CV has reached a client.
+
+    Returns None for candidates who did not come in through a referee, and the
+    existing record for a candidate already mapped to another position: the
+    ledger entry is per referred candidate, not per mapping.
+    """
+    from app.modules.recruitment.models import Candidate, Position
+
+    candidate = await Candidate.get(mapping.candidate_id)
+    if not candidate or not candidate.referee_id:
+        return None
+
+    existing = await ReferralRecord.find_one(
+        {"brand_id": mapping.brand_id, "candidate_id": mapping.candidate_id}
+    )
+    if existing:
+        return existing
+
+    # The position's own seniority, which is what the referee sees on their
+    # portal; _matrix_tier turns it into a rate at pricing time.
+    position = await Position.get(mapping.position_id)
+    role_level = position.seniority.value if position else None
+
+    record = ReferralRecord(
+        brand_id=mapping.brand_id,
+        referee_id=candidate.referee_id,
+        mapping_id=mapping.id,
+        candidate_id=mapping.candidate_id,
+        position_id=mapping.position_id,
+        role_level=role_level,
+        submission_date=candidate.created_at,
+        kanban_stage=resolve_referee_stage([mapping]).value,
+    )
+
+    try:
+        # Idempotent thanks to the unique index on (brand_id, candidate_id). The
+        # find_one above is the common path; this is the race where a candidate
+        # is mapped to two positions at once, which without the index would open
+        # two ledger entries and pay the referee twice for one referral.
+        await record.insert()
+    except DuplicateKeyError:
+        return await ReferralRecord.find_one(
+            {"brand_id": mapping.brand_id, "candidate_id": mapping.candidate_id}
+        )
+    return record
+
+
+async def backfill_missing_referral_records(
+    brand_id: PydanticObjectId, referee_id: PydanticObjectId
+) -> None:
+    """Open ledger entries for referred candidates mapped before this existed.
+
+    No code path created a ReferralRecord until map_candidate started doing it,
+    so every referral made before then has real mappings and no ledger entry —
+    and therefore accrues nothing. Opening them lazily when the referee loads
+    their own dashboard keeps this self-healing instead of relying on a one-shot
+    migration that goes stale the moment a straggler is mapped.
+    """
+    from app.modules.recruitment.models import Candidate
+
+    candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
+    if not candidates:
+        return
+
+    recorded = {
+        r.candidate_id
+        for r in await ReferralRecord.find(
+            {"brand_id": brand_id, "referee_id": referee_id}
+        ).to_list()
+    }
+    missing = [c.id for c in candidates if c.id not in recorded]
+
+    for candidate_mappings in (await _mappings_by_candidate(brand_id, missing)).values():
+        # The earliest mapping opens the entry: it is the one that first put this
+        # CV in front of a client.
+        await ensure_referral_record(min(candidate_mappings, key=lambda m: m.mapped_at))
 
 
 async def sync_referral_with_mapping(r: ReferralRecord) -> None:
-    """Sync the kanban_stage and joining_date from the canonical Mapping."""
-    from app.modules.recruitment.models import Mapping
+    """Refresh a referral's cached stage and joining date from its Mappings.
 
-    mapping = await Mapping.get(r.mapping_id)
-    if not mapping:
+    The Mapping a recruiter drags on the kanban board is the source of truth;
+    ReferralRecord only caches it for the portal and the payment jobs. This runs
+    on every referee dashboard load and in the nightly job, so a recruiter's move
+    reaches the referee without the pipeline needing a write path of its own.
+
+    Reads every mapping the candidate has rather than only r.mapping_id: a
+    candidate put forward to a second client gets a second Mapping, and the
+    referral should track whichever one is furthest along.
+    """
+    mappings = await _candidate_mappings(r.brand_id, r.candidate_id)
+    if not mappings:
         return
 
-    # 1. Sync stage. A closed-out mapping has no referee-facing step to move to,
-    # so hold the last real one — syncing would reset the tracker to CV Received.
-    if mapping.stage not in _CLOSED_STAGES:
-        r.kanban_stage = map_stage_to_referee(mapping.stage.value)
+    stage = resolve_referee_stage(mappings).value
+    joined_at = _joined_at(mappings)
+    needs_joining_date = joined_at is not None and r.joining_date is None
 
-    # 2. Sync joining_date
-    if mapping.stage == PipelineStage.joined and not r.joining_date:
-        for event in mapping.history:
-            if event.stage == PipelineStage.joined:
-                r.joining_date = event.at
-                break
+    # Called in a loop over every one of a referee's referrals on each page load,
+    # so an unchanged referral must not cost a write.
+    if r.kanban_stage == stage and not needs_joining_date:
+        return
 
+    r.kanban_stage = stage
+    if needs_joining_date:
+        r.joining_date = joined_at
     await r.save()
 
 
@@ -125,23 +305,46 @@ async def get_dashboard_summary(
     }
 
 
-def calculate_incentive_amount(role_level: str, total_eligible_in_cycle: int) -> float:
+# What one referral pays, by tier and by how many of that referee's referrals
+# landed in the same cycle: (1-2, 3-4, 5+). Senior carries its own row rather
+# than sharing Entry's so that repricing it later is a one-line edit here.
+_INCENTIVE_MATRIX: dict[str, tuple[float, float, float]] = {
+    "Entry": (1000.0, 1200.0, 1500.0),
+    "Mid": (800.0, 1000.0, 1200.0),
+    "Senior": (1000.0, 1200.0, 1500.0),
+}
+
+# Positions carry a Seniority; the matrix is written in tiers. Junior is the
+# entry tier, and the other two line up by name.
+_TIER_BY_SENIORITY: dict[str, str] = {
+    Seniority.junior.value: "Entry",
+    Seniority.mid.value: "Mid",
+    Seniority.senior.value: "Senior",
+}
+
+
+def _matrix_tier(role_level: str | None) -> str:
+    """Normalise a stored role_level onto a tier the matrix actually prices.
+
+    role_level holds the position's Seniority ("Junior"/"Mid"/"Senior"), which is
+    what the referee sees on their portal. Records written before that was
+    populated hold a tier name directly, or nothing at all — both still have to
+    price, so a tier passes straight through and anything unrecognised falls back
+    to Entry, which is what an unset role_level has always been priced at.
+    """
+    if role_level in _INCENTIVE_MATRIX:
+        return role_level
+    return _TIER_BY_SENIORITY.get(role_level or "", "Entry")
+
+
+def calculate_incentive_amount(role_level: str | None, total_eligible_in_cycle: int) -> float:
     """Determine the incentive amount based on the payment matrix."""
-    if role_level == "Entry":
-        if total_eligible_in_cycle >= 5:
-            return 1500.0
-        elif total_eligible_in_cycle >= 3:
-            return 1200.0
-        else:
-            return 1000.0
-    elif role_level == "Mid":
-        if total_eligible_in_cycle >= 5:
-            return 1200.0
-        elif total_eligible_in_cycle >= 3:
-            return 1000.0
-        else:
-            return 800.0
-    return 0.0
+    one_or_two, three_or_four, five_plus = _INCENTIVE_MATRIX[_matrix_tier(role_level)]
+    if total_eligible_in_cycle >= 5:
+        return five_plus
+    if total_eligible_in_cycle >= 3:
+        return three_or_four
+    return one_or_two
 
 
 async def _mark_eligible_if_due(r: ReferralRecord, today: date, cycle_month: str) -> None:
@@ -165,7 +368,7 @@ async def _reprice_cycle(cycle_refs: list[ReferralRecord]) -> None:
     """
     eligible_count = len(cycle_refs)
     for r in cycle_refs:
-        new_incentive = calculate_incentive_amount(r.role_level or "Entry", eligible_count)
+        new_incentive = calculate_incentive_amount(r.role_level, eligible_count)
         if r.incentive_amount != new_incentive:
             r.incentive_amount = new_incentive
             await r.save()
@@ -192,6 +395,8 @@ async def update_eligibility_and_incentives(
     brand_id: PydanticObjectId, referee_id: PydanticObjectId
 ) -> None:
     """Check +7 calendar days eligibility and update matrix for a specific referee."""
+    await backfill_missing_referral_records(brand_id, referee_id)
+
     referrals = await ReferralRecord.find(
         {
             "brand_id": brand_id,
@@ -269,7 +474,7 @@ async def get_referrals(
 ) -> list[dict[str, Any]]:
     """Get the candidate journey for the referee."""
     # DO NOT call update_eligibility_and_incentives here. This is a read-only endpoint.
-    from app.modules.recruitment.models import Candidate, Mapping
+    from app.modules.recruitment.models import Candidate
 
     candidates = await Candidate.find({"brand_id": brand_id, "referee_id": referee_id}).to_list()
 
@@ -279,24 +484,26 @@ async def get_referrals(
 
     referral_map = {r.candidate_id: r for r in referrals}
 
-    # kanban_stage freezes when a referral is rejected, dropped or put on hold
-    # (see sync_referral_with_mapping), so on its own it cannot say whether the
-    # candidate is still live. Carry the mapping's own stage through too: the
-    # portal's action buttons key off it, and without it a rejected referral
-    # would keep offering Select/Reject. Loaded in one query rather than per
-    # referral — this endpoint is polled.
-    mapping_by_id = {}
-    if referrals:
-        for m in await Mapping.find(
-            {"brand_id": brand_id, "_id": {"$in": [r.mapping_id for r in referrals]}}
-        ).to_list():
-            mapping_by_id[m.id] = m
+    # Every mapping for every one of this referee's candidates, in one query —
+    # this endpoint is polled, so it must not go per-referral. Serves two needs:
+    # the timeline stage is resolved across all of a candidate's mappings, while
+    # the portal's action buttons still key off the referral's own mapping (a
+    # rejected one must stop offering Select/Reject), which is indexed by id
+    # below out of the same result.
+    mappings_by_candidate = await _mappings_by_candidate(brand_id, [c.id for c in candidates])
+    mapping_by_id = {m.id: m for grouped in mappings_by_candidate.values() for m in grouped}
 
     result = []
     for candidate in candidates:
         candidate_name = candidate.full_name if candidate.full_name else "Unknown Candidate"
         parts = candidate_name.split()
         masked_name = f"{parts[0]} {parts[-1][0]}." if len(parts) > 1 else candidate_name
+
+        # Read off the live Mappings rather than the cached kanban_stage, so a
+        # recruiter's move lands here on the referee's next load and a referral
+        # whose record predates the sync still shows the right stage.
+        candidate_mappings = mappings_by_candidate.get(candidate.id, [])
+        kanban_stage = resolve_referee_stage(candidate_mappings).value
 
         if candidate.id in referral_map:
             r = referral_map[candidate.id]
@@ -312,8 +519,8 @@ async def get_referrals(
                     "candidate_name": masked_name,
                     "role_level": r.role_level,
                     "submission_date": r.submission_date,
-                    "kanban_stage": r.kanban_stage,
-                    "joining_date": r.joining_date,
+                    "kanban_stage": kanban_stage,
+                    "joining_date": r.joining_date or _joined_at(candidate_mappings),
                     "joining_plus7_eligible": r.joining_plus7_eligible,
                     "incentive_status": r.payment_status,
                     "incentive_amount": r.incentive_amount,
@@ -322,7 +529,8 @@ async def get_referrals(
                 }
             )
         else:
-            # A candidate the referee submitted that has no ReferralRecord yet.
+            # A candidate the referee submitted whose ReferralRecord has not been
+            # opened yet — the money side is still empty, but the stage is real.
             # Statuses come from the enums, not literals: the portal and the
             # payment jobs both compare against those exact values.
             result.append(
@@ -335,8 +543,8 @@ async def get_referrals(
                     "candidate_name": masked_name,
                     "role_level": None,
                     "submission_date": candidate.created_at,
-                    "kanban_stage": RefereeKanbanStage.cv_received.value,
-                    "joining_date": None,
+                    "kanban_stage": kanban_stage,
+                    "joining_date": _joined_at(candidate_mappings),
                     "joining_plus7_eligible": False,
                     "incentive_status": PaymentStatus.pending.value,
                     "incentive_amount": 0.0,
