@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import {
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
+  IconLogout,
   IconMoon,
   IconSun,
 } from "@tabler/icons-react";
@@ -19,6 +20,7 @@ import {
 } from "@/components/sidebar/nav-config";
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
+import { useApiFetch } from "@/lib/api";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
 import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
 import type { UserInfo } from "@/types";
@@ -142,28 +144,63 @@ function ThemeToggleRow() {
   );
 }
 
-/** Bottom user row — avatar + name, no hover popover */
+/** Bottom user row — avatar + name + icon-only logout, no hover popover */
 function UserRow({ user }: { readonly user: UserInfo | null }) {
   const { open, animate } = useSidebar();
   const labelAnimation = animate ? { opacity: open ? 1 : 0, x: open ? 0 : -4 } : undefined;
+  const apiFetch = useApiFetch();
+
+  const handleSignOut = async () => {
+    try {
+      await apiFetch("/api/v1/auth/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Logout failed:", err);
+    } finally {
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith("dismissed_banners_")) {
+          sessionStorage.removeItem(key);
+        }
+      }
+      window.location.href = "/sign-in";
+    }
+  };
 
   return (
     <div className="relative px-3">
       <div
         className="flex items-center gap-3 py-1.5 w-full"
-        style={{ justifyContent: open ? "flex-start" : "center" }}
+        style={{ justifyContent: open ? "space-between" : "center" }}
       >
-        <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
-          {user?.full_name?.[0] ?? "?"}
-        </div>
-        <motion.span
-          animate={labelAnimation}
-          transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
-          className="text-sm font-medium text-white truncate whitespace-nowrap"
-          style={{ display: open ? "block" : "none" }}
+        <div
+          className="flex items-center gap-3 min-w-0"
+          style={{ justifyContent: open ? "flex-start" : "center" }}
         >
-          {user?.full_name ?? "Loading…"}
-        </motion.span>
+          <div className="size-8 shrink-0 rounded-full bg-yellow flex items-center justify-center text-xs font-bold text-navy uppercase select-none shadow-sm">
+            {user?.full_name?.[0] ?? "?"}
+          </div>
+          <motion.span
+            animate={labelAnimation}
+            transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
+            className="text-sm font-medium text-white truncate whitespace-nowrap"
+            style={{ display: open ? "block" : "none" }}
+          >
+            {user?.full_name ?? "Loading…"}
+          </motion.span>
+        </div>
+
+        <motion.button
+          type="button"
+          onClick={handleSignOut}
+          aria-label="Log out"
+          title="Log out"
+          animate={animate ? { opacity: open ? 1 : 0, width: open ? "auto" : 0 } : undefined}
+          transition={{ type: "tween", duration: 0.12, ease: "easeOut" }}
+          style={{ display: open ? "flex" : "none" }}
+          className="shrink-0 flex items-center justify-center rounded-md p-1.5 text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        >
+          <IconLogout className="size-4" />
+        </motion.button>
       </div>
     </div>
   );
