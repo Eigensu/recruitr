@@ -1,15 +1,22 @@
 """Client resource DTOs."""
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, EmailStr, StringConstraints
+
+from app.modules.recruitment.enums import EstablishmentTag
 
 # Names arrive from free-text inputs — trim and bound them at the edge so the
 # stored value is exactly what the dropdown will render.
 ClientName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 ClientCity = Annotated[str, StringConstraints(strip_whitespace=True, max_length=120)]
 ClientText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+# "" alongside the enum, not just the enum: the edit form clears a field by
+# sending it blank (like every ClientText field), and a bare EstablishmentTag
+# would 422 on that instead of clearing it — see _writable_fields, which
+# already folds a blank value to None for storage.
+ClientEstablishmentTag = EstablishmentTag | Literal[""]
 
 
 class ClientResponse(BaseModel):
@@ -18,6 +25,7 @@ class ClientResponse(BaseModel):
     name: str
     city: str | None = None
     industry: str | None = None
+    establishment_tag: EstablishmentTag | None = None
     logo_url: str | None = None
     brand_description: str | None = None
     website: str | None = None
@@ -45,6 +53,7 @@ class ClientCreate(BaseModel):
     name: ClientName
     city: ClientCity | None = None
     industry: ClientText | None = None
+    establishment_tag: ClientEstablishmentTag | None = None
     website: ClientText | None = None
     contact_person: ClientText | None = None
     contact_email: ClientText | None = None
@@ -57,6 +66,7 @@ class ClientUpdate(BaseModel):
     name: ClientName | None = None
     city: ClientCity | None = None
     industry: ClientText | None = None
+    establishment_tag: ClientEstablishmentTag | None = None
     website: ClientText | None = None
     contact_person: ClientText | None = None
     contact_email: ClientText | None = None

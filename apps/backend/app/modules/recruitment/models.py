@@ -22,6 +22,7 @@ from app.modules.recruitment.enums import (
     Decision,
     Department,
     EducationLevel,
+    EstablishmentTag,
     Gender,
     NotificationKind,
     PaymentStatus,
@@ -112,6 +113,7 @@ class Client(Document):
     brand_description: str | None = None
     # Contact/CRM detail — all optional, all shown on the client detail page.
     industry: str | None = None
+    establishment_tag: EstablishmentTag | None = None
     website: str | None = None
     contact_person: str | None = None
     contact_email: str | None = None
@@ -295,6 +297,7 @@ class Candidate(Document):
     brand_experience: str | None = None
     department: Department | None = None
     specialization: str | None = None
+    establishment_tag: EstablishmentTag | None = None
     preferred_train_line: str | None = None
     cv_link: str | None = None
     resume_url: str | None = None

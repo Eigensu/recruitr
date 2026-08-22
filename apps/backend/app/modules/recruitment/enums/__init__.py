@@ -6,6 +6,7 @@ from app.modules.recruitment.enums.candidate_status import CandidateStatus
 from app.modules.recruitment.enums.decision import Decision
 from app.modules.recruitment.enums.department import Department
 from app.modules.recruitment.enums.education_level import EducationLevel
+from app.modules.recruitment.enums.establishment_tag import EstablishmentTag
 from app.modules.recruitment.enums.gender import Gender
 from app.modules.recruitment.enums.pipeline_stage import (
     INACTIVE_STAGES,
@@ -45,4 +46,5 @@ __all__ = [
     "NotificationKind",
     "Department",
     "PositionApprovalStatus",
+    "EstablishmentTag",
 ]

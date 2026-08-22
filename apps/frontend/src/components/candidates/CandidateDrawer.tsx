@@ -550,7 +550,8 @@ function ViewBody({
         candidate.education ||
         candidate.brand_experience ||
         candidate.department ||
-        candidate.specialization) && (
+        candidate.specialization ||
+        candidate.establishment_tag) && (
         <>
           <section>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-3">
@@ -562,6 +563,9 @@ function ViewBody({
               {candidate.brand_experience && <TagChip tag={`Exp: ${candidate.brand_experience}`} />}
               {candidate.department && <TagChip tag={`Dept: ${candidate.department}`} />}
               {candidate.specialization && <TagChip tag={`Spec: ${candidate.specialization}`} />}
+              {candidate.establishment_tag && (
+                <TagChip tag={`Establishment: ${candidate.establishment_tag}`} />
+              )}
             </div>
           </section>
           <div className="h-px bg-border/50" />
@@ -799,6 +803,7 @@ function EditForm({
     brand_experience: candidate.brand_experience ?? "",
     department: candidate.department ?? "",
     specialization: candidate.specialization ?? "",
+    establishment_tag: candidate.establishment_tag ?? "",
     notes: candidate.notes ?? "",
   });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -844,6 +849,7 @@ function EditForm({
         brand_experience: form.brand_experience || undefined,
         department: form.department || undefined,
         specialization: form.specialization || undefined,
+        establishment_tag: form.establishment_tag || undefined,
         notes: form.notes.trim() || undefined,
       };
       // The upload happens once, above, before the PATCH: confirming a resume

@@ -11,6 +11,7 @@ from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
     Department,
+    EstablishmentTag,
     Gender,
     PipelineStage,
 )
@@ -22,6 +23,7 @@ class CandidateStructuredTags(BaseModel):
     brand_experience: str | None = None
     department: Department | None = None
     specialization: str | None = None
+    establishment_tag: EstablishmentTag | None = None
 
     @model_validator(mode="after")
     def validate_department_specialization(self) -> "CandidateStructuredTags":
@@ -212,6 +214,7 @@ class CandidateResponse(CandidateStructuredTags):
             brand_experience=doc.brand_experience,
             department=doc.department,
             specialization=doc.specialization,
+            establishment_tag=doc.establishment_tag,
             preferred_train_line=doc.preferred_train_line,
             cv_link=None if cv_locked else doc.cv_link,
             resume_url=None if cv_locked else doc.resume_url,

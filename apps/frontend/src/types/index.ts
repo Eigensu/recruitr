@@ -241,6 +241,7 @@ export interface ApiCandidate {
   brand_experience: string | null;
   department: string | null;
   specialization: string | null;
+  establishment_tag: string | null;
   preferred_train_line: string | null;
   cv_link: string | null;
   resume_url: string | null;
@@ -472,6 +473,8 @@ export interface PublicBrand {
 }
 
 export type Department = "BOH" | "Service" | "Corporate";
+
+export type EstablishmentTag = "Cafe" | "QSR" | "Restaurant" | "Hotel" | "Other";
 
 export interface SourcingAnalyticsItem {
   source: string;
