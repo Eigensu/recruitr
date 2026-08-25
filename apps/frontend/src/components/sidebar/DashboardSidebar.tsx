@@ -21,6 +21,7 @@ import {
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { useTheme } from "@/context/ThemeContext";
 import { useApiFetch } from "@/lib/api";
+import { useToast } from "@/components/ui/Toast";
 import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
 import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
 import type { UserInfo } from "@/types";
@@ -149,21 +150,24 @@ function UserRow({ user }: { readonly user: UserInfo | null }) {
   const { open, animate } = useSidebar();
   const labelAnimation = animate ? { opacity: open ? 1 : 0, x: open ? 0 : -4 } : undefined;
   const apiFetch = useApiFetch();
+  const toast = useToast();
 
   const handleSignOut = async () => {
     try {
       await apiFetch("/api/v1/auth/logout", { method: "POST" });
     } catch (err) {
       console.error("Logout failed:", err);
-    } finally {
-      for (let i = sessionStorage.length - 1; i >= 0; i--) {
-        const key = sessionStorage.key(i);
-        if (key?.startsWith("dismissed_banners_")) {
-          sessionStorage.removeItem(key);
-        }
-      }
-      window.location.href = "/sign-in";
+      toast("Logout failed. Please try again.", "error");
+      return;
     }
+
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith("dismissed_banners_")) {
+        sessionStorage.removeItem(key);
+      }
+    }
+    window.location.href = "/sign-in";
   };
 
   return (
