@@ -267,7 +267,7 @@ export interface ApiCandidate {
 
 /** One position mapping returned by GET /api/v1/candidates/{id}/mappings */
 export interface ApiCandidateMappingItem {
-  mapping_id: string;
+  mapping_id: string | null;
   position_id: string;
   position_code: string;
   role: string;
@@ -417,7 +417,7 @@ export type KanbanStage =
   | "on_hold";
 
 export interface PipelineCard {
-  mapping_id: string;
+  mapping_id: string | null;
   candidate_id: string;
   candidate_name: string;
   candidate_email: string;
@@ -452,11 +452,12 @@ export interface PipelineBoardData {
 export type NotificationKind =
   | "awaiting_decision"
   | "awaiting_interview_decision"
-  | "awaiting_offer_upload";
+  | "awaiting_offer_upload"
+  | "client_message";
 
 export interface PipelineNotification {
   id: string;
-  mapping_id: string;
+  mapping_id: string | null;
   kind: NotificationKind;
   message: string;
   created_at: string;

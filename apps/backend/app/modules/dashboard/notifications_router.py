@@ -27,7 +27,7 @@ _ERR_NOT_FOUND = "Notification not found"
 
 class NotificationResponse(BaseModel):
     id: str
-    mapping_id: str
+    mapping_id: str | None = None
     kind: NotificationKind
     message: str
     created_at: datetime
@@ -37,7 +37,7 @@ class NotificationResponse(BaseModel):
 def _to_response(doc: Notification) -> NotificationResponse:
     return NotificationResponse(
         id=str(doc.id),
-        mapping_id=str(doc.mapping_id),
+        mapping_id=str(doc.mapping_id) if doc.mapping_id else None,
         kind=doc.kind,
         message=doc.message,
         created_at=doc.created_at,
@@ -49,7 +49,15 @@ def _scope_match(scope: TenantScope) -> dict:
     """Client sees only their own notifications; staff see the brand-wide ones
     raised for them (client_id=None) — see Notification's own docstring for why
     the reminder job writes one row of each per stuck mapping."""
-    return {"brand_id": scope.brand_id, "client_id": scope.client_id}
+    match = {"brand_id": scope.brand_id}
+    if scope.role == "client":
+        match["client_id"] = scope.client_id
+    elif scope.role == "referee":
+        # Referees have no notifications currently. This ensures they don't see staff/client ones.
+        match["_id"] = None
+    else:
+        match["client_id"] = None
+    return match
 
 
 @router.get("")
