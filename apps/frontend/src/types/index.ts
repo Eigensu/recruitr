@@ -267,7 +267,7 @@ export interface ApiCandidate {
 
 /** One position mapping returned by GET /api/v1/candidates/{id}/mappings */
 export interface ApiCandidateMappingItem {
-  mapping_id: string | null;
+  mapping_id: string;
   position_id: string;
   position_code: string;
   role: string;
@@ -417,7 +417,7 @@ export type KanbanStage =
   | "on_hold";
 
 export interface PipelineCard {
-  mapping_id: string | null;
+  mapping_id: string;
   candidate_id: string;
   candidate_name: string;
   candidate_email: string;
