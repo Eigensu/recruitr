@@ -114,7 +114,7 @@ export default function KanbanCard({
                     e.stopPropagation();
                     onStageChange(card, "rejected");
                   }}
-                  className="rounded bg-red-500/10 border border-red-500/20 px-2 py-0.5 text-[10px] font-medium text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 w-fit"
+                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-[11px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 w-fit"
                 >
                   Mark as Rejected
                 </button>
