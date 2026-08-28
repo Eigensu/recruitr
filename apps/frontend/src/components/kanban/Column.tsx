@@ -32,6 +32,7 @@ interface Props {
   label: string;
   cards: PipelineCard[];
   readOnly?: boolean;
+  isClientBoard?: boolean;
   onCardClick?: (card: PipelineCard) => void;
   onStageChange?: (card: PipelineCard, newStage: string) => void;
 }
@@ -41,6 +42,7 @@ export default function KanbanColumn({
   label,
   cards,
   readOnly,
+  isClientBoard,
   onCardClick,
   onStageChange,
 }: Readonly<Props>) {
@@ -70,7 +72,7 @@ export default function KanbanColumn({
           <span className={cn("size-2 rounded-full shrink-0", dot)} />
           <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
         </div>
-        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", accent)}>
+        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", accent)}>
           {cards.length}
         </span>
       </div>
@@ -89,6 +91,7 @@ export default function KanbanColumn({
             key={card.mapping_id}
             card={card}
             readOnly={readOnly}
+            isClientBoard={isClientBoard}
             onCardClick={onCardClick}
             onStageChange={onStageChange}
           />

@@ -177,6 +177,7 @@ export default function ClientPipelineBoard({ positions }: Props) {
                 label={col.label}
                 cards={col.mappings}
                 readOnly={true}
+                isClientBoard={true}
                 onCardClick={(card) => setSelectedCard(card)}
                 onStageChange={handleStageChange}
               />

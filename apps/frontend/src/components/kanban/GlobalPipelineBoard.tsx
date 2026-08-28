@@ -14,6 +14,7 @@ import {
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
 import KanbanCard from "./CandidateCard";
+import ClientActionModal from "./ClientActionModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -91,6 +92,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
     position_id: "",
@@ -360,6 +362,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
                 onStageChange={handleStageChange}
+                onCardClick={(card) => setSelectedCard(card)}
               />
             ))}
           </div>
@@ -369,6 +372,29 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
           </DragOverlay>
         </DndContext>
       )}
+      <ClientActionModal
+        isOpen={!!selectedCard}
+        onClose={() => setSelectedCard(null)}
+        card={selectedCard}
+        onStageChange={async (newStage) => {
+          if (!selectedCard) return;
+          const res = await fetch(
+            `${API_URL}/api/v1/pipeline/mappings/${selectedCard.mapping_id}/move`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to_stage: newStage }),
+            },
+          );
+          if (res.ok) {
+            setSelectedCard(null);
+            load();
+          } else {
+            console.error("Failed to move candidate");
+          }
+        }}
+        onActionComplete={load}
+      />
     </div>
   );
 }
