@@ -12,3 +12,4 @@ class NotificationKind(StrEnum):
     awaiting_decision = "awaiting_decision"
     awaiting_interview_decision = "awaiting_interview_decision"
     awaiting_offer_upload = "awaiting_offer_upload"
+    client_message = "client_message"

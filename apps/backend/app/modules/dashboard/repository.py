@@ -8,6 +8,7 @@ strict per-brand tenant isolation required by the spec (§2.3).
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -333,7 +334,12 @@ async def fetch_pipeline(filters: DashboardFilters) -> dict[str, Any]:
         {_GROUP: {"_id": _F_STAGE, "count": {"$sum": 1}}},
     ]
     results = await (await Mapping.get_motor_collection().aggregate(pipeline)).to_list(length=None)
-    counts = {PipelineStage(item["_id"]): int(item["count"]) for item in results if item.get("_id")}
+    counts = {}
+    for item in results:
+        stage_val = item.get("_id")
+        if stage_val:
+            with suppress(ValueError):
+                counts[PipelineStage(stage_val)] = int(item["count"])
     total = sum(counts.values())
 
     stages: list[dict[str, Any]] = []

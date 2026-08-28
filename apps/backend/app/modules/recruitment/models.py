@@ -582,7 +582,7 @@ class ReferralRecord(Document):
 
     brand_id: PydanticObjectId
     referee_id: PydanticObjectId
-    mapping_id: PydanticObjectId
+    mapping_id: PydanticObjectId | None = None
     candidate_id: PydanticObjectId
     position_id: PydanticObjectId
     role_level: str | None = None
@@ -665,7 +665,7 @@ class Notification(Document):
 
     brand_id: PydanticObjectId
     client_id: PydanticObjectId | None = None
-    mapping_id: PydanticObjectId
+    mapping_id: PydanticObjectId | None = None
     kind: NotificationKind
     message: str
     created_at: datetime = Field(default_factory=_utcnow)

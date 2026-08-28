@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { IconBell } from "@tabler/icons-react";
 import {
   clientFetchNotifications,
@@ -39,14 +40,25 @@ export default function NotificationBell() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  async function handleMarkRead(id: string) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)),
-    );
-    try {
-      await clientMarkNotificationRead(id);
-    } catch {
-      load(); // resync on failure
+  const router = useRouter();
+
+  async function handleMarkRead(n: PipelineNotification) {
+    if (!n.read_at) {
+      setNotifications((prev) =>
+        prev.map((prevN) =>
+          prevN.id === n.id ? { ...prevN, read_at: new Date().toISOString() } : prevN,
+        ),
+      );
+      try {
+        await clientMarkNotificationRead(n.id);
+      } catch {
+        load(); // resync on failure
+      }
+    }
+
+    setIsOpen(false);
+    if (n.kind === "client_message") {
+      router.push("/client-messaging");
     }
   }
 
@@ -93,7 +105,7 @@ export default function NotificationBell() {
                 <button
                   key={n.id}
                   type="button"
-                  onClick={() => handleMarkRead(n.id)}
+                  onClick={() => handleMarkRead(n)}
                   className="block w-full border-b px-4 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-surface-2"
                   style={{
                     borderColor: "var(--color-border-val)",
