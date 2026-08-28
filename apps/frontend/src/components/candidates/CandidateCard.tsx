@@ -70,6 +70,13 @@ function CandidateAvatar({
 }
 
 function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
+  let salaryStr: string | null = null;
+  if (candidate.salary != null) {
+    salaryStr = `₹${candidate.salary.toLocaleString("en-IN")}`;
+  } else if (candidate.expected_salary != null) {
+    salaryStr = `₹${candidate.expected_salary.toLocaleString("en-IN")} Expected`;
+  }
+
   return (
     <div className="flex-1 min-w-0 pt-0.5">
       <h3 className="font-heading font-bold text-text-primary text-[15px] leading-snug truncate">
@@ -85,13 +92,11 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
               : `Independent · ${candidate.experience_years}y`}
         </span>
       </p>
-      {(candidate.city || candidate.area || candidate.gender || candidate.age) && (
+      {(candidate.city || candidate.area || salaryStr || candidate.age) && (
         <p className="text-[10px] text-text-muted mt-0.5 capitalize truncate">
           {[
             [candidate.city, candidate.area].filter(Boolean).join(" • "),
-            [candidate.gender, candidate.age ? `${candidate.age} yrs` : null]
-              .filter(Boolean)
-              .join(" • "),
+            [salaryStr, candidate.age ? `${candidate.age} yrs` : null].filter(Boolean).join(" • "),
           ]
             .filter(Boolean)
             .join(" | ")}
@@ -107,20 +112,25 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
   );
 }
 
-function CandidateSkills({ skills }: { skills: string[] }) {
+function CandidateTags({ tags }: { tags: string[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {skills.slice(0, 4).map((skill) => (
+      {tags.slice(0, 4).map((tag) => (
         <span
-          key={skill}
-          className="skill-tag text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+          key={tag}
+          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px]"
+          style={{
+            background: "rgba(96,165,250,0.1)",
+            color: "#60a5fa",
+            border: "1px solid rgba(96,165,250,0.25)",
+          }}
         >
-          {skill}
+          {tag}
         </span>
       ))}
-      {skills.length > 4 && (
+      {tags.length > 4 && (
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
-          +{skills.length - 4}
+          +{tags.length - 4}
         </span>
       )}
     </div>
@@ -310,7 +320,24 @@ export default function CandidateCard({
             )}
           </div>
 
-          {candidate.status !== "PENDING" && <CandidateSkills skills={candidate.skills} />}
+          {candidate.status !== "PENDING" && (
+            <CandidateTags
+              tags={
+                [
+                  candidate.communication ? `Comm: ${candidate.communication}` : null,
+                  candidate.education ? `Edu: ${candidate.education}` : null,
+                  candidate.brand_experience ? `Exp: ${candidate.brand_experience}` : null,
+                  candidate.department
+                    ? `Dept: ${candidate.department.replace("Kitchen (BOH)", "BOH").replace("Front of House (Service)", "Service")}`
+                    : null,
+                  candidate.specialization ? `Spec: ${candidate.specialization}` : null,
+                  candidate.establishment_tag
+                    ? `Establishment: ${candidate.establishment_tag}`
+                    : null,
+                ].filter(Boolean) as string[]
+              }
+            />
+          )}
 
           <CandidateFooter
             phone={candidate.phone}
