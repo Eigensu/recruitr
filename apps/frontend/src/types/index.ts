@@ -476,9 +476,9 @@ export type Department = "BOH" | "Service" | "Corporate";
 export type EstablishmentTag = "Cafe" | "QSR" | "Restaurant" | "Hotel" | "Other";
 
 export interface SourcingAnalyticsItem {
-  source: string;
-  source_channel: string;
-  count: number;
+  source_type: string | null;
+  source_channel: string | null;
+  candidate_count: number;
   pipeline_candidates: number;
   offers_accepted: number;
   joined_candidates: number;

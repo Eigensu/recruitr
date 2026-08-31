@@ -541,6 +541,33 @@ async def fetch_stage_timing(filters: DashboardFilters) -> dict[str, Any]:
     }
 
 
+def _derive_source_type(channel: str | None, raw_source: str | None) -> str | None:
+    if not channel or not channel.strip():
+        if raw_source == "internal":
+            return "Internal"
+        return None  # genuinely missing/unknown
+
+    c = channel.lower().strip()
+
+    if "indeed" in c or "naukri" in c:
+        return "Job Portal"
+    if "whatsapp" in c:
+        return "Social Media / Messaging"
+    if "linkedin" in c or "instagram" in c or "facebook" in c:
+        return "Social Media"
+    if "partner" in c or "binge" in c:
+        return "Partner"
+    if "referral" in c or "employee" in c or "staff" in c:
+        return "Referral"
+    if "direct" in c or "website" in c:
+        return "Direct"
+
+    if raw_source == "internal":
+        return "Internal"
+
+    return "Other"
+
+
 async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:
     brand_oid = _require_brand(filters)
     candidate_match: dict[str, Any] = {"brand_id": brand_oid}
@@ -627,21 +654,34 @@ async def fetch_sourcing(filters: DashboardFilters) -> dict[str, Any]:
     results = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(
         length=None
     )
-    metrics = []
+    metrics_map = {}
     for item in results:
         _id = item.get("_id", {})
-        metrics.append(
-            {
-                "source_type": _id.get("source"),
-                "source_channel": _id.get("source_channel"),
-                "candidate_count": item.get("candidate_count", 0),
-                "pipeline_candidates": item.get("pipeline_candidates", 0),
-                "offers_accepted": item.get("offers_accepted", 0),
-                "joined_candidates": item.get("joined_candidates", 0),
-            }
-        )
+        raw_source = _id.get("source")
+        channel = _id.get("source_channel")
 
-    # Sort primarily by candidate count descending
+        source_type = _derive_source_type(channel, raw_source)
+
+        # Group by the resolved (source_type, channel) pair
+        # to avoid duplicates if raw_source differed but computed type is the same
+        key = (source_type, channel)
+        if key not in metrics_map:
+            metrics_map[key] = {
+                "source_type": source_type,
+                "source_channel": channel,
+                "candidate_count": 0,
+                "pipeline_candidates": 0,
+                "offers_accepted": 0,
+                "joined_candidates": 0,
+            }
+
+        m = metrics_map[key]
+        m["candidate_count"] += item.get("candidate_count", 0)
+        m["pipeline_candidates"] += item.get("pipeline_candidates", 0)
+        m["offers_accepted"] += item.get("offers_accepted", 0)
+        m["joined_candidates"] += item.get("joined_candidates", 0)
+
+    metrics = list(metrics_map.values())
     metrics.sort(key=lambda x: x["candidate_count"], reverse=True)
     return {"metrics": metrics}
 
