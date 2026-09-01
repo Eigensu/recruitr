@@ -22,7 +22,7 @@ import {
 import { listTeams, listTeamEmployees, type Team, type EmployeeTeamInfo } from "@/lib/api/teams";
 
 interface ChecklistSettingsTabProps {
-  user: UserInfo | null;
+  readonly user: UserInfo | null;
 }
 
 export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps) {
@@ -158,11 +158,29 @@ function TaskCard({
   isMaintainer,
   onDelete,
 }: {
-  task: TaskResponse;
-  isMaintainer: boolean;
-  onDelete: () => void;
+  readonly task: TaskResponse;
+  readonly isMaintainer: boolean;
+  readonly onDelete: () => void;
 }) {
   const isCompleted = task.completed_count >= task.target_count;
+  let assigneeLabel = (
+    <>
+      <IconUser className="w-3.5 h-3.5" /> Single Assignment
+    </>
+  );
+  if (task.assignee_type === "all") {
+    assigneeLabel = (
+      <>
+        <IconUsers className="w-3.5 h-3.5" /> All Recruiters
+      </>
+    );
+  } else if (task.assignee_type === "team") {
+    assigneeLabel = (
+      <>
+        <IconUsers className="w-3.5 h-3.5" /> Team Task
+      </>
+    );
+  }
 
   return (
     <div className="border border-border rounded-xl bg-surface overflow-hidden flex flex-col">
@@ -186,21 +204,7 @@ function TaskCard({
                 <IconCalendarEvent className="w-3.5 h-3.5" />
                 Due {new Date(task.due_date).toLocaleDateString()}
               </span>
-              <span className="flex items-center gap-1 mt-1 opacity-70">
-                {task.assignee_type === "all" ? (
-                  <>
-                    <IconUsers className="w-3.5 h-3.5" /> All Recruiters
-                  </>
-                ) : task.assignee_type === "team" ? (
-                  <>
-                    <IconUsers className="w-3.5 h-3.5" /> Team Task
-                  </>
-                ) : (
-                  <>
-                    <IconUser className="w-3.5 h-3.5" /> Single Assignment
-                  </>
-                )}
-              </span>
+              <span className="flex items-center gap-1 mt-1 opacity-70">{assigneeLabel}</span>
             </div>
 
             {isMaintainer && (
@@ -270,10 +274,10 @@ function CreateTaskModal({
   onClose,
   onSuccess,
 }: {
-  teams: Team[];
-  employees: EmployeeTeamInfo[];
-  onClose: () => void;
-  onSuccess: () => void;
+  readonly teams: Team[];
+  readonly employees: EmployeeTeamInfo[];
+  readonly onClose: () => void;
+  readonly onSuccess: () => void;
 }) {
   const apiFetch = useApiFetch();
   const toast = useToast();
@@ -310,7 +314,7 @@ function CreateTaskModal({
         title,
         description: description || undefined,
         tracked_activity_type: trackedActivity,
-        target_count: parseInt(targetCount),
+        target_count: Number.parseInt(targetCount, 10),
         assignee_type: assigneeType,
         assignee_id: assigneeType === "all" ? undefined : assigneeId,
         start_date: startObj.toISOString(),
@@ -338,7 +342,9 @@ function CreateTaskModal({
 
         <form onSubmit={handleSubmit} className="flex flex-col overflow-y-auto p-6 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-text-primary">Task Title</label>
+            <label htmlFor="task-title" className="text-sm font-medium text-text-primary">
+              Task Title
+            </label>
             <input
               type="text"
               required
@@ -350,10 +356,13 @@ function CreateTaskModal({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-text-primary">Description (Optional)</label>
+            <label htmlFor="task-description" className="text-sm font-medium text-text-primary">
+              Description (Optional)
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              id="task-description"
               placeholder="Any additional instructions..."
               rows={2}
               className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary resize-none"
@@ -361,7 +370,9 @@ function CreateTaskModal({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-text-primary">Activity to Track</label>
+            <label htmlFor="task-activity" className="text-sm font-medium text-text-primary">
+              Activity to Track
+            </label>
             <select
               value={trackedActivity}
               onChange={(e) => setTrackedActivity(e.target.value as TrackedActivityType)}
@@ -379,9 +390,12 @@ function CreateTaskModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text-primary">Target Count</label>
+              <label htmlFor="task-target-count" className="text-sm font-medium text-text-primary">
+                Target Count
+              </label>
               <input
                 type="number"
+                id="task-target-count"
                 min="1"
                 required
                 value={targetCount}
@@ -390,8 +404,11 @@ function CreateTaskModal({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text-primary">Due Date</label>
+              <label htmlFor="task-due-date" className="text-sm font-medium text-text-primary">
+                Due Date
+              </label>
               <input
+                id="task-due-date"
                 type="date"
                 required
                 min={today}
@@ -403,7 +420,9 @@ function CreateTaskModal({
           </div>
 
           <div className="flex flex-col gap-1.5 border-t border-border pt-5">
-            <label className="text-sm font-medium text-text-primary">Assignment</label>
+            <label htmlFor="task-assignment" className="text-sm font-medium text-text-primary">
+              Assignment
+            </label>
             <select
               value={assigneeType}
               onChange={(e) => {
@@ -420,7 +439,9 @@ function CreateTaskModal({
 
           {assigneeType === "team" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text-primary">Select Team</label>
+              <label htmlFor="task-team" className="text-sm font-medium text-text-primary">
+                Select Team
+              </label>
               <select
                 required
                 value={assigneeId}
@@ -439,7 +460,9 @@ function CreateTaskModal({
 
           {assigneeType === "single" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text-primary">Select Recruiter</label>
+              <label htmlFor="task-recruiter" className="text-sm font-medium text-text-primary">
+                Select Recruiter
+              </label>
               <select
                 required
                 value={assigneeId}

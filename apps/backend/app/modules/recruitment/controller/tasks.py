@@ -47,7 +47,92 @@ async def _calculate_progress(
     ).count()
 
 
-@router.post("/", response_model=TaskResponse)
+async def _get_task_query_for_viewer(tenant: TenantScope, is_admin: bool) -> dict:
+    query = {"brand_id": tenant.brand_id, "is_active": True}
+    if is_admin:
+        return query
+
+    if not tenant.employee_id:
+        return {}
+
+    emp = await Employee.find_one({"_id": tenant.employee_id})
+    if not emp:
+        return {}
+
+    or_conds = [
+        {"assignee_type": TaskAssignmentType.all},
+        {"assignee_type": TaskAssignmentType.single, "assignee_id": tenant.employee_id},
+    ]
+    if emp.team_id:
+        or_conds.append({"assignee_type": TaskAssignmentType.team, "assignee_id": emp.team_id})
+
+    query["$or"] = or_conds
+    return query
+
+
+async def _populate_recruiter_progress(
+    tenant: TenantScope, task: RecruitmentTask, base_resp: TaskResponse
+) -> None:
+    completed = await _calculate_progress(tenant.brand_id, tenant.employee_id, task)
+    base_resp.completed_count = min(completed, task.target_count)
+    base_resp.progress_percentage = int((base_resp.completed_count / task.target_count) * 100)
+
+
+async def _populate_admin_progress(
+    tenant: TenantScope, task: RecruitmentTask, base_resp: TaskResponse
+) -> None:
+    if task.assignee_type == TaskAssignmentType.single:
+        emp = await Employee.find_one({"_id": task.assignee_id})
+        if emp:
+            completed = await _calculate_progress(tenant.brand_id, task.assignee_id, task)
+            base_resp.completed_count = min(completed, task.target_count)
+            base_resp.progress_percentage = int(
+                (base_resp.completed_count / task.target_count) * 100
+            )
+            base_resp.detailed_progress = [
+                RecruiterProgress(
+                    employee_id=str(emp.id),
+                    name=emp.name,
+                    completed_count=base_resp.completed_count,
+                    progress_percentage=base_resp.progress_percentage,
+                )
+            ]
+        return
+
+    # Team or All
+    emp_query = {
+        "brand_id": tenant.brand_id,
+        "is_active": True,
+        "role": {"$nin": ["admin", "maintainer"]},
+    }
+    if task.assignee_type == TaskAssignmentType.team:
+        emp_query["team_id"] = task.assignee_id
+
+    emps = await Employee.find(emp_query).to_list()
+    detailed = []
+    for emp in emps:
+        completed = await _calculate_progress(tenant.brand_id, emp.id, task)
+        completed = min(completed, task.target_count)
+        pct = int((completed / task.target_count) * 100)
+        detailed.append(
+            RecruiterProgress(
+                employee_id=str(emp.id),
+                name=emp.name,
+                completed_count=completed,
+                progress_percentage=pct,
+            )
+        )
+
+    if detailed:
+        total_pct = sum(d.progress_percentage for d in detailed)
+        total_completed = sum(d.completed_count for d in detailed)
+        base_resp.progress_percentage = int(total_pct / len(detailed))
+        base_resp.completed_count = total_completed
+
+    base_resp.detailed_progress = detailed
+
+
+@router.post("/")
 async def create_task(
     payload: TaskCreate, tenant: TenantScope = _Tenant, _: User = _Admin
 ) -> TaskResponse:
@@ -97,35 +182,17 @@ async def create_task(
     )
 
 
-@router.get("/", response_model=list[TaskResponse])
+@router.get("/")
 async def list_tasks(tenant: TenantScope = _Tenant, viewer: User = _Viewer) -> list[TaskResponse]:
-    # If admin, fetch all active tasks in brand
     is_admin = viewer.role in ("admin", "maintainer")
-
-    query = {"brand_id": tenant.brand_id, "is_active": True}
-
-    if not is_admin:
-        if not tenant.employee_id:
-            return []
-
-        emp = await Employee.find_one({"_id": tenant.employee_id})
-        if not emp:
-            return []
-
-        or_conds = [
-            {"assignee_type": TaskAssignmentType.all},
-            {"assignee_type": TaskAssignmentType.single, "assignee_id": tenant.employee_id},
-        ]
-        if emp.team_id:
-            or_conds.append({"assignee_type": TaskAssignmentType.team, "assignee_id": emp.team_id})
-
-        query["$or"] = or_conds
+    query = await _get_task_query_for_viewer(tenant, is_admin)
+    if not query:
+        return []
 
     tasks = await RecruitmentTask.find(query).to_list()
     responses = []
 
     for task in tasks:
-        # Compute progress
         base_resp = TaskResponse(
             id=str(task.id),
             title=task.title,
@@ -141,66 +208,11 @@ async def list_tasks(tenant: TenantScope = _Tenant, viewer: User = _Viewer) -> l
         )
 
         if not is_admin:
-            # Recruiter view - just their own progress
-            completed = await _calculate_progress(tenant.brand_id, tenant.employee_id, task)
-            base_resp.completed_count = min(completed, task.target_count)
-            base_resp.progress_percentage = int(
-                (base_resp.completed_count / task.target_count) * 100
-            )
-            responses.append(base_resp)
+            await _populate_recruiter_progress(tenant, task, base_resp)
         else:
-            # Admin view
-            if task.assignee_type == TaskAssignmentType.single:
-                emp = await Employee.find_one({"_id": task.assignee_id})
-                if emp:
-                    completed = await _calculate_progress(tenant.brand_id, task.assignee_id, task)
-                    base_resp.completed_count = min(completed, task.target_count)
-                    base_resp.progress_percentage = int(
-                        (base_resp.completed_count / task.target_count) * 100
-                    )
-                    base_resp.detailed_progress = [
-                        RecruiterProgress(
-                            employee_id=str(emp.id),
-                            name=emp.name,
-                            completed_count=base_resp.completed_count,
-                            progress_percentage=base_resp.progress_percentage,
-                        )
-                    ]
-            else:
-                # Team or All
-                emp_query = {
-                    "brand_id": tenant.brand_id,
-                    "is_active": True,
-                    "role": {"$nin": ["admin", "maintainer"]},
-                }
-                if task.assignee_type == TaskAssignmentType.team:
-                    emp_query["team_id"] = task.assignee_id
+            await _populate_admin_progress(tenant, task, base_resp)
 
-                emps = await Employee.find(emp_query).to_list()
-                detailed = []
-                for emp in emps:
-                    completed = await _calculate_progress(tenant.brand_id, emp.id, task)
-                    completed = min(completed, task.target_count)
-                    pct = int((completed / task.target_count) * 100)
-                    detailed.append(
-                        RecruiterProgress(
-                            employee_id=str(emp.id),
-                            name=emp.name,
-                            completed_count=completed,
-                            progress_percentage=pct,
-                        )
-                    )
-
-                # Average progress
-                if detailed:
-                    total_pct = sum(d.progress_percentage for d in detailed)
-                    total_completed = sum(d.completed_count for d in detailed)
-                    base_resp.progress_percentage = int(total_pct / len(detailed))
-                    base_resp.completed_count = total_completed
-
-                base_resp.detailed_progress = detailed
-
-            responses.append(base_resp)
+        responses.append(base_resp)
 
     return responses
 
