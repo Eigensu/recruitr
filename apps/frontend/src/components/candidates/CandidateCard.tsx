@@ -118,7 +118,7 @@ function CandidateTags({ tags }: { tags: string[] }) {
       {tags.slice(0, 4).map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px]"
+          className={`${tag.startsWith("Edu:") ? "block" : "inline-flex items-center gap-1"} rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px]`}
           style={{
             background: "rgba(96,165,250,0.1)",
             color: "#60a5fa",
