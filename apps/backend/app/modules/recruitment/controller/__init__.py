@@ -9,6 +9,7 @@ from app.modules.recruitment.controller.positions import router as positions_rou
 from app.modules.recruitment.controller.public_controller import router as public_router
 from app.modules.recruitment.controller.referees import router as referees_router
 from app.modules.recruitment.controller.tags import router as tags_router
+from app.modules.recruitment.controller.tasks import router as tasks_router
 from app.modules.recruitment.controller.teams import router as teams_router
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "referees_router",
     "tags_router",
     "teams_router",
+    "tasks_router",
 ]

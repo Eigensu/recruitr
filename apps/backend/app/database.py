@@ -36,6 +36,7 @@ from app.modules.recruitment.models import (
     PaymentBatch,
     Position,
     RecruiterTag,
+    RecruitmentTask,
     RefereeUser,
     ReferralRecord,
     Team,
@@ -163,6 +164,7 @@ async def init_db() -> None:
         Mapping,
         Employee,
         Team,
+        RecruitmentTask,
         RecruiterTag,
         ActivityLog,
         CandidateEvent,
@@ -172,6 +174,7 @@ async def init_db() -> None:
         PaymentBatch,
         Notification,
         # Gamification
+        RecruitmentTask,
         RecruiterProfile,
         # Leaderboard
         EmployeeStat,

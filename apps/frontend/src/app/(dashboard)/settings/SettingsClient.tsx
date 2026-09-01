@@ -9,6 +9,7 @@ import NotificationPreferences from "@/components/settings/NotificationPreferenc
 import SettingsShell from "@/components/settings/SettingsShell";
 import PreferencesPanel from "@/components/settings/PreferencesPanel";
 import AccountPanel from "@/components/settings/AccountPanel";
+import ChecklistSettingsTab from "@/components/settings/ChecklistSettingsTab";
 import type { UserInfo } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { listTeams, listTeamEmployees, type Team, type EmployeeTeamInfo } from "@/lib/api/teams";
@@ -60,6 +61,7 @@ export default function SettingsClient({ initialUser }: { initialUser: UserInfo 
   const TABS = [
     "Preferences",
     ...(isMaintainer ? ["Team", "Referees", "Automation"] : []),
+    "Checklist",
     "Account",
   ];
   const [activeTab, setActiveTab] = useState("Preferences");
@@ -124,6 +126,7 @@ export default function SettingsClient({ initialUser }: { initialUser: UserInfo 
       {activeTab === "Team" && isMaintainer && <TeamSettingsTab />}
       {activeTab === "Referees" && isMaintainer && <RefereeSettingsTab />}
       {activeTab === "Automation" && isMaintainer && <AutomationSettingsPanel />}
+      {activeTab === "Checklist" && <ChecklistSettingsTab user={user} />}
     </SettingsShell>
   );
 }
