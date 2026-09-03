@@ -161,11 +161,42 @@ export default function ClientPipelineBoard({ positions }: Props) {
 
       {/* Board */}
       {loading ? (
-        <div
-          className="flex flex-1 items-center justify-center text-sm"
-          style={{ color: "var(--color-text-secondary)" }}
-        >
-          Loading…
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-2 animate-in fade-in duration-300">
+          {[1, 2, 3, 4].map((colIndex) => (
+            <div
+              key={colIndex}
+              className="flex w-[320px] shrink-0 flex-col rounded-2xl p-4 bg-surface"
+              style={{
+                border: "1px solid var(--color-border-val)",
+                background: "var(--color-surface-val)",
+              }}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full shrink-0 bg-surface-2" />
+                  <div className="h-4 w-24 rounded-full bg-surface-2 animate-pulse" />
+                </div>
+                <div className="h-5 w-8 rounded-full bg-surface-2 animate-pulse" />
+              </div>
+              <div className="flex-1 space-y-2.5 overflow-y-auto">
+                {[1, 2, 3].map((cardIndex) => (
+                  <div
+                    key={cardIndex}
+                    className="group relative rounded-xl border p-3 min-h-[120px] bg-surface-panel animate-pulse"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    <div className="h-4 w-3/4 rounded-full bg-surface-2 mb-2" />
+                    <div className="h-3 w-1/2 rounded-full bg-surface-2 mb-2" />
+                    <div className="h-3 w-1/3 rounded-full bg-surface-2 mb-4" />
+                    <div className="flex justify-between items-center mt-auto">
+                      <div className="h-4 w-12 rounded-full bg-surface-2" />
+                      <div className="h-4 w-12 rounded-full bg-surface-2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <DndContext>
