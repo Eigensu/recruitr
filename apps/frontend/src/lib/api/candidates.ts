@@ -49,6 +49,7 @@ export function buildCandidateQuery(filters: Partial<CandidateFilters>): string 
   if (filters.source) params.set("source", filters.source);
   if (filters.source_channel) params.set("source_channel", filters.source_channel);
   if (filters.created_by) params.set("created_by", filters.created_by);
+  if (filters.referee_id) params.set("referee_id", filters.referee_id);
   if (filters.city) params.set("city", filters.city);
   if (filters.gender) params.set("gender", filters.gender);
   if (filters.role) params.set("role", filters.role);

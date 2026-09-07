@@ -42,7 +42,7 @@ def _stamp(updates: dict) -> dict:
 
 def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
     return RefereeUserResponse(
-        _id=str(doc.id),
+        id=str(doc.id),
         brand_id=str(doc.brand_id),
         email=doc.email,
         name=doc.name,

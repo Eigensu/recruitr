@@ -1,6 +1,12 @@
 "use client";
 
-import type { ApiCandidate, BulkUploadResult, CandidateFilters, PaginatedResponse } from "@/types";
+import type {
+  ApiCandidate,
+  BulkUploadResult,
+  CandidateFilters,
+  CandidateReferrerOption,
+  PaginatedResponse,
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -10,6 +16,7 @@ function buildQuery(filters: Partial<CandidateFilters>): string {
   if (filters.source) params.set("source", filters.source);
   if (filters.source_channel) params.set("source_channel", filters.source_channel);
   if (filters.created_by) params.set("created_by", filters.created_by);
+  if (filters.referee_id) params.set("referee_id", filters.referee_id);
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
@@ -32,6 +39,14 @@ export async function clientFetchCandidates(
   });
   if (!res.ok) throw new Error(`Candidates fetch failed: ${res.status}`);
   return res.json() as Promise<PaginatedResponse<ApiCandidate>>;
+}
+
+export async function clientFetchCandidateReferees(): Promise<CandidateReferrerOption[]> {
+  const res = await fetch(`${API_URL}/api/v1/candidates/referees`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Candidate referees fetch failed: ${res.status}`);
+  return res.json() as Promise<CandidateReferrerOption[]>;
 }
 
 export async function clientCreateCandidate(data: {

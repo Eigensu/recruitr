@@ -152,6 +152,12 @@ class CandidateResponse(CandidateStructuredTags):
     source: str | None = None
     source_channel: str | None = None
     connect_code: str | None = None
+    # The referee who referred this candidate, if any — set once, at
+    # application time, from a matched connect code. referee_name is
+    # resolved by the caller (see _referee_name / the list aggregation's
+    # referee_users $lookup); it is never derived here.
+    referee_id: str | None = None
+    referee_name: str | None = None
     salary: float | None = None
     notes: str | None = None
     # Defaulted, not required: candidates created before `status` existed have no
@@ -179,6 +185,7 @@ class CandidateResponse(CandidateStructuredTags):
         mappings_count: int = 0,
         *,
         created_by_name: str | None = None,
+        referee_name: str | None = None,
         cv_locked: bool = False,
     ) -> "CandidateResponse":
         """Build the response from a Candidate document.
@@ -228,6 +235,8 @@ class CandidateResponse(CandidateStructuredTags):
             source=doc.source,
             source_channel=doc.source_channel,
             connect_code=doc.connect_code,
+            referee_id=str(doc.referee_id) if doc.referee_id else None,
+            referee_name=referee_name,
             status=doc.status,
             created_by_id=str(doc.created_by_id) if doc.created_by_id else None,
             created_by_name=created_by_name,
@@ -293,6 +302,17 @@ class CandidateHistoryResponse(BaseModel):
 
     events: list[CandidateHistoryEvent]
     placements: list[CandidatePlacement]
+
+
+class CandidateReferrerOption(BaseModel):
+    """One entry in GET /candidates/referees — name only, never contact info.
+
+    Feeds the External Candidates filter dropdown for any staff role. Email and
+    connect_code stay behind the existing maintainer-gated GET /referees.
+    """
+
+    id: str
+    name: str
 
 
 class CandidatePage(PaginatedResponse[CandidateResponse]):

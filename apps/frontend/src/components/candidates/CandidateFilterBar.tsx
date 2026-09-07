@@ -3,17 +3,30 @@
 import { useState } from "react";
 import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
 import { SOURCE_CHANNELS } from "@/lib/constants/candidate";
-import type { CandidateFilters, CandidateSource, RecruiterOption } from "@/types";
+import type {
+  CandidateFilters,
+  CandidateReferrerOption,
+  CandidateSource,
+  RecruiterOption,
+} from "@/types";
 
 interface Props {
   availableTags: string[];
   availableRoles?: string[];
   recruiters?: readonly RecruiterOption[];
   onFilterChange: (filters: Partial<CandidateFilters>) => void;
+  /** "external" locks the source select and swaps it for a Referee filter. */
+  mode?: "all" | "external";
+  referees?: readonly CandidateReferrerOption[];
+  /** Controlled — the External tab drives this from a referee badge click too. */
+  refereeId?: string;
+  onRefereeChange?: (refereeId: string) => void;
 }
 
 /** Sentinel the API accepts for candidates nobody owns (public applications). */
 const UNASSIGNED = "unassigned";
+/** Sentinel the API accepts for external candidates with no referee. */
+const NOT_REFERRED = "none";
 
 const inputStyle = {
   background: "var(--color-canvas-val)",
@@ -26,6 +39,10 @@ export default function CandidateFilterBar({
   availableRoles = [],
   recruiters = [],
   onFilterChange,
+  mode = "all",
+  referees = [],
+  refereeId = "",
+  onRefereeChange,
 }: Props) {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<CandidateSource | "">("");
@@ -163,20 +180,40 @@ export default function CandidateFilterBar({
         <option value={UNASSIGNED}>Unassigned</option>
       </select>
 
-      <select
-        value={source}
-        onChange={(e) => {
-          const v = e.target.value as CandidateSource | "";
-          setSource(v);
-          emit({ source: v });
-        }}
-        className="rounded-lg px-3 py-1.5 text-sm outline-none"
-        style={inputStyle}
-      >
-        <option value="">All Sources</option>
-        <option value="internal">Internal</option>
-        <option value="external">External</option>
-      </select>
+      {mode === "all" && (
+        <select
+          value={source}
+          onChange={(e) => {
+            const v = e.target.value as CandidateSource | "";
+            setSource(v);
+            emit({ source: v });
+          }}
+          className="rounded-lg px-3 py-1.5 text-sm outline-none"
+          style={inputStyle}
+        >
+          <option value="">All Sources</option>
+          <option value="internal">Internal</option>
+          <option value="external">External</option>
+        </select>
+      )}
+
+      {mode === "external" && (
+        <select
+          value={refereeId}
+          onChange={(e) => onRefereeChange?.(e.target.value)}
+          className="rounded-lg px-3 py-1.5 text-sm outline-none"
+          style={inputStyle}
+          aria-label="Filter by referee"
+        >
+          <option value="">All Referees</option>
+          <option value={NOT_REFERRED}>Not referred</option>
+          {referees.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+      )}
 
       <select
         value={sourceChannel}

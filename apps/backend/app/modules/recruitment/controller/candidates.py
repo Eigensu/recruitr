@@ -41,7 +41,7 @@ from app.modules.recruitment.enums import (
     CandidateStatus,
     PipelineStage,
 )
-from app.modules.recruitment.models import Candidate, CandidateEvent, Employee, Mapping
+from app.modules.recruitment.models import Candidate, CandidateEvent, Employee, Mapping, RefereeUser
 from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
@@ -52,6 +52,7 @@ from app.modules.recruitment.schemas import (
     CandidateMappingItem,
     CandidatePage,
     CandidatePlacement,
+    CandidateReferrerOption,
     CandidateResponse,
     CandidateUpdate,
     ExperienceFilter,
@@ -81,6 +82,7 @@ _LOOKUP = "$lookup"
 _ADD_FIELDS = "$addFields"
 _UNSET = "$unset"
 _UNWIND = "$unwind"
+_GROUP = "$group"
 _SORT = "$sort"
 _FACET = "$facet"
 _SKIP = "$skip"
@@ -94,6 +96,9 @@ _log = logging.getLogger(__name__)
 
 # Sentinel accepted by the created_by filter for candidates nobody owns.
 _UNASSIGNED = "unassigned"
+# Sentinel accepted by the referee_id filter for candidates with no referee —
+# the public form and manually-added external candidates alike.
+_NOT_REFERRED = "none"
 
 # Stages that mean the candidate actually landed the job. Not TERMINAL_STAGES,
 # which also counts `rejected` — a rejection closes a mapping but is not a
@@ -208,10 +213,25 @@ async def _owner_name(candidate: Candidate) -> str | None:
     return owner.name if owner else None
 
 
+async def _referee_name(candidate: Candidate) -> str | None:
+    """Display name of the referee who referred this candidate, if any.
+
+    Falls back to email: RefereeUser.name stays null until the referee has
+    logged in at least once, and a badge with nothing to show is worse than
+    one showing their email.
+    """
+    if candidate.referee_id is None:
+        return None
+    referee = await RefereeUser.get(candidate.referee_id)
+    if referee is None:
+        return None
+    return referee.name or referee.email
+
+
 async def _build_candidate_response(
     doc: Candidate, mappings_count: int = 0, scope: TenantScope | None = None
 ) -> CandidateResponse:
-    """Shared builder — resolves the owner's name and applies the CV lock.
+    """Shared builder — resolves the owner's/referee's name and applies the CV lock.
 
     `scope` is optional only so the public application form, which has no
     viewer, can reuse the shape; every authenticated call site passes it.
@@ -221,6 +241,7 @@ async def _build_candidate_response(
         doc,
         mappings_count,
         created_by_name=await _owner_name(doc),
+        referee_name=await _referee_name(doc),
         cv_locked=cv_locked,
     )
 
@@ -257,6 +278,41 @@ async def list_candidate_roles(tenant: _Tenant) -> list[str]:
     return sorted(r for r in all_roles if r)
 
 
+# ── Referees ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/referees")
+async def list_candidate_referees(tenant: _Tenant) -> list[CandidateReferrerOption]:
+    """Distinct referees with at least one attributed candidate in this brand.
+
+    Feeds the External Candidates referee filter. Name only, open to any staff
+    role — unlike GET /referees (the full roster with email + connect code),
+    which stays maintainer-gated. See CandidateReferrerOption.
+    """
+    pipeline = [
+        {_MATCH: {"brand_id": tenant.brand_id, "referee_id": {"$ne": None}, "is_active": True}},
+        {_GROUP: {"_id": "$referee_id"}},
+        {
+            _LOOKUP: {
+                "from": "referee_users",
+                "localField": "_id",
+                "foreignField": "_id",
+                "as": "referee",
+            }
+        },
+        {_UNWIND: "$referee"},
+        {
+            _ADD_FIELDS: {
+                "id": {_TO_STR: "$_id"},
+                "name": {"$ifNull": ["$referee.name", "$referee.email"]},
+            }
+        },
+        {_SORT: {"name": 1}},
+    ]
+    result = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(length=None)
+    return [CandidateReferrerOption(id=r["id"], name=r["name"]) for r in result]
+
+
 # ── List ───────────────────────────────────────────────────────────────────────
 
 
@@ -271,6 +327,10 @@ async def list_candidates(
     created_by: Annotated[
         str | None,
         Query(description="Employee id of the recruiter who added them, or 'unassigned'"),
+    ] = None,
+    referee_id: Annotated[
+        str | None,
+        Query(description="Referee id who referred them, or 'none' — External tab drill-down"),
     ] = None,
     tags: Annotated[list[str] | None, Query()] = None,
     has_resume: Annotated[bool | None, Query()] = None,
@@ -333,6 +393,11 @@ async def list_candidates(
         match["created_by_id"] = None
     elif created_by:
         match["created_by_id"] = to_object_id(created_by, "created_by")
+
+    if referee_id == _NOT_REFERRED:
+        match["referee_id"] = None
+    elif referee_id:
+        match["referee_id"] = to_object_id(referee_id, "referee_id")
 
     if city:
         match["city"] = city
@@ -397,14 +462,32 @@ async def list_candidates(
             }
         },
         {
+            _LOOKUP: {
+                "from": "referee_users",
+                "localField": "referee_id",
+                "foreignField": "_id",
+                "as": "ref",
+            }
+        },
+        {
             _ADD_FIELDS: {
                 "id": {_TO_STR: "$_id"},
                 "mappings_count": {_SIZE: "$cand_maps"},
                 "created_by_id": {_TO_STR: "$created_by_id"},
                 "created_by_name": {"$arrayElemAt": ["$owner.name", 0]},
+                "referee_id": {_TO_STR: "$referee_id"},
+                # RefereeUser.name stays null until the referee logs in once —
+                # fall back to email so an invited-but-dormant referee still
+                # gets a readable badge instead of a blank one.
+                "referee_name": {
+                    "$ifNull": [
+                        {"$arrayElemAt": ["$ref.name", 0]},
+                        {"$arrayElemAt": ["$ref.email", 0]},
+                    ]
+                },
             }
         },
-        {_UNSET: ["cand_maps", "owner"]},
+        {_UNSET: ["cand_maps", "owner", "ref"]},
         {_SORT: {"created_at": -1, "full_name": 1}},
         _paginate(page, limit),
     ]

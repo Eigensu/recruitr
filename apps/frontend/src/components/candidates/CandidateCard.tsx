@@ -10,9 +10,13 @@ import {
   IconPhone,
   IconTrash,
   IconUserCheck,
+  IconUsers,
 } from "@tabler/icons-react";
 import type { ApiCandidate } from "@/types";
 import { resolveCvRef } from "@/lib/api/candidates";
+import { clientFetchCandidates } from "@/lib/api/candidates.client";
+import { useApiFetch } from "@/lib/api";
+import { listReferees } from "@/lib/api/referees";
 
 interface CandidateCardProps {
   candidate: ApiCandidate;
@@ -21,6 +25,8 @@ interface CandidateCardProps {
   onDelete?: (id: string) => Promise<void>;
   onApprove?: () => Promise<void>;
   onReject?: () => Promise<void>;
+  /** Present only where the caller can act on it (the External Candidates tab). */
+  onViewReferee?: (refereeId: string) => void;
 }
 
 const PALETTES = [
@@ -69,7 +75,196 @@ function CandidateAvatar({
   );
 }
 
-function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
+/**
+ * How this candidate entered the system — referred by a referee (clickable,
+ * drills into their other referrals), self-applied through the public form,
+ * or manually tagged external by a recruiter (LinkedIn, Naukri, …).
+ *
+ * Only renders for source="external" candidates; internal ones show nothing
+ * here (the "Added by {recruiter}" line below already covers them).
+ */
+function SourceBadge({
+  candidate,
+  isMaintainer,
+  onViewReferee,
+}: {
+  candidate: ApiCandidate;
+  isMaintainer?: boolean;
+  onViewReferee?: (refereeId: string) => void;
+}) {
+  if (candidate.source !== "external") return null;
+  if (candidate.referee_id && candidate.referee_name) {
+    return (
+      <RefereeBadge
+        refereeId={candidate.referee_id}
+        refereeName={candidate.referee_name}
+        isMaintainer={isMaintainer}
+        onViewReferee={onViewReferee}
+      />
+    );
+  }
+  // created_by_id is null exactly when nobody on staff sourced them — the
+  // public form is the only other way a candidate lands with source=external.
+  if (!candidate.created_by_id) {
+    return (
+      <span className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[rgba(96,165,250,0.1)] text-[#4453c4] dark:text-[#8b97f0]">
+        {candidate.source_channel
+          ? `Public application · ${candidate.source_channel}`
+          : "Public application"}
+      </span>
+    );
+  }
+  if (candidate.source_channel) {
+    return (
+      <span className="inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-text-muted border border-border">
+        {candidate.source_channel}
+      </span>
+    );
+  }
+  return null;
+}
+
+function RefereeBadge({
+  refereeId,
+  refereeName,
+  isMaintainer,
+  onViewReferee,
+}: {
+  refereeId: string;
+  refereeName: string;
+  isMaintainer?: boolean;
+  onViewReferee?: (refereeId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+  const [contact, setContact] = useState<{ email: string; connect_code: string | null } | null>(
+    null,
+  );
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const apiFetch = useApiFetch();
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: PointerEvent) {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    async function loadDetails() {
+      setLoading(true);
+      try {
+        // Two calls, not one: omitting `status` doesn't mean "all statuses" —
+        // list_candidates defaults it to APPROVED, which silently dropped
+        // pending referrals from this count. Pending + approved matches what
+        // "View all referrals" actually navigates to on the External tab.
+        const [pendingPage, approvedPage, referees] = await Promise.all([
+          clientFetchCandidates({
+            source: "external",
+            referee_id: refereeId,
+            status: "PENDING",
+            page: 1,
+            limit: 1,
+          }),
+          clientFetchCandidates({
+            source: "external",
+            referee_id: refereeId,
+            status: "APPROVED",
+            page: 1,
+            limit: 1,
+          }),
+          // Email/connect code stay behind the same maintainer gate GET /referees
+          // already enforces — an ordinary recruiter never issues this call.
+          isMaintainer ? listReferees(apiFetch) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setCount((pendingPage.meta?.total ?? 0) + (approvedPage.meta?.total ?? 0));
+        const match = referees?.find((r) => r.id === refereeId);
+        if (match) setContact({ email: match.email, connect_code: match.connect_code });
+      } catch {
+        if (!cancelled) setCount(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, refereeId, isMaintainer, apiFetch]);
+
+  return (
+    // z-30, not z-10: the Approve/Reject block lower in the card is also
+    // `relative z-10`, and with equal z-index the later element in DOM order
+    // wins the tie — which was letting those buttons paint over this popover
+    // despite its own z-20. Outranking their z-10 here fixes it regardless of
+    // where in the card this badge renders.
+    <div ref={wrapperRef} className="pointer-events-auto relative z-30 w-fit">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[rgba(52,211,153,0.1)] text-[#1f7a63] dark:text-[#4fbd9f] hover:opacity-80 transition-opacity"
+      >
+        <IconUsers className="size-3" />
+        Referred by {refereeName}
+      </button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg p-3 text-xs shadow-xl bg-surface-panel border border-border"
+        >
+          <p className="font-heading font-bold text-text-primary text-[13px]">{refereeName}</p>
+          <p className="mt-1 text-text-muted">
+            {loading
+              ? "Loading…"
+              : count == null
+                ? "—"
+                : `${count} candidate${count === 1 ? "" : "s"} referred`}
+          </p>
+          {isMaintainer && contact && (
+            <div className="mt-2 pt-2 border-t border-border/40 space-y-0.5 text-text-muted">
+              <p className="truncate">{contact.email}</p>
+              {contact.connect_code && <p className="font-mono">{contact.connect_code}</p>}
+            </div>
+          )}
+          {onViewReferee && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewReferee(refereeId);
+                setOpen(false);
+              }}
+              className="mt-2 text-[11px] font-semibold text-yellow hover:opacity-80"
+            >
+              View all referrals →
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CandidateInfo({
+  candidate,
+  isMaintainer,
+  onViewReferee,
+}: {
+  candidate: ApiCandidate;
+  isMaintainer?: boolean;
+  onViewReferee?: (refereeId: string) => void;
+}) {
   let salaryStr: string | null = null;
   if (candidate.salary != null) {
     salaryStr = `₹${candidate.salary.toLocaleString("en-IN")}`;
@@ -107,6 +302,15 @@ function CandidateInfo({ candidate }: { candidate: ApiCandidate }) {
           <IconUserCheck className="size-3 shrink-0 opacity-50" />
           <span className="truncate">Added by {candidate.created_by_name}</span>
         </p>
+      )}
+      {candidate.source === "external" && (
+        <div className="mt-1.5">
+          <SourceBadge
+            candidate={candidate}
+            isMaintainer={isMaintainer}
+            onViewReferee={onViewReferee}
+          />
+        </div>
       )}
     </div>
   );
@@ -210,6 +414,7 @@ export default function CandidateCard({
   onDelete,
   onApprove,
   onReject,
+  onViewReferee,
 }: Readonly<CandidateCardProps>) {
   const palette = getAvatarPalette(candidate.full_name);
   const initials = getInitials(candidate.full_name);
@@ -294,7 +499,11 @@ export default function CandidateCard({
         <div className="flex flex-col h-full p-5 gap-4">
           <div className="flex items-start gap-3.5">
             <CandidateAvatar palette={palette} initials={initials} />
-            <CandidateInfo candidate={candidate} />
+            <CandidateInfo
+              candidate={candidate}
+              isMaintainer={isMaintainer}
+              onViewReferee={onViewReferee}
+            />
             {isMaintainer && onDelete && (
               <div className="pointer-events-auto relative z-10 shrink-0">
                 {confirmDelete ? (
