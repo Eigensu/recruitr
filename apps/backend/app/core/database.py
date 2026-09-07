@@ -174,7 +174,6 @@ async def init_db() -> None:
         PaymentBatch,
         Notification,
         # Gamification
-        RecruitmentTask,
         RecruiterProfile,
         # Leaderboard
         EmployeeStat,

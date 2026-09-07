@@ -104,7 +104,7 @@
         "type": "debugpy",
         "request": "launch",
         "module": "uvicorn",
-        "args": ["app.main:app", "--reload", "--port", "8000"],
+        "args": ["app.core.main:app", "--reload", "--port", "8000"],
         "cwd": "${workspaceFolder:🐍 Backend (FastAPI)}",
         "envFile": "${workspaceFolder:🏠 Root}/.env",
         "justMyCode": true,

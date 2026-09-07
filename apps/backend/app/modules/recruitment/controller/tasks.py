@@ -1,7 +1,7 @@
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import (
+from app.core.dependencies import (
     get_tenant,
     get_viewer,
     require_maintainer,

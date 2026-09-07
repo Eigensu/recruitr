@@ -9,7 +9,7 @@ model redefines an index that already exists (same name, different unique /
 partialFilterExpression / sparse / TTL / key spec), creation fails with
 IndexOptionsConflict (85) or IndexKeySpecsConflict (86). That single failure
 makes the app fall back to skip_indexes=True, which disables index sync for
-every model, not just the one that conflicted (see app/database.py).
+every model, not just the one that conflicted (see app/core/database.py).
 
 Unlike fix_ttl_indexes.py (which only compares expireAfterSeconds), this
 compares the full set of index-defining options, so it also catches cases

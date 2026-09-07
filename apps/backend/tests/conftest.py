@@ -6,6 +6,7 @@ import pytest_asyncio
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
+from app.common.utils.seed_guard import assert_local_database
 from app.core.config import settings
 from app.modules.auth.models import User
 from app.modules.brands.models import Brand
@@ -24,6 +25,7 @@ from app.modules.recruitment.models import (
     CandidateDocument,
     CandidateEvent,
     Client,
+    ClientMessage,
     ClientUser,
     Counter,
     Employee,
@@ -32,6 +34,7 @@ from app.modules.recruitment.models import (
     PaymentBatch,
     Position,
     RecruiterTag,
+    RecruitmentTask,
     RefereeUser,
     ReferralRecord,
     Team,
@@ -41,6 +44,11 @@ from app.modules.recruitment.models import (
 @pytest_asyncio.fixture(autouse=True)
 async def init_test_db() -> AsyncGenerator[None, None]:
     """Initialize an isolated test database for each test, then drop it."""
+    # This fixture drops its database on teardown, and the repo-root .env points
+    # MONGODB_URI at the live Atlas cluster — so an unguarded `uv run pytest`
+    # creates and drops `<db>_test` on production. Same hazard the seeders guard
+    # against; run against localhost, or set SEED_ALLOW_REMOTE_DB=1 to override.
+    assert_local_database(settings.MONGODB_URI, action="run tests against")
     test_db_name = f"{settings.MONGODB_DB_NAME}_test"
     client = AsyncMongoClient(settings.MONGODB_URI)
     await init_beanie(
@@ -49,18 +57,20 @@ async def init_test_db() -> AsyncGenerator[None, None]:
             # Auth
             User,
             Brand,
-            # Recruitment domain. Keep in step with app/database.py — a model
+            # Recruitment domain. Keep in step with app/core/database.py — a model
             # missing here is not caught until some endpoint happens to query
             # it, and then fails as CollectionWasNotInitialized rather than as
             # anything that points at this list.
             Counter,
             Client,
             ClientUser,
+            ClientMessage,
             Position,
             Candidate,
             Mapping,
             Employee,
             Team,
+            RecruitmentTask,
             RecruiterTag,
             ActivityLog,
             CandidateEvent,

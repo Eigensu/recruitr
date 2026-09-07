@@ -32,11 +32,12 @@ pnpm --filter frontend lint     # eslint
 pnpm --filter frontend format   # prettier --write .
 
 # Backend only (from repo root, uses uv)
-pnpm dev:backend                 # uvicorn app.main:app --reload --port 8000
+pnpm dev:backend                 # uvicorn app.core.main:app --reload --port 8000
 cd apps/backend && uv sync       # install deps (uv.lock is the source of truth; requirements.txt is kept in sync for Docker)
-cd apps/backend && uv run pytest                          # full suite
-cd apps/backend && uv run pytest tests/test_recruitment/test_candidates_api.py  # single file
-cd apps/backend && uv run pytest tests/test_recruitment/test_candidates_api.py::test_name -v  # single test
+# Tests refuse to run unless MONGODB_URI is local — see the note below.
+cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest             # full suite
+cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest tests/test_recruitment/test_candidates_api.py           # single file
+cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest tests/test_recruitment/test_candidates_api.py::test_name -v  # single test
 cd apps/backend && uv run ruff check .                    # lint
 cd apps/backend && uv run ruff format .                    # format
 ```
@@ -45,6 +46,12 @@ Backend tests spin up a real MongoDB (`{MONGODB_DB_NAME}_test`) per test via a `
 autouse fixture in `tests/conftest.py` — a Mongo instance must be reachable at `MONGODB_URI`. Use
 `docker-compose up -d` (starts a single-node Mongo *replica set* on `:27017`, required for Beanie
 transactions, plus Redis on `:6379`) if nothing is running locally.
+
+**That fixture drops its database on teardown, and the repo-root `.env` points `MONGODB_URI` at the
+live Atlas cluster** — so it calls `assert_local_database()` first and refuses to run against a
+non-local host, the same guard the seeders use. Override `MONGODB_URI` on the command line (env
+vars beat `.env`) as shown above, or set `SEED_ALLOW_REMOTE_DB=1` if you really mean to target a
+remote scratch cluster.
 
 `pyproject.toml` is the source of truth for lint/test config: ruff targets py311, line-length 100,
 `E501`/`B008` ignored (B008 is the FastAPI `Depends()` default-arg idiom); pytest uses
@@ -56,9 +63,9 @@ A husky `pre-commit` hook runs `lint-staged` (eslint --fix + prettier) on staged
 ## Environment
 
 Single `.env` at the repo root is the source of truth for both apps (see `.env.example`):
-Backend reads it via `pydantic-settings` (`app/config.py` resolves the path relative to its own
-file location, three levels up, so it works regardless of cwd). Frontend reads
-`NEXT_PUBLIC_*`-prefixed vars via `next.config.ts`.
+Backend reads it via `pydantic-settings` (`app/core/config.py` finds the root by walking up for
+`pnpm-workspace.yaml`, so it works regardless of cwd and survives the file being moved). Frontend
+reads `NEXT_PUBLIC_*`-prefixed vars via `next.config.ts`.
 
 Note: `.env.example` lists Clerk keys (`NEXT_PUBLIC_CLERK_*`), but auth is **not** Clerk-based —
 see Auth below. Those vars are currently unused; don't assume Clerk is wired up anywhere.
@@ -79,4 +86,4 @@ Backend architecture and auth model → `apps/backend/CLAUDE.md`. Frontend archi
   `NEXT_PUBLIC_CLOUDINARY_*` env vars are used for direct-from-browser upload widgets.
 - Redis is optional in dev (`REDIS_ENABLED` flag) and backs the dashboard/leaderboard cache
   (`app/common/extras/redis_cache.py`) plus the Celery broker/result backend for background jobs
-  (`app/celery_app.py`).
+  (`app/core/celery_app.py`).
