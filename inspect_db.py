@@ -5,7 +5,7 @@ import os
 sys.path.insert(0, os.path.abspath('apps/backend'))
 
 from pymongo import AsyncMongoClient
-from app.config import settings
+from app.core.config import settings
 
 async def main():
     client = AsyncMongoClient(settings.MONGODB_URI)

@@ -14,9 +14,9 @@ from app.core.dependencies import deny_clients
 from app.modules.auth.access import warn_if_unconfigured
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
+from app.modules.dashboard.controller import router as dashboard_router
+from app.modules.dashboard.routers.notifications_router import router as notifications_router
 from app.modules.dashboard.routers.referee_router import router as referee_router
-from app.modules.dashboard.routers.router import router as dashboard_router
-from app.modules.dashboard.services.notifications_router import router as notifications_router
 from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
     activity_router,

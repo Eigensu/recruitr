@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT / "apps" / "backend"))
 PDF_DIR = Path(__file__).parent / "Database CV_s FY26-27"
 MANPOWER_FILE = Path(__file__).parent / "Binge - Manpower Database - Combined.xlsx"
 
-from app.config import settings
+from app.core.config import settings
 
 BRAND_NAME = "Binge Consulting"
 CLOUDINARY_FOLDER = "eigensu/resumes"

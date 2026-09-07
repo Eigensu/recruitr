@@ -24,7 +24,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "apps" / "backend"))
 
-from app.config import settings
+from app.core.config import settings
 
 MANPOWER_FILE = Path(__file__).parent / "Binge - Manpower Database - Combined.xlsx"
 DASHBOARD_FILE = Path(__file__).parent / "Binge - Recruitment Dashboard (1).xlsx"

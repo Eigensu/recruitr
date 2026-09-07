@@ -32,7 +32,7 @@ from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.utils.resume_parser import parse_resume
 from app.modules.storage.service import extract_text_from_pdf
 
-from app.config import settings
+from app.core.config import settings
 
 DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
 PDF_DIR = Path(os.getenv("PDF_DIR", str(Path(__file__).parent / "Database CV_s FY26-27")))
