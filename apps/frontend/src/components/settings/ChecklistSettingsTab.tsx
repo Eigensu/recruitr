@@ -8,6 +8,7 @@ import {
   IconUser,
   IconCalendarEvent,
   IconTrash,
+  IconEdit,
 } from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -15,6 +16,7 @@ import type { UserInfo } from "@/types";
 import {
   listTasks,
   createTask,
+  updateTask,
   deleteTask,
   type TaskResponse,
   type TrackedActivityType,
@@ -32,6 +34,7 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskResponse | null>(null);
 
   const isMaintainer = user?.role === "admin" || user?.role === "maintainer";
 
@@ -130,19 +133,25 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
               key={task.id}
               task={task}
               isMaintainer={isMaintainer}
+              onEdit={() => setEditingTask(task)}
               onDelete={() => handleDelete(task.id)}
             />
           ))}
         </div>
       )}
 
-      {showCreateModal && isMaintainer && (
-        <CreateTaskModal
+      {(showCreateModal || editingTask !== null) && isMaintainer && (
+        <TaskFormModal
+          editTask={editingTask || undefined}
           teams={teams}
           employees={employees}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingTask(null);
+          }}
           onSuccess={() => {
             setShowCreateModal(false);
+            setEditingTask(null);
             fetchTasks();
           }}
         />
@@ -156,10 +165,12 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
 function TaskCard({
   task,
   isMaintainer,
+  onEdit,
   onDelete,
 }: {
   readonly task: TaskResponse;
   readonly isMaintainer: boolean;
+  readonly onEdit: () => void;
   readonly onDelete: () => void;
 }) {
   const isCompleted = task.completed_count >= task.target_count;
@@ -208,13 +219,22 @@ function TaskCard({
             </div>
 
             {isMaintainer && (
-              <button
-                onClick={onDelete}
-                className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
-                title="Delete Task"
-              >
-                <IconTrash className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={onEdit}
+                  className="p-1.5 text-text-muted hover:text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors"
+                  title="Edit Task"
+                >
+                  <IconEdit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
+                  title="Delete Task"
+                >
+                  <IconTrash className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -268,12 +288,14 @@ function TaskCard({
 
 // ── CREATE TASK MODAL ──────────────────────────────────────────────────────
 
-function CreateTaskModal({
+function TaskFormModal({
+  editTask,
   teams,
   employees,
   onClose,
   onSuccess,
 }: {
+  readonly editTask?: TaskResponse;
   readonly teams: Team[];
   readonly employees: EmployeeTeamInfo[];
   readonly onClose: () => void;
@@ -282,49 +304,58 @@ function CreateTaskModal({
   const apiFetch = useApiFetch();
   const toast = useToast();
 
-  const [submitting, setSubmitting] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [targetCount, setTargetCount] = useState("5");
-  const [trackedActivity, setTrackedActivity] = useState<TrackedActivityType>("mapped");
-  const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">("all");
-  const [assigneeId, setAssigneeId] = useState("");
-
   const today = new Date().toISOString().split("T")[0];
-  const [dueDate, setDueDate] = useState(today);
+
+  const [title, setTitle] = useState(editTask?.title ?? "");
+  const [description, setDescription] = useState(editTask?.description ?? "");
+  const [trackedActivity, setTrackedActivity] = useState<TrackedActivityType>(
+    editTask?.tracked_activity_type ?? "all_activities",
+  );
+  const [targetCount, setTargetCount] = useState(editTask ? String(editTask.target_count) : "");
+
+  const initialDueDate = editTask ? new Date(editTask.due_date).toISOString().split("T")[0] : today;
+  const [dueDate, setDueDate] = useState(initialDueDate);
+
+  const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">(
+    editTask?.assignee_type ?? "all",
+  );
+  const [assigneeId, setAssigneeId] = useState(editTask?.assignee_id ?? "");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !targetCount || !dueDate) return;
-    if ((assigneeType === "single" || assigneeType === "team") && !assigneeId) {
-      toast("Please select an assignee", "error");
-      return;
-    }
-
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      // Start of day today, due date at end of day
-      const startObj = new Date();
-      startObj.setHours(0, 0, 0, 0);
-
-      const dueObj = new Date(dueDate);
+      const [y, m, d] = dueDate.split("-").map(Number);
+      const dueObj = new Date(y, m - 1, d);
       dueObj.setHours(23, 59, 59, 999);
 
-      await createTask(apiFetch, {
+      const payload = {
         title,
         description: description || undefined,
         tracked_activity_type: trackedActivity,
         target_count: Number.parseInt(targetCount, 10),
         assignee_type: assigneeType,
         assignee_id: assigneeType === "all" ? undefined : assigneeId,
-        start_date: startObj.toISOString(),
         due_date: dueObj.toISOString(),
-      });
+      };
 
-      toast("Task created successfully", "success");
+      if (editTask) {
+        await updateTask(apiFetch, editTask.id, payload);
+        toast("Task updated successfully", "success");
+      } else {
+        const startObj = new Date();
+        startObj.setHours(0, 0, 0, 0);
+        await createTask(apiFetch, {
+          ...payload,
+          start_date: startObj.toISOString(),
+        });
+        toast("Task created successfully", "success");
+      }
+
       onSuccess();
     } catch {
-      toast("Failed to create task", "error");
+      toast(editTask ? "Failed to update task" : "Failed to create task", "error");
     } finally {
       setSubmitting(false);
     }
@@ -334,7 +365,9 @@ function CreateTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-surface-2">
-          <h2 className="text-lg font-bold text-text-primary">Create New Task</h2>
+          <h2 className="text-lg font-bold text-text-primary">
+            {editTask ? "Edit Task" : "Create New Task"}
+          </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-xl">
             &times;
           </button>
@@ -378,6 +411,7 @@ function CreateTaskModal({
               onChange={(e) => setTrackedActivity(e.target.value as TrackedActivityType)}
               className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
             >
+              <option value="all_activities">All Activities</option>
               <option value="mapped">Candidate Mapped</option>
               <option value="stage_moved">Candidate Moved</option>
               <option value="rejected">Candidate Rejected</option>
@@ -493,7 +527,13 @@ function CreateTaskModal({
               disabled={submitting}
               className="px-4 py-2 bg-navy text-white dark:bg-yellow dark:text-navy text-sm font-bold rounded-lg disabled:opacity-50"
             >
-              {submitting ? "Creating..." : "Create Task"}
+              {submitting
+                ? editTask
+                  ? "Saving..."
+                  : "Creating..."
+                : editTask
+                  ? "Save Changes"
+                  : "Create Task"}
             </button>
           </div>
         </form>

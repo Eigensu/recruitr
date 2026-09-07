@@ -84,7 +84,7 @@ export function TasksProgressCard() {
         >
           <div className="flex flex-col">
             <span className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              TASKS
+              Checklist
             </span>
 
             {totalTasks === 0 ? (
