@@ -64,7 +64,10 @@ export default async function PipelinePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-canvas">
       <div className="shrink-0 border-b border-border px-6 pb-5 pt-6">
-        <h1 className="font-heading text-3xl font-bold tracking-wide text-text-primary">
+        <h1
+          className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
+          style={{ color: "var(--color-text-primary)" }}
+        >
           {isClient ? "Hiring Pipeline" : "Recruitment Pipeline"}
         </h1>
         <p className="mt-1 text-sm text-text-muted">

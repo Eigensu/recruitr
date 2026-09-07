@@ -7,13 +7,7 @@ import { useTheme } from "@/context/ThemeContext";
 
 const LANGUAGE_KEY = "binge-language";
 
-const LANGUAGES = [
-  { value: "en", label: "English" },
-  { value: "ja", label: "Japanese (日本語)" },
-  { value: "zh", label: "Chinese (中文)" },
-  { value: "hi", label: "Hindi (हिन्दी)" },
-  { value: "ar", label: "Arabic (العربية)" },
-] as const;
+const LANGUAGES = [{ value: "en", label: "English" }] as const;
 
 interface PreferencesPanelProps {
   /** Extra rows appended inside the bordered list, e.g. the staff "My Team" block. */
@@ -33,7 +27,8 @@ export default function PreferencesPanel({ extraRows, children }: PreferencesPan
 
   const [language, setLanguage] = useState<string>(() => {
     try {
-      return globalThis.localStorage?.getItem(LANGUAGE_KEY) ?? "en";
+      const stored = globalThis.localStorage?.getItem(LANGUAGE_KEY);
+      return LANGUAGES.some((l) => l.value === stored) ? stored! : "en";
     } catch {
       return "en";
     }

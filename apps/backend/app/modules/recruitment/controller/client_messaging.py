@@ -54,6 +54,31 @@ async def create_message(
         cta_url=payload.cta_url,
     )
     await msg.insert()
+
+    # Create notifications for targeted clients
+    from app.modules.recruitment.enums import NotificationKind
+    from app.modules.recruitment.models import Client, Notification
+
+    client_ids = []
+    if msg.target_type == "all":
+        clients = await Client.find({"brand_id": scope.brand_id}).to_list()
+        client_ids = [c.id for c in clients]
+    else:
+        client_ids = msg.target_client_ids or []
+
+    notifications_to_insert = []
+    for cid in client_ids:
+        notifications_to_insert.append(
+            Notification(
+                brand_id=scope.brand_id,
+                client_id=cid,
+                kind=NotificationKind.client_message,
+                message=msg.message_text,
+            )
+        )
+    if notifications_to_insert:
+        await Notification.insert_many(notifications_to_insert)
+
     return ClientMessageOut.model_validate(msg)
 
 

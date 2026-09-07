@@ -60,8 +60,23 @@ async def list_activity(
     _: Annotated[object, Depends(require_maintainer)],
     page: _Page = 1,
     limit: _Limit = 50,
+    search: Annotated[str | None, Query()] = None,
+    activityType: Annotated[str | None, Query()] = None,
+    recruiterId: Annotated[str | None, Query()] = None,
+    category: Annotated[str | None, Query()] = None,
 ) -> ActivityPage:
     match: dict = {"brand_id": tenant.brand_id}
+    if activityType:
+        match["activity_type"] = activityType
+    if category:
+        match["target_entity_type"] = category
+    if recruiterId:
+        from bson import ObjectId
+
+        try:
+            match["employee_id"] = ObjectId(recruiterId)
+        except Exception:
+            match["employee_id"] = recruiterId
 
     pipeline = [
         {_MATCH: match},
@@ -102,14 +117,32 @@ async def list_activity(
             }
         },
         {_UNSET: ["_emp", "_id"]},
-        {_SORT: {"created_at": -1}},
-        {
-            _FACET: {
-                "items": [{_SKIP: (page - 1) * limit}, {_LIMIT_OP: limit}],
-                "meta": [{_COUNT: "total"}],
-            }
-        },
     ]
+
+    if search:
+        pipeline.append(
+            {
+                "$match": {
+                    "$or": [
+                        {"description": {"$regex": search, "$options": "i"}},
+                        {"employee_name": {"$regex": search, "$options": "i"}},
+                        {"activity_type": {"$regex": search, "$options": "i"}},
+                    ]
+                }
+            }
+        )
+
+    pipeline.extend(
+        [
+            {_SORT: {"created_at": -1}},
+            {
+                _FACET: {
+                    "items": [{_SKIP: (page - 1) * limit}, {_LIMIT_OP: limit}],
+                    "meta": [{_COUNT: "total"}],
+                }
+            },
+        ]
+    )
 
     result = await (await ActivityLog.get_motor_collection().aggregate(pipeline)).to_list(
         length=None

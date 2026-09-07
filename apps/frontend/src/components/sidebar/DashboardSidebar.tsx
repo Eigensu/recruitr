@@ -22,7 +22,7 @@ import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/s
 import { useTheme } from "@/context/ThemeContext";
 import { useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
-import { OnboardingProgressCard } from "@/components/sidebar/OnboardingProgressCard";
+import { TasksProgressCard } from "@/components/sidebar/TasksProgressCard";
 import MobileBottomNav from "@/components/sidebar/MobileBottomNav";
 import type { UserInfo } from "@/types";
 
@@ -252,7 +252,7 @@ export default function DashboardSidebar({ user }: { readonly user: UserInfo | n
 
           {/* Bottom: onboarding + theme toggle + user */}
           <div className="flex flex-col">
-            {!isReferee && <OnboardingProgressCard progress={76} />}
+            {!isReferee && <TasksProgressCard />}
 
             <div className="mt-4 flex flex-col pt-2">
               <ThemeToggleRow />

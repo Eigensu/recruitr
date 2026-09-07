@@ -11,6 +11,7 @@ import {
 import { useRefereeData } from "@/hooks/useRefereeData";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { NotificationBell } from "@/components/dashboard";
 import DashboardKpiCard from "@/components/dashboard/molecules/DashboardKpiCard";
 
 /** Timeline dot: filled for the stage in progress, ticked for stages behind it.
@@ -137,7 +138,8 @@ export default function RefereePortal() {
                 Welcome, {user?.full_name ?? "back"}
               </h1>
             </div>
-            <div className="mt-1 shrink-0">
+            <div className="mt-1 flex shrink-0 items-center gap-2">
+              <NotificationBell />
               <ThemeToggle />
             </div>
           </div>
@@ -164,7 +166,7 @@ export default function RefereePortal() {
         {!isLoading && !error && (
           <>
             {/* SUMMARY TILES */}
-            <div className="grid gap-4 sm:grid-cols-3 sm:h-[180px]">
+            <div className="grid gap-4 sm:grid-cols-3">
               <DashboardKpiCard
                 index={0}
                 metric={{

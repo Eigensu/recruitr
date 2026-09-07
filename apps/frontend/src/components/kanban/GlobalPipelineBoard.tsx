@@ -14,6 +14,7 @@ import {
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
 import KanbanCard from "./CandidateCard";
+import ClientActionModal from "./ClientActionModal";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -91,6 +92,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
     position_id: "",
@@ -339,11 +341,45 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
 
       {/* Board */}
       {loading ? (
-        <div
-          className="flex flex-1 items-center justify-center text-sm"
-          style={{ color: "var(--color-text-secondary)" }}
-        >
-          Loading…
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-2 animate-in fade-in duration-300">
+          {[1, 2, 3, 4, 5, 6].map((colIndex) => (
+            <div
+              key={colIndex}
+              className="flex w-[320px] shrink-0 flex-col rounded-2xl p-4 bg-surface"
+              style={{
+                border: "1px solid var(--color-border-val)",
+                background: "var(--color-surface-val)",
+              }}
+            >
+              {/* Column Header */}
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full shrink-0 bg-surface-2" />
+                  <div className="h-4 w-24 rounded-full bg-surface-2 animate-pulse" />
+                </div>
+                <div className="h-5 w-8 rounded-full bg-surface-2 animate-pulse" />
+              </div>
+              {/* Column Cards */}
+              <div className="flex-1 space-y-2.5 overflow-y-auto">
+                {[1, 2, 3].map((cardIndex) => (
+                  <div
+                    key={cardIndex}
+                    className="group relative rounded-xl border p-3 min-h-[120px] bg-surface-panel animate-pulse"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    {/* Card Content Skeleton */}
+                    <div className="h-4 w-3/4 rounded-full bg-surface-2 mb-2" />
+                    <div className="h-3 w-1/2 rounded-full bg-surface-2 mb-2" />
+                    <div className="h-3 w-1/3 rounded-full bg-surface-2 mb-4" />
+                    <div className="flex justify-between items-center mt-auto">
+                      <div className="h-4 w-12 rounded-full bg-surface-2" />
+                      <div className="h-4 w-12 rounded-full bg-surface-2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <DndContext
@@ -360,6 +396,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
                 onStageChange={handleStageChange}
+                onCardClick={(card) => setSelectedCard(card)}
               />
             ))}
           </div>
@@ -369,6 +406,29 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
           </DragOverlay>
         </DndContext>
       )}
+      <ClientActionModal
+        isOpen={!!selectedCard}
+        onClose={() => setSelectedCard(null)}
+        card={selectedCard}
+        onStageChange={async (newStage) => {
+          if (!selectedCard) return;
+          const res = await fetch(
+            `${API_URL}/api/v1/pipeline/mappings/${selectedCard.mapping_id}/move`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ to_stage: newStage }),
+            },
+          );
+          if (res.ok) {
+            setSelectedCard(null);
+            load();
+          } else {
+            console.error("Failed to move candidate");
+          }
+        }}
+        onActionComplete={load}
+      />
     </div>
   );
 }

@@ -7,10 +7,11 @@ import {
   IconLoader2,
   IconUser,
   IconAlertCircle,
+  IconSearch,
 } from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -84,17 +85,32 @@ function timeAgo(iso: string): string {
 export default function ActivityPage() {
   const apiFetch = useApiFetch();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isMaintainer, isLoading: authLoading } = useCurrentUser();
+
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [meta, setMeta] = useState<ActivityPage["meta"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
 
+  const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+
+  // Filters from URL
+  const searchParam = searchParams?.get("search") || "";
+  const activityTypeParam = searchParams?.get("activityType") || "";
+  const recruiterIdParam = searchParams?.get("recruiterId") || "";
+  const categoryParam = searchParams?.get("category") || "";
+
+  // Local state for debounced search
+  const [searchValue, setSearchValue] = useState(searchParam);
+
   const fetchPage = useCallback(
-    async (p: number, append = false) => {
+    async (p: number, append = false, queryParams: string = "") => {
       try {
-        const data = await apiFetch<ActivityPage>(`/api/v1/activity?page=${p}&limit=50`);
+        const data = await apiFetch<ActivityPage>(
+          `/api/v1/activity?page=${p}&limit=50${queryParams}`,
+        );
         setItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setMeta(data.meta);
       } catch {
@@ -104,6 +120,38 @@ export default function ActivityPage() {
     [apiFetch],
   );
 
+  // Initial load of employees
+  useEffect(() => {
+    if (authLoading || !isMaintainer) return;
+    apiFetch<{ id: string; name: string }[]>("/api/v1/teams/employees")
+      .then((data) => setEmployees(data))
+      .catch(() => {});
+  }, [authLoading, isMaintainer, apiFetch]);
+
+  // Update URL function
+  const updateUrl = useCallback(
+    (newParams: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+      for (const [k, v] of Object.entries(newParams)) {
+        if (v) params.set(k, v);
+        else params.delete(k);
+      }
+      router.replace(`?${params.toString()}`);
+    },
+    [searchParams, router],
+  );
+
+  // Debounce search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchValue !== searchParam) {
+        updateUrl({ search: searchValue });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchValue, searchParam, updateUrl]);
+
+  // Fetch when URL params change
   useEffect(() => {
     if (authLoading) return;
     if (!isMaintainer) {
@@ -112,18 +160,42 @@ export default function ActivityPage() {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    fetchPage(1).finally(() => setLoading(false));
-  }, [authLoading, isMaintainer, router, fetchPage]);
+    const params = new URLSearchParams();
+    if (searchParam) params.set("search", searchParam);
+    if (activityTypeParam) params.set("activityType", activityTypeParam);
+    if (recruiterIdParam) params.set("recruiterId", recruiterIdParam);
+    if (categoryParam) params.set("category", categoryParam);
+
+    setPage(1);
+    fetchPage(1, false, `&${params.toString()}`).finally(() => setLoading(false));
+  }, [
+    authLoading,
+    isMaintainer,
+    router,
+    fetchPage,
+    searchParam,
+    activityTypeParam,
+    recruiterIdParam,
+    categoryParam,
+  ]);
 
   async function handleLoadMore() {
     const next = page + 1;
     setLoadingMore(true);
-    await fetchPage(next, true);
+    const params = new URLSearchParams();
+    if (searchParam) params.set("search", searchParam);
+    if (activityTypeParam) params.set("activityType", activityTypeParam);
+    if (recruiterIdParam) params.set("recruiterId", recruiterIdParam);
+    if (categoryParam) params.set("category", categoryParam);
+
+    await fetchPage(next, true, `&${params.toString()}`);
     setPage(next);
     setLoadingMore(false);
   }
 
-  if (authLoading || loading) {
+  const hasFilters = Boolean(searchParam || activityTypeParam || recruiterIdParam || categoryParam);
+
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <IconLoader2 className="size-6 animate-spin text-text-muted" />
@@ -141,16 +213,102 @@ export default function ActivityPage() {
         <div>
           <h1 className="text-2xl font-heading font-bold text-text-primary">Activity Log</h1>
           <p className="text-sm text-text-secondary mt-0.5">
-            {meta ? `${meta.total} total actions across your team` : "All recruitment actions"}
+            {meta ? `${meta.total} matching actions across your team` : "All recruitment actions"}
           </p>
         </div>
       </div>
 
-      {/* Feed */}
-      {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
+      {/* Filters Toolbar */}
+      <div className="mb-8 flex flex-col md:flex-row flex-wrap items-center gap-3 bg-surface-2 p-3 rounded-xl border border-border">
+        {/* Search */}
+        <div className="flex-1 min-w-[200px] w-full relative">
+          <input
+            type="text"
+            placeholder="Search activities..."
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm bg-surface rounded-lg border border-border text-text-primary placeholder-text-muted focus:outline-none focus:border-text-secondary"
+          />
+          <IconSearch className="size-4 text-text-muted absolute left-3 top-2.5" />
+        </div>
+
+        {/* Activity Type Dropdown */}
+        <select
+          value={activityTypeParam}
+          onChange={(e) => updateUrl({ activityType: e.target.value })}
+          className="w-full md:w-auto px-3 py-2 text-sm bg-surface rounded-lg border border-border text-text-primary focus:outline-none"
+        >
+          <option value="">All Activities</option>
+          <option value="mapped">Candidate Mapped</option>
+          <option value="stage_moved">Candidate Moved</option>
+          <option value="rejected">Candidate Rejected</option>
+          <option value="joined">Candidate Joined</option>
+          <option value="offer_accepted">Offer Accepted</option>
+          <option value="offer_sent">Offer Sent</option>
+          <option value="unmapped">Candidate Unmapped</option>
+        </select>
+
+        {/* Recruiter Dropdown */}
+        <select
+          value={recruiterIdParam}
+          onChange={(e) => updateUrl({ recruiterId: e.target.value })}
+          className="w-full md:w-auto px-3 py-2 text-sm bg-surface rounded-lg border border-border text-text-primary focus:outline-none"
+        >
+          <option value="">All Recruiters</option>
+          {employees.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+          <option value="system">System</option>
+        </select>
+
+        {/* Category Dropdown */}
+        <select
+          value={categoryParam}
+          onChange={(e) => updateUrl({ category: e.target.value })}
+          className="w-full md:w-auto px-3 py-2 text-sm bg-surface rounded-lg border border-border text-text-primary focus:outline-none"
+        >
+          <option value="">All Categories</option>
+          <option value="mapping">Mapping</option>
+          <option value="candidate">Candidate</option>
+        </select>
+
+        {/* Clear Filters */}
+        {hasFilters && (
+          <button
+            onClick={() => {
+              setSearchValue("");
+              router.replace("?");
+            }}
+            className="w-full md:w-auto px-3 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors text-left"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Loading overlay during filtering */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <IconLoader2 className="size-6 animate-spin text-text-muted" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center border border-border rounded-xl bg-surface">
           <IconAlertCircle className="size-10 text-text-muted opacity-30 mb-3" />
-          <p className="text-text-secondary text-sm">No activity recorded yet.</p>
+          <p className="text-text-primary font-semibold">No activities found</p>
+          <p className="text-text-secondary text-sm mt-1">Try changing your search or filters.</p>
+          {hasFilters && (
+            <button
+              onClick={() => {
+                setSearchValue("");
+                router.replace("?");
+              }}
+              className="mt-4 px-4 py-2 rounded-lg bg-surface-2 border border-border text-sm font-medium text-text-primary hover:bg-surface-panel transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="relative">

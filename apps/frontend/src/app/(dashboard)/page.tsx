@@ -86,9 +86,9 @@ async function ClientProfilesSection() {
 async function SourcingAnalyticsSection() {
   const data = await getSourcingDashboardData();
   const metrics = data.map((item) => ({
-    source_type: item.source,
+    source_type: item.source_type,
     source_channel: item.source_channel,
-    candidate_count: item.count,
+    candidate_count: item.candidate_count,
     pipeline_candidates: item.pipeline_candidates,
     offers_accepted: item.offers_accepted,
     joined_candidates: item.joined_candidates,

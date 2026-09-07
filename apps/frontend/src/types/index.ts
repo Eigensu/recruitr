@@ -452,11 +452,12 @@ export interface PipelineBoardData {
 export type NotificationKind =
   | "awaiting_decision"
   | "awaiting_interview_decision"
-  | "awaiting_offer_upload";
+  | "awaiting_offer_upload"
+  | "client_message";
 
 export interface PipelineNotification {
   id: string;
-  mapping_id: string;
+  mapping_id: string | null;
   kind: NotificationKind;
   message: string;
   created_at: string;
@@ -475,9 +476,9 @@ export type Department = "BOH" | "Service" | "Corporate";
 export type EstablishmentTag = "Cafe" | "QSR" | "Restaurant" | "Hotel" | "Other";
 
 export interface SourcingAnalyticsItem {
-  source: string;
-  source_channel: string;
-  count: number;
+  source_type: string | null;
+  source_channel: string | null;
+  candidate_count: number;
   pipeline_candidates: number;
   offers_accepted: number;
   joined_candidates: number;

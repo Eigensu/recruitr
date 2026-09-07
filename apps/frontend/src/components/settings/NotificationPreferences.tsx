@@ -71,7 +71,7 @@ export default function NotificationPreferences() {
               checked={preferences.email_alerts}
               onChange={() => handleToggle("email_alerts")}
               disabled={isSaving}
-              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-yellow"
+              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-blue-500"
               style={{
                 top: "0.125rem",
                 right: preferences.email_alerts ? "0" : "1.25rem",
@@ -80,7 +80,9 @@ export default function NotificationPreferences() {
             />
             <div
               className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${
-                preferences.email_alerts ? "bg-navy dark:bg-yellow" : "bg-gray-300 dark:bg-gray-600"
+                preferences.email_alerts
+                  ? "bg-navy dark:bg-blue-500"
+                  : "bg-gray-300 dark:bg-gray-600"
               }`}
             ></div>
           </div>
@@ -104,7 +106,7 @@ export default function NotificationPreferences() {
               checked={preferences.new_candidate}
               onChange={() => handleToggle("new_candidate")}
               disabled={isSaving}
-              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-yellow"
+              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-blue-500"
               style={{
                 top: "0.125rem",
                 right: preferences.new_candidate ? "0" : "1.25rem",
@@ -114,7 +116,7 @@ export default function NotificationPreferences() {
             <div
               className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${
                 preferences.new_candidate
-                  ? "bg-navy dark:bg-yellow"
+                  ? "bg-navy dark:bg-blue-500"
                   : "bg-gray-300 dark:bg-gray-600"
               }`}
             ></div>
@@ -141,7 +143,7 @@ export default function NotificationPreferences() {
               checked={preferences.weekly_digest}
               onChange={() => handleToggle("weekly_digest")}
               disabled={isSaving}
-              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-yellow"
+              className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 dark:border-gray-600 checked:right-0 checked:border-navy dark:checked:border-blue-500"
               style={{
                 top: "0.125rem",
                 right: preferences.weekly_digest ? "0" : "1.25rem",
@@ -151,7 +153,7 @@ export default function NotificationPreferences() {
             <div
               className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${
                 preferences.weekly_digest
-                  ? "bg-navy dark:bg-yellow"
+                  ? "bg-navy dark:bg-blue-500"
                   : "bg-gray-300 dark:bg-gray-600"
               }`}
             ></div>

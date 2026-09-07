@@ -7,6 +7,7 @@ The dashboard and leaderboard modules read from these same collections.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Literal
 
 from beanie import Document, PydanticObjectId, Replace, Update, before_event
@@ -582,7 +583,7 @@ class ReferralRecord(Document):
 
     brand_id: PydanticObjectId
     referee_id: PydanticObjectId
-    mapping_id: PydanticObjectId
+    mapping_id: PydanticObjectId | None = None
     candidate_id: PydanticObjectId
     position_id: PydanticObjectId
     role_level: str | None = None
@@ -665,7 +666,7 @@ class Notification(Document):
 
     brand_id: PydanticObjectId
     client_id: PydanticObjectId | None = None
-    mapping_id: PydanticObjectId
+    mapping_id: PydanticObjectId | None = None
     kind: NotificationKind
     message: str
     created_at: datetime = Field(default_factory=_utcnow)
@@ -677,4 +678,39 @@ class Notification(Document):
             IndexModel([("brand_id", 1), ("client_id", 1), ("read_at", 1)]),
             IndexModel([("mapping_id", 1), ("kind", 1), ("client_id", 1)]),
             IndexModel("created_at"),
+        ]
+
+
+# ── Recruitment Tasks ────────────────────────────────────────────────────────
+
+
+class TaskAssignmentType(StrEnum):
+    single = "single"
+    team = "team"
+    all = "all"
+
+
+class RecruitmentTask(Document):
+    brand_id: PydanticObjectId
+    title: str
+    description: str | None = None
+    tracked_activity_type: ActivityType
+    target_count: int
+    assignee_type: TaskAssignmentType
+    assignee_id: PydanticObjectId | None = None
+    start_date: datetime
+    due_date: datetime
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "recruitment_tasks"
+        indexes = [
+            IndexModel([("brand_id", 1)]),
+            IndexModel([("brand_id", 1), ("is_active", 1)]),
         ]
