@@ -55,7 +55,9 @@ remote scratch cluster.
 
 `pyproject.toml` is the source of truth for lint/test config: ruff targets py311, line-length 100,
 `E501`/`B008` ignored (B008 is the FastAPI `Depends()` default-arg idiom); pytest uses
-`asyncio_mode = "auto"`.
+`asyncio_mode = "auto"`. `TID251` bans importing `recruitment/{repository,service}/_impl.py` from
+anywhere but that package's own `__init__.py`, so the facade convention fails the linter rather
+than relying on everyone remembering it.
 
 A husky `pre-commit` hook runs `lint-staged` (eslint --fix + prettier) on staged frontend files and
 `ruff check --fix` + `ruff format` on staged backend `.py` files.

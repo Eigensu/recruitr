@@ -42,7 +42,7 @@ from app.modules.recruitment.enums import (
     PipelineStage,
 )
 from app.modules.recruitment.models import Candidate, CandidateEvent, Employee, Mapping
-from app.modules.recruitment.repository_impl import record_candidate_event
+from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
     BulkUploadResult,

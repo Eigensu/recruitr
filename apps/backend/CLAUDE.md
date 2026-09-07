@@ -40,16 +40,17 @@ cross-cutting notes.
   into one module because they share tenant-scoping and cross-reference each other constantly).
   Within a module the convention is `router`/`controller` (HTTP layer) → `service` (business logic)
   → `repository` (Mongo access) → `models` (Beanie documents) → `schemas` (Pydantic I/O). In
-  `recruitment` specifically, `repository/__init__.py` and `service/__init__.py` are thin re-export
-  facades over `repository_impl.py` / `service/service_impl.py` (a mid-refactor split into
-  per-domain files, in progress) — import from the package, not the `_impl` module, from outside
-  the package. `service/` holds both the facade and the implementations beneath it
-  (`service_impl.py`, plus `resume_service.py` as the first piece carved out); there is no separate
-  `services/` package, and reintroducing one would put two importable names a single letter apart.
-  Every repository function takes a `TenantScope` and prepends `brand_id` to its query; never call
-  `get_motor_collection()` directly outside `repository_impl.py`. `dashboard` follows the same
-  shape with its HTTP layer in `routers/` and business logic in `services/` — plural there, since
-  those directories hold several peers and no facade.
+  `recruitment` specifically, each layer is a package whose `__init__.py` is the public surface and
+  whose `_impl.py` is private to it: `repository/{__init__,_impl}.py` and
+  `service/{__init__,_impl,resume_service}.py`. Import from the package, never from `_impl` — the
+  underscore is the rule, and it is what lets `_impl.py` be split into per-domain modules (the
+  mid-refactor direction; `resume_service.py` is the first piece carved out) without touching a
+  caller. There is no separate `services/` package; reintroducing one would put two importable
+  names a single letter apart, which is exactly what was just removed. Every repository function
+  takes a `TenantScope` and prepends `brand_id` to its query; never call `get_motor_collection()`
+  outside `repository/_impl.py`. `dashboard` follows the same shape with its HTTP layer in
+  `routers/` and business logic in `services/` — plural there, since those directories hold several
+  peers and no facade.
 - Gamification/leaderboard credit is fire-and-forget from the recruitment service layer — a
   duplicate award or Redis failure must never roll back the domain write that triggered it.
 

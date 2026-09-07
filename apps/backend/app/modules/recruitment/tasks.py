@@ -233,7 +233,7 @@ def process_joining_dates() -> None:
 
         from app.modules.recruitment.enums import Decision, PipelineStage
         from app.modules.recruitment.models import Mapping
-        from app.modules.recruitment.repository_impl import move_stage
+        from app.modules.recruitment.repository import move_stage
         from app.modules.recruitment.schemas import TenantScope
 
         now = datetime.now(UTC)

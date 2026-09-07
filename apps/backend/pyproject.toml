@@ -12,7 +12,7 @@ target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+select = ["E", "F", "I", "W", "UP", "B", "SIM", "TID251"]
 # - E501 (line length) is enforced by the formatter (`ruff format`), not the linter
 #   (consistent with .trunk/configs/ruff.toml).
 # - B008 is the FastAPI Depends()/Query()/File() default-argument idiom — a known
@@ -21,6 +21,19 @@ ignore = ["E501", "B008"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+# The recruitment layers expose their public surface through the package
+# __init__ and keep the implementation in a private `_impl` module. That rule
+# was documentation until now, and callers had already drifted past it; TID251
+# makes it fail the linter instead. The two facades are the only legitimate
+# importers, and are excepted below.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"app.modules.recruitment.repository._impl".msg = "Import from app.modules.recruitment.repository — _impl is private to that package."
+"app.modules.recruitment.service._impl".msg = "Import from app.modules.recruitment.service — _impl is private to that package."
+
+[tool.ruff.lint.per-file-ignores]
+"app/modules/recruitment/repository/__init__.py" = ["TID251"]
+"app/modules/recruitment/service/__init__.py" = ["TID251"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

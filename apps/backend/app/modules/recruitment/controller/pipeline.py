@@ -39,7 +39,7 @@ from app.modules.recruitment.models import (
     Position,
     StageEvent,
 )
-from app.modules.recruitment.repository_impl import (
+from app.modules.recruitment.repository import (
     candidate_display_name,
     move_stage,
     recompute_position_seats,
@@ -751,7 +751,7 @@ async def drop_candidate(
 ):
     from app.modules.auth.models import UserRole
     from app.modules.recruitment.enums import Decision, PipelineStage
-    from app.modules.recruitment.repository_impl import move_stage
+    from app.modules.recruitment.repository import move_stage
 
     mapping = await _get_or_404(viewer, mapping_id)
 
