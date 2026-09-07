@@ -115,7 +115,7 @@ async def _parse_and_update_resume(
     Fields are only updated when the candidate currently has no value
     (skills are always refreshed since the resume is the source of truth).
     """
-    from app.modules.recruitment.services.resume_service import parse_resume_with
+    from app.modules.recruitment.service.resume_service import parse_resume_with
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -135,7 +135,7 @@ async def _parse_and_update_resume(
         if not doc:
             return
 
-        from app.modules.recruitment.services.resume_service import build_candidate_resume_update
+        from app.modules.recruitment.service.resume_service import build_candidate_resume_update
 
         update = build_candidate_resume_update(doc, parsed, raw_text)
         if update:
@@ -490,7 +490,7 @@ async def bulk_upload_resumes(
         try:
             file_bytes = await upload.read()
 
-            from app.modules.recruitment.services.resume_service import process_resume_bytes
+            from app.modules.recruitment.service.resume_service import process_resume_bytes
 
             try:
                 raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
@@ -547,7 +547,7 @@ async def bulk_upload_resumes(
             existing = await Candidate.find_one({"email": email_lower, "brand_id": tenant.brand_id})
 
             if existing:
-                from app.modules.recruitment.services.resume_service import (
+                from app.modules.recruitment.service.resume_service import (
                     build_candidate_resume_update,
                 )
 

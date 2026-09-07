@@ -41,14 +41,15 @@ cross-cutting notes.
   Within a module the convention is `router`/`controller` (HTTP layer) → `service` (business logic)
   → `repository` (Mongo access) → `models` (Beanie documents) → `schemas` (Pydantic I/O). In
   `recruitment` specifically, `repository/__init__.py` and `service/__init__.py` are thin re-export
-  facades over `repository_impl.py` / `services/service_impl.py` (a mid-refactor split into
+  facades over `repository_impl.py` / `service/service_impl.py` (a mid-refactor split into
   per-domain files, in progress) — import from the package, not the `_impl` module, from outside
-  the package. Note the singular `service/` (facade) and plural `services/` (implementations) are
-  two different packages that differ by one letter; that collision predates the `app/core` move and
-  is worth collapsing when the refactor is finished. Every repository function takes a
-  `TenantScope` and prepends `brand_id` to its query; never call `get_motor_collection()` directly
-  outside `repository_impl.py`. `dashboard` follows the same shape with its HTTP layer in
-  `routers/` and business logic in `services/`.
+  the package. `service/` holds both the facade and the implementations beneath it
+  (`service_impl.py`, plus `resume_service.py` as the first piece carved out); there is no separate
+  `services/` package, and reintroducing one would put two importable names a single letter apart.
+  Every repository function takes a `TenantScope` and prepends `brand_id` to its query; never call
+  `get_motor_collection()` directly outside `repository_impl.py`. `dashboard` follows the same
+  shape with its HTTP layer in `routers/` and business logic in `services/` — plural there, since
+  those directories hold several peers and no facade.
 - Gamification/leaderboard credit is fire-and-forget from the recruitment service layer — a
   duplicate award or Redis failure must never roll back the domain write that triggered it.
 

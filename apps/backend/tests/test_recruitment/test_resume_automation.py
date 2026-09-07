@@ -10,8 +10,8 @@ from __future__ import annotations
 import pytest
 
 from app.modules.brands.models import AutomationSettings
-from app.modules.recruitment.services import resume_service
-from app.modules.recruitment.services.resume_service import (
+from app.modules.recruitment.service import resume_service
+from app.modules.recruitment.service.resume_service import (
     build_candidate_resume_update,
     parse_resume_with,
     process_resume_bytes,

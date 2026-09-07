@@ -40,8 +40,8 @@ from app.modules.recruitment.schemas import (
     TenantScope,
     TopCandidateItem,
 )
-from app.modules.recruitment.services.service_impl import map_candidate as service_map_candidate
-from app.modules.recruitment.services.service_impl import unmap_candidate as service_unmap_candidate
+from app.modules.recruitment.service.service_impl import map_candidate as service_map_candidate
+from app.modules.recruitment.service.service_impl import unmap_candidate as service_unmap_candidate
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.matching import _get_effective_requirements
 
