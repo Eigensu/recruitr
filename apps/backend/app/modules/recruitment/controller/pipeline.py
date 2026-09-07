@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, get_viewer
+from app.core.dependencies import get_tenant, get_viewer
 from app.modules.recruitment.enums import (
     KANBAN_STAGES,
     TERMINAL_STAGES,

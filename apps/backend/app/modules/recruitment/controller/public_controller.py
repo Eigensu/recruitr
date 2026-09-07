@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.config import settings
+from app.core.config import settings
 from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.brands.service import get_automation_settings

@@ -10,7 +10,7 @@ all. The cases below pin which, so a future edit cannot quietly reintroduce the
 duplicate-key collapse under cover of the intended ones.
 """
 
-from app.modules.dashboard.referee_service import (
+from app.modules.dashboard.services.referee_service import (
     _FROZEN_STAGES,
     _REFEREE_STAGE_BY_INTERNAL,
     map_stage_to_referee,

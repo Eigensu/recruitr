@@ -11,7 +11,7 @@ import pytest
 from bson import ObjectId
 from pymongo import MongoClient
 
-from app.config import settings
+from app.core.config import settings
 from scripts.backfill_stage_entered_at import _needs_backfill, apply, plan
 
 NOW = datetime(2026, 8, 20, 12, 0, tzinfo=UTC).replace(tzinfo=None)

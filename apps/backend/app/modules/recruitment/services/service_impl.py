@@ -277,7 +277,7 @@ async def _open_referral_record(mapping: Mapping) -> None:
     never roll back the mapping the recruiter just made.
     """
     try:
-        from app.modules.dashboard.referee_service import ensure_referral_record
+        from app.modules.dashboard.services.referee_service import ensure_referral_record
 
         await ensure_referral_record(mapping)
     except Exception:  # noqa: BLE001

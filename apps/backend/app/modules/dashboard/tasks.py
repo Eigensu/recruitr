@@ -3,8 +3,8 @@
 import asyncio
 import logging
 
-from app.celery_app import celery_app
-from app.modules.dashboard.referee_service import (
+from app.core.celery_app import celery_app
+from app.modules.dashboard.services.referee_service import (
     generate_payment_batch,
     process_daily_referee_updates,
 )

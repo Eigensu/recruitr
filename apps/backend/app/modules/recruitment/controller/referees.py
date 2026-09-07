@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, require_admin, require_maintainer
+from app.core.dependencies import get_tenant, require_admin, require_maintainer
 from app.modules.recruitment.models import RefereeUser
 from app.modules.recruitment.schemas import (
     RefereeUserInvite,

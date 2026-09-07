@@ -5,8 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import get_tenant, get_viewer
-from app.modules.dashboard import service
+from app.core.dependencies import get_tenant, get_viewer
 from app.modules.dashboard.schemas import (
     DashboardActivityPage,
     DashboardCandidatePage,
@@ -20,6 +19,7 @@ from app.modules.dashboard.schemas import (
     DashboardSourcingResponse,
     DashboardStageTimingResponse,
 )
+from app.modules.dashboard.services import service
 from app.modules.recruitment.enums import PipelineStage
 from app.modules.recruitment.schemas import TenantScope
 

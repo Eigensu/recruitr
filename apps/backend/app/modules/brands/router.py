@@ -18,7 +18,7 @@ from typing import Annotated
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import get_current_user, get_tenant, require_maintainer
+from app.core.dependencies import get_current_user, get_tenant, require_maintainer
 from app.modules.auth.access import NOT_AUTHORIZED, may_hold_staff_account
 from app.modules.auth.models import User
 from app.modules.auth.schemas import TokenPayload

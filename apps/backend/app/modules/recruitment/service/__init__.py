@@ -8,7 +8,7 @@ During Phase C/D refactoring, services will be split into focused modules:
 For now, re-export from the root service.py module.
 """
 
-from app.modules.recruitment.service_impl import (
+from app.modules.recruitment.services.service_impl import (
     advance_stage,
     ensure_employee_for_user,
     map_candidate,

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.dependencies import get_current_user, require_admin
+from app.core.dependencies import get_current_user, require_admin
 from app.modules.auth.schemas import TokenPayload
 from app.modules.leaderboard.repository import backfill_stats_from_mappings
 from app.modules.leaderboard.schemas import (

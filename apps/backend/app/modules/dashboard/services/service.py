@@ -9,7 +9,7 @@ from typing import Any
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.extras.redis_cache import dashboard_cache
-from app.config import settings
+from app.core.config import settings
 from app.modules.dashboard.repository import (
     fetch_activities,
     fetch_candidates,

@@ -16,14 +16,14 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from pymongo import MongoClient  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 
 def declared_indexes() -> dict[str, list]:
     """Collection name -> IndexModel list, straight from the Beanie models."""
     from beanie import Document
 
-    from app.database import init_db  # noqa: F401  (ensures model modules import)
+    from app.core.database import init_db  # noqa: F401  (ensures model modules import)
 
     def walk(cls):
         for sub in cls.__subclasses__():

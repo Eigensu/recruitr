@@ -29,14 +29,14 @@ import datetime as dt  # noqa: E402
 
 from pymongo import MongoClient  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 
 def declared_ttl_indexes() -> list[tuple[str, str, str, int]]:
     """(collection, index_name, field, expireAfterSeconds) declared by the models."""
     from beanie import Document
 
-    from app.database import init_db  # noqa: F401  (imports every model module)
+    from app.core.database import init_db  # noqa: F401  (imports every model module)
 
     def walk(cls):
         for sub in cls.__subclasses__():

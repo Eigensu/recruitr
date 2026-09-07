@@ -10,10 +10,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.dependencies import get_current_user
+from app.core.dependencies import get_current_user
 from app.modules.auth.models import User, UserRole
 from app.modules.auth.schemas import TokenPayload
-from app.modules.dashboard import referee_service
+from app.modules.dashboard.services import referee_service
 
 router = APIRouter(prefix="/api/v1/referee-dashboard", tags=["Referee Dashboard"])
 

@@ -22,7 +22,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, get_viewer, require_maintainer
+from app.core.dependencies import get_tenant, get_viewer, require_maintainer
 from app.modules.recruitment.enums import PositionStatus, Seniority
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.repository import generate_position_code
@@ -40,8 +40,8 @@ from app.modules.recruitment.schemas import (
     TenantScope,
     TopCandidateItem,
 )
-from app.modules.recruitment.service_impl import map_candidate as service_map_candidate
-from app.modules.recruitment.service_impl import unmap_candidate as service_unmap_candidate
+from app.modules.recruitment.services.service_impl import map_candidate as service_map_candidate
+from app.modules.recruitment.services.service_impl import unmap_candidate as service_unmap_candidate
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.matching import _get_effective_requirements
 

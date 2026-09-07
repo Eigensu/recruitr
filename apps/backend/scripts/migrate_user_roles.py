@@ -41,7 +41,7 @@ from datetime import UTC, datetime
 
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 
 _VALID_ROLES = {"employee", "maintainer", "admin"}
 

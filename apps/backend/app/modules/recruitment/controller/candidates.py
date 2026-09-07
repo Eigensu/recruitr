@@ -32,8 +32,8 @@ from pymongo.errors import DuplicateKeyError, OperationFailure
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
-from app.config import settings
-from app.dependencies import get_tenant, require_maintainer
+from app.core.config import settings
+from app.core.dependencies import get_tenant, require_maintainer
 from app.modules.brands.models import AutomationSettings
 from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import (

@@ -6,17 +6,17 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import database
 from app.common.extras.redis_cache import dashboard_cache, leaderboard_cache
-from app.config import settings
-from app.database import init_db
-from app.dependencies import deny_clients
+from app.core import database
+from app.core.config import settings
+from app.core.database import init_db
+from app.core.dependencies import deny_clients
 from app.modules.auth.access import warn_if_unconfigured
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
-from app.modules.dashboard.notifications_router import router as notifications_router
-from app.modules.dashboard.referee_router import router as referee_router
-from app.modules.dashboard.router import router as dashboard_router
+from app.modules.dashboard.routers.referee_router import router as referee_router
+from app.modules.dashboard.routers.router import router as dashboard_router
+from app.modules.dashboard.services.notifications_router import router as notifications_router
 from app.modules.leaderboard.routes import router as leaderboard_router
 from app.modules.recruitment.controller import (
     activity_router,

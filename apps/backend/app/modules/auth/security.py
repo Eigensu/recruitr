@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import bcrypt
 from jose import jwt
 
-from app.config import settings
+from app.core.config import settings
 
 # bcrypt only ever reads the first 72 bytes of a password. Up to bcrypt 4.x it
 # truncated silently; 5.0 raises ValueError instead. We truncate ourselves so
