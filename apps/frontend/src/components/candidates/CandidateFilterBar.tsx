@@ -120,6 +120,7 @@ export default function CandidateFilterBar({
     setGender("");
     setRole("");
     setSalary("");
+    if (mode === "external") onRefereeChange?.("");
     onFilterChange({ page: 1, limit: 50 });
   }
 
@@ -134,7 +135,8 @@ export default function CandidateFilterBar({
     !!city ||
     !!gender ||
     !!role ||
-    !!salary;
+    !!salary ||
+    (mode === "external" && !!refereeId);
 
   return (
     <div

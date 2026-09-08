@@ -93,11 +93,14 @@ function SourceBadge({
   onViewReferee?: (refereeId: string) => void;
 }>) {
   if (candidate.source !== "external") return null;
-  if (candidate.referee_id && candidate.referee_name) {
+  if (candidate.referee_id) {
     return (
       <RefereeBadge
         refereeId={candidate.referee_id}
-        refereeName={candidate.referee_name}
+        // referee_name is resolved server-side and is only ever null when the
+        // referee record itself is missing — still attribute the referral
+        // rather than silently falling through to the public/manual badges.
+        refereeName={candidate.referee_name ?? "Unknown referee"}
         isMaintainer={isMaintainer}
         onViewReferee={onViewReferee}
       />

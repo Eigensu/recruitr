@@ -67,7 +67,10 @@ export default function CandidatesClient({
   // so it never slows down the default "All Candidates" load.
   const [activeTab, setActiveTab] = useState<"all" | "external">("all");
   const [externalCandidates, setExternalCandidates] = useState<ApiCandidate[]>([]);
+  const [externalTotal, setExternalTotal] = useState(0);
+  const [externalPage, setExternalPage] = useState(1);
   const [externalLoading, setExternalLoading] = useState(false);
+  const [externalLoadingMore, setExternalLoadingMore] = useState(false);
   const [externalLoaded, setExternalLoaded] = useState(false);
   const [externalFilters, setExternalFilters] = useState<Partial<CandidateFilters>>({});
   const [externalRefereeId, setExternalRefereeId] = useState("");
@@ -120,18 +123,54 @@ export default function CandidatesClient({
         source: "external" as const,
         referee_id: refereeId || undefined,
         page: 1,
-        limit: 50,
+        limit: PAGE_SIZE,
       };
       const [pendingPage, approvedPage] = await Promise.all([
         clientFetchCandidates({ ...base, status: "PENDING" }),
         clientFetchCandidates({ ...base, status: "APPROVED" }),
       ]);
       setExternalCandidates([...(pendingPage.items ?? []), ...(approvedPage.items ?? [])]);
+      setExternalTotal((pendingPage.meta?.total ?? 0) + (approvedPage.meta?.total ?? 0));
+      setExternalPage(1);
     } catch {
       setExternalCandidates([]);
+      setExternalTotal(0);
+      setExternalPage(1);
     } finally {
       setExternalLoading(false);
       setExternalLoaded(true);
+    }
+  }
+
+  // PENDING and APPROVED paginate independently server-side, so page N of one
+  // can be shorter (or empty) than page N of the other once it runs out —
+  // concatenating whatever each returns still converges on the full set.
+  async function handleLoadMoreExternal() {
+    const nextPage = externalPage + 1;
+    setExternalLoadingMore(true);
+    try {
+      const base = {
+        ...externalFilters,
+        source: "external" as const,
+        referee_id: externalRefereeId || undefined,
+        page: nextPage,
+        limit: PAGE_SIZE,
+      };
+      const [pendingPage, approvedPage] = await Promise.all([
+        clientFetchCandidates({ ...base, status: "PENDING" }),
+        clientFetchCandidates({ ...base, status: "APPROVED" }),
+      ]);
+      setExternalCandidates((prev) => [
+        ...prev,
+        ...(pendingPage.items ?? []),
+        ...(approvedPage.items ?? []),
+      ]);
+      setExternalTotal((pendingPage.meta?.total ?? 0) + (approvedPage.meta?.total ?? 0));
+      setExternalPage(nextPage);
+    } catch {
+      // leave existing external candidates as-is
+    } finally {
+      setExternalLoadingMore(false);
     }
   }
 
@@ -278,8 +317,12 @@ export default function CandidatesClient({
   const candidateLabel = total === 1 ? "1 candidate" : `${total} candidates`;
   const countLabel = hasMore ? `Showing ${candidates.length} of ${candidateLabel}` : candidateLabel;
 
-  const externalLabel =
-    externalCandidates.length === 1 ? "1 candidate" : `${externalCandidates.length} candidates`;
+  const hasMoreExternal = externalCandidates.length < externalTotal;
+  const externalCandidateLabel =
+    externalTotal === 1 ? "1 candidate" : `${externalTotal} candidates`;
+  const externalLabel = hasMoreExternal
+    ? `Showing ${externalCandidates.length} of ${externalCandidateLabel}`
+    : externalCandidateLabel;
 
   return (
     <div className="flex flex-col gap-4">
@@ -487,6 +530,27 @@ export default function CandidatesClient({
                   onReject={c.status === "PENDING" ? () => handleRejectCandidate(c.id) : undefined}
                 />
               ))}
+            </div>
+          )}
+
+          {!externalLoading && hasMoreExternal && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={handleLoadMoreExternal}
+                disabled={externalLoadingMore}
+                className="rounded-lg px-5 py-2 text-sm font-medium"
+                style={{
+                  background: "var(--color-surface-val)",
+                  color: "var(--color-text-primary)",
+                  border: "1px solid var(--color-border-val)",
+                  opacity: externalLoadingMore ? 0.6 : 1,
+                }}
+              >
+                {externalLoadingMore
+                  ? "Loading…"
+                  : `Load more (${externalTotal - externalCandidates.length} remaining)`}
+              </button>
             </div>
           )}
         </>

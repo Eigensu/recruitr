@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.dependencies import get_tenant, get_viewer
 from app.core.main import app
+from app.modules.recruitment.enums.candidate_status import CandidateStatus
 from app.modules.recruitment.models import Candidate, Mapping, Position, RefereeUser
 from app.modules.recruitment.schemas import TenantScope
 
@@ -277,7 +278,18 @@ async def test_list_candidate_referees_only_includes_referees_with_candidates(
 ) -> None:
     referred_by = await _create_referee(_BRAND_A, email="active@example.com", name="Active Ref")
     await _create_referee(_BRAND_A, email="unused@example.com", name="Unused Ref")
-    created = await _create_via_api(client_a)
+    # source="external": the endpoint scopes to what the External tab actually
+    # lists, so an internally-sourced candidate with a referee_id (which can't
+    # happen via the real referral flow, only by direct write like this test
+    # otherwise would) must not surface a referee that has nothing to show.
+    created = await _create_via_api(
+        client_a,
+        {
+            "source": "external",
+            "source_channel": "LinkedIn",
+            "cv_link": "https://example.com/cv.pdf",
+        },
+    )
     await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
         {Candidate.referee_id: referred_by.id}
     )
@@ -286,6 +298,46 @@ async def test_list_candidate_referees_only_includes_referees_with_candidates(
     assert res.status_code == 200
     body = res.json()
     assert body == [{"id": str(referred_by.id), "name": "Active Ref"}]
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_excludes_internal_source(client_a: AsyncClient) -> None:
+    """A referee_id on a non-external candidate shouldn't surface in the dropdown.
+
+    The External tab only ever lists source=external candidates, so a referee
+    whose only attributed candidate is internal would otherwise appear in the
+    filter and return zero rows when selected.
+    """
+    referred_by = await _create_referee(_BRAND_A, email="internal-ref@example.com", name="Ref")
+    created = await _create_via_api(client_a)  # BASE_PAYLOAD defaults to source="internal"
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referred_by.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates/referees")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_excludes_rejected_candidates(client_a: AsyncClient) -> None:
+    """A referee whose only candidate was rejected shouldn't surface either."""
+    referred_by = await _create_referee(_BRAND_A, email="rejected-ref@example.com", name="Ref")
+    created = await _create_via_api(
+        client_a,
+        {
+            "source": "external",
+            "source_channel": "LinkedIn",
+            "cv_link": "https://example.com/cv.pdf",
+        },
+    )
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referred_by.id, Candidate.status: CandidateStatus.rejected}
+    )
+
+    res = await client_a.get("/api/v1/candidates/referees")
+    assert res.status_code == 200
+    assert res.json() == []
 
 
 @pytest.mark.asyncio

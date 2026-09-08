@@ -289,9 +289,21 @@ async def list_candidate_referees(tenant: _Tenant) -> list[CandidateReferrerOpti
     Feeds the External Candidates referee filter. Name only, open to any staff
     role — unlike GET /referees (the full roster with email + connect code),
     which stays maintainer-gated. See CandidateReferrerOption.
+
+    Scoped to source=external and PENDING/APPROVED to match what the External
+    tab actually lists — a referee whose only candidate is internal or
+    rejected would otherwise show up in the dropdown and return zero rows.
     """
     pipeline = [
-        {_MATCH: {"brand_id": tenant.brand_id, "referee_id": {"$ne": None}, "is_active": True}},
+        {
+            _MATCH: {
+                "brand_id": tenant.brand_id,
+                "referee_id": {"$ne": None},
+                "is_active": True,
+                "source": "external",
+                "status": {"$in": [CandidateStatus.pending.value, CandidateStatus.approved.value]},
+            }
+        },
         {_GROUP: {"_id": "$referee_id"}},
         {
             _LOOKUP: {
