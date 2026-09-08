@@ -8,13 +8,14 @@ Endpoints:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.common.utils.object_id import to_object_id
 from app.core.dependencies import get_viewer
+from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.models import Notification
 from app.modules.recruitment.schemas import TenantScope
@@ -45,16 +46,27 @@ def _to_response(doc: Notification) -> NotificationResponse:
     )
 
 
-def _scope_match(scope: TenantScope) -> dict:
+# No notification carries this as its client_id (the field holds an ObjectId or
+# None), so it matches nothing — a deliberate empty result for referees. Kept
+# beside the only function that reads it: it is not a shared value, it is how
+# this one predicate says "no rows".
+_REFEREE_NO_NOTIFICATIONS = "__referee_has_no_notifications__"
+
+
+def _scope_match(scope: TenantScope) -> dict[str, Any]:
     """Client sees only their own notifications; staff see the brand-wide ones
     raised for them (client_id=None) — see Notification's own docstring for why
-    the reminder job writes one row of each per stuck mapping."""
-    match = {"brand_id": scope.brand_id}
-    if scope.role == "client":
+    the reminder job writes one row of each per stuck mapping.
+
+    Never returns an _id key: mark_notification_read adds its own, and a
+    restriction expressed on _id would be silently replaced by it.
+    """
+    match: dict[str, Any] = {"brand_id": scope.brand_id}
+    if scope.role == UserRole.client:
         match["client_id"] = scope.client_id
-    elif scope.role == "referee":
-        # Referees have no notifications currently. This ensures they don't see staff/client ones.
-        match["_id"] = None
+    elif scope.role == UserRole.referee:
+        # Referees have no notifications currently.
+        match["client_id"] = _REFEREE_NO_NOTIFICATIONS
     else:
         match["client_id"] = None
     return match
@@ -81,5 +93,8 @@ async def mark_notification_read(viewer: _Viewer, notification_id: str) -> Notif
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_NOT_FOUND)
     if doc.read_at is None:
         doc.read_at = datetime.now(UTC)
-        await doc.save()
+        # set(), not save(): save() rewrites every field from this in-memory
+        # copy, so a concurrent write to the same row would be undone by a
+        # request that only meant to stamp read_at.
+        await doc.set({"read_at": doc.read_at})
     return _to_response(doc)

@@ -301,7 +301,20 @@ async def list_candidate_referees(tenant: _Tenant) -> list[CandidateReferrerOpti
                 "referee_id": {"$ne": None},
                 "is_active": True,
                 "source": "external",
-                "status": {"$in": [CandidateStatus.pending.value, CandidateStatus.approved.value]},
+                # Missing status included for the same reason list_candidates
+                # includes it: candidates predating the field are listed by the
+                # tab, so their referee belongs in the tab's dropdown.
+                "$or": [
+                    {
+                        "status": {
+                            "$in": [
+                                CandidateStatus.pending.value,
+                                CandidateStatus.approved.value,
+                            ]
+                        }
+                    },
+                    {"status": {"$exists": False}},
+                ],
             }
         },
         {_GROUP: {"_id": "$referee_id"}},

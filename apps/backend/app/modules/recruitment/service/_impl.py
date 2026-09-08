@@ -76,13 +76,16 @@ async def ensure_employee_for_user(user: object) -> Employee:
         employee.role = role
 
     if employee.brand_id is None and is_agency_email(email):
-        brand = await Brand.find_one({})
-        if brand is not None:
+        # Fetch two, assign only on one: with several brands there is nothing to
+        # pick on, and guessing drops a new hire inside another tenant's data.
+        # Leaving brand_id unset is the recoverable outcome.
+        brands = await Brand.find({}).limit(2).to_list()
+        if len(brands) == 1:
             await Employee.get_motor_collection().update_one(
                 {"_id": employee.id},
-                {"$set": {"brand_id": brand.id}},
+                {"$set": {"brand_id": brands[0].id}},
             )
-            employee.brand_id = brand.id
+            employee.brand_id = brands[0].id
 
     return employee
 
@@ -293,7 +296,12 @@ async def _invalidate_caches(brand_id: PydanticObjectId) -> None:
     try:
         from app.common.extras.redis_cache import dashboard_cache, leaderboard_cache
 
-        await dashboard_cache.delete_pattern("dashboard:*")
-        await leaderboard_cache.delete_pattern("leaderboard:*")
+        # Built through build_key rather than written out: both namespaces come
+        # from REDIS_NAMESPACE, so the literal "leaderboard:*" matched nothing —
+        # leaderboard keys are "<namespace>:leaderboard:...". Dashboard keys are
+        # brand-scoped and narrowed to this brand; leaderboard keys are not
+        # brand-scoped at all, so that one still clears the namespace.
+        await dashboard_cache.delete_pattern(dashboard_cache.build_key(brand_id, "*"))
+        await leaderboard_cache.delete_pattern(leaderboard_cache.build_key("*"))
     except Exception:  # noqa: BLE001
         pass
