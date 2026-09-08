@@ -14,7 +14,9 @@ interface Props {
   availableTags: string[];
   availableRoles?: string[];
   recruiters?: readonly RecruiterOption[];
-  onFilterChange: (filters: Partial<CandidateFilters>) => void;
+  /** `refereeId` is passed only by "Clear all" in external mode, so the referee
+   *  and the filters are cleared by a single parent update. */
+  onFilterChange: (filters: Partial<CandidateFilters>, refereeId?: string) => void;
   /** "external" locks the source select and swaps it for a Referee filter. */
   mode?: "all" | "external";
   referees?: readonly CandidateReferrerOption[];
@@ -120,8 +122,12 @@ export default function CandidateFilterBar({
     setGender("");
     setRole("");
     setSalary("");
-    if (mode === "external") onRefereeChange?.("");
-    onFilterChange({ page: 1, limit: 50 });
+    // One update rather than two: clearing the referee through onRefereeChange
+    // fired its own fetch with the filters still applied, and the fetch that
+    // followed read the pre-clear refereeId from state — so "Clear all" left
+    // the referee filter on the results while the dropdown showed it empty.
+    if (mode === "external") onFilterChange({ page: 1, limit: 50 }, "");
+    else onFilterChange({ page: 1, limit: 50 });
   }
 
   const hasActive =

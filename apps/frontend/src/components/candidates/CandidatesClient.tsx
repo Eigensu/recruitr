@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type {
   ApiCandidate,
   CandidateFilters,
@@ -75,6 +75,8 @@ export default function CandidatesClient({
   const [externalFilters, setExternalFilters] = useState<Partial<CandidateFilters>>({});
   const [externalRefereeId, setExternalRefereeId] = useState("");
   const [externalReferees, setExternalReferees] = useState<CandidateReferrerOption[]>([]);
+  // Bumped by every external fetch; a response whose id is stale is dropped.
+  const externalRequestRef = useRef(0);
 
   async function handleFilterChange(filters: Partial<CandidateFilters>) {
     setLoading(true);
@@ -116,6 +118,9 @@ export default function CandidatesClient({
   ) {
     const filters = overrides.filters ?? externalFilters;
     const refereeId = overrides.refereeId ?? externalRefereeId;
+    // Search and referee changes fire a request each, undebounced, so two can
+    // be in flight at once and resolve out of order. Only the newest may write.
+    const requestId = ++externalRequestRef.current;
     setExternalLoading(true);
     try {
       const base = {
@@ -129,16 +134,21 @@ export default function CandidatesClient({
         clientFetchCandidates({ ...base, status: "PENDING" }),
         clientFetchCandidates({ ...base, status: "APPROVED" }),
       ]);
+      if (requestId !== externalRequestRef.current) return;
       setExternalCandidates([...(pendingPage.items ?? []), ...(approvedPage.items ?? [])]);
       setExternalTotal((pendingPage.meta?.total ?? 0) + (approvedPage.meta?.total ?? 0));
       setExternalPage(1);
+      // Success only: handleTabChange reloads while this is false, so setting
+      // it in `finally` turned one failed fetch into a tab that stays empty
+      // until the page is reloaded.
+      setExternalLoaded(true);
     } catch {
+      if (requestId !== externalRequestRef.current) return;
       setExternalCandidates([]);
       setExternalTotal(0);
       setExternalPage(1);
     } finally {
-      setExternalLoading(false);
-      setExternalLoaded(true);
+      if (requestId === externalRequestRef.current) setExternalLoading(false);
     }
   }
 
@@ -147,6 +157,7 @@ export default function CandidatesClient({
   // concatenating whatever each returns still converges on the full set.
   async function handleLoadMoreExternal() {
     const nextPage = externalPage + 1;
+    const requestId = externalRequestRef.current;
     setExternalLoadingMore(true);
     try {
       const base = {
@@ -160,6 +171,10 @@ export default function CandidatesClient({
         clientFetchCandidates({ ...base, status: "PENDING" }),
         clientFetchCandidates({ ...base, status: "APPROVED" }),
       ]);
+      // A filter change while this was in flight replaced the list underneath
+      // it; appending page N of the old query onto page 1 of the new one is
+      // worse than dropping it.
+      if (requestId !== externalRequestRef.current) return;
       setExternalCandidates((prev) => [
         ...prev,
         ...(pendingPage.items ?? []),
@@ -190,9 +205,10 @@ export default function CandidatesClient({
     }
   }
 
-  function handleExternalFilterChange(filters: Partial<CandidateFilters>) {
+  function handleExternalFilterChange(filters: Partial<CandidateFilters>, refereeId?: string) {
     setExternalFilters(filters);
-    loadExternalCandidates({ filters });
+    if (refereeId !== undefined) setExternalRefereeId(refereeId);
+    loadExternalCandidates({ filters, refereeId });
   }
 
   function handleExternalRefereeChange(refereeId: string) {
@@ -244,8 +260,13 @@ export default function CandidatesClient({
         setTotal((t) => Math.max(0, t - 1));
       }
 
+      // Same bookkeeping as `total` above: hasMoreExternal compares the loaded
+      // rows against this count, so a stale count offers a "Load more" that
+      // comes back with nothing.
+      const wasExternal = externalCandidates.some((c) => c.id === id);
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
       setExternalCandidates((prev) => prev.filter((c) => c.id !== id));
+      if (wasExternal) setExternalTotal((t) => Math.max(0, t - 1));
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to delete candidate", "error");
@@ -291,10 +312,12 @@ export default function CandidatesClient({
   async function handleRejectCandidate(id: string) {
     try {
       await clientRejectCandidate(id);
+      const wasExternal = externalCandidates.some((c) => c.id === id);
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
       // Rejected candidates drop off entirely — neither PENDING nor APPROVED
       // status query picks them back up, same as the main pending section.
       setExternalCandidates((prev) => prev.filter((c) => c.id !== id));
+      if (wasExternal) setExternalTotal((t) => Math.max(0, t - 1));
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
       toast("Candidate rejected", "success");
     } catch (err) {
