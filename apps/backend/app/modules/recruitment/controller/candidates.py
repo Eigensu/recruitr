@@ -91,6 +91,7 @@ _COUNT = "$count"
 _SIZE = "$size"
 _TO_STR = "$toString"
 _EXPR = "$expr"
+_ARRAY_ELEM_AT = "$arrayElemAt"
 
 _log = logging.getLogger(__name__)
 
@@ -474,15 +475,15 @@ async def list_candidates(
                 "id": {_TO_STR: "$_id"},
                 "mappings_count": {_SIZE: "$cand_maps"},
                 "created_by_id": {_TO_STR: "$created_by_id"},
-                "created_by_name": {"$arrayElemAt": ["$owner.name", 0]},
+                "created_by_name": {_ARRAY_ELEM_AT: ["$owner.name", 0]},
                 "referee_id": {_TO_STR: "$referee_id"},
                 # RefereeUser.name stays null until the referee logs in once —
                 # fall back to email so an invited-but-dormant referee still
                 # gets a readable badge instead of a blank one.
                 "referee_name": {
                     "$ifNull": [
-                        {"$arrayElemAt": ["$ref.name", 0]},
-                        {"$arrayElemAt": ["$ref.email", 0]},
+                        {_ARRAY_ELEM_AT: ["$ref.name", 0]},
+                        {_ARRAY_ELEM_AT: ["$ref.email", 0]},
                     ]
                 },
             }

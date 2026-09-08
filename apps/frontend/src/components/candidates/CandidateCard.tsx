@@ -87,11 +87,11 @@ function SourceBadge({
   candidate,
   isMaintainer,
   onViewReferee,
-}: {
+}: Readonly<{
   candidate: ApiCandidate;
   isMaintainer?: boolean;
   onViewReferee?: (refereeId: string) => void;
-}) {
+}>) {
   if (candidate.source !== "external") return null;
   if (candidate.referee_id && candidate.referee_name) {
     return (
@@ -124,17 +124,23 @@ function SourceBadge({
   return null;
 }
 
+function referralCountLabel(loading: boolean, count: number | null): string {
+  if (loading) return "Loading…";
+  if (count == null) return "—";
+  return `${count} candidate${count === 1 ? "" : "s"} referred`;
+}
+
 function RefereeBadge({
   refereeId,
   refereeName,
   isMaintainer,
   onViewReferee,
-}: {
+}: Readonly<{
   refereeId: string;
   refereeName: string;
   isMaintainer?: boolean;
   onViewReferee?: (refereeId: string) => void;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState<number | null>(null);
@@ -219,18 +225,13 @@ function RefereeBadge({
         Referred by {refereeName}
       </button>
       {open && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg p-3 text-xs shadow-xl bg-surface-panel border border-border"
-        >
+        // No stopPropagation needed: this popover sits inside the badge's own
+        // pointer-events-auto wrapper, a sibling (not a descendant) of the
+        // card's full-cover open button — so a click here was never going to
+        // bubble into it in the first place.
+        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-lg p-3 text-xs shadow-xl bg-surface-panel border border-border">
           <p className="font-heading font-bold text-text-primary text-[13px]">{refereeName}</p>
-          <p className="mt-1 text-text-muted">
-            {loading
-              ? "Loading…"
-              : count == null
-                ? "—"
-                : `${count} candidate${count === 1 ? "" : "s"} referred`}
-          </p>
+          <p className="mt-1 text-text-muted">{referralCountLabel(loading, count)}</p>
           {isMaintainer && contact && (
             <div className="mt-2 pt-2 border-t border-border/40 space-y-0.5 text-text-muted">
               <p className="truncate">{contact.email}</p>
@@ -260,11 +261,11 @@ function CandidateInfo({
   candidate,
   isMaintainer,
   onViewReferee,
-}: {
+}: Readonly<{
   candidate: ApiCandidate;
   isMaintainer?: boolean;
   onViewReferee?: (refereeId: string) => void;
-}) {
+}>) {
   let salaryStr: string | null = null;
   if (candidate.salary != null) {
     salaryStr = `₹${candidate.salary.toLocaleString("en-IN")}`;
