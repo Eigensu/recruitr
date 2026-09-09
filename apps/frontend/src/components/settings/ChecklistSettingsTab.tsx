@@ -322,6 +322,15 @@ function TaskFormModal({
   const [assigneeId, setAssigneeId] = useState(editTask?.assignee_id ?? "");
   const [submitting, setSubmitting] = useState(false);
 
+  const isSaving = editTask !== undefined;
+  const buttonText = submitting
+    ? isSaving
+      ? "Saving..."
+      : "Creating..."
+    : isSaving
+      ? "Save Changes"
+      : "Create Task";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -330,25 +339,33 @@ function TaskFormModal({
       const dueObj = new Date(y, m - 1, d);
       dueObj.setHours(23, 59, 59, 999);
 
-      const payload = {
-        title,
-        description: description || undefined,
-        tracked_activity_type: trackedActivity,
-        target_count: Number.parseInt(targetCount, 10),
-        assignee_type: assigneeType,
-        assignee_id: assigneeType === "all" ? undefined : assigneeId,
-        due_date: dueObj.toISOString(),
-      };
+      const targetCountNum = Number.parseInt(targetCount, 10);
+      const finalAssigneeId = assigneeType === "all" ? undefined : assigneeId;
+      const finalDescription = description || undefined;
 
       if (editTask) {
-        await updateTask(apiFetch, editTask.id, payload);
+        await updateTask(apiFetch, editTask.id, {
+          title,
+          description: finalDescription,
+          tracked_activity_type: trackedActivity,
+          target_count: targetCountNum,
+          assignee_type: assigneeType,
+          assignee_id: finalAssigneeId,
+          due_date: dueObj.toISOString(),
+        });
         toast("Task updated successfully", "success");
       } else {
         const startObj = new Date();
         startObj.setHours(0, 0, 0, 0);
         await createTask(apiFetch, {
-          ...payload,
+          title,
+          description: finalDescription,
+          tracked_activity_type: trackedActivity,
+          target_count: targetCountNum,
+          assignee_type: assigneeType,
+          assignee_id: finalAssigneeId,
           start_date: startObj.toISOString(),
+          due_date: dueObj.toISOString(),
         });
         toast("Task created successfully", "success");
       }
@@ -527,13 +544,7 @@ function TaskFormModal({
               disabled={submitting}
               className="px-4 py-2 bg-navy text-white dark:bg-yellow dark:text-navy text-sm font-bold rounded-lg disabled:opacity-50"
             >
-              {submitting
-                ? editTask
-                  ? "Saving..."
-                  : "Creating..."
-                : editTask
-                  ? "Save Changes"
-                  : "Create Task"}
+              {buttonText}
             </button>
           </div>
         </form>

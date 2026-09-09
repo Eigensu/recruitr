@@ -1,16 +1,12 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.common.utils.datetime_utils import normalize_datetime
 from app.modules.recruitment.enums.activity_type import ActivityType
 from app.modules.recruitment.models import TaskAssignmentType
 
-
-def _normalize_datetime(dt: datetime) -> datetime:
-    """Normalize datetime to naive UTC for safe comparison."""
-    if dt.tzinfo is not None:
-        return dt.astimezone(UTC).replace(tzinfo=None)
-    return dt
+DATE_ERROR_MSG = "due_date must be greater than or equal to start_date"
 
 
 class TaskCreate(BaseModel):
@@ -26,10 +22,10 @@ class TaskCreate(BaseModel):
     @model_validator(mode="after")
     def check_dates(self) -> "TaskCreate":
         if self.start_date and self.due_date:
-            s_dt = _normalize_datetime(self.start_date)
-            d_dt = _normalize_datetime(self.due_date)
+            s_dt = normalize_datetime(self.start_date)
+            d_dt = normalize_datetime(self.due_date)
             if d_dt < s_dt:
-                raise ValueError("due_date must be greater than or equal to start_date")
+                raise ValueError(DATE_ERROR_MSG)
         return self
 
 
@@ -56,12 +52,12 @@ class TaskResponse(BaseModel):
     due_date: datetime
 
     @model_validator(mode="after")
-    def check_dates(self) -> "TaskCreate":
+    def check_dates(self) -> "TaskResponse":
         if self.start_date and self.due_date:
-            s_dt = _normalize_datetime(self.start_date)
-            d_dt = _normalize_datetime(self.due_date)
+            s_dt = normalize_datetime(self.start_date)
+            d_dt = normalize_datetime(self.due_date)
             if d_dt < s_dt:
-                raise ValueError("due_date must be greater than or equal to start_date")
+                raise ValueError(DATE_ERROR_MSG)
         return self
 
     is_active: bool
@@ -88,8 +84,8 @@ class TaskUpdatePayload(BaseModel):
     @model_validator(mode="after")
     def check_dates(self) -> "TaskUpdatePayload":
         if self.start_date and self.due_date:
-            s_dt = _normalize_datetime(self.start_date)
-            d_dt = _normalize_datetime(self.due_date)
+            s_dt = normalize_datetime(self.start_date)
+            d_dt = normalize_datetime(self.due_date)
             if d_dt < s_dt:
-                raise ValueError("due_date must be greater than or equal to start_date")
+                raise ValueError(DATE_ERROR_MSG)
         return self
