@@ -1,12 +1,15 @@
 from beanie import PydanticObjectId
+from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.common.utils.datetime_utils import normalize_datetime
 from app.dependencies import (
     get_tenant,
     get_viewer,
     require_maintainer,
 )
 from app.modules.auth.models import User
+from app.modules.recruitment.enums.activity_type import ActivityType
 from app.modules.recruitment.models import (
     ActivityLog,
     Employee,
@@ -19,6 +22,7 @@ from app.modules.recruitment.schemas.tasks import (
     RecruiterProgress,
     TaskCreate,
     TaskResponse,
+    TaskUpdatePayload,
 )
 
 router = APIRouter()
@@ -38,13 +42,32 @@ async def _calculate_progress(
     brand_id: PydanticObjectId, employee_id: PydanticObjectId, task: RecruitmentTask
 ) -> int:
     """Calculate actual progress for one employee."""
-    return await ActivityLog.find(
-        ActivityLog.brand_id == brand_id,
-        ActivityLog.employee_id == employee_id,
-        ActivityLog.activity_type == task.tracked_activity_type,
-        ActivityLog.created_at >= task.start_date,
-        ActivityLog.created_at <= task.due_date,
-    ).count()
+    valid_activities = [
+        ActivityType.mapped,
+        ActivityType.stage_moved,
+        ActivityType.rejected,
+        ActivityType.joined,
+        ActivityType.offer_accepted,
+        ActivityType.offer_sent,
+        ActivityType.unmapped,
+    ]
+
+    if task.tracked_activity_type == ActivityType.all_activities:
+        return await ActivityLog.find(
+            ActivityLog.brand_id == brand_id,
+            ActivityLog.employee_id == employee_id,
+            In(ActivityLog.activity_type, valid_activities),
+            ActivityLog.created_at >= task.start_date,
+            ActivityLog.created_at <= task.due_date,
+        ).count()
+    else:
+        return await ActivityLog.find(
+            ActivityLog.brand_id == brand_id,
+            ActivityLog.employee_id == employee_id,
+            ActivityLog.activity_type == task.tracked_activity_type,
+            ActivityLog.created_at >= task.start_date,
+            ActivityLog.created_at <= task.due_date,
+        ).count()
 
 
 async def _get_task_query_for_viewer(tenant: TenantScope, is_admin: bool) -> dict:
@@ -162,8 +185,8 @@ async def create_task(
         target_count=payload.target_count,
         assignee_type=payload.assignee_type,
         assignee_id=assignee_oid,
-        start_date=payload.start_date,
-        due_date=payload.due_date,
+        start_date=normalize_datetime(payload.start_date),
+        due_date=normalize_datetime(payload.due_date),
     )
     await task.insert()
 
@@ -225,3 +248,84 @@ async def delete_task(task_id: str, tenant: TenantScope = _Tenant, _: User = _Ad
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
     await task.delete()
     return {"status": "ok"}
+
+
+async def _create_task_response(task: RecruitmentTask, tenant: TenantScope) -> TaskResponse:
+    base_resp = TaskResponse(
+        id=str(task.id),
+        title=task.title,
+        description=task.description,
+        tracked_activity_type=task.tracked_activity_type,
+        target_count=task.target_count,
+        assignee_type=task.assignee_type,
+        assignee_id=str(task.assignee_id) if task.assignee_id else None,
+        start_date=task.start_date,
+        due_date=task.due_date,
+        is_active=task.is_active,
+        created_at=task.created_at,
+    )
+    await _populate_admin_progress(tenant, task, base_resp)
+    return base_resp
+
+
+async def _apply_assignment_updates(
+    update_data: dict, task: RecruitmentTask, tenant: TenantScope
+) -> None:
+    if "assignee_type" not in update_data and "assignee_id" not in update_data:
+        return
+
+    new_type = update_data.get("assignee_type", task.assignee_type)
+    new_id = update_data.get("assignee_id", str(task.assignee_id) if task.assignee_id else None)
+
+    assignee_oid = None
+    if new_type in [TaskAssignmentType.single, TaskAssignmentType.team]:
+        if not new_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "assignee_id required")
+        assignee_oid = _to_object_id(new_id, "assignee_id")
+
+        if new_type == TaskAssignmentType.single:
+            if not await Employee.find_one({"_id": assignee_oid, "brand_id": tenant.brand_id}):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+        else:
+            if not await Team.find_one({"_id": assignee_oid, "brand_id": tenant.brand_id}):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
+
+    update_data["assignee_id"] = assignee_oid
+
+
+def _apply_date_updates(update_data: dict, task: RecruitmentTask) -> None:
+    if "start_date" in update_data:
+        update_data["start_date"] = normalize_datetime(update_data["start_date"])
+    if "due_date" in update_data:
+        update_data["due_date"] = normalize_datetime(update_data["due_date"])
+
+    new_start = update_data.get("start_date", normalize_datetime(task.start_date))
+    new_due = update_data.get("due_date", normalize_datetime(task.due_date))
+
+    if new_due < new_start:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "due_date must be greater than or equal to start_date"
+        )
+
+
+@router.patch("/{task_id}")
+async def update_task(
+    task_id: str, payload: TaskUpdatePayload, tenant: TenantScope = _Tenant, _: User = _Admin
+) -> TaskResponse:
+    tid = _to_object_id(task_id, "task_id")
+    task = await RecruitmentTask.find_one({"_id": tid, "brand_id": tenant.brand_id})
+    if not task:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Task not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        return await _create_task_response(task, tenant)
+
+    await _apply_assignment_updates(update_data, task, tenant)
+    _apply_date_updates(update_data, task)
+
+    for k, v in update_data.items():
+        setattr(task, k, v)
+
+    await task.save()
+    return await _create_task_response(task, tenant)

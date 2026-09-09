@@ -2,6 +2,7 @@ type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
 
 export type TaskAssignmentType = "single" | "team" | "all";
 export type TrackedActivityType =
+  | "all_activities"
   | "mapped"
   | "stage_moved"
   | "offer_sent"
@@ -62,4 +63,27 @@ export async function createTask(
 
 export async function deleteTask(apiFetch: ApiFetch, taskId: string): Promise<void> {
   await apiFetch<void>(`/api/v1/tasks/${taskId}`, { method: "DELETE" });
+}
+
+export interface TaskUpdatePayload {
+  title?: string;
+  description?: string;
+  tracked_activity_type?: TrackedActivityType;
+  target_count?: number;
+  assignee_type?: TaskAssignmentType;
+  assignee_id?: string;
+  start_date?: string;
+  due_date?: string;
+}
+
+export async function updateTask(
+  apiFetch: ApiFetch,
+  taskId: string,
+  payload: TaskUpdatePayload,
+): Promise<TaskResponse> {
+  return await apiFetch<TaskResponse>(`/api/v1/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
