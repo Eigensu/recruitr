@@ -167,7 +167,7 @@ class PositionMappedCandidate(BaseModel):
     mapping_id: str
     candidate_id: str
     full_name: str
-    email: str
+    email: str | None = None
     previous_company: str | None = None
     experience_years: float
     skills: list[str]

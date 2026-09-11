@@ -78,7 +78,7 @@ class FilteredCandidate(BaseModel):
 
     id: str
     name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     resume_url: str | None = None
     extracted_skills: list[str] = []
@@ -97,7 +97,7 @@ class SuggestedCandidate(BaseModel):
 
     id: str
     name: str
-    email: str
+    email: str | None = None
     resume_url: str | None = None
     extracted_skills: list[str] = []
     tags: list[str] = []
@@ -286,7 +286,7 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 mapping_id=row["mapping_id"],
                 candidate_id=row["candidate_id"],
                 candidate_name=row["candidate_name"],
-                candidate_email=row["candidate_email"],
+                candidate_email=row.get("candidate_email"),
                 position_id=row["position_id"],
                 position_code=row["position_code"],
                 position_role=row["position_role"],
