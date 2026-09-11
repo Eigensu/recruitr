@@ -4,7 +4,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from app.dependencies import get_tenant, get_viewer
+from app.core.dependencies import get_tenant, get_viewer
 from app.modules.recruitment.models import ClientMessage
 from app.modules.recruitment.schemas import TenantScope
 from app.modules.recruitment.schemas.client_messaging import (

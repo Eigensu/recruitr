@@ -11,8 +11,8 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant, get_viewer
-from app.main import app
+from app.core.dependencies import get_tenant, get_viewer
+from app.core.main import app
 from app.modules.recruitment.models import Candidate, Mapping, Position
 from app.modules.recruitment.schemas import TenantScope
 
@@ -494,7 +494,7 @@ async def test_confirm_resume(client_a: AsyncClient) -> None:
     cid = created["id"]
     assert created["resume_url"] is None
 
-    from app.config import settings
+    from app.core.config import settings
 
     cloud_name = settings.CLOUDINARY_CLOUD_NAME or "test"
     valid_url = f"https://res.cloudinary.com/{cloud_name}/abc123.pdf"

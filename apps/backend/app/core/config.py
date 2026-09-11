@@ -1,9 +1,9 @@
 """Application configuration via environment variables with Pydantic validation.
 
-The .env file lives at the monorepo root (three levels up from this file).
-Pydantic-settings resolves the path relative to the process working directory,
-so we compute the absolute path here to be safe regardless of where the
-server is started from.
+The .env file lives at the monorepo root. Pydantic-settings would resolve a
+relative path against the process working directory, so we find the root
+ourselves and hand it an absolute path — the server then behaves the same no
+matter where it is started from.
 """
 
 import secrets
@@ -13,11 +13,35 @@ from pydantic import AliasChoices, Field, ValidationInfo, field_validator
 from pydantic.types import PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Monorepo root = three directories above apps/backend/app/config.py
-try:
-    _ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
-except IndexError:
-    _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+def _find_root_env() -> Path:
+    """Walk up from this file for the monorepo root and return its .env path.
+
+    Deliberately not a fixed parents[N] hop: this module has already moved down
+    a directory once (app/config.py -> app/core/config.py), and a hardcoded
+    count does not fail loudly when it goes stale — it silently points at a
+    path with no .env, every setting falls back to its default, and the
+    MONGODB_URI default happens to work locally, so nothing looks wrong until
+    production comes up misconfigured. Anchoring on a marker that only the root
+    has keeps this correct wherever the module lives.
+    """
+    parents = Path(__file__).resolve().parents
+    for parent in parents:
+        if (parent / "pnpm-workspace.yaml").is_file():
+            return parent / ".env"
+    # No workspace marker above us. The Docker image is the expected case — it
+    # copies only app/, so the monorepo root is not in the image at all and the
+    # platform supplies the real environment variables. Take any .env that does
+    # exist, else a path that simply is not there; pydantic-settings treats a
+    # missing env_file as "no file", which is what we want here. Never index a
+    # fixed parent: in the container there are only four.
+    for parent in parents:
+        if (parent / ".env").is_file():
+            return parent / ".env"
+    return parents[-1] / ".env"
+
+
+_ROOT_ENV = _find_root_env()
 
 # Where the Next.js dev server runs. Both the CORS allow-list and the links
 # built into outbound emails default to it, and they have to agree.

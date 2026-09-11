@@ -42,7 +42,7 @@ import asyncio
 
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 
 _STAGE_MAP = {
     "decision_pending": "interview",

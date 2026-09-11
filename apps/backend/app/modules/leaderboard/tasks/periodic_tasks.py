@@ -1,8 +1,8 @@
 import asyncio
 from datetime import UTC, datetime
 
-from app.celery_app import celery_app
-from app.database import init_db
+from app.core.celery_app import celery_app
+from app.core.database import init_db
 from app.modules.leaderboard.service.leaderboard_service import (
     refresh_monthly_snapshot,
     refresh_rankings,

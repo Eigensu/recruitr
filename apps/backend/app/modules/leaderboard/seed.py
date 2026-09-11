@@ -9,8 +9,8 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from app.common.utils.seed_guard import assert_local_database
-from app.config import settings
-from app.database import init_db
+from app.core.config import settings
+from app.core.database import init_db
 from app.modules.dashboard.enums import JobStatus, PipelineStage
 from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeRarityEnum, BadgeTypeEnum
 from app.modules.leaderboard.models import LeaderboardMappings

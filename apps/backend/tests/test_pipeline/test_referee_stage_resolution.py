@@ -16,7 +16,7 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
-from app.modules.dashboard.referee_service import (
+from app.modules.dashboard.services.referee_service import (
     calculate_incentive_amount,
     ensure_referral_record,
     get_referrals,

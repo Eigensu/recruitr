@@ -5,18 +5,21 @@ cross-cutting notes.
 
 ## Backend architecture (`apps/backend/app`)
 
-- `main.py` — FastAPI app assembly: middleware, router mounts, `/health`. Read this first to see
+- `core/main.py` — FastAPI app assembly: middleware, router mounts, `/health`. Read this first to see
   which routers exist and what dependency guards are attached at the router level (e.g. the
   leaderboard router blanket-denies the `client` role via `dependencies=[Depends(deny_clients)]`
   so no endpoint added later can forget it).
-- `config.py` — `Settings` (pydantic-settings), loaded once as the `settings` singleton.
-- `database.py` — Beanie/Mongo init. **Every Beanie Document model must be registered in the
+- `core/config.py` — `Settings` (pydantic-settings), loaded once as the `settings` singleton. It
+  locates the root `.env` by walking up for `pnpm-workspace.yaml` rather than a fixed number of
+  parent hops — a hardcoded hop count silently resolves to a path with no `.env` if this file ever
+  moves, and every setting then falls back to its default without erroring.
+- `core/database.py` — Beanie/Mongo init. **Every Beanie Document model must be registered in the
   `document_models` list here** (and mirrored in `tests/conftest.py`'s fixture) or it fails at
   query time with `CollectionWasNotInitialized` instead of at startup. If Mongo index sync fails
   (conflicting/quota-exceeded indexes), it falls back to `skip_indexes=True` for *all* models and
   flips `/health` to `"degraded"` — see `scripts/inspect_indexes.py` / `fix_ttl_indexes.py` /
   `fix_index_conflicts.py`.
-- `dependencies.py` — the auth/tenant dependency chain used across nearly every route. Understand
+- `core/dependencies.py` — the auth/tenant dependency chain used across nearly every route. Understand
   this before touching any endpoint:
   - `get_current_user` → decodes the `access_token` HttpOnly cookie (or `Authorization: Bearer`)
     as a local JWT.
@@ -37,11 +40,17 @@ cross-cutting notes.
   into one module because they share tenant-scoping and cross-reference each other constantly).
   Within a module the convention is `router`/`controller` (HTTP layer) → `service` (business logic)
   → `repository` (Mongo access) → `models` (Beanie documents) → `schemas` (Pydantic I/O). In
-  `recruitment` specifically, `repository/__init__.py` and `service/__init__.py` are thin re-export
-  facades over `repository_impl.py` / `service_impl.py` (a mid-refactor split into per-domain
-  files, in progress) — import from the package, not the `_impl` module, from outside the package.
-  Every repository function takes a `TenantScope` and prepends `brand_id` to its query; never call
-  `get_motor_collection()` directly outside `repository_impl.py`.
+  `recruitment` specifically, each layer is a package whose `__init__.py` is the public surface and
+  whose `_impl.py` is private to it: `repository/{__init__,_impl}.py` and
+  `service/{__init__,_impl,resume_service}.py`. Import from the package, never from `_impl` — the
+  underscore is the rule, and it is what lets `_impl.py` be split into per-domain modules (the
+  mid-refactor direction; `resume_service.py` is the first piece carved out) without touching a
+  caller. There is no separate `services/` package; reintroducing one would put two importable
+  names a single letter apart, which is exactly what was just removed. Every repository function
+  takes a `TenantScope` and prepends `brand_id` to its query; never call `get_motor_collection()`
+  outside `repository/_impl.py`. `dashboard` follows the same shape with its HTTP layer in
+  `routers/` and business logic in `services/` — plural there, since those directories hold several
+  peers and no facade.
 - Gamification/leaderboard credit is fire-and-forget from the recruitment service layer — a
   duplicate award or Redis failure must never roll back the domain write that triggered it.
 

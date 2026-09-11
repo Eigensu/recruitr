@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any
 from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
-from app.config import settings
-from app.modules.dashboard.email_service import EmailService
+from app.core.config import settings
+from app.modules.dashboard.services.email_service import EmailService
 from app.modules.recruitment.enums import (
     REFEREE_STAGE_ORDER,
     PaymentStatus,

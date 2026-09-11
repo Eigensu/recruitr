@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 from beanie import PydanticObjectId
 
-from app.celery_app import celery_app
-from app.config import settings
-from app.modules.dashboard.email_service import EmailService
+from app.core.celery_app import celery_app
+from app.core.config import settings
+from app.modules.dashboard.services.email_service import EmailService
 from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.enums.pipeline_stage import PipelineStage
 from app.modules.recruitment.models import Candidate, ClientUser, Mapping, Notification, Position
@@ -155,7 +155,7 @@ async def _send_client_reminders(mapping: Mapping, reminder_type: str) -> None:
 @celery_app.task(name="recruitment.process_reminders")
 def process_reminders() -> None:
     """Run daily to send reminders to clients."""
-    from app.database import init_db
+    from app.core.database import init_db
 
     async def run():
         await init_db()
@@ -169,7 +169,7 @@ def process_new_position_notifications(
     position_id: str, brand_id: str, created_by_name: str
 ) -> None:
     """Send notifications when a client creates a new position."""
-    from app.database import init_db
+    from app.core.database import init_db
     from app.modules.recruitment.enums.activity_type import ActivityType
     from app.modules.recruitment.models import ActivityLog, Employee, Position
 
@@ -225,7 +225,7 @@ def process_new_position_notifications(
 @celery_app.task(name="recruitment.process_joining_dates")
 def process_joining_dates() -> None:
     """Run daily to auto-transition candidates who have reached their joining date."""
-    from app.database import init_db
+    from app.core.database import init_db
 
     async def run():
         await init_db()
@@ -233,7 +233,7 @@ def process_joining_dates() -> None:
 
         from app.modules.recruitment.enums import Decision, PipelineStage
         from app.modules.recruitment.models import Mapping
-        from app.modules.recruitment.repository_impl import move_stage
+        from app.modules.recruitment.repository import move_stage
         from app.modules.recruitment.schemas import TenantScope
 
         now = datetime.now(UTC)

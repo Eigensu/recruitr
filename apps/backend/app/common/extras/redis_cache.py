@@ -9,7 +9,7 @@ from typing import Any
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from app.config import settings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 

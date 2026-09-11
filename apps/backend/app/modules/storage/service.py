@@ -10,7 +10,7 @@ import cloudinary.uploader
 import cloudinary.utils
 import pymupdf  # the `fitz` import name is deprecated and warns on every import
 
-from app.config import settings
+from app.core.config import settings
 
 # Configure Cloudinary SDK on import
 cloudinary.config(

@@ -3,8 +3,8 @@ import logging
 
 from beanie import PydanticObjectId
 
-from app.celery_app import celery_app
-from app.database import init_db
+from app.core.celery_app import celery_app
+from app.core.database import init_db
 from app.modules.leaderboard.models import EmployeeStat
 from app.modules.leaderboard.repository.writes import unlock_badges
 from app.modules.leaderboard.utils.badge_engine import evaluate_badges

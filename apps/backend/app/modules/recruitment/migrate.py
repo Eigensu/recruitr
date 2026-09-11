@@ -28,7 +28,7 @@ from typing import Any
 from bson import ObjectId
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 from app.modules.recruitment.enums import PipelineStage, PositionStatus
 
 # ── Stage remapping (old dashboard PipelineStage → new unified PipelineStage) ──

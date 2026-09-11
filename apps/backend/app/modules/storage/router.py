@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 
-from app.dependencies import deny_clients, get_current_user
+from app.core.dependencies import deny_clients, get_current_user
 from app.modules.auth.schemas import TokenPayload
 from app.modules.storage import service
 from app.modules.storage.schemas import CloudinarySignatureResponse

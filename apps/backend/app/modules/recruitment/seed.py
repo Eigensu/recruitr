@@ -22,7 +22,7 @@ from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app.common.utils.seed_guard import assert_local_database
-from app.config import settings
+from app.core.config import settings
 from app.modules.recruitment.enums import (
     ActivityType,
     Decision,

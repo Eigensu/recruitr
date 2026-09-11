@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_viewer
+from app.core.dependencies import get_viewer
 from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.models import Notification
 from app.modules.recruitment.schemas import TenantScope

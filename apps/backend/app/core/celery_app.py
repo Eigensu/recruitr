@@ -3,7 +3,7 @@ from datetime import timedelta
 from celery import Celery
 from celery.schedules import crontab
 
-from app.config import settings
+from app.core.config import settings
 
 celery_app = Celery(
     settings.APP_NAME,

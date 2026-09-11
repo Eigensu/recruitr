@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.common.dtos.pagination import PaginationMeta
-from app.dependencies import get_tenant, require_maintainer
+from app.core.dependencies import get_tenant, require_maintainer
 from app.modules.recruitment.models import ActivityLog
 from app.modules.recruitment.schemas import TenantScope
 
