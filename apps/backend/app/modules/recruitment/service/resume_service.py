@@ -56,15 +56,18 @@ async def process_resume_bytes(
         uploaded, and `parsed` carries at most the email when `email_only`.
     """
     # 1. Extract text — only if something is going to read it
+    # Both are synchronous and CPU-bound (PDF/DOCX decoding, then regex passes
+    # over the whole document); run on a thread so a 50-file bulk upload does
+    # not stall every other request on the loop.
     text = (
-        extract_text_from_file(file_bytes)
+        await asyncio.to_thread(extract_text_from_file, file_bytes)
         if automation.resume_parsing_enabled or email_only
         else None
     )
 
     # 2. Parse structured fields
     parsed = (
-        parse_resume_with(text, automation, email_only=email_only)
+        await asyncio.to_thread(parse_resume_with, text, automation, email_only=email_only)
         if text is not None
         else ParsedResume()
     )
@@ -90,7 +93,9 @@ def build_candidate_resume_update(
 ) -> dict:
     """
     Build a MongoDB update dict to merge parsed resume fields into an existing candidate without
-    overwriting fields the recruiter has set, except for skills/tags which always sync.
+    overwriting fields the recruiter has set. Skills and tags re-sync whenever the parser returns
+    any, but an empty parse never clears them: with auto-tagging off `parsed.tags` is empty by
+    construction, and that setting means "infer no tags", not "delete the ones already there".
 
     With the brand's parsing switched off `parsed` is empty and `raw_text` is
     None, so this narrows to just the resume URL — the file is attached and

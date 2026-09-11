@@ -13,7 +13,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.dependencies import get_tenant, get_viewer
 from app.core.main import app
-from app.modules.recruitment.models import Candidate, Mapping, Position
+from app.modules.recruitment.enums.candidate_status import CandidateStatus
+from app.modules.recruitment.models import Candidate, Mapping, Position, RefereeUser
 from app.modules.recruitment.schemas import TenantScope
 
 # ── Shared test tenant (two different brands for isolation tests) ──────────────
@@ -163,6 +164,207 @@ async def test_list_experience_filter_gt5(client_a: AsyncClient) -> None:
     assert res.status_code == 200
     assert res.json()["meta"]["total"] == 1
     assert res.json()["items"][0]["experience_years"] == 7
+
+
+# ── Referee attribution (External Candidates tab) ──────────────────────────────
+# CandidateCreateStrict/the manual-add endpoint never resolves connect_code to
+# referee_id — only the public application form does that (public_controller.py)
+# — so these tests set referee_id directly on the document, the way that flow
+# would have left it.
+
+
+async def _create_referee(brand_id: PydanticObjectId, **overrides) -> RefereeUser:
+    referee = RefereeUser(
+        brand_id=brand_id,
+        email=overrides.pop("email", "priya.referee@example.com"),
+        name=overrides.pop("name", "Priya Referee"),
+        **overrides,
+    )
+    await referee.insert()
+    return referee
+
+
+@pytest.mark.asyncio
+async def test_list_includes_referee_name_when_referred(client_a: AsyncClient) -> None:
+    referee = await _create_referee(_BRAND_A)
+    created = await _create_via_api(client_a)
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referee.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates")
+    assert res.status_code == 200
+    item = res.json()["items"][0]
+    assert item["referee_id"] == str(referee.id)
+    assert item["referee_name"] == "Priya Referee"
+
+
+@pytest.mark.asyncio
+async def test_list_referee_name_falls_back_to_email_when_name_missing(
+    client_a: AsyncClient,
+) -> None:
+    referee = await _create_referee(_BRAND_A, name=None, email="dormant.referee@example.com")
+    created = await _create_via_api(client_a)
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referee.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates")
+    assert res.json()["items"][0]["referee_name"] == "dormant.referee@example.com"
+
+
+@pytest.mark.asyncio
+async def test_list_candidates_without_a_referee_have_null_referee_fields(
+    client_a: AsyncClient,
+) -> None:
+    await _create_via_api(client_a)
+
+    res = await client_a.get("/api/v1/candidates")
+    item = res.json()["items"][0]
+    assert item["referee_id"] is None
+    assert item["referee_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_referee_id(client_a: AsyncClient) -> None:
+    referee = await _create_referee(_BRAND_A)
+    referred = await _create_via_api(client_a, {"email": "referred@test.com"})
+    await _create_via_api(client_a, {"email": "unreferred@test.com"})
+    await Candidate.find_one(Candidate.id == PydanticObjectId(referred["id"])).set(
+        {Candidate.referee_id: referee.id}
+    )
+
+    res = await client_a.get(f"/api/v1/candidates?referee_id={referee.id}")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["meta"]["total"] == 1
+    assert body["items"][0]["email"] == "referred@test.com"
+
+
+@pytest.mark.asyncio
+async def test_list_filter_referee_id_none_returns_unreferred_only(
+    client_a: AsyncClient,
+) -> None:
+    referee = await _create_referee(_BRAND_A)
+    referred = await _create_via_api(client_a, {"email": "referred@test.com"})
+    await _create_via_api(client_a, {"email": "unreferred@test.com"})
+    await Candidate.find_one(Candidate.id == PydanticObjectId(referred["id"])).set(
+        {Candidate.referee_id: referee.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates?referee_id=none")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["meta"]["total"] == 1
+    assert body["items"][0]["email"] == "unreferred@test.com"
+
+
+@pytest.mark.asyncio
+async def test_get_candidate_detail_includes_referee_name(client_a: AsyncClient) -> None:
+    referee = await _create_referee(_BRAND_A)
+    created = await _create_via_api(client_a)
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referee.id}
+    )
+
+    res = await client_a.get(f"/api/v1/candidates/{created['id']}")
+    assert res.status_code == 200
+    assert res.json()["referee_name"] == "Priya Referee"
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_only_includes_referees_with_candidates(
+    client_a: AsyncClient,
+) -> None:
+    referred_by = await _create_referee(_BRAND_A, email="active@example.com", name="Active Ref")
+    await _create_referee(_BRAND_A, email="unused@example.com", name="Unused Ref")
+    # source="external": the endpoint scopes to what the External tab actually
+    # lists, so an internally-sourced candidate with a referee_id (which can't
+    # happen via the real referral flow, only by direct write like this test
+    # otherwise would) must not surface a referee that has nothing to show.
+    created = await _create_via_api(
+        client_a,
+        {
+            "source": "external",
+            "source_channel": "LinkedIn",
+            "cv_link": "https://example.com/cv.pdf",
+        },
+    )
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referred_by.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates/referees")
+    assert res.status_code == 200
+    body = res.json()
+    assert body == [{"id": str(referred_by.id), "name": "Active Ref"}]
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_excludes_internal_source(client_a: AsyncClient) -> None:
+    """A referee_id on a non-external candidate shouldn't surface in the dropdown.
+
+    The External tab only ever lists source=external candidates, so a referee
+    whose only attributed candidate is internal would otherwise appear in the
+    filter and return zero rows when selected.
+    """
+    referred_by = await _create_referee(_BRAND_A, email="internal-ref@example.com", name="Ref")
+    created = await _create_via_api(client_a)  # BASE_PAYLOAD defaults to source="internal"
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referred_by.id}
+    )
+
+    res = await client_a.get("/api/v1/candidates/referees")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_excludes_rejected_candidates(client_a: AsyncClient) -> None:
+    """A referee whose only candidate was rejected shouldn't surface either."""
+    referred_by = await _create_referee(_BRAND_A, email="rejected-ref@example.com", name="Ref")
+    created = await _create_via_api(
+        client_a,
+        {
+            "source": "external",
+            "source_channel": "LinkedIn",
+            "cv_link": "https://example.com/cv.pdf",
+        },
+    )
+    await Candidate.find_one(Candidate.id == PydanticObjectId(created["id"])).set(
+        {Candidate.referee_id: referred_by.id, Candidate.status: CandidateStatus.rejected}
+    )
+
+    res = await client_a.get("/api/v1/candidates/referees")
+    assert res.status_code == 200
+    assert res.json() == []
+
+
+@pytest.mark.asyncio
+async def test_list_candidate_referees_is_brand_scoped() -> None:
+    """A referee attributed only in brand B must not surface in brand A's list."""
+    referee_b = await _create_referee(_BRAND_B, name="Other Brand Ref")
+
+    # Step 1: create + attribute as brand B
+    app.dependency_overrides[get_tenant] = lambda: TENANT_B
+    app.dependency_overrides[get_viewer] = lambda: TENANT_B
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as cb:
+        res_b = await cb.post("/api/v1/candidates", json=BASE_PAYLOAD)
+        assert res_b.status_code == 201
+        await Candidate.find_one(Candidate.id == PydanticObjectId(res_b.json()["id"])).set(
+            {Candidate.referee_id: referee_b.id}
+        )
+
+    # Step 2: query as brand A
+    app.dependency_overrides[get_tenant] = lambda: TENANT_A
+    app.dependency_overrides[get_viewer] = lambda: TENANT_A
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ca:
+        res = await ca.get("/api/v1/candidates/referees")
+        assert res.status_code == 200
+        assert res.json() == []
+
+    app.dependency_overrides.pop(get_tenant, None)
+    app.dependency_overrides.pop(get_viewer, None)
 
 
 # ── Create ─────────────────────────────────────────────────────────────────────

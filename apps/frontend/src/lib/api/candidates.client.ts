@@ -1,23 +1,40 @@
 "use client";
 
-import type { ApiCandidate, BulkUploadResult, CandidateFilters, PaginatedResponse } from "@/types";
+import type {
+  ApiCandidate,
+  BulkUploadResult,
+  CandidateFilters,
+  CandidateReferrerOption,
+  PaginatedResponse,
+} from "@/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Plain truthy string/enum filters — one line each would be identical but for
+// the key, which is exactly what pushed this past Sonar's cognitive-complexity
+// budget as a flat if-chain. Looping over the field list keeps it one branch.
+const STRING_FILTER_KEYS = [
+  "search",
+  "source",
+  "source_channel",
+  "created_by",
+  "referee_id",
+  "city",
+  "gender",
+  "role",
+  "salary",
+  "status",
+] as const satisfies readonly (keyof CandidateFilters)[];
+
 function buildQuery(filters: Partial<CandidateFilters>): string {
   const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.source) params.set("source", filters.source);
-  if (filters.source_channel) params.set("source_channel", filters.source_channel);
-  if (filters.created_by) params.set("created_by", filters.created_by);
+  for (const key of STRING_FILTER_KEYS) {
+    const value = filters[key];
+    if (value) params.set(key, String(value));
+  }
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
-  if (filters.city) params.set("city", filters.city);
-  if (filters.gender) params.set("gender", filters.gender);
-  if (filters.role) params.set("role", filters.role);
-  if (filters.salary) params.set("salary", filters.salary);
-  if (filters.status) params.set("status", filters.status);
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
@@ -32,6 +49,14 @@ export async function clientFetchCandidates(
   });
   if (!res.ok) throw new Error(`Candidates fetch failed: ${res.status}`);
   return res.json() as Promise<PaginatedResponse<ApiCandidate>>;
+}
+
+export async function clientFetchCandidateReferees(): Promise<CandidateReferrerOption[]> {
+  const res = await fetch(`${API_URL}/api/v1/candidates/referees`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Candidate referees fetch failed: ${res.status}`);
+  return res.json() as Promise<CandidateReferrerOption[]>;
 }
 
 export async function clientCreateCandidate(data: {

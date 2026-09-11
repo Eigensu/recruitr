@@ -267,23 +267,24 @@ async def get_dashboard_summary(
 
         mapped_candidate_ids = {m.candidate_id for m in mappings}
 
-        for c in candidates:
-            if c.id in mapped_candidate_ids:
-                cvs_actioned += 1
-                continue
-
-            has_activity = await CandidateEvent.find(
+        # One distinct() over the whole set, not an exists() per candidate:
+        # this runs on every load of the referee dashboard.
+        actioned_ids = set(
+            await CandidateEvent.get_motor_collection().distinct(
+                "candidate_id",
                 {
                     "brand_id": brand_id,
-                    "candidate_id": c.id,
+                    "candidate_id": {"$in": candidate_ids},
                     "event_type": {
                         "$nin": [CandidateEventType.applied.value, CandidateEventType.mapped.value]
                     },
-                }
-            ).exists()
+                },
+            )
+        )
 
-            if has_activity:
-                cvs_actioned += 1
+        cvs_actioned = sum(
+            1 for c in candidates if c.id in mapped_candidate_ids or c.id in actioned_ids
+        )
 
     referrals = await ReferralRecord.find(
         {"brand_id": brand_id, "referee_id": referee_id}
@@ -629,8 +630,16 @@ async def _pay_referee_cycle(
         # Idempotent insert thanks to unique index on (brand_id, referee_id, cycle_month)
         await batch.insert()
     except DuplicateKeyError:
-        # A worker already processed this referee's payment batch for this cycle
-        return
+        # Another worker inserted the batch — or an earlier run did and then died
+        # before marking the referrals. Load it and carry on rather than return:
+        # the loop below is idempotent, and returning here is what leaves those
+        # referrals stuck at "owed" with a batch that says they were paid.
+        existing = await PaymentBatch.find_one(
+            {"brand_id": brand_id, "referee_id": referee_id, "cycle_month": cycle_month}
+        )
+        if existing is None:
+            return
+        batch = existing
 
     for r in refs:
         r.payment_status = PaymentStatus.paid.value
