@@ -13,7 +13,10 @@ class StageMappingItem(BaseModel):
     mapping_id: str
     candidate_id: str
     candidate_name: str
-    candidate_email: str
+    # Optional because Candidate.email is: phone is the mandatory contact
+    # channel for a manually-added candidate, email is not. A required str
+    # here 500s the whole board on the first emailless card.
+    candidate_email: str | None = None
     position_id: str
     position_code: str
     position_role: str

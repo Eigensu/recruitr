@@ -49,7 +49,7 @@ export default function TriageCard({ card, isDragging: isDragOverlay = false }: 
         <p className="truncate text-sm font-semibold leading-tight text-text-primary">
           {card.name}
         </p>
-        <p className="mt-0.5 truncate text-[11px] text-text-muted">{card.email}</p>
+        {card.email && <p className="mt-0.5 truncate text-[11px] text-text-muted">{card.email}</p>}
       </div>
 
       {card.extracted_skills && card.extracted_skills.length > 0 && (
