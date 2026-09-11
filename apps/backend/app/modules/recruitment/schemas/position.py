@@ -132,7 +132,7 @@ class TopCandidateItem(BaseModel):
 
     id: str
     full_name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float

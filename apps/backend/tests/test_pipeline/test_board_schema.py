@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.modules.recruitment.schemas.pipeline import StageMappingItem
-from app.modules.recruitment.schemas.position import PositionMappedCandidate
+from app.modules.recruitment.schemas.position import PositionMappedCandidate, TopCandidateItem
 
 
 @pytest.fixture(autouse=True)
@@ -57,3 +57,16 @@ def test_position_mapped_candidate_accepts_null_email() -> None:
         stage="sourced",
     )
     assert cand.email is None
+
+
+def test_top_candidate_item_accepts_null_email() -> None:
+    """Same fix for GET /positions/{id}/top-candidates, which validates rows
+    straight off the candidates collection."""
+    top = TopCandidateItem(
+        id=_ROW["candidate_id"],
+        full_name="Candidate With No Email",
+        email=None,
+        experience_years=3.0,
+        skills=["python"],
+    )
+    assert top.email is None
