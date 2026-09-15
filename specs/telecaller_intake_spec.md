@@ -1,0 +1,560 @@
+# Telecaller Intake Pipeline — Technical Specification
+
+**Status:** Draft for review · **Branch:** `claude/cool-ptolemy-9a4fsq`
+
+Adds a **Telecaller** role, a **live Google Sheets ingest** of Meta (Instagram) lead-ad
+candidates, a **two-leg review workflow** (telecaller → recruiter), **admin observability** on
+time-to-action for both legs, and an **SLA breach alert** when a telecaller sits on a lead for
+more than a day.
+
+---
+
+## 1. Context and constraints
+
+Read `CLAUDE.md`, `apps/backend/CLAUDE.md` first. The design below leans on four existing
+mechanisms rather than inventing parallel ones:
+
+| Existing mechanism | Where | Reused for |
+|---|---|---|
+| `TenantScope` + `brand_id` on every query | `core/dependencies.py`, `utils/scoping.py` | Tenant isolation of leads |
+| `Counter` + `next_seq()` atomic sequence | `repository/_impl.py:45` | Round-robin assignment cursor |
+| `Notification` + Celery reminder sweep | `models.py`, `recruitment/tasks.py` | SLA breach alerts |
+| Stage-timing aggregations | `dashboard/repository.py:503` | Time-to-action math conventions |
+
+**Decisions already settled** (from the requirements conversation):
+
+1. Telecaller is a **staff role in the data model** — real `Employee` record, `brand_id`,
+   tenant-scoped — not an outsider grant like `client`/`referee`.
+2. Sheet connection is **service account + Sheets API, polled** by a Celery beat job.
+3. Assignment is **round-robin** on both legs (ingest → telecaller, accept → recruiter).
+4. Telecaller reject **marks the candidate `REJECTED` and keeps it in the pool** (auditable).
+5. "Recruiter actioned" = **the first pipeline mapping** for that candidate.
+6. SLA alert = **in-app `Notification` per breach (deduped) + one daily email digest to admins**.
+7. Scope = **backend + frontend in one PR**.
+
+---
+
+## 2. Source data
+
+The sheet is a **Meta Lead Ads export**. Confirmed header row (21 columns):
+
+```
+id · created_time · ad_id · ad_name · adset_id · adset_name · campaign_id · campaign_name
+form_id · form_name · is_organic · platform · highest_educational_qualification
+what_role_are_you_interested_in? · experience_working_in_the_f&b_industry_(in_years)?_(...)
+your_current_role? · your_current_location? · full_name · email · phone_number · lead_status
+```
+
+### 2.1 Column mapping
+
+Headers are matched **normalized** — lowercased, non-alphanumerics collapsed to `_`, trimmed —
+so Meta renaming `your_current_role?` to `your current role?` does not break ingest. The map
+lives in one table in `utils/lead_sheet.py`:
+
+| Sheet column | Target | Transform |
+|---|---|---|
+| `id` | `IntakeLead.external_id` | verbatim; **idempotency key** |
+| `created_time` | `IntakeLead.external_created_at` | ISO-8601 parse, tz-aware, `None` on failure |
+| `platform` | `Candidate.source_channel` | `ig`→`Instagram`, `fb`→`Facebook`, else title-cased raw |
+| — | `Candidate.source` | constant `"external"` |
+| `full_name` | `Candidate.full_name` | trimmed; **row skipped if blank** |
+| `phone_number` | `Candidate.phone` | normalized (see 2.2); **row skipped if blank** |
+| `email` | `Candidate.email` | lowercased; `None` if blank or not `x@y.z` |
+| `your_current_location?` | `Candidate.city` | trimmed |
+| `your_current_role?` | `Candidate.current_role` | trimmed |
+| `experience_working_in_the_f&b_industry_...` | `Candidate.experience_years` | first number in the string (`"2-3 years"`→`2.0`, `"fresher"`→`0.0`) |
+| `highest_educational_qualification` | `Candidate.education_level` + `.education` | fuzzy→`EducationLevel`; raw text always kept in `.education` |
+| `what_role_are_you_interested_in?` | `Candidate.specialization` + `.department` | raw to `specialization`; matched against `ROLES_BY_CATEGORY` to infer `Department` |
+| `is_organic` | `IntakeLead.is_organic` | `"true"/"yes"/"1"` → `True` |
+| `ad_id`/`ad_name`/`adset_*`/`campaign_*`/`form_*` | `IntakeLead.attribution` | embedded sub-document, verbatim |
+| `lead_status` | `IntakeLead.external_status` | verbatim, read-only |
+| *(every column, verbatim)* | `IntakeLead.raw` | full row as `dict[str, str]` |
+
+Unmapped/new columns land in `raw` and are never lost. An env override,
+`INTAKE_SHEET_COLUMN_OVERRIDES` (JSON `{"sheet_header": "candidate_field"}`), lets you retarget a
+column without a deploy.
+
+### 2.2 Phone normalization
+
+Indian numbers arrive as `+919876543210`, `919876543210`, `9876543210`, `98765 43210`. Stored
+normalized to **last 10 digits** in a new `Candidate.phone_normalized` field, with the original in
+`phone`. `phone_normalized` is what dedupe matches on; a new **non-unique** index backs it.
+
+> Deliberately **not** a unique index: the collection already holds candidates with duplicate or
+> missing phones, and a unique index that cannot build leaves `init_beanie` degraded for *every*
+> model (see `core/database.py:_init_beanie`). Dedupe is enforced in the ingest path instead.
+
+### 2.3 Deduplication
+
+Two layers, in order:
+
+1. **`external_id`** — `(brand_id, external_id)` unique index on `IntakeLead`. Re-reading the same
+   sheet row is a no-op. This makes the poll safely re-runnable and lets it read the whole range
+   every time instead of tracking a cursor.
+2. **Existing candidate** — if a live candidate in the brand matches on `phone_normalized` (or, when
+   present, `email`), the lead links to **that** candidate rather than creating a second one, and is
+   filed `status = duplicate`. It is **not** assigned to a telecaller, and it surfaces in the admin
+   dashboard's duplicate count.
+
+> ⚠️ **Confirm:** a repeat lead for someone already in the pool is currently treated as a duplicate
+> and *not* re-reviewed. If a person re-applying after 6 months should go back through telecaller
+> review, say so and I will add a `INTAKE_DUPLICATE_RECHECK_DAYS` window.
+
+---
+
+## 3. Data model
+
+### 3.1 New: `IntakeLead` (collection `intake_leads`)
+
+One row per ingested lead: the workflow state, the timing record, and the campaign attribution.
+Deliberately **a separate document, not fields bolted onto `Candidate`** — `Candidate` already
+carries ~45 fields and this workflow applies to a subset of it. It mirrors how `Mapping`,
+`ReferralRecord` and `CandidateEvent` are separate documents over the same candidate.
+
+```python
+class IntakeAttribution(BaseModel):          # embedded
+    ad_id / ad_name / adset_id / adset_name: str | None
+    campaign_id / campaign_name: str | None
+    form_id / form_name: str | None
+
+class IntakeLead(Document):
+    brand_id: PydanticObjectId
+    candidate_id: PydanticObjectId                    # FK → candidates._id
+    source: IntakeSource = google_sheet
+    source_channel: str | None                        # "Instagram" | "Facebook"
+    external_id: str                                  # Meta lead id — idempotency key
+    external_created_at: datetime | None
+    external_status: str | None                       # sheet's own lead_status, read-only
+    is_organic: bool | None
+    attribution: IntakeAttribution
+    raw: dict[str, str]                               # full sheet row, verbatim
+
+    status: IntakeLeadStatus = pending_telecaller
+    ingested_at: datetime
+
+    # ── Telecaller leg ──
+    telecaller_id: PydanticObjectId | None            # FK → employees._id
+    telecaller_assigned_at: datetime | None
+    telecaller_actioned_at: datetime | None
+    telecaller_decision: IntakeDecision | None        # accept | reject
+    telecaller_notes: str | None
+    telecaller_response_seconds: int | None           # denormalized at action time
+    telecaller_sla_breached_at: datetime | None       # set once; the alert dedupe key
+
+    # ── Recruiter leg ──
+    recruiter_id: PydanticObjectId | None
+    recruiter_assigned_at: datetime | None
+    recruiter_actioned_at: datetime | None            # stamped on first Mapping
+    recruiter_action_mapping_id: PydanticObjectId | None
+    recruiter_response_seconds: int | None
+    recruiter_sla_breached_at: datetime | None
+
+    reassignment_count: int = 0
+    created_at / updated_at: datetime
+```
+
+`*_response_seconds` are **denormalized** rather than computed with `$subtract` at read time so the
+analytics aggregations can `$avg`/`$percentile` a plain field and sort on it.
+
+**Indexes**
+
+```python
+IndexModel([("brand_id", 1), ("external_id", 1)], unique=True)   # idempotency
+IndexModel([("brand_id", 1), ("status", 1), ("telecaller_assigned_at", 1)])  # SLA sweep
+IndexModel([("brand_id", 1), ("telecaller_id", 1), ("status", 1)])           # telecaller queue
+IndexModel([("brand_id", 1), ("recruiter_id", 1), ("status", 1)])            # recruiter queue
+IndexModel([("brand_id", 1), ("candidate_id", 1)])
+IndexModel([("brand_id", 1), ("ingested_at", -1)])
+```
+
+No TTL — this is the permanent audit record, like `CandidateEvent`.
+
+### 3.2 New: `IntakeSourceConfig` (collection `intake_source_configs`)
+
+Per-brand sheet wiring, editable by an admin in the UI instead of requiring a redeploy to change a
+tab name or range. **Credentials never live here** — only in env.
+
+```python
+class IntakeSourceConfig(Document):
+    brand_id: PydanticObjectId                # unique
+    spreadsheet_id: str
+    sheet_range: str = "Sheet1!A:U"
+    enabled: bool = False
+    default_source_channel: str = "Instagram"
+    last_synced_at / last_success_at: datetime | None
+    last_row_count / last_ingested_count / last_skipped_count: int
+    last_error: str | None                    # surfaced in the admin UI
+    consecutive_failures: int = 0
+```
+
+### 3.3 New enums (`recruitment/enums/`)
+
+```python
+class IntakeLeadStatus(StrEnum):
+    pending_telecaller = "pending_telecaller"   # assigned, awaiting decision
+    unassigned        = "unassigned"            # ingested, no active telecaller to take it
+    rejected          = "rejected"              # telecaller rejected — terminal
+    pending_recruiter = "pending_recruiter"     # accepted, awaiting first mapping
+    actioned          = "actioned"              # recruiter mapped them — terminal
+    duplicate         = "duplicate"             # matched an existing candidate — terminal
+
+class IntakeDecision(StrEnum):
+    accept = "accept"
+    reject = "reject"
+
+class IntakeSource(StrEnum):
+    google_sheet = "google_sheet"
+
+class IntakeRejectReason(StrEnum):     # optional on reject; drives the admin breakdown
+    wrong_number / not_reachable / not_interested / not_eligible / duplicate / other
+```
+
+`unassigned` is not an edge case to ignore: leads arriving when no telecaller is active must still
+be ingested and must be visible to an admin, not silently dropped.
+
+### 3.4 Changes to existing models
+
+| Model | Change | Why |
+|---|---|---|
+| `auth.UserRole` | `+ telecaller = "telecaller"` | the new role |
+| `Candidate` | `+ assigned_recruiter_id: ObjectId \| None`, `+ phone_normalized: str \| None` | recruiter ownership of a lead; dedupe |
+| `Notification` | `+ employee_id: ObjectId \| None`, `+ intake_lead_id: ObjectId \| None` | target a single admin, link to the lead |
+| `NotificationKind` | `+ telecaller_sla_breach`, `+ recruiter_sla_breach` | the two new alerts |
+
+`assigned_recruiter_id` is **separate from `created_by_id`**, not a reuse of it: `created_by_id`
+means "who sourced this person" and gates CV visibility (`utils/cv_access.py`). A lead was sourced
+by an ad, not a recruiter — leaving it `None` keeps the CV shared, which is correct. Overloading it
+would silently lock the lead's CV to one recruiter.
+
+`Notification.employee_id` requires a matching change in `notifications_router._scope_match`: staff
+currently match `{"client_id": None}`, which must become "client_id is None **and** (employee_id is
+None or employee_id == me)". The existing `_id` injection in `mark_notification_read` must survive
+that rewrite — the docstring there already warns about it.
+
+Both new documents go into `core/database.py`'s `document_models` **and** `tests/conftest.py`'s
+fixture list, or they fail at query time with `CollectionWasNotInitialized`.
+
+---
+
+## 4. The Telecaller role and access control
+
+### 4.1 Route access is deny-by-default
+
+A telecaller gets an `Employee` record and a `brand_id` — but **`get_tenant` will reject the
+telecaller role, exactly as it rejects `client`.**
+
+This is the one place I am reading past the literal "staff role in the hierarchy" answer, and it is
+deliberate. `get_tenant` is the guard on nearly every staff endpoint. If it admitted telecallers,
+the new role would immediately have read/write access to the full candidate directory, every
+position, the pipeline board and the client list — because those endpoints were written when every
+`get_tenant` caller was a recruiter. The codebase's documented containment strategy is *"forgetting
+a guard locks a client out; it never leaks"*, and telecallers should inherit it.
+
+So: **staff in the data model, deny-by-default at the route layer.** New dependency:
+
+```python
+def get_telecaller_tenant(...)   # telecaller | maintainer | admin → TenantScope
+```
+
+Telecaller-reachable surface, and nothing else:
+
+- `GET /api/v1/auth/me`
+- `GET /api/v1/intake/leads/mine` — their own queue
+- `POST /api/v1/intake/leads/{id}/accept` · `/reject`
+- `GET /api/v1/notifications` · `POST /{id}/read`
+- `GET|PATCH /api/v1/settings` (own profile)
+
+`TenantScope` gains `is_telecaller`. `is_recruiter` already returns `True` only for `employee`, so
+telecallers are automatically excluded from leaderboard credit and the activity feed with no change.
+
+### 4.2 `deny_clients` → `deny_outsiders`
+
+The leaderboard router is mounted with `dependencies=[Depends(deny_clients)]`. A telecaller must not
+see recruiters' names and scores either. Rather than a function named `deny_clients` that quietly
+also denies telecallers, it is **renamed `deny_outsiders`** and denies `{client, referee,
+telecaller}` — two call sites in `core/main.py` plus the `apps/backend/CLAUDE.md` reference.
+
+### 4.3 Provisioning
+
+Telecallers are created by an admin via `POST /api/v1/teams/telecallers` (or the existing employee
+invite path with `role=telecaller`), which creates the `User` + `Employee` pair. `may_sign_in()` in
+`auth/access.py` is unchanged — a telecaller is on an agency domain like any other staff member.
+`_post_login_path` gains a telecaller branch → `/leads`.
+
+---
+
+## 5. Ingest pipeline
+
+```
+Google Sheet (Meta lead ads)
+        │  Sheets API v4, service account, read-only scope
+        ▼
+[celery beat] intake.poll_google_sheet          every INTAKE_POLL_MINUTES (default 10)
+        │
+        ├── read whole range → normalize headers → parse rows
+        ├── skip rows with no full_name or no phone
+        ├── skip external_ids already ingested          (unique index = idempotent)
+        ├── match existing candidate by phone/email     → status=duplicate, link, stop
+        ├── create Candidate(status=PENDING, source=external, source_channel=Instagram)
+        ├── create IntakeLead(status=pending_telecaller)
+        ├── round-robin assign a telecaller             (or status=unassigned)
+        └── record CandidateEvent(applied)
+```
+
+### 5.1 Sheets client
+
+`utils/google_sheets.py` — a thin async wrapper: `google-auth` mints a service-account JWT and
+exchanges it for an access token; `httpx` (already a dependency) calls
+`GET /v4/spreadsheets/{id}/values/{range}`. Scope `spreadsheets.readonly`.
+
+> `gspread` was considered and rejected: it is synchronous and would block the event loop or force
+> `run_in_executor`, for one HTTP GET. New dependency is **`google-auth` only**, added to both
+> `pyproject.toml` and `requirements.txt` (kept in sync for Docker).
+
+New settings in `core/config.py` / `.env.example`:
+
+```bash
+GOOGLE_SHEETS_ENABLED=false
+GOOGLE_SERVICE_ACCOUNT_JSON=          # raw or base64 service-account JSON
+INTAKE_SPREADSHEET_ID=1JMg0WtubG9lWeKSoWHsF7M2zOJfsgIWdBQYvOb0X0yM
+INTAKE_SHEET_RANGE=Sheet1!A:U
+INTAKE_POLL_MINUTES=10
+INTAKE_SHEET_COLUMN_OVERRIDES=        # optional JSON remap
+TELECALLER_SLA_HOURS=24
+RECRUITER_SLA_HOURS=24
+```
+
+**Setup you must do:** create a GCP service account, enable the Google Sheets API, download its JSON
+key into `GOOGLE_SERVICE_ACCOUNT_JSON`, and **share the spreadsheet with the service account's
+email address as Viewer**. Without that share the API returns 403 and ingest stays empty.
+
+### 5.2 Failure behaviour
+
+A failed poll increments `consecutive_failures` and writes `last_error` (surfaced in the admin UI).
+It never partially commits: each row is independent, so a malformed row is skipped and counted, not
+fatal. After 3 consecutive failures an in-app notification goes to admins. Because ingest is
+idempotent, a failed run is simply retried by the next tick.
+
+### 5.3 Round-robin
+
+```python
+seq = await next_seq(brand_id, "intake_telecaller_rr")   # atomic $inc, existing primitive
+roster = active telecallers for brand, sorted by _id     # stable order
+assignee = roster[seq % len(roster)] if roster else None
+```
+
+Same for recruiters with key `intake_recruiter_rr`. Atomic under concurrency, no locks, and gaps are
+harmless. If the roster is empty → `status = unassigned`, surfaced to admins.
+
+---
+
+## 6. Workflow
+
+### 6.1 Telecaller accepts
+
+`POST /api/v1/intake/leads/{id}/accept` (body: optional `notes`)
+
+1. 409 unless `status == pending_telecaller` and `telecaller_id == me` (admins may act on any).
+2. Stamp `telecaller_actioned_at`, `telecaller_decision=accept`,
+   `telecaller_response_seconds = actioned_at − assigned_at`.
+3. `Candidate.status → APPROVED` (it now enters the recruiter directory, which already filters to
+   `APPROVED` by default — so pending and rejected leads never pollute it).
+4. Round-robin a recruiter → `recruiter_id`, `recruiter_assigned_at`, `Candidate.assigned_recruiter_id`.
+5. `status → pending_recruiter` (or `unassigned` if no recruiter roster).
+6. `CandidateEvent(approved)` + `ActivityLog`.
+
+### 6.2 Telecaller rejects
+
+`POST /api/v1/intake/leads/{id}/reject` (body: optional `reason: IntakeRejectReason`, `notes`)
+
+Same stamping, then `Candidate.status → REJECTED`, `status → rejected`, `CandidateEvent(declined)`.
+The candidate row **stays live and searchable** (`is_active` untouched) so rejections remain
+reportable; the directory hides it because it filters to `APPROVED`.
+
+### 6.3 Recruiter actions
+
+The clock stops at the **first `Mapping`** for that candidate. Hooked in
+`service/_impl.py:map_candidate`, immediately after `_open_referral_record` and following the same
+rule as gamification and the referral ledger:
+
+```python
+await _close_intake_lead(mapping)   # fire-and-forget
+```
+
+> "Fire-and-forget" is the module's established contract: *a duplicate award or Redis failure must
+> never roll back the domain write that triggered it.* A metrics stamp is no different — if the
+> stamp fails, the mapping still stands.
+
+It stamps `recruiter_actioned_at`, `recruiter_response_seconds`, `recruiter_action_mapping_id`, and
+`status → actioned`, only when a `pending_recruiter` lead exists for that candidate.
+
+### 6.4 Admin reassignment
+
+`POST /api/v1/intake/leads/{id}/reassign` (admin/maintainer) — move a lead to a different telecaller
+or recruiter, e.g. when someone is away. **Resets the relevant `*_assigned_at`** (the SLA clock
+restarts for the new owner — a fresh assignee should not inherit someone else's overdue clock),
+clears `*_sla_breached_at`, and increments `reassignment_count` so a lead cannot be passed around to
+dodge the SLA unnoticed.
+
+---
+
+## 7. Observability
+
+### 7.1 Metrics
+
+**Funnel** (counts by status, over a date range): ingested → assigned → accepted/rejected →
+recruiter-assigned → actioned, plus duplicates and unassigned.
+
+**Telecaller leg** — overall and per telecaller:
+- avg / **median** / p90 time-to-action (hours)
+- pending count, and of those how many are **overdue** (> `TELECALLER_SLA_HOURS`)
+- accepted / rejected counts and accept-rate
+- oldest pending lead's age
+- SLA compliance % = actioned-within-SLA ÷ actioned
+
+> Median and p90 are reported alongside the mean because one lead left over a weekend drags an
+> average far enough to hide a team that is otherwise fine.
+
+**Recruiter leg** — the same shape, keyed on the recruiter leg's timestamps.
+
+**Campaign breakdown** — leads, accept-rate and actioned-rate grouped by `campaign_name` /
+`ad_name` / `source_channel`. Effectively free (the attribution is already stored) and it answers
+"which ad spend produces candidates that actually convert".
+
+### 7.2 Endpoints (admin/maintainer)
+
+```
+GET /api/v1/intake/analytics/overview     funnel + headline SLA numbers
+GET /api/v1/intake/analytics/telecallers  per-telecaller table
+GET /api/v1/intake/analytics/recruiters   per-recruiter table
+GET /api/v1/intake/analytics/campaigns    attribution breakdown
+GET /api/v1/intake/leads                  paginated, filter by status/telecaller/recruiter/
+                                          overdue/date-range/campaign
+GET /api/v1/intake/leads/{id}             one lead + its full timing trail
+GET /api/v1/intake/config                 sheet config + last sync status
+PUT /api/v1/intake/config                 update config (admin)
+POST /api/v1/intake/sync                  "Sync now" — enqueue an immediate poll (admin)
+```
+
+All are Mongo aggregations following `dashboard/repository.py` conventions (`$match` on `brand_id`
+first, `$facet` for multi-metric single round-trips). Cached through the existing
+`dashboard_cache` Redis helper with a 5-minute TTL, invalidated on any lead write.
+
+---
+
+## 8. SLA alerting
+
+### 8.1 Hourly breach sweep — `intake.sla_sweep`, `crontab(minute=15)`
+
+Hourly, not daily: a daily job could let a breach sit for up to 24 extra hours before anyone hears
+about it, which defeats a 24-hour SLA.
+
+```
+for each lead where status == pending_telecaller
+                and telecaller_assigned_at < now − TELECALLER_SLA_HOURS
+                and telecaller_sla_breached_at is None:
+    → one Notification(kind=telecaller_sla_breach, employee_id=<each admin>) per admin
+    → stamp telecaller_sla_breached_at = now        # fires exactly once per lead
+```
+
+The same sweep covers `pending_recruiter` against `RECRUITER_SLA_HOURS` with
+`recruiter_sla_breach`. You only asked for the telecaller alert; the recruiter one is the same three
+lines and the same dashboard already measures that leg, so it is included — say the word and I will
+drop it or leave it off by default.
+
+The `*_sla_breached_at` stamp is the dedupe key — the same guarantee `Mapping.reminders_sent` gives
+the existing reminder job. A lead stuck for a week raises one notification, not 168.
+
+### 8.2 Daily digest — `intake.sla_digest`, `crontab(minute=0, hour=3)`
+
+One email per admin listing every currently-overdue lead, grouped by telecaller, with ages and a
+deep link to `/leads?overdue=true`. New `EmailService.send_intake_sla_digest`, following the
+existing HTML-escaping and never-raise conventions in that class. **No email is sent when nothing
+is overdue** — a daily "all clear" trains people to ignore the alert.
+
+---
+
+## 9. Frontend
+
+### 9.1 Routes
+
+| Route | Who | Contents |
+|---|---|---|
+| `/leads` | telecaller | Their queue only. Card list: name, phone (click-to-call `tel:`), city, current role, experience, role interest, time remaining on SLA. Accept / Reject buttons, reject-reason picker, notes. |
+| `/leads` | admin/maintainer | All leads + filters (status, telecaller, recruiter, overdue, campaign, date range). Reassign action. |
+| `/leads/analytics` | admin/maintainer | The observability dashboard (§7.1). |
+
+### 9.2 Wiring
+
+- **Sidebar**: a `TELECALLER_NAV_CONFIG` array in `nav-config.ts`, mirroring the existing
+  `REFEREE_NAV_CONFIG` pattern rather than adding two more booleans to `NavItemConfig` (which
+  already carries three). Staff nav gains a `Leads` item, maintainer-gated.
+- **RouteGuard**: a telecaller branch — anything outside `/leads` and `/settings` redirects to
+  `/leads`, mirroring the existing referee branch.
+- **`useCurrentUser`**: `+ isTelecaller`.
+- **`types/index.ts`**: `UserRole` union gains `"telecaller"`.
+- Charts follow the repo's existing dashboard component structure (`atoms`/`molecules`/`organisms`)
+  and the project's `dataviz` conventions.
+
+---
+
+## 10. Testing
+
+New `tests/test_intake/`, following the existing per-area layout:
+
+| File | Covers |
+|---|---|
+| `test_sheet_mapping.py` | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization |
+| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; duplicate phone links instead of creating |
+| `test_round_robin.py` | even distribution; empty roster ⇒ `unassigned`, not a crash; concurrent assignment does not collide |
+| `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
+| `test_recruiter_action_stamp.py` | first mapping stamps `actioned`; a second mapping does not re-stamp; a failing stamp does not roll back the mapping |
+| `test_sla_sweep.py` | breach fires exactly once per lead; re-running the sweep adds nothing; reassignment resets the clock |
+| `test_telecaller_access.py` | **containment** — a telecaller is 403'd on candidates, positions, pipeline, clients, leaderboard, activity. Mirrors `test_pipeline/test_referee_portal_is_read_only.py` |
+| `test_intake_analytics.py` | funnel counts, median/p90 math, per-person grouping, brand isolation |
+
+Plus `pnpm --filter frontend lint`, `uv run ruff check .`, `ruff format`.
+
+Tests need a local Mongo — `MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest`. The
+autouse fixture drops its database on teardown and `assert_local_database()` refuses a non-local
+host, so the command-line override is mandatory.
+
+---
+
+## 11. Build order
+
+1. **Role + access** — `UserRole.telecaller`, `get_telecaller_tenant`, `deny_outsiders` rename,
+   `TenantScope.is_telecaller`, provisioning, login redirect. *Ship with `test_telecaller_access.py`
+   green before anything else touches data.*
+2. **Models + enums** — `IntakeLead`, `IntakeSourceConfig`, enums, `Candidate`/`Notification`
+   changes, registration in `database.py` + `conftest.py`.
+3. **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, unit tests (no network).
+4. **Ingest service + poll task** — round-robin, dedupe, Celery beat entry, `POST /intake/sync`.
+5. **Workflow endpoints** — accept / reject / reassign, `map_candidate` hook.
+6. **Analytics** — aggregations + endpoints + cache invalidation.
+7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
+8. **Frontend** — telecaller queue → admin lead list → analytics dashboard → nav/guard wiring.
+9. **Docs** — update `apps/backend/CLAUDE.md` (role table, new module) and `.env.example`.
+
+Steps 1–2 are a safe first commit; 3–5 are the functional core; 6–8 are additive.
+
+---
+
+## 12. Open items — please confirm
+
+1. **Duplicate policy** (§2.3) — a lead matching an existing candidate is filed `duplicate` and not
+   re-reviewed. Should a re-application after N days go back through telecaller review instead?
+2. **Sheet write-back** — should we write the telecaller's decision back into the sheet's
+   `lead_status` column? That needs a read/write scope on the service account instead of read-only.
+   Currently **out of scope**.
+3. **Recruiter SLA alerts** (§8.1) — included by default. Keep, or telecaller-only as literally asked?
+4. **SLA clock** — 24 calendar hours from assignment, including nights and weekends. Business hours
+   would need a working-calendar config; say so if a lead assigned 6pm Friday should not breach on
+   Saturday evening.
+5. **Which brand** do sheet leads belong to? The design assumes the `IntakeSourceConfig` row's
+   `brand_id` (one config per brand, configured by an admin). Correct if you run multiple brands.
+6. **Historical backfill** — the first poll will ingest *every* row currently in the sheet and
+   round-robin them all to telecallers. If the sheet holds months of old leads, that is a large
+   surprise queue. Options: ingest all as `unassigned`, or only ingest rows with
+   `created_time` newer than a cutoff. **Default: only rows newer than the config's creation
+   time**, older ones ingested as `unassigned` so nothing is lost.
