@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { IconChevronDown, IconChevronUp } from "@tabler/icons-react";
-import { SOURCE_CHANNELS } from "@/lib/constants/candidate";
+import {
+  SOURCE_CHANNELS,
+  DEPARTMENT_OPTIONS,
+  ESTABLISHMENT_TAG_OPTIONS,
+  COMMUNICATION_OPTIONS,
+  STRUCTURED_EDUCATION_OPTIONS,
+} from "@/lib/constants/candidate";
 import type {
   CandidateFilters,
   CandidateReferrerOption,
@@ -57,6 +63,10 @@ export default function CandidateFilterBar({
   const [gender, setGender] = useState("");
   const [role, setRole] = useState("");
   const [salary, setSalary] = useState("");
+  const [department, setDepartment] = useState("");
+  const [establishmentTag, setEstablishmentTag] = useState("");
+  const [communication, setCommunication] = useState("");
+  const [education, setEducation] = useState("");
   const [tagsOpen, setTagsOpen] = useState(false);
 
   function emit(
@@ -72,6 +82,10 @@ export default function CandidateFilterBar({
       gender: string;
       role: string;
       salary: string;
+      department: string;
+      establishmentTag: string;
+      communication: string;
+      education: string;
     }> = {},
   ) {
     const s = over.search ?? search;
@@ -85,6 +99,10 @@ export default function CandidateFilterBar({
     const g = over.gender ?? gender;
     const r = over.role ?? role;
     const sal = over.salary ?? salary;
+    const dept = over.department ?? department;
+    const est = over.establishmentTag ?? establishmentTag;
+    const comm = over.communication ?? communication;
+    const edu = over.education ?? education;
     onFilterChange({
       search: s || undefined,
       source: (src as CandidateSource) || undefined,
@@ -97,6 +115,10 @@ export default function CandidateFilterBar({
       gender: g || undefined,
       role: r || undefined,
       salary: sal || undefined,
+      department: dept || undefined,
+      establishment_tag: est || undefined,
+      communication: comm || undefined,
+      education: edu || undefined,
       page: 1,
       limit: 50,
     });
@@ -122,6 +144,10 @@ export default function CandidateFilterBar({
     setGender("");
     setRole("");
     setSalary("");
+    setDepartment("");
+    setEstablishmentTag("");
+    setCommunication("");
+    setEducation("");
     // One update rather than two: clearing the referee through onRefereeChange
     // fired its own fetch with the filters still applied, and the fetch that
     // followed read the pre-clear refereeId from state — so "Clear all" left
@@ -142,6 +168,10 @@ export default function CandidateFilterBar({
     !!gender ||
     !!role ||
     !!salary ||
+    !!department ||
+    !!establishmentTag ||
+    !!communication ||
+    !!education ||
     (mode === "external" && !!refereeId);
 
   return (
@@ -304,6 +334,78 @@ export default function CandidateFilterBar({
         <option value="5to8">₹5L – &lt;₹8L</option>
         <option value="8to12">₹8L – &lt;₹12L</option>
         <option value="gt12">₹12L+</option>
+      </select>
+
+      <select
+        value={department}
+        onChange={(e) => {
+          const v = e.target.value;
+          setDepartment(v);
+          emit({ department: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Departments</option>
+        {DEPARTMENT_OPTIONS.map((d) => (
+          <option key={d.value} value={d.value}>
+            {d.label}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={establishmentTag}
+        onChange={(e) => {
+          const v = e.target.value;
+          setEstablishmentTag(v);
+          emit({ establishmentTag: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Establishments</option>
+        {ESTABLISHMENT_TAG_OPTIONS.map((e) => (
+          <option key={e.value} value={e.value}>
+            {e.label}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={communication}
+        onChange={(e) => {
+          const v = e.target.value;
+          setCommunication(v);
+          emit({ communication: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Communication</option>
+        {COMMUNICATION_OPTIONS.map((c) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={education}
+        onChange={(e) => {
+          const v = e.target.value;
+          setEducation(v);
+          emit({ education: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+      >
+        <option value="">All Education</option>
+        {STRUCTURED_EDUCATION_OPTIONS.map((edu) => (
+          <option key={edu} value={edu}>
+            {edu}
+          </option>
+        ))}
       </select>
 
       <div className="relative">

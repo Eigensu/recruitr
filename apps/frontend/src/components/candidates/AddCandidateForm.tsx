@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
+import { useApiFetch } from "@/lib/api";
 import {
   clientConfirmResume,
   clientCreateCandidate,
   clientDeleteCandidate,
 } from "@/lib/api/candidates.client";
+import { getRoleCatalog } from "@/lib/api/positions";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import type { ApiCandidate } from "@/types";
 import {
@@ -27,6 +29,7 @@ import {
   StructuredCandidateTags,
   TextField,
   inputStyle,
+  resolveCurrentRole,
   resolveSourceChannel,
 } from "./CandidateFormFields";
 
@@ -106,6 +109,14 @@ interface Props {
 }
 
 export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
+  const apiFetch = useApiFetch();
+  const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    getRoleCatalog(apiFetch)
+      .then(setRoleCatalog)
+      .catch(() => setRoleCatalog({}));
+  }, [apiFetch]);
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -121,6 +132,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     establishment_tag: "",
     cv_link: "",
     current_role: "",
+    current_role_other: "",
     experience_years: "",
     city: "",
     area: "",
@@ -139,6 +151,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
+  function resolvedRole(): string {
+    return resolveCurrentRole(form.current_role, form.current_role_other);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = schema.safeParse({
@@ -154,7 +170,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       specialization: form.specialization || undefined,
       establishment_tag: form.establishment_tag || undefined,
       cv_link: form.cv_link || undefined,
-      current_role: form.current_role || undefined,
+      current_role: resolvedRole() || undefined,
       experience_years: form.experience_years || undefined,
       city: form.city || undefined,
       area: form.area || undefined,
@@ -287,8 +303,12 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       )}
 
       <CurrentRoleField
+        roleCatalog={roleCatalog}
+        department={form.department}
         value={form.current_role}
+        other={form.current_role_other}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        onOther={(current_role_other) => setForm((f) => ({ ...f, current_role_other }))}
         error={errors.current_role}
       />
       <ExperienceYearsField
@@ -337,7 +357,17 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       <StructuredCandidateTags
         form={form}
         errors={errors}
-        onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
+        onChange={(updates) =>
+          setForm((f) => ({
+            ...f,
+            ...updates,
+            // Role options are scoped to department, so a role picked under the
+            // old department can silently be invalid for the new one.
+            ...(updates.department !== undefined && updates.department !== f.department
+              ? { current_role: "", current_role_other: "" }
+              : {}),
+          }))
+        }
       />
 
       {form.source === "internal" && <ResumeField file={resumeFile} onFile={setResumeFile} />}
