@@ -8,7 +8,7 @@ type FilteredCard = CandidateCard & { status: LegacyCandidateStatus };
 export interface SuggestedCandidate {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   resume_url: string | null;
   extracted_skills: string[];
   tags: string[];

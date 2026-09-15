@@ -408,7 +408,7 @@ export interface KanbanColumn {
 export interface CandidateCard {
   id: string; // candidate_id — used as dnd-kit item id
   name: string;
-  email: string;
+  email: string | null;
   extracted_skills: string[];
   resume_url: string | null;
   match_score?: number;
@@ -431,7 +431,7 @@ export interface PipelineCard {
   mapping_id: string;
   candidate_id: string;
   candidate_name: string;
-  candidate_email: string;
+  candidate_email: string | null;
   position_id: string;
   position_code: string;
   position_role: string;
