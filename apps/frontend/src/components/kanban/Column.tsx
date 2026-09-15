@@ -6,25 +6,25 @@ import type { KanbanStage, PipelineCard } from "@/types";
 import KanbanCard from "./CandidateCard";
 
 const STAGE_ACCENT: Record<KanbanStage, string> = {
-  sourced: "text-slate-400 border-slate-500/30 bg-slate-500/5",
-  sent_to_client: "text-blue-400 border-blue-500/30 bg-blue-500/5",
-  interview: "text-purple-400 border-purple-500/30 bg-purple-500/5",
-  selected: "text-indigo-400 border-indigo-500/30 bg-indigo-500/5",
-  joined: "text-emerald-500 border-emerald-600/30 bg-emerald-600/5",
-  rejected: "text-red-400 border-red-500/30 bg-red-500/5",
-  candidate_dropped: "text-red-600 border-red-700/30 bg-red-700/5",
-  on_hold: "text-gray-400 border-gray-500/30 bg-gray-500/5",
+  sourced: "text-text-primary border-slate-500/30 bg-slate-500/10",
+  sent_to_client: "text-text-primary border-blue-500/30 bg-blue-500/10",
+  interview: "text-text-primary border-purple-500/30 bg-purple-500/10",
+  selected: "text-text-primary border-indigo-500/30 bg-indigo-500/10",
+  joined: "text-text-primary border-emerald-500/30 bg-emerald-500/10",
+  rejected: "text-text-primary border-red-500/30 bg-red-500/10",
+  candidate_dropped: "text-text-primary border-red-600/30 bg-red-600/10",
+  on_hold: "text-text-primary border-gray-500/30 bg-gray-500/10",
 };
 
 const STAGE_DOT: Record<KanbanStage, string> = {
-  sourced: "bg-slate-400",
-  sent_to_client: "bg-blue-400",
-  interview: "bg-purple-400",
-  selected: "bg-indigo-400",
+  sourced: "bg-slate-500",
+  sent_to_client: "bg-blue-500",
+  interview: "bg-purple-500",
+  selected: "bg-indigo-500",
   joined: "bg-emerald-500",
-  rejected: "bg-red-400",
+  rejected: "bg-red-500",
   candidate_dropped: "bg-red-600",
-  on_hold: "bg-gray-400",
+  on_hold: "bg-gray-500",
 };
 
 interface Props {
