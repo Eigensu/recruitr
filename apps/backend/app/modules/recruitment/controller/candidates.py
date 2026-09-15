@@ -365,6 +365,10 @@ async def list_candidates(
     gender: Annotated[str | None, Query()] = None,
     role: Annotated[str | None, Query()] = None,
     salary: Annotated[Literal["lt3", "3to5", "5to8", "8to12", "gt12"] | None, Query()] = None,
+    department: Annotated[str | None, Query()] = None,
+    establishment_tag: Annotated[str | None, Query()] = None,
+    communication: Annotated[str | None, Query()] = None,
+    education: Annotated[str | None, Query()] = None,
     status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
     page: _Page = 1,
     limit: _Limit = 30,
@@ -433,6 +437,18 @@ async def list_candidates(
 
     if role:
         and_clauses.append({"$or": [{"current_role": role}, {"role": role}]})
+
+    if department:
+        match["department"] = department
+
+    if establishment_tag:
+        match["establishment_tag"] = establishment_tag
+
+    if communication:
+        match["communication"] = communication
+
+    if education:
+        match["education"] = education
 
     if salary:
         # Convert salary field to double safely. If missing/invalid, resolves to null.

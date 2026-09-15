@@ -27,6 +27,8 @@ import {
   ESTABLISHMENT_TAG_OPTIONS,
   GENDER_OPTIONS,
   CANDIDATE_SOURCES,
+  ROLE_OPTIONS_BY_DEPARTMENT,
+  CURRENT_ROLE_OTHER,
 } from "@/lib/constants/candidate";
 
 export const inputCls = "w-full rounded-lg px-3 py-2 text-sm outline-none";
@@ -52,6 +54,11 @@ export function withExisting(options: readonly string[], current: string): strin
 export function resolveSourceChannel(source: string, channel: string, other: string): string {
   if (source !== "external") return "";
   return channel === SOURCE_CHANNEL_OTHER ? other.trim() : channel;
+}
+
+/** "Other" carries the typed value instead of the literal "Other" role. */
+export function resolveCurrentRole(role: string, other: string): string {
+  return role === CURRENT_ROLE_OTHER ? other.trim() : role;
 }
 
 /* ── Building blocks ───────────────────────────────────────────────────────── */
@@ -345,10 +352,46 @@ export function NoticePeriodField(
   return <TextField label="Notice Period *" placeholder="e.g. 30 days" {...props} />;
 }
 
-export function CurrentRoleField(
-  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
-) {
-  return <TextField label="Current Role *" placeholder="e.g. Senior Engineer" {...props} />;
+/**
+ * Role list is scoped to the selected department, matching the Positions role
+ * dropdown; falls back to the flattened, deduped list when no department is
+ * picked yet. "Other" reveals a free-text box, same pattern as SourceChannelField.
+ */
+export function CurrentRoleField({
+  department,
+  value,
+  other,
+  onChange,
+  onOther,
+  error,
+  className,
+}: Readonly<{
+  department: string;
+  value: string;
+  other: string;
+  onChange: (v: string) => void;
+  onOther: (v: string) => void;
+  error?: string;
+  className?: string;
+}>) {
+  const options = department
+    ? ROLE_OPTIONS_BY_DEPARTMENT[department] || [CURRENT_ROLE_OTHER]
+    : [...new Set(Object.values(ROLE_OPTIONS_BY_DEPARTMENT).flat())];
+  return (
+    <div className={className}>
+      <SelectField label="Current Role *" value={value} onChange={onChange} options={options} />
+      {value === CURRENT_ROLE_OTHER && (
+        <input
+          className={`${inputCls} mt-2`}
+          style={inputStyle}
+          placeholder="Enter their role"
+          value={other}
+          onChange={(e) => onOther(e.target.value)}
+        />
+      )}
+      <FieldError message={error} />
+    </div>
+  );
 }
 
 export function CvLinkField({
