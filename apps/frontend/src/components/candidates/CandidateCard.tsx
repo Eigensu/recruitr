@@ -537,6 +537,9 @@ export default function CandidateCard({
             <CandidateTags
               tags={
                 [
+                  candidate.establishment_tag
+                    ? `Establishment: ${candidate.establishment_tag}`
+                    : null,
                   candidate.communication ? `Comm: ${candidate.communication}` : null,
                   candidate.education ? `Edu: ${candidate.education}` : null,
                   candidate.brand_experience ? `Exp: ${candidate.brand_experience}` : null,
@@ -544,9 +547,6 @@ export default function CandidateCard({
                     ? `Dept: ${candidate.department.replace("Kitchen (BOH)", "BOH").replace("Front of House (Service)", "Service")}`
                     : null,
                   candidate.specialization ? `Spec: ${candidate.specialization}` : null,
-                  candidate.establishment_tag
-                    ? `Establishment: ${candidate.establishment_tag}`
-                    : null,
                 ].filter(Boolean) as string[]
               }
             />
