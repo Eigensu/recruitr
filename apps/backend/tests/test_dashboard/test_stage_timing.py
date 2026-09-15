@@ -15,8 +15,8 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_viewer
-from app.main import app
+from app.core.dependencies import get_viewer
+from app.core.main import app
 from app.modules.dashboard.repository import fetch_stage_timing
 from app.modules.dashboard.schemas import DashboardFilters
 from app.modules.recruitment.enums import PipelineStage

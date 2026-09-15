@@ -9,7 +9,7 @@ model redefines an index that already exists (same name, different unique /
 partialFilterExpression / sparse / TTL / key spec), creation fails with
 IndexOptionsConflict (85) or IndexKeySpecsConflict (86). That single failure
 makes the app fall back to skip_indexes=True, which disables index sync for
-every model, not just the one that conflicted (see app/database.py).
+every model, not just the one that conflicted (see app/core/database.py).
 
 Unlike fix_ttl_indexes.py (which only compares expireAfterSeconds), this
 compares the full set of index-defining options, so it also catches cases
@@ -31,7 +31,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from pymongo import MongoClient  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 # Option keys that define an index's behavior (as opposed to bookkeeping
 # fields like 'v' or 'ns' that Mongo adds to the live listing). Deliberately
@@ -58,7 +58,7 @@ def declared_indexes() -> list[tuple[str, dict]]:
     """(collection, index document) for every index declared on a Beanie model."""
     from beanie import Document
 
-    from app.database import init_db  # noqa: F401  (ensures model modules import)
+    from app.core.database import init_db  # noqa: F401  (ensures model modules import)
 
     def walk(cls):
         for sub in cls.__subclasses__():

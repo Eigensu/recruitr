@@ -69,7 +69,7 @@ class PositionCreate(BaseModel):
         # but the prompt specifically wants client flow to enforce it.
         # The prompt says Category is required for the client portal.
         # So we require department if role is provided and they must match.
-        from app.modules.recruitment.constants import ROLES_BY_CATEGORY
+        from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
 
         if self.department:
             allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
@@ -107,7 +107,7 @@ class PositionUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_category_and_role(self) -> "PositionUpdate":
-        from app.modules.recruitment.constants import ROLES_BY_CATEGORY
+        from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
 
         if self.department and self.role:
             allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
@@ -132,7 +132,7 @@ class TopCandidateItem(BaseModel):
 
     id: str
     full_name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float
@@ -167,7 +167,7 @@ class PositionMappedCandidate(BaseModel):
     mapping_id: str
     candidate_id: str
     full_name: str
-    email: str
+    email: str | None = None
     previous_company: str | None = None
     experience_years: float
     skills: list[str]

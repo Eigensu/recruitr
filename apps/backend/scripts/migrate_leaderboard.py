@@ -43,7 +43,7 @@ from datetime import UTC, datetime
 
 from pymongo.errors import DuplicateKeyError
 
-from app.database import init_db
+from app.core.database import init_db
 from app.modules.leaderboard.enums import ActivityTypeEnum
 from app.modules.leaderboard.models import (
     EmployeeStat,

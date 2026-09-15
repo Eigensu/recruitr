@@ -23,15 +23,15 @@ def mock_email_service(monkeypatch):
         sent_emails.append(("offer_upload", kwargs.get("email")))
 
     monkeypatch.setattr(
-        "app.modules.dashboard.email_service.EmailService.send_client_action_reminder",
+        "app.modules.dashboard.services.email_service.EmailService.send_client_action_reminder",
         mock_client_action,
     )
     monkeypatch.setattr(
-        "app.modules.dashboard.email_service.EmailService.send_interview_followup",
+        "app.modules.dashboard.services.email_service.EmailService.send_interview_followup",
         mock_interview_followup,
     )
     monkeypatch.setattr(
-        "app.modules.dashboard.email_service.EmailService.send_offer_upload_reminder",
+        "app.modules.dashboard.services.email_service.EmailService.send_offer_upload_reminder",
         mock_offer_upload,
     )
     return sent_emails

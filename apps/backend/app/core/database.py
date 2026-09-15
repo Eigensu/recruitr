@@ -9,7 +9,7 @@ import pymongo.errors
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 from app.modules.auth.models import User
 from app.modules.brands.models import Brand
 from app.modules.gamification.models import RecruiterProfile
@@ -174,7 +174,6 @@ async def init_db() -> None:
         PaymentBatch,
         Notification,
         # Gamification
-        RecruitmentTask,
         RecruiterProfile,
         # Leaderboard
         EmployeeStat,

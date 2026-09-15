@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from app.celery_app import celery_app
-from app.database import init_db
+from app.core.celery_app import celery_app
+from app.core.database import init_db
 from app.modules.leaderboard.enums import ActivityTypeEnum
 from app.modules.leaderboard.service.leaderboard_service import handle_activity
 

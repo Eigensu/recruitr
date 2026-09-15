@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, require_admin, require_maintainer
+from app.core.dependencies import get_tenant, require_admin, require_maintainer
 from app.modules.recruitment.models import RefereeUser
 from app.modules.recruitment.schemas import (
     RefereeUserInvite,
@@ -42,7 +42,7 @@ def _stamp(updates: dict) -> dict:
 
 def _to_user_response(doc: RefereeUser) -> RefereeUserResponse:
     return RefereeUserResponse(
-        _id=str(doc.id),
+        id=str(doc.id),
         brand_id=str(doc.brand_id),
         email=doc.email,
         name=doc.name,

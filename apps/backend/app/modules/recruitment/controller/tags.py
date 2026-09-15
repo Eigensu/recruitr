@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import get_tenant
+from app.core.dependencies import get_tenant
 from app.modules.recruitment.models import RecruiterTag
 from app.modules.recruitment.schemas import RecruiterTagCreate, RecruiterTagResponse, TenantScope
 

@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from pymongo.errors import DuplicateKeyError
 
 from app.common.utils.object_id import to_object_id
-from app.dependencies import get_tenant, get_viewer
+from app.core.dependencies import get_tenant, get_viewer
 from app.modules.recruitment.enums import (
     KANBAN_STAGES,
     TERMINAL_STAGES,
@@ -39,7 +39,7 @@ from app.modules.recruitment.models import (
     Position,
     StageEvent,
 )
-from app.modules.recruitment.repository_impl import (
+from app.modules.recruitment.repository import (
     candidate_display_name,
     move_stage,
     recompute_position_seats,
@@ -78,7 +78,7 @@ class FilteredCandidate(BaseModel):
 
     id: str
     name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
     resume_url: str | None = None
     extracted_skills: list[str] = []
@@ -97,7 +97,7 @@ class SuggestedCandidate(BaseModel):
 
     id: str
     name: str
-    email: str
+    email: str | None = None
     resume_url: str | None = None
     extracted_skills: list[str] = []
     tags: list[str] = []
@@ -286,7 +286,7 @@ async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
                 mapping_id=row["mapping_id"],
                 candidate_id=row["candidate_id"],
                 candidate_name=row["candidate_name"],
-                candidate_email=row["candidate_email"],
+                candidate_email=row.get("candidate_email"),
                 position_id=row["position_id"],
                 position_code=row["position_code"],
                 position_role=row["position_role"],
@@ -751,7 +751,7 @@ async def drop_candidate(
 ):
     from app.modules.auth.models import UserRole
     from app.modules.recruitment.enums import Decision, PipelineStage
-    from app.modules.recruitment.repository_impl import move_stage
+    from app.modules.recruitment.repository import move_stage
 
     mapping = await _get_or_404(viewer, mapping_id)
 

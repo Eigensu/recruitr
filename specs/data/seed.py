@@ -33,7 +33,7 @@ MANPOWER_FILE = DATA_DIR / "Binge - Manpower Database - Combined.xlsx"
 
 # ── Config ──────────────────────────────────────────────────────────────────────
 
-from app.config import settings
+from app.core.config import settings
 
 BRAND_NAME = "Binge Consulting"
 

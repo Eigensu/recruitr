@@ -6,7 +6,7 @@ from beanie import PydanticObjectId
 from fastapi import Depends, HTTPException, Request, status
 from jose import JWTError, jwt
 
-from app.config import settings
+from app.core.config import settings
 from app.modules.auth.schemas import TokenPayload
 
 # ── Auth ───────────────────────────────────────────────────────────────────────

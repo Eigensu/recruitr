@@ -9,8 +9,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 
-from app.config import settings
-from app.dependencies import get_current_user
+from app.core.config import settings
+from app.core.dependencies import get_current_user
 from app.modules.auth.access import (
     NOT_AUTHORIZED,
     find_client_authorization,

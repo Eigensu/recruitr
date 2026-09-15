@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from bson import ObjectId
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 
 
 async def run(email: str | None, *, list_mode: bool, mongo_uri: str, db_name: str) -> None:

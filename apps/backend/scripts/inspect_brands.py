@@ -14,7 +14,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from pymongo import MongoClient  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 # Every collection that carries brand_id, derived from the Beanie models.
 BRAND_SCOPED = [

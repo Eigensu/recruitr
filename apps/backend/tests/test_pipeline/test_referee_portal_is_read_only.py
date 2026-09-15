@@ -10,7 +10,7 @@ party with a financial stake in the outcome.
 removal, so the write surface cannot creep back without someone deciding to.
 """
 
-from app.main import app
+from app.core.main import app
 
 PREFIX = "/api/v1/referee-dashboard"
 

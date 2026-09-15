@@ -13,7 +13,7 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from app.common.utils.seed_guard import assert_local_database
-from app.config import settings
+from app.core.config import settings
 from app.modules.dashboard.enums import (
     ActivityType,
     JobStatus,

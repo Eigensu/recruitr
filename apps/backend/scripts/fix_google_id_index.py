@@ -31,7 +31,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from pymongo import MongoClient  # noqa: E402
 from pymongo.errors import DuplicateKeyError, OperationFailure  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 INDEX_NAME = "google_id_1"
 WANTED = {"google_id": {"$type": "string"}}

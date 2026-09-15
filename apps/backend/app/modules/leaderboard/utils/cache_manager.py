@@ -3,7 +3,7 @@ import json
 from typing import Any
 
 from app.common.extras.redis_cache import leaderboard_cache
-from app.config import settings
+from app.core.config import settings
 
 RANKING_ZSET_KEY = leaderboard_cache.build_key("rankings:zset")
 

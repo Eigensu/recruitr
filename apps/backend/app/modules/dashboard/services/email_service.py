@@ -24,12 +24,14 @@ class EmailService:
             logger.warning(
                 "Email delivery infrastructure is implemented/configured, but "
                 "live delivery could not be verified because provider credentials are unavailable. "
-                f"Would have sent to={to}, subject='{subject}' (body redacted)"
+                f"Would have sent subject='{subject}' (recipient and body redacted)"
             )
             return
 
         resend.api_key = api_key
-        logger.info(f"Sending email to {to} via Resend: {subject}")
+        # Recipient omitted: these are candidate and referee addresses, and the
+        # subject alone is enough to trace a delivery through the logs.
+        logger.info(f"Sending email via Resend: {subject}")
         try:
             resend.Emails.send(
                 {

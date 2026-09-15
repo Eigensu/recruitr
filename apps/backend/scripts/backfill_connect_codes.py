@@ -26,7 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from pymongo import MongoClient  # noqa: E402
 
-from app.config import settings  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.modules.recruitment.utils.connect_code import generate_connect_code  # noqa: E402
 
 # Mongo cannot compare a missing field to a present one, so "has a code" is a

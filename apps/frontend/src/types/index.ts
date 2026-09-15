@@ -180,6 +180,8 @@ export interface CandidateFilters {
   source_channel?: string;
   /** Employee id of the recruiter who added them, or "unassigned". */
   created_by?: string;
+  /** Referee id who referred them — External Candidates tab drill-down. */
+  referee_id?: string;
   tags?: string[];
   has_resume?: boolean;
   has_cv_link?: boolean;
@@ -190,6 +192,12 @@ export interface CandidateFilters {
   status?: string;
   page: number;
   limit: number;
+}
+
+/** One entry in GET /api/v1/candidates/referees — name only, no contact info. */
+export interface CandidateReferrerOption {
+  id: string;
+  name: string;
 }
 
 export interface BulkUploadFailure {
@@ -251,6 +259,9 @@ export interface ApiCandidate {
   source: string | null;
   /** Which external channel the candidate came from (LinkedIn, Naukri, …). */
   source_channel: string | null;
+  /** Referee who referred this candidate, if any — set from a matched connect code. */
+  referee_id: string | null;
+  referee_name: string | null;
   salary: number | null;
   notes: string | null;
   status: CandidateStatus;
@@ -397,7 +408,7 @@ export interface KanbanColumn {
 export interface CandidateCard {
   id: string; // candidate_id — used as dnd-kit item id
   name: string;
-  email: string;
+  email: string | null;
   extracted_skills: string[];
   resume_url: string | null;
   match_score?: number;
@@ -420,7 +431,7 @@ export interface PipelineCard {
   mapping_id: string;
   candidate_id: string;
   candidate_name: string;
-  candidate_email: string;
+  candidate_email: string | null;
   position_id: string;
   position_code: string;
   position_role: string;

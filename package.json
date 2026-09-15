@@ -9,7 +9,7 @@
     "lint": "turbo run lint",
     "format": "turbo run format",
     "dev:frontend": "turbo run dev --filter=frontend",
-    "dev:backend": "cd apps/backend && uvicorn app.main:app --reload --port 8000",
+    "dev:backend": "cd apps/backend && uvicorn app.core.main:app --reload --port 8000",
     "build:frontend": "turbo run build --filter=frontend",
     "prepare": "husky"
   },

@@ -12,8 +12,8 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant, require_maintainer
-from app.main import app
+from app.core.dependencies import get_tenant, require_maintainer
+from app.core.main import app
 from app.modules.brands.models import Brand
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import TenantScope

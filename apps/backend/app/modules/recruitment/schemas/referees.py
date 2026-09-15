@@ -1,10 +1,17 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 
 class RefereeUserResponse(BaseModel):
-    id: str = Field(alias="_id")
+    # Plain, unaliased: an aliased `id` (Field(alias="_id")) serializes as
+    # `_id` in the JSON response by default (FastAPI dumps response models
+    # with by_alias=True) while every frontend consumer — listReferees(),
+    # RefereeSettingsTab's remove/key-by-id, and the External Candidates
+    # referee popover — reads `.id`. That mismatch shipped silently: nothing
+    # throws on a `key={undefined}` or a DELETE /referees/undefined, they
+    # just silently no-op.
+    id: str
     brand_id: str
     email: str
     name: str | None = None
@@ -17,8 +24,6 @@ class RefereeUserResponse(BaseModel):
     last_login: datetime | None = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(populate_by_name=True)
 
 
 class RefereeUserInvite(BaseModel):

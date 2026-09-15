@@ -14,8 +14,8 @@ import pytest_asyncio
 from beanie import PydanticObjectId
 from httpx import ASGITransport, AsyncClient
 
-from app.dependencies import get_tenant, get_viewer, require_maintainer
-from app.main import app
+from app.core.dependencies import get_tenant, get_viewer, require_maintainer
+from app.core.main import app
 from app.modules.recruitment.models import Client, Position
 from app.modules.recruitment.schemas import TenantScope
 

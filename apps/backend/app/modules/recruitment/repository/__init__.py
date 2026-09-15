@@ -1,6 +1,13 @@
-"""Recruitment data access layer — re-exports from repository_impl."""
+"""Recruitment data access layer — the package's public surface.
 
-from app.modules.recruitment.repository_impl import (
+Import from here, not from `_impl`: the underscore marks that module private to
+this package, and routing through the facade is what lets `_impl.py` be split
+into per-domain modules later without touching a single caller.
+
+Every function here takes a `TenantScope` and prepends `brand_id` to its query.
+"""
+
+from app.modules.recruitment.repository._impl import (
     candidate_display_name,
     create_employee,
     create_mapping,

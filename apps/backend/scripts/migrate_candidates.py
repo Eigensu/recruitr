@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 
 from pymongo import AsyncMongoClient
 
-from app.config import settings
+from app.core.config import settings
 
 
 @dataclass
