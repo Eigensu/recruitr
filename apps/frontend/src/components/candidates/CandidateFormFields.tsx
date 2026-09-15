@@ -27,7 +27,6 @@ import {
   ESTABLISHMENT_TAG_OPTIONS,
   GENDER_OPTIONS,
   CANDIDATE_SOURCES,
-  ROLE_OPTIONS_BY_DEPARTMENT,
   CURRENT_ROLE_OTHER,
 } from "@/lib/constants/candidate";
 
@@ -354,10 +353,13 @@ export function NoticePeriodField(
 
 /**
  * Role list is scoped to the selected department, matching the Positions role
- * dropdown; falls back to the flattened, deduped list when no department is
- * picked yet. "Other" reveals a free-text box, same pattern as SourceChannelField.
+ * dropdown — both fetch the same GET /positions/role-catalog rather than each
+ * keeping their own copy. Falls back to the flattened, deduped list when no
+ * department is picked yet. "Other" reveals a free-text box, same pattern as
+ * SourceChannelField.
  */
 export function CurrentRoleField({
+  roleCatalog,
   department,
   value,
   other,
@@ -366,6 +368,7 @@ export function CurrentRoleField({
   error,
   className,
 }: Readonly<{
+  roleCatalog: Record<string, string[]>;
   department: string;
   value: string;
   other: string;
@@ -374,9 +377,10 @@ export function CurrentRoleField({
   error?: string;
   className?: string;
 }>) {
-  const options = department
-    ? ROLE_OPTIONS_BY_DEPARTMENT[department] || [CURRENT_ROLE_OTHER]
-    : [...new Set(Object.values(ROLE_OPTIONS_BY_DEPARTMENT).flat())];
+  const baseOptions = department
+    ? (roleCatalog[department] ?? [])
+    : [...new Set(Object.values(roleCatalog).flat())];
+  const options = [...baseOptions, CURRENT_ROLE_OTHER];
   return (
     <div className={className}>
       <SelectField label="Current Role *" value={value} onChange={onChange} options={options} />

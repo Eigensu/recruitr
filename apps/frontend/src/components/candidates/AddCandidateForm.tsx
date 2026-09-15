@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
+import { useApiFetch } from "@/lib/api";
 import {
   clientConfirmResume,
   clientCreateCandidate,
   clientDeleteCandidate,
 } from "@/lib/api/candidates.client";
+import { getRoleCatalog } from "@/lib/api/positions";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
 import type { ApiCandidate } from "@/types";
 import {
@@ -107,6 +109,14 @@ interface Props {
 }
 
 export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
+  const apiFetch = useApiFetch();
+  const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    getRoleCatalog(apiFetch)
+      .then(setRoleCatalog)
+      .catch(() => setRoleCatalog({}));
+  }, [apiFetch]);
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -293,6 +303,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       )}
 
       <CurrentRoleField
+        roleCatalog={roleCatalog}
         department={form.department}
         value={form.current_role}
         other={form.current_role_other}
@@ -346,7 +357,17 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       <StructuredCandidateTags
         form={form}
         errors={errors}
-        onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
+        onChange={(updates) =>
+          setForm((f) => ({
+            ...f,
+            ...updates,
+            // Role options are scoped to department, so a role picked under the
+            // old department can silently be invalid for the new one.
+            ...(updates.department !== undefined && updates.department !== f.department
+              ? { current_role: "", current_role_other: "" }
+              : {}),
+          }))
+        }
       />
 
       {form.source === "internal" && <ResumeField file={resumeFile} onFile={setResumeFile} />}

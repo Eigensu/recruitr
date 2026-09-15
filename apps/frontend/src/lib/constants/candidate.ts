@@ -84,93 +84,13 @@ export const ESTABLISHMENT_TAG_OPTIONS = [
   { value: "Other", label: "Other" },
 ] as const;
 
-/** Selecting this reveals a free-text box; the typed value is stored instead. */
-export const CURRENT_ROLE_OTHER = "Other";
-
 /**
- * Role options grouped by department, shared with the Positions role dropdown.
- * "Other" is appended to every group so a role missing from the list can still
- * be entered as free text.
+ * Selecting this reveals a free-text box; the typed value is stored instead.
+ * The actual role catalog is not duplicated here — it is fetched from
+ * GET /api/v1/positions/role-catalog, the same source Positions uses and the
+ * backend validates PositionCreate/PositionUpdate against.
  */
-export const ROLE_OPTIONS_BY_DEPARTMENT: Record<string, string[]> = {
-  Service: [
-    "Bar Assistant",
-    "Bar Manager",
-    "Bar Supervisor",
-    "Barback",
-    "Barista",
-    "Bartender",
-    "Café Manager",
-    "Café Supervisor",
-    "Captain",
-    "Cashier",
-    "Counter Sales",
-    "Duty Manager",
-    "F&B Executive",
-    "F&B Supervisor",
-    "Floor Supervisor",
-    "Front Office Executive",
-    "GRE",
-    "Hostess",
-    "Mixologist",
-    "Outlet Manager",
-    "Shift Manager",
-    "Sommelier",
-    "Steward",
-    "Waiter / Server",
-    "RM",
-    "ARM",
-    "Head Bartender",
-    "Beverage Head",
-    CURRENT_ROLE_OTHER,
-  ],
-  BOH: [
-    "CDP",
-    "Commi 1",
-    "Commi 2",
-    "Commi 3",
-    "DCDP",
-    "Executive Chef",
-    "Food Production Manager",
-    "Head Baker",
-    "Head Chef",
-    "Kitchen Supervisor",
-    "Packaging Assistant",
-    "Sous Chef",
-    "Staff Cook",
-    "Store Manager",
-    "Storekeeper",
-    CURRENT_ROLE_OTHER,
-  ],
-  Corporate: [
-    "Accountant / Accounts",
-    "Admin / Back Office",
-    "Brand Manager",
-    "Business Development",
-    "Community Manager",
-    "Content Strategist",
-    "CRM",
-    "Data Analyst",
-    "EA / PA",
-    "F&B Controller",
-    "General Manager",
-    "Graphic Designer",
-    "HR",
-    "Lawyer",
-    "Marketing",
-    "MIS Executive",
-    "Operations Head",
-    "Payroll",
-    "PR",
-    "Project Manager",
-    "Purchase",
-    "Sales",
-    "Social Media",
-    "Supply Chain / SCM",
-    "Training Manager / L&D",
-    CURRENT_ROLE_OTHER,
-  ],
-};
+export const CURRENT_ROLE_OTHER = "Other";
 
 export const SPECIALIZATION_OPTIONS: Record<string, string[]> = {
   BOH: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
