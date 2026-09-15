@@ -52,6 +52,7 @@ import {
   TagChip,
   TextField,
   inputStyle,
+  resolveCurrentRole,
   resolveSourceChannel,
 } from "./CandidateFormFields";
 
@@ -784,6 +785,7 @@ function EditForm({
     previous_company: candidate.previous_company ?? "",
     experience_years: String(candidate.experience_years),
     current_role: candidate.current_role ?? "",
+    current_role_other: "",
     city: candidate.city ?? "",
     area: candidate.area ?? "",
     gender: candidate.gender ?? "",
@@ -814,6 +816,10 @@ function EditForm({
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
+  function resolvedRole(): string {
+    return resolveCurrentRole(form.current_role, form.current_role_other);
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (form.department && !form.specialization) {
@@ -832,7 +838,7 @@ function EditForm({
         phone: form.phone.trim() || undefined,
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
-        current_role: form.current_role.trim() || undefined,
+        current_role: resolvedRole() || undefined,
         city: form.city.trim() || undefined,
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,
@@ -926,8 +932,11 @@ function EditForm({
       />
 
       <CurrentRoleField
+        department={form.department}
         value={form.current_role}
+        other={form.current_role_other}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        onOther={(current_role_other) => setForm((f) => ({ ...f, current_role_other }))}
       />
 
       <CityField value={form.city} onChange={(city) => setForm((f) => ({ ...f, city }))} />

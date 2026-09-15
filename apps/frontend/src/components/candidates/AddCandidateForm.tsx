@@ -27,6 +27,7 @@ import {
   StructuredCandidateTags,
   TextField,
   inputStyle,
+  resolveCurrentRole,
   resolveSourceChannel,
 } from "./CandidateFormFields";
 
@@ -121,6 +122,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     establishment_tag: "",
     cv_link: "",
     current_role: "",
+    current_role_other: "",
     experience_years: "",
     city: "",
     area: "",
@@ -139,6 +141,10 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     return resolveSourceChannel(form.source, form.source_channel, form.source_channel_other);
   }
 
+  function resolvedRole(): string {
+    return resolveCurrentRole(form.current_role, form.current_role_other);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const parsed = schema.safeParse({
@@ -154,7 +160,7 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       specialization: form.specialization || undefined,
       establishment_tag: form.establishment_tag || undefined,
       cv_link: form.cv_link || undefined,
-      current_role: form.current_role || undefined,
+      current_role: resolvedRole() || undefined,
       experience_years: form.experience_years || undefined,
       city: form.city || undefined,
       area: form.area || undefined,
@@ -287,8 +293,11 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
       )}
 
       <CurrentRoleField
+        department={form.department}
         value={form.current_role}
+        other={form.current_role_other}
         onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        onOther={(current_role_other) => setForm((f) => ({ ...f, current_role_other }))}
         error={errors.current_role}
       />
       <ExperienceYearsField
