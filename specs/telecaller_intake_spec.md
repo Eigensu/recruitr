@@ -96,9 +96,10 @@ Two layers, in order:
    filed `status = duplicate`. It is **not** assigned to a telecaller, and it surfaces in the admin
    dashboard's duplicate count.
 
-> ⚠️ **Confirm:** a repeat lead for someone already in the pool is currently treated as a duplicate
-> and *not* re-reviewed. If a person re-applying after 6 months should go back through telecaller
-> review, say so and I will add a `INTAKE_DUPLICATE_RECHECK_DAYS` window.
+A repeat lead for someone already in the pool is **never re-reviewed**, however old the original —
+telecallers should not re-dial people the desk already knows. The duplicate count is reported per
+campaign, which is the useful signal here: it tells you how much ad spend is re-reaching people you
+already have.
 
 ---
 
@@ -181,6 +182,8 @@ class IntakeSourceConfig(Document):
     sheet_range: str = "Sheet1!A:U"
     enabled: bool = False
     default_source_channel: str = "Instagram"
+    activated_at: datetime | None             # stamped when enabled first flips true;
+                                              # the live poll ignores leads older than this
     last_synced_at / last_success_at: datetime | None
     last_row_count / last_ingested_count / last_skipped_count: int
     last_error: str | None                    # surfaced in the admin UI
@@ -292,6 +295,7 @@ Google Sheet (Meta lead ads)
 [celery beat] intake.poll_google_sheet          every INTAKE_POLL_MINUTES (default 10)
         │
         ├── read whole range → normalize headers → parse rows
+        ├── skip rows with created_time < config.activated_at   (history → §5.4 script)
         ├── skip rows with no full_name or no phone
         ├── skip external_ids already ingested          (unique index = idempotent)
         ├── match existing candidate by phone/email     → status=duplicate, link, stop
@@ -300,6 +304,12 @@ Google Sheet (Meta lead ads)
         ├── round-robin assign a telecaller             (or status=unassigned)
         └── record CandidateEvent(applied)
 ```
+
+The live poll deliberately handles **only leads created after the integration was switched on**
+(`IntakeSourceConfig.activated_at`, stamped when `enabled` first flips true). Everything already
+sitting in the sheet is the backfill script's job — see §5.4. Without that cutoff, switching the
+feature on would round-robin the sheet's entire history into telecaller queues in one tick and start
+a 24-hour SLA clock on every one of them.
 
 ### 5.1 Sheets client
 
@@ -345,6 +355,60 @@ assignee = roster[seq % len(roster)] if roster else None
 
 Same for recruiters with key `intake_recruiter_rr`. Atomic under concurrency, no locks, and gaps are
 harmless. If the roster is empty → `status = unassigned`, surfaced to admins.
+
+### 5.4 Historical backfill — `scripts/backfill_intake_leads.py`
+
+A separate, explicit, operator-run script rather than anything automatic. It follows the conventions
+of the existing `scripts/backfill_*.py` family: **dry run by default, `--confirm` to write, safe to
+re-run** (the `external_id` unique index makes a second run a no-op on rows it already imported).
+
+**Report mode (the default) writes nothing** and prints what you need in order to decide:
+
+```
+$ python3 scripts/backfill_intake_leads.py
+
+Brand: Binge Consulting (68f1…)
+  candidates in system          1,247
+    with a phone number         1,190
+  sheet rows read                 863
+    unusable (no name/phone)       41
+    already ingested                0
+    match an existing candidate   312   ← would link, not duplicate
+    genuinely new                 510
+  date range in sheet      2025-02-11 … 2026-09-15
+
+Nothing written. Re-run with --confirm to import.
+```
+
+That report is the answer to "how many candidates are already in the system, and how much of this
+sheet do we already have" — and it is obtainable before a single row is imported.
+
+**Flags:**
+
+| Flag | Effect |
+|---|---|
+| *(none)* | report only, no writes |
+| `--confirm` | actually import |
+| `--since YYYY-MM-DD` | only rows with `created_time` on or after this date |
+| `--assign` | round-robin the imported leads to telecallers (starts their SLA clocks) |
+| `--unassigned` | import as `status=unassigned` — **default**; visible to admins, in analytics, nobody's queue |
+| `--limit N` | import at most N rows, for a cautious first pass |
+
+Default is `--unassigned` because importing history with `--assign` immediately breaches the SLA on
+every row older than a day and buries the admin dashboard in alerts. Import first, look at what
+landed, then bulk-assign from the admin UI if the backlog is worth working.
+
+> The repo-root `.env` points `MONGODB_URI` at the live Atlas cluster, and `assert_local_database()`
+> refuses a non-local host. Running this against production needs `SEED_ALLOW_REMOTE_DB=1`,
+> deliberately. The script also takes a read-only path through `inspect_brands.py`-style counting in
+> report mode, so the report itself is safe to run against production without the override.
+
+`scripts/inspect_brands.py` already exists and answers the candidate-count half of this today,
+read-only, with no new code:
+
+```bash
+cd apps/backend && python3 scripts/inspect_brands.py
+```
 
 ---
 
@@ -458,9 +522,14 @@ for each lead where status == pending_telecaller
 ```
 
 The same sweep covers `pending_recruiter` against `RECRUITER_SLA_HOURS` with
-`recruiter_sla_breach`. You only asked for the telecaller alert; the recruiter one is the same three
-lines and the same dashboard already measures that leg, so it is included — say the word and I will
-drop it or leave it off by default.
+`recruiter_sla_breach` — **confirmed in scope**, so an admin is alerted when a recruiter sits on an
+accepted candidate past 24h just as they are for a telecaller.
+
+**The clock runs on 24 calendar hours**, nights and weekends included: a lead assigned 6pm Friday
+breaches Saturday evening and alerts then. No working-calendar config, no holiday table. If the
+weekend noise turns out to be a problem in practice, the cheapest fix later is to hold *delivery* of
+breach notifications until the next working morning while leaving the measured times untouched —
+that keeps the analytics honest, which a paused clock would not.
 
 The `*_sla_breached_at` stamp is the dedupe key — the same guarantee `Mapping.reminders_sent` gives
 the existing reminder job. A lead stuck for a week raises one notification, not 168.
@@ -505,7 +574,8 @@ New `tests/test_intake/`, following the existing per-area layout:
 | File | Covers |
 |---|---|
 | `test_sheet_mapping.py` | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization |
-| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; duplicate phone links instead of creating |
+| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; duplicate phone links instead of creating; rows older than `activated_at` are skipped by the poll |
+| `test_backfill_script.py` | report mode writes nothing; `--confirm` imports; re-running imports nothing new; `--unassigned` default leaves SLA clocks unstarted |
 | `test_round_robin.py` | even distribution; empty roster ⇒ `unassigned`, not a crash; concurrent assignment does not collide |
 | `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
 | `test_recruiter_action_stamp.py` | first mapping stamps `actioned`; a second mapping does not re-stamp; a failing stamp does not roll back the mapping |
@@ -529,7 +599,7 @@ host, so the command-line override is mandatory.
 2. **Models + enums** — `IntakeLead`, `IntakeSourceConfig`, enums, `Candidate`/`Notification`
    changes, registration in `database.py` + `conftest.py`.
 3. **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, unit tests (no network).
-4. **Ingest service + poll task** — round-robin, dedupe, Celery beat entry, `POST /intake/sync`.
+4. **Ingest service + poll task** — round-robin, dedupe, `activated_at` cutoff, Celery beat entry, `POST /intake/sync`. Plus `scripts/backfill_intake_leads.py` (report mode first).
 5. **Workflow endpoints** — accept / reject / reassign, `map_candidate` hook.
 6. **Analytics** — aggregations + endpoints + cache invalidation.
 7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
@@ -540,21 +610,28 @@ Steps 1–2 are a safe first commit; 3–5 are the functional core; 6–8 are ad
 
 ---
 
-## 12. Open items — please confirm
+## 12. Decisions log
 
-1. **Duplicate policy** (§2.3) — a lead matching an existing candidate is filed `duplicate` and not
-   re-reviewed. Should a re-application after N days go back through telecaller review instead?
-2. **Sheet write-back** — should we write the telecaller's decision back into the sheet's
-   `lead_status` column? That needs a read/write scope on the service account instead of read-only.
-   Currently **out of scope**.
-3. **Recruiter SLA alerts** (§8.1) — included by default. Keep, or telecaller-only as literally asked?
-4. **SLA clock** — 24 calendar hours from assignment, including nights and weekends. Business hours
-   would need a working-calendar config; say so if a lead assigned 6pm Friday should not breach on
-   Saturday evening.
-5. **Which brand** do sheet leads belong to? The design assumes the `IntakeSourceConfig` row's
-   `brand_id` (one config per brand, configured by an admin). Correct if you run multiple brands.
-6. **Historical backfill** — the first poll will ingest *every* row currently in the sheet and
-   round-robin them all to telecallers. If the sheet holds months of old leads, that is a large
-   surprise queue. Options: ingest all as `unassigned`, or only ingest rows with
-   `created_time` newer than a cutoff. **Default: only rows newer than the config's creation
-   time**, older ones ingested as `unassigned` so nothing is lost.
+Settled in review — recorded here so the reasoning is not lost:
+
+| Question | Decision |
+|---|---|
+| Telecaller role shape | Staff in the data model (`Employee` + `brand_id`), **deny-by-default at the route layer** (§4.1) |
+| Sheet connection | Service account + Sheets API, polled every 10 min |
+| Assignment | Round-robin on both legs, via the atomic `Counter` primitive |
+| Telecaller reject | `Candidate.status = REJECTED`, row stays live and reportable |
+| "Recruiter actioned" | The first `Mapping` for that candidate |
+| SLA alerting | In-app `Notification` per breach (deduped) + one daily email digest to admins |
+| SLA clock | **24 calendar hours**, nights and weekends included (§8.1) |
+| Duplicates | Link to the existing candidate, file as `duplicate`, **never re-review** (§2.3) |
+| Recruiter SLA alerts | **In scope** — same sweep, same dashboard (§8.1) |
+| Sheet write-back | **Out of scope.** The service account stays read-only, so no code path can modify your spreadsheet |
+| Historical backfill | **Not automatic.** Live poll handles new leads only; history goes through `scripts/backfill_intake_leads.py`, dry-run by default (§5.4) |
+| Build scope | Backend + frontend, one PR |
+
+### Still open
+
+1. **Which brand do sheet leads belong to?** The design assumes one `IntakeSourceConfig` per brand,
+   with the admin picking the brand when configuring the sheet. If you run a single brand this is a
+   non-question and the config simply attaches to it. `python3 scripts/inspect_brands.py` (read-only)
+   will confirm how many brands exist today.
