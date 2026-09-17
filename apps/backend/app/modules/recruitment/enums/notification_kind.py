@@ -13,3 +13,7 @@ class NotificationKind(StrEnum):
     awaiting_interview_decision = "awaiting_interview_decision"
     awaiting_offer_upload = "awaiting_offer_upload"
     client_message = "client_message"
+    # Intake SLA breaches. Unlike the three above, these are addressed to one
+    # person (Notification.employee_id) rather than raised brand-wide.
+    telecaller_sla_breach = "telecaller_sla_breach"
+    recruiter_sla_breach = "recruiter_sla_breach"
