@@ -32,6 +32,10 @@ class TenantScope:
     def is_client(self) -> bool:
         return self.role == UserRole.client
 
+    @property
+    def is_telecaller(self) -> bool:
+        return self.role == UserRole.telecaller
+
     def scoped(self, match: dict) -> dict:
         """Add the client restriction to a query that already filters by brand.
 
