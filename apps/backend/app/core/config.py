@@ -6,6 +6,8 @@ ourselves and hand it an absolute path — the server then behaves the same no
 matter where it is started from.
 """
 
+import json
+import logging
 import secrets
 from pathlib import Path
 
@@ -112,6 +114,50 @@ class Settings(BaseSettings):
 
     # ── Frontend ──
     FRONTEND_URL: str = _LOCAL_FRONTEND
+
+    # ── Inbound lead intake (Meta lead ads -> Google Sheet) ──
+    # The service-account key as raw JSON or base64. Deliberately not a file
+    # path: the container has no writable secrets volume, and the key is the
+    # one piece of this integration that must never reach the database.
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
+    # Master switch. Off means the poll task returns immediately, so the
+    # feature can ship dark and be turned on once credentials are in place.
+    GOOGLE_SHEETS_ENABLED: bool = False
+    # Seed values for the IntakeSourceConfig row; the admin UI edits the row
+    # afterwards, and the row wins.
+    INTAKE_SPREADSHEET_ID: str = ""
+    INTAKE_SHEET_RANGE: str = "Sheet1!A:U"
+    INTAKE_POLL_MINUTES: PositiveInt = 10
+    # JSON, {"sheet header": "candidate_field"}, to retarget a renamed column
+    # without a deploy. See utils/lead_sheet.resolve_columns.
+    INTAKE_SHEET_COLUMN_OVERRIDES: str = ""
+    # Hours before an unactioned assignment is reported as overdue.
+    TELECALLER_SLA_HOURS: PositiveInt = 24
+    RECRUITER_SLA_HOURS: PositiveInt = 24
+
+    @property
+    def intake_column_overrides(self) -> dict[str, str]:
+        """INTAKE_SHEET_COLUMN_OVERRIDES parsed, or {} if it is unset or unparseable.
+
+        Never raises: a typo here would otherwise take the whole app down at
+        import, and the ingest degrades perfectly well to its built-in mapping.
+        """
+        raw = self.INTAKE_SHEET_COLUMN_OVERRIDES.strip()
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            logging.getLogger(__name__).warning(
+                "INTAKE_SHEET_COLUMN_OVERRIDES is not valid JSON; ignoring it."
+            )
+            return {}
+        if not isinstance(parsed, dict):
+            logging.getLogger(__name__).warning(
+                "INTAKE_SHEET_COLUMN_OVERRIDES must be a JSON object; ignoring it."
+            )
+            return {}
+        return {str(key): str(value) for key, value in parsed.items()}
 
     # ── Agency access ──
     # Comma-separated email domains whose addresses may hold a staff account,

@@ -23,3 +23,4 @@ dnspython>=2.6.1 # not directly required, pinned by Snyk to avoid a vulnerabilit
 idna>=3.18 # not directly required, pinned by Snyk to avoid a vulnerability
 requests>=2.34.0 # not directly required, pinned by Snyk to avoid a vulnerability (resend pulls it)
 resend
+google-auth>=2.35.0  # service-account signing for the Google Sheets lead intake
