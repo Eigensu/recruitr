@@ -32,6 +32,12 @@ _ALLOWED_PATHS = {
     "/api/v1/storage/webhook/cloudinary",
     "/api/v1/notifications",
     "/api/v1/notifications/{notification_id}/read",
+    # The lead queue — the job. Everything else under /intake stays in the
+    # sweep: reassign is maintainer-gated and sync is admin-gated, so a
+    # telecaller must still be refused there.
+    "/api/v1/intake/leads/mine",
+    "/api/v1/intake/leads/{lead_id}/accept",
+    "/api/v1/intake/leads/{lead_id}/reject",
 }
 
 _PATH_PARAM = re.compile(r"\{[^}]+\}")
@@ -208,3 +214,14 @@ def test_a_telecaller_lands_on_the_lead_queue():
     assert _post_login_path(caller, has_brand=True, is_referee=False) == "/leads"
     # No brand yet: onboarding, the same as any other staff member.
     assert _post_login_path(caller, has_brand=False, is_referee=False) == "/onboarding"
+
+
+@pytest.mark.asyncio
+async def test_a_telecaller_reaches_their_own_queue(http: AsyncClient):
+    await _sign_up(UserRole.telecaller, "caller@binge.consulting")
+
+    res = await http.get(
+        "/api/v1/intake/leads/mine", headers=await _headers("caller@binge.consulting")
+    )
+
+    assert res.status_code == 200

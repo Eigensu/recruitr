@@ -31,7 +31,9 @@ from app.modules.auth.models import NON_RECRUITER_ROLES, UserRole
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
+    IntakeDecision,
     IntakeLeadStatus,
+    IntakeRejectReason,
     IntakeSource,
 )
 from app.modules.recruitment.models import (
@@ -378,9 +380,11 @@ def before_cutoff(lead: ParsedLead, cutoff: datetime | None) -> bool:
     column was renamed or the value was unparseable — and dropping live leads
     because of a formatting change is far worse than importing an old one.
     """
-    if cutoff is None or lead.external_created_at is None:
+    cutoff = as_utc(cutoff)
+    created = as_utc(lead.external_created_at)
+    if cutoff is None or created is None:
         return False
-    return lead.external_created_at < cutoff
+    return created < cutoff
 
 
 # ── Poll ───────────────────────────────────────────────────────────────────────
@@ -519,3 +523,184 @@ async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId
             plan.matched_existing += 1
 
     return plan
+
+
+# ── Decisions ──────────────────────────────────────────────────────────────────
+
+
+def as_utc(value: datetime | None) -> datetime | None:
+    """A timezone-aware copy of a datetime that may have come back from Mongo.
+
+    The driver stores UTC and returns it **naive**, so any timestamp read from a
+    document compares as naive while anything built in Python here is aware —
+    and Python raises TypeError on that comparison rather than guessing. Every
+    comparison between a stored timestamp and "now" goes through this.
+    """
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _elapsed_seconds(since: datetime | None, until: datetime) -> int | None:
+    """Whole seconds between assignment and action, or None if never assigned.
+
+    None rather than 0: a lead actioned by an admin before anyone was assigned
+    has no response time, and recording zero would report it as instantaneous
+    work and drag every average down.
+    """
+    since = as_utc(since)
+    if since is None:
+        return None
+    return max(0, int((until - since).total_seconds()))
+
+
+async def accept_lead(
+    lead: IntakeLead, *, notes: str | None = None, now: datetime | None = None
+) -> IntakeLead:
+    """Telecaller accepted: approve the candidate and hand them to a recruiter.
+
+    The recruiter is chosen by the same round-robin that picked the telecaller.
+    If there is none, the lead waits as `unassigned` with the candidate already
+    approved — the screening call happened either way, and hiding that work
+    because the desk is empty would be a lie about what the telecaller did.
+    """
+    stamp = now or datetime.now(UTC)
+    recruiter = await next_assignee(lead.brand_id, telecallers=False)
+
+    await lead.set(
+        {
+            "status": (
+                IntakeLeadStatus.pending_recruiter if recruiter else IntakeLeadStatus.unassigned
+            ),
+            "telecaller_decision": IntakeDecision.accept,
+            "telecaller_actioned_at": stamp,
+            "telecaller_notes": notes,
+            "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
+            "recruiter_id": recruiter.id if recruiter else None,
+            "recruiter_assigned_at": stamp if recruiter else None,
+            "updated_at": stamp,
+        }
+    )
+
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is not None:
+        await candidate.set(
+            {
+                # Into the recruiter directory, which filters to APPROVED.
+                "status": CandidateStatus.approved,
+                "assigned_recruiter_id": recruiter.id if recruiter else None,
+            }
+        )
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.approved,
+            note="Accepted by telecaller",
+        )
+    return lead
+
+
+async def reject_lead(
+    lead: IntakeLead,
+    *,
+    reason: IntakeRejectReason | None = None,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> IntakeLead:
+    """Telecaller rejected: mark the candidate REJECTED but keep the record.
+
+    is_active is deliberately untouched. The directory hides them because it
+    filters to APPROVED, while the row stays searchable and countable — which is
+    what makes "what are we rejecting, and why" answerable later.
+    """
+    stamp = now or datetime.now(UTC)
+
+    await lead.set(
+        {
+            "status": IntakeLeadStatus.rejected,
+            "telecaller_decision": IntakeDecision.reject,
+            "telecaller_actioned_at": stamp,
+            "telecaller_reject_reason": reason,
+            "telecaller_notes": notes,
+            "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
+            "updated_at": stamp,
+        }
+    )
+
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is not None:
+        await candidate.set({"status": CandidateStatus.rejected})
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.declined,
+            note=f"Rejected by telecaller ({reason.value})" if reason else "Rejected by telecaller",
+        )
+    return lead
+
+
+async def reassign_lead(
+    lead: IntakeLead, *, assignee: Employee, now: datetime | None = None
+) -> IntakeLead:
+    """Move a lead to someone else on whichever leg it is waiting.
+
+    The clock restarts for the new owner and the breach stamp is cleared: they
+    have not had the lead for a day, and inheriting someone else's overdue clock
+    would report them as late on arrival. reassignment_count is what stops that
+    being a way to keep a lead permanently fresh unnoticed.
+    """
+    stamp = now or datetime.now(UTC)
+    recruiter_leg = lead.status == IntakeLeadStatus.pending_recruiter
+    updates: dict[str, object] = {
+        "reassignment_count": lead.reassignment_count + 1,
+        "updated_at": stamp,
+    }
+    if recruiter_leg:
+        updates |= {
+            "recruiter_id": assignee.id,
+            "recruiter_assigned_at": stamp,
+            "recruiter_sla_breached_at": None,
+        }
+    else:
+        updates |= {
+            "status": IntakeLeadStatus.pending_telecaller,
+            "telecaller_id": assignee.id,
+            "telecaller_assigned_at": stamp,
+            "telecaller_sla_breached_at": None,
+        }
+    await lead.set(updates)
+
+    if recruiter_leg:
+        candidate = await Candidate.get(lead.candidate_id)
+        if candidate is not None:
+            await candidate.set({"assigned_recruiter_id": assignee.id})
+    return lead
+
+
+async def close_lead_for_mapping(mapping) -> None:
+    """Stop the recruiter's clock when they first put this candidate forward.
+
+    Called from map_candidate, fire-and-forget like the gamification and
+    referral writes beside it: this records that a mapping happened, so failing
+    to record it must never undo the mapping itself.
+    """
+    lead = await IntakeLead.find_one(
+        {
+            "brand_id": mapping.brand_id,
+            "candidate_id": mapping.candidate_id,
+            "status": IntakeLeadStatus.pending_recruiter.value,
+        }
+    )
+    if lead is None:
+        return
+
+    stamp = datetime.now(UTC)
+    await lead.set(
+        {
+            "status": IntakeLeadStatus.actioned,
+            "recruiter_actioned_at": stamp,
+            "recruiter_action_mapping_id": mapping.id,
+            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
+            "updated_at": stamp,
+        }
+    )

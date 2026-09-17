@@ -529,7 +529,20 @@ await _close_intake_lead(mapping)   # fire-and-forget
 
 > "Fire-and-forget" is the module's established contract: *a duplicate award or Redis failure must
 > never roll back the domain write that triggered it.* A metrics stamp is no different — if the
-> stamp fails, the mapping still stands.
+> stamp fails, the mapping still stands. `test_recruiter_action_stamp.py` proves it by making the
+> stamp raise and asserting the mapping survives.
+
+### 6.3a Timestamps out of Mongo are naive
+
+The driver stores UTC and hands it back **without a timezone**, so any datetime read from a document
+compares as naive while anything built in Python is aware — and Python raises `TypeError` on that
+comparison rather than guessing. This is not theoretical: it would have crashed every poll the
+moment `activated_at` was set, because the cutoff check compares a stored timestamp against a parsed
+one.
+
+`intake_service.as_utc()` is the single place that fixes it, and **every comparison between a stored
+timestamp and "now" must go through it** — including the SLA sweep in §8, which compares
+`telecaller_assigned_at` against a cutoff on every run.
 
 It stamps `recruiter_actioned_at`, `recruiter_response_seconds`, `recruiter_action_mapping_id`, and
 `status → actioned`, only when a `pending_recruiter` lead exists for that candidate.
@@ -570,6 +583,7 @@ recruiter-assigned → actioned, plus duplicates and unassigned.
 ### 7.2 Endpoints (admin/maintainer)
 
 ```
+POST /api/v1/intake/sync                  read the sheet now — admin, runs inline (built in step 5)
 GET /api/v1/intake/analytics/overview     funnel + headline SLA numbers
 GET /api/v1/intake/analytics/telecallers  per-telecaller table
 GET /api/v1/intake/analytics/recruiters   per-recruiter table
@@ -676,7 +690,7 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -693,7 +707,9 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
    `activated_at` cutoff, Celery beat entry every `INTAKE_POLL_MINUTES`, and
    `scripts/backfill_intake_leads.py`. `POST /intake/sync` moved to step 5, where the intake
    controller is created — an endpoint has nowhere to live until then.
-5. **Workflow endpoints** — accept / reject / reassign, `map_candidate` hook.
+5. ✅ **Workflow endpoints** — `controller/intake.py` (queue, accept, reject, reassign, sync),
+   `get_telecaller_tenant`, the `map_candidate` hook, and the containment sweep extended to cover
+   the three new telecaller-reachable routes.
 6. **Analytics** — aggregations + endpoints + cache invalidation.
 7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
 8. **Frontend** — telecaller queue → admin lead list → analytics dashboard → nav/guard wiring.
