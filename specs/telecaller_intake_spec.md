@@ -76,13 +76,29 @@ column without a deploy.
 
 ### 2.2 Phone normalization
 
-Indian numbers arrive as `+919876543210`, `919876543210`, `9876543210`, `98765 43210`. Stored
-normalized to **last 10 digits** in a new `Candidate.phone_normalized` field, with the original in
-`phone`. `phone_normalized` is what dedupe matches on; a new **non-unique** index backs it.
+Indian numbers arrive as `+919876543210`, `919876543210`, `9876543210`, `98765 43210`. One pure
+function, `utils/phone.py:normalize_phone()`, reduces them all to the **last 10 digits**; `None` when
+fewer than 10 digits remain. `Candidate.phone` itself is stored exactly as received.
 
-> Deliberately **not** a unique index: the collection already holds candidates with duplicate or
-> missing phones, and a unique index that cannot build leaves `init_beanie` degraded for *every*
-> model (see `core/database.py:_init_beanie`). Dedupe is enforced in the ingest path instead.
+**No stored normalized field.** Each ingest run (poll or backfill) loads a projection of every live
+candidate's `phone` and `email` for the brand, normalizes in Python, and builds an in-memory lookup.
+
+A stored `Candidate.phone_normalized` was the first design and was dropped once the real data was in
+view. The brand already holds **757 candidates** with no such field, so a stored field would need a
+backfill before dedupe matched *any* of them. It would also have to be kept in sync at every write
+path: `controller/candidates.py:537` (create), `:674` (bulk upload), `public_controller.py:201`
+(public apply) and the update endpoint. Beanie's `@before_event` hooks can't carry that. `doc.set()`
+sends only the fields it is given, which is why `referees.py:_stamp` adds `updated_at` by hand. Any
+path that missed the sync would silently let duplicates through.
+
+The in-memory lookup has none of those failure modes. It is always computed from the current
+`phone`, whoever wrote it and however. The cost is one projected query per run: under 100 KB at
+today's size, every 10 minutes. **Revisit past ~50k candidates**, where a stored field plus index
+becomes worth its sync burden.
+
+The lookup is also updated **as rows are ingested within the run**. Meta produces two lead IDs when
+someone submits the same form twice. Without this, both rows would pass the dedupe check against
+the pre-run snapshot and create two candidates.
 
 ### 2.3 Deduplication
 
@@ -91,8 +107,8 @@ Two layers, in order:
 1. **`external_id`** — `(brand_id, external_id)` unique index on `IntakeLead`. Re-reading the same
    sheet row is a no-op. This makes the poll safely re-runnable and lets it read the whole range
    every time instead of tracking a cursor.
-2. **Existing candidate** — if a live candidate in the brand matches on `phone_normalized` (or, when
-   present, `email`), the lead links to **that** candidate rather than creating a second one, and is
+2. **Existing candidate**: if a live candidate in the brand matches on normalized phone, or on email
+   when the lead has one (§2.2), the lead links to **that** candidate rather than creating a second one, and is
    filed `status = duplicate`. It is **not** assigned to a telecaller, and it surfaces in the admin
    dashboard's duplicate count.
 
@@ -172,8 +188,15 @@ No TTL — this is the permanent audit record, like `CandidateEvent`.
 
 ### 3.2 New: `IntakeSourceConfig` (collection `intake_source_configs`)
 
-Per-brand sheet wiring, editable by an admin in the UI instead of requiring a redeploy to change a
-tab name or range. **Credentials never live here** — only in env.
+Sheet wiring, editable by an admin in the UI instead of requiring a redeploy to change a tab name or
+range. **Credentials never live here**; they stay in env.
+
+**One brand for now.** Production has a single brand (Binge Consulting), so there is exactly one
+config row, attached to the sole `Brand` the same way `ensure_employee_for_user` resolves it: fetch
+two, act only when there is exactly one. The admin UI has **no brand picker**. The row still carries
+`brand_id` under a unique index, and every lead is still stamped and queried by it. That keeps a
+future second brand a matter of inserting another config row, not a data migration. The brand `_id`
+is never hardcoded.
 
 ```python
 class IntakeSourceConfig(Document):
@@ -220,7 +243,7 @@ be ingested and must be visible to an admin, not silently dropped.
 | Model | Change | Why |
 |---|---|---|
 | `auth.UserRole` | `+ telecaller = "telecaller"` | the new role |
-| `Candidate` | `+ assigned_recruiter_id: ObjectId \| None`, `+ phone_normalized: str \| None` | recruiter ownership of a lead; dedupe |
+| `Candidate` | `+ assigned_recruiter_id: ObjectId \| None` | recruiter ownership of a lead (no phone field; see §2.2) |
 | `Notification` | `+ employee_id: ObjectId \| None`, `+ intake_lead_id: ObjectId \| None` | target a single admin, link to the lead |
 | `NotificationKind` | `+ telecaller_sla_breach`, `+ recruiter_sla_breach` | the two new alerts |
 
@@ -270,6 +293,15 @@ Telecaller-reachable surface, and nothing else:
 `TenantScope` gains `is_telecaller`. `is_recruiter` already returns `True` only for `employee`, so
 telecallers are automatically excluded from leaderboard credit and the activity feed with no change.
 
+**`get_viewer` needs the same care.** It delegates to `get_tenant` for every non-client role, so
+once `get_tenant` refuses telecallers, every `get_viewer` endpoint refuses them too. That is correct
+for six of its seven users: `pipeline`, `positions`, `clients`, `tasks`, `client_messaging` and the
+`dashboard` controller. The exception is **`notifications_router`**. It is on the telecaller surface
+above, and it would 403 them. It switches to a dependency that admits telecallers explicitly, and
+`_scope_match` gains a telecaller branch: their own `employee_id`-targeted rows only, never the
+brand-wide staff rows. `test_telecaller_access.py` asserts both halves: a 200 on notifications and
+403s on the other six.
+
 ### 4.2 `deny_clients` → `deny_outsiders`
 
 The leaderboard router is mounted with `dependencies=[Depends(deny_clients)]`. A telecaller must not
@@ -279,10 +311,24 @@ telecaller}` — two call sites in `core/main.py` plus the `apps/backend/CLAUDE.
 
 ### 4.3 Provisioning
 
-Telecallers are created by an admin via `POST /api/v1/teams/telecallers` (or the existing employee
-invite path with `role=telecaller`), which creates the `User` + `Employee` pair. `may_sign_in()` in
-`auth/access.py` is unchanged — a telecaller is on an agency domain like any other staff member.
-`_post_login_path` gains a telecaller branch → `/leads`.
+**No new API endpoint.** Role assignment in this codebase is deliberately manual, with no
+self-serve UI (`scripts/migrate_user_roles.py` docstring), and a role-escalation endpoint is attack
+surface this feature does not need. Telecallers follow the same path maintainers and admins do:
+
+```bash
+python -m scripts.migrate_user_roles promote --email caller@binge.consulting --role telecaller
+```
+
+That needs one change: `"telecaller"` added to the script's hardcoded `_VALID_ROLES`. Everything
+downstream already works. On the next login, `ensure_employee_for_user` copies `User.role` onto
+`Employee.role` and attaches the sole brand for an agency-domain address. `_post_login_path` gains a
+telecaller branch that redirects to `/leads`.
+
+> ⚠️ **Exposure window (open, §12).** A new staff signup lands as a full `employee` and stays one
+> until someone runs `promote`. For a recruiter that is harmless. For a telecaller it means full
+> candidate, client and pipeline access in between. This is not new; every agency-domain signup
+> works this way today. It matters more if telecallers are contract callers than if they are
+> in-house staff.
 
 ---
 
@@ -362,20 +408,23 @@ A separate, explicit, operator-run script rather than anything automatic. It fol
 of the existing `scripts/backfill_*.py` family: **dry run by default, `--confirm` to write, safe to
 re-run** (the `external_id` unique index makes a second run a no-op on rows it already imported).
 
-**Report mode (the default) writes nothing** and prints what you need in order to decide:
+**Report mode (the default) writes nothing** and prints what you need in order to decide. The
+candidate count below is real, from `inspect_brands.py` on 2026-09-17. **Every sheet figure is
+illustrative**, because the sheet has not been read yet:
 
 ```
 $ python3 scripts/backfill_intake_leads.py
 
-Brand: Binge Consulting (68f1…)
-  candidates in system          1,247
-    with a phone number         1,190
-  sheet rows read                 863
-    unusable (no name/phone)       41
+Brand: Binge Consulting (6a25b766…)
+  candidates in system            757
+    with a usable phone          ~???   ← dedupe coverage: only these can be matched
+  sheet rows read                 ???
+    unusable (no name/phone)      ???
     already ingested                0
-    match an existing candidate   312   ← would link, not duplicate
-    genuinely new                 510
-  date range in sheet      2025-02-11 … 2026-09-15
+    duplicate within the sheet    ???   ← same person, two Meta lead ids
+    match an existing candidate   ???   ← would link, not create
+    genuinely new                 ???
+  date range in sheet       ???? … ????
 
 Nothing written. Re-run with --confirm to import.
 ```
@@ -574,7 +623,7 @@ New `tests/test_intake/`, following the existing per-area layout:
 | File | Covers |
 |---|---|
 | `test_sheet_mapping.py` | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization |
-| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; duplicate phone links instead of creating; rows older than `activated_at` are skipped by the poll |
+| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; an existing candidate stored as `+91 98765 43210` matches a lead's `9876543210`; two lead ids for one phone *in the same run* ⇒ one candidate; rows older than `activated_at` are skipped by the poll |
 | `test_backfill_script.py` | report mode writes nothing; `--confirm` imports; re-running imports nothing new; `--unassigned` default leaves SLA clocks unstarted |
 | `test_round_robin.py` | even distribution; empty roster ⇒ `unassigned`, not a crash; concurrent assignment does not collide |
 | `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
@@ -627,11 +676,18 @@ Settled in review — recorded here so the reasoning is not lost:
 | Recruiter SLA alerts | **In scope** — same sweep, same dashboard (§8.1) |
 | Sheet write-back | **Out of scope.** The service account stays read-only, so no code path can modify your spreadsheet |
 | Historical backfill | **Not automatic.** Live poll handles new leads only; history goes through `scripts/backfill_intake_leads.py`, dry-run by default (§5.4) |
+| Brand | **One brand for now** (Binge Consulting). No brand picker, but `brand_id` scoping kept everywhere so a second brand stays cheap (§3.2) |
+| Phone dedupe | **In-memory lookup per run**, not a stored field. Matches all 757 existing candidates with no backfill or write-path sync (§2.2) |
+| Provisioning | **Existing `migrate_user_roles.py promote`**, no new API endpoint (§4.3) |
 | Build scope | Backend + frontend, one PR |
 
 ### Still open
 
-1. **Which brand do sheet leads belong to?** The design assumes one `IntakeSourceConfig` per brand,
-   with the admin picking the brand when configuring the sheet. If you run a single brand this is a
-   non-question and the config simply attaches to it. `python3 scripts/inspect_brands.py` (read-only)
-   will confirm how many brands exist today.
+1. **Are telecallers on the `@binge.consulting` domain?** This decides provisioning, and it is the
+   one answer step 1 depends on.
+   - **Yes, in-house staff:** the design above stands. The exposure window in §4.3 is the same one
+     every recruiter signup already has.
+   - **No, contract callers with personal email:** they cannot sign up at all today, because
+     `may_sign_in()` refuses any non-agency address without a grant. They would need an allow-list
+     grant like `RefereeUser`. Assigning the telecaller role at grant time would also close the
+     exposure window, since they would never pass through `employee`.
