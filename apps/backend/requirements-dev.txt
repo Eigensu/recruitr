@@ -1,0 +1,18 @@
+# Test-only dependencies. Not installed into the Docker image — see requirements.txt
+# for what ships.
+#
+# These exist so `uv run pytest` resolves pytest from the project venv. Without
+# them the venv has no pytest, uv falls through to whatever global pytest is on
+# PATH, and the suite silently runs against that interpreter's packages instead
+# of the ones the app imports — which is how the suite came to be passing on
+# FastAPI 0.122 while the app ran on 0.141, with route discovery differing
+# between them.
+#
+#   uv pip install -r requirements.txt -r requirements-dev.txt
+
+-r requirements.txt
+
+pytest>=8.3.4
+# <0.25: 0.25 changed the default fixture loop scope, which conftest.py's autouse
+# per-test database fixture depends on.
+pytest-asyncio>=0.24.0,<0.25
