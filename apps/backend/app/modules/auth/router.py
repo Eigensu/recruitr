@@ -414,6 +414,11 @@ def _google_role(current: UserRole, is_client: bool, is_referee: bool) -> UserRo
 def _post_login_path(user: User, has_brand: bool, is_referee: bool) -> str:
     if is_referee:
         return "/referee"
+    # Straight to the lead queue: the dashboard at "/" is built on endpoints
+    # get_tenant refuses a telecaller. Without a brand they fall through to
+    # onboarding like any other staff member.
+    if user.role == UserRole.telecaller and has_brand:
+        return "/leads"
     if has_brand or user.role == UserRole.client:
         return "/"
     return "/onboarding"

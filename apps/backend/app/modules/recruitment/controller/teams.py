@@ -11,7 +11,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.dependencies import get_tenant, require_maintainer
-from app.modules.auth.models import User, UserRole
+from app.modules.auth.models import NON_RECRUITER_ROLES, User
 from app.modules.recruitment.models import Employee, Team
 from app.modules.recruitment.schemas import (
     BulkAssignEmployees,
@@ -28,13 +28,11 @@ _Tenant = Annotated[TenantScope, Depends(get_tenant)]
 _RequireMaintainer = Depends(require_maintainer)
 
 
-async def _elevated_emails() -> set[str]:
-    """Emails of maintainer/admin users — they are not recruiters and are hidden
-    from employee listings."""
-    elevated = await User.find(
-        {"role": {"$in": [UserRole.maintainer.value, UserRole.admin.value]}}
-    ).to_list(None)
-    return {user.email.lower() for user in elevated}
+async def _non_recruiter_emails() -> set[str]:
+    """Emails of users in NON_RECRUITER_ROLES — maintainers, admins and
+    telecallers are not recruiters and are hidden from employee listings."""
+    non_recruiters = await User.find({"role": {"$in": list(NON_RECRUITER_ROLES)}}).to_list(None)
+    return {user.email.lower() for user in non_recruiters}
 
 
 @router.get("", response_model=list[TeamResponse])
@@ -67,7 +65,7 @@ async def update_team(tenant: _Tenant, team_id: str, payload: TeamUpdate):
 @router.get("/employees", response_model=list[EmployeeTeamResponse])
 async def list_employees(tenant: _Tenant):
     employees = await Employee.find({"brand_id": tenant.brand_id}).to_list(None)
-    hidden = await _elevated_emails()
+    hidden = await _non_recruiter_emails()
     return [employee for employee in employees if employee.email.lower() not in hidden]
 
 

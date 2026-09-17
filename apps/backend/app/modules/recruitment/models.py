@@ -666,6 +666,9 @@ class Notification(Document):
 
     brand_id: PydanticObjectId
     client_id: PydanticObjectId | None = None
+    # Set to address one staff member — the only staff rows a telecaller sees.
+    # None (and absent, on rows predating the field) is a brand-wide staff row.
+    employee_id: PydanticObjectId | None = None
     mapping_id: PydanticObjectId | None = None
     kind: NotificationKind
     message: str
