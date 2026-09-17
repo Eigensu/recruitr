@@ -331,3 +331,33 @@ async def test_coverage_reports_how_many_candidates_can_be_matched_at_all():
     total, reachable = await contact_coverage(_BRAND)
 
     assert (total, reachable) == (4, 2)
+
+
+# ── Timestamps out of Mongo ────────────────────────────────────────────────────
+
+
+def test_the_activation_cutoff_survives_a_naive_timestamp():
+    # Mongo stores UTC and hands it back without a timezone, so activated_at
+    # read from a document is naive while a parsed lead time is aware. Python
+    # raises TypeError on that comparison rather than guessing, which would have
+    # taken down every poll once activation was set.
+    naive_cutoff = datetime(2026, 9, 15)  # noqa: DTZ001 - exactly what Mongo returns
+    (old,) = _leads(_row(created_time="2026-09-14T10:00:00+00:00"))
+    (new,) = _leads(_row(created_time="2026-09-16T10:00:00+00:00"))
+
+    assert before_cutoff(old, naive_cutoff) is True
+    assert before_cutoff(new, naive_cutoff) is False
+
+
+@pytest.mark.asyncio
+async def test_a_stored_assignment_time_still_measures_a_response(callers):
+    # Same hazard on the other leg: telecaller_assigned_at comes back naive.
+    from app.modules.recruitment.service.intake_service import accept_lead
+
+    await ingest_leads(_leads(_row()), brand_id=_BRAND)
+    stored = await IntakeLead.find_one({"brand_id": _BRAND})
+    assert stored.telecaller_assigned_at.tzinfo is None
+
+    await accept_lead(stored)
+
+    assert (await IntakeLead.get(stored.id)).telecaller_response_seconds is not None
