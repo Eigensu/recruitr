@@ -222,6 +222,24 @@ def process_new_position_notifications(
     asyncio.run(run())
 
 
+@celery_app.task(name="intake.poll_google_sheet")
+def poll_intake_sheet() -> None:
+    """Read the configured lead sheet and ingest anything new.
+
+    Safe to run as often as you like: (brand_id, external_id) is unique on
+    IntakeLead, so a row already ingested is skipped rather than duplicated.
+    Returns immediately when the integration is switched off.
+    """
+    from app.core.database import init_db
+    from app.modules.recruitment.service.intake_service import poll_google_sheet
+
+    async def run():
+        await init_db()
+        await poll_google_sheet()
+
+    asyncio.run(run())
+
+
 @celery_app.task(name="recruitment.process_joining_dates")
 def process_joining_dates() -> None:
     """Run daily to auto-transition candidates who have reached their joining date."""

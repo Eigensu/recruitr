@@ -41,6 +41,10 @@ celery_app.conf.update(
             "task": "recruitment.process_reminders",
             "schedule": crontab(minute=30, hour=1),  # Runs daily at 01:30 UTC
         },
+        "intake-poll-google-sheet": {
+            "task": "intake.poll_google_sheet",
+            "schedule": timedelta(minutes=settings.INTAKE_POLL_MINUTES),
+        },
         "recruitment-joining-dates": {
             "task": "recruitment.process_joining_dates",
             "schedule": crontab(minute=0, hour=2),  # Runs daily at 02:00 UTC
