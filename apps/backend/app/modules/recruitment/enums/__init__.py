@@ -8,6 +8,13 @@ from app.modules.recruitment.enums.department import Department
 from app.modules.recruitment.enums.education_level import EducationLevel
 from app.modules.recruitment.enums.establishment_tag import EstablishmentTag
 from app.modules.recruitment.enums.gender import Gender
+from app.modules.recruitment.enums.intake import (
+    OPEN_INTAKE_STATUSES,
+    IntakeDecision,
+    IntakeLeadStatus,
+    IntakeRejectReason,
+    IntakeSource,
+)
 from app.modules.recruitment.enums.pipeline_stage import (
     INACTIVE_STAGES,
     KANBAN_STAGES,
@@ -47,4 +54,9 @@ __all__ = [
     "Department",
     "PositionApprovalStatus",
     "EstablishmentTag",
+    "IntakeSource",
+    "IntakeLeadStatus",
+    "OPEN_INTAKE_STATUSES",
+    "IntakeDecision",
+    "IntakeRejectReason",
 ]

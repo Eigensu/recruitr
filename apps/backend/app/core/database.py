@@ -31,6 +31,8 @@ from app.modules.recruitment.models import (
     ClientUser,
     Counter,
     Employee,
+    IntakeLead,
+    IntakeSourceConfig,
     Mapping,
     Notification,
     PaymentBatch,
@@ -173,6 +175,8 @@ async def init_db() -> None:
         ReferralRecord,
         PaymentBatch,
         Notification,
+        IntakeLead,
+        IntakeSourceConfig,
         # Gamification
         RecruiterProfile,
         # Leaderboard
