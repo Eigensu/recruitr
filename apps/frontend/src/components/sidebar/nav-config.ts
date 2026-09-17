@@ -11,6 +11,7 @@ import {
   IconBuilding,
   IconMessage,
   IconUserPlus,
+  IconPhoneCall,
 } from "@tabler/icons-react";
 
 export interface NavItemConfig {
@@ -27,6 +28,11 @@ export const REFEREE_NAV_CONFIG: NavItemConfig[] = [
   { href: "/referee", label: "Dashboard", icon: IconLayoutDashboard, exact: true },
   { href: "/referee/refer", label: "Refer Candidate", icon: IconUserPlus },
   { href: "/referee/settings", label: "Settings", icon: IconSettings },
+];
+
+export const TELECALLER_NAV_CONFIG: NavItemConfig[] = [
+  { href: "/leads", label: "Leads", icon: IconPhoneCall },
+  { href: "/settings", label: "Settings", icon: IconSettings },
 ];
 
 export const NAV_CONFIG: NavItemConfig[] = [

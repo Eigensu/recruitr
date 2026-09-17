@@ -2,12 +2,12 @@
 
 Offer letters come to the API as file bytes rather than as a URL to confirm.
 That is not an oversight: GET /api/v1/storage/sign is the only source of a
-Cloudinary upload credential and it is deny_clients ("a credential to write
-into the agency's Cloudinary account, which a client account has no reason to
-hold"), so the signed browser-upload flow staff use for resumes is unreachable
-from the client and referee portals — the only two places offer letters are
-uploaded from. Taking a URL instead would also let a caller point a mapping's
-offer letter at any address they liked.
+Cloudinary upload credential and it is deny_outsiders ("a credential to write
+into the agency's Cloudinary account, which a client, referee or telecaller
+account has no reason to hold"), so the signed browser-upload flow staff use for
+resumes is unreachable from the client and referee portals — the only two places
+offer letters are uploaded from. Taking a URL instead would also let a caller
+point a mapping's offer letter at any address they liked.
 
 Shared by both portals so they cannot drift on what they accept.
 """

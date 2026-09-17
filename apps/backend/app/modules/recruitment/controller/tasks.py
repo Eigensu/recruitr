@@ -6,7 +6,7 @@ from app.core.dependencies import (
     get_viewer,
     require_maintainer,
 )
-from app.modules.auth.models import User
+from app.modules.auth.models import NON_RECRUITER_ROLES, User
 from app.modules.recruitment.models import (
     ActivityLog,
     Employee,
@@ -103,7 +103,7 @@ async def _populate_admin_progress(
     emp_query = {
         "brand_id": tenant.brand_id,
         "is_active": True,
-        "role": {"$nin": ["admin", "maintainer"]},
+        "role": {"$nin": list(NON_RECRUITER_ROLES)},
     }
     if task.assignee_type == TaskAssignmentType.team:
         emp_query["team_id"] = task.assignee_id

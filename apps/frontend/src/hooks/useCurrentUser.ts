@@ -13,6 +13,7 @@ interface CurrentUserState {
   isAdmin: boolean;
   isClient: boolean;
   isReferee: boolean;
+  isTelecaller: boolean;
 }
 
 /**
@@ -52,5 +53,6 @@ export function useCurrentUser(): CurrentUserState {
     isAdmin: role === "admin",
     isClient: role === "client",
     isReferee: role === "referee",
+    isTelecaller: role === "telecaller",
   };
 }

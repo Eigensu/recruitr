@@ -20,6 +20,11 @@ class UserRole(StrEnum):
       staff endpoint denies it by default and access has to be granted one
       endpoint at a time via get_viewer.
     - referee: an external referee who refers candidates. Also not in hierarchy.
+    - telecaller: agency staff who screen inbound leads by phone. Holds an
+      Employee record and a brand like a recruiter, but is NOT a recruiter and
+      sits outside the hierarchy: get_tenant refuses this role exactly as it
+      refuses client, so every staff endpoint denies it by default and the lead
+      queue is opened to it deliberately.
     """
 
     employee = "employee"
@@ -27,6 +32,20 @@ class UserRole(StrEnum):
     admin = "admin"
     client = "client"
     referee = "referee"
+    telecaller = "telecaller"
+
+
+# Roles that hold an Employee record but do not recruit: they earn no leaderboard
+# credit and are left out of every recruiter roster. Queries exclude these with
+# $nin rather than matching role == "employee" because Employee rows written
+# before the role field existed carry no role at all, and those are recruiters —
+# $nin keeps them, an equality match would silently drop them. Adding a staff
+# role that does not recruit means adding it here, and nowhere else.
+NON_RECRUITER_ROLES: tuple[str, ...] = (
+    UserRole.admin.value,
+    UserRole.maintainer.value,
+    UserRole.telecaller.value,
+)
 
 
 class User(Document):

@@ -39,6 +39,9 @@ function SignInContent() {
       })) as { role?: string };
       if (res.role === "referee") {
         router.push("/referee");
+      } else if (res.role === "telecaller") {
+        // The dashboard at "/" is built on endpoints a telecaller is refused.
+        router.push("/leads");
       } else {
         router.push("/");
       }

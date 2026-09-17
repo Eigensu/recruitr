@@ -282,6 +282,10 @@ So: **staff in the data model, deny-by-default at the route layer.** New depende
 def get_telecaller_tenant(...)   # telecaller | maintainer | admin → TenantScope
 ```
 
+Added in step 5 alongside the lead-queue endpoints that use it, not in step 1, so no commit
+carries an unused guard. Step 1 did add `_staff_scope()`, the brand check extracted out of
+`get_tenant`, so this and `get_inbox_viewer` share a single copy of it.
+
 Telecaller-reachable surface, and nothing else:
 
 - `GET /api/v1/auth/me`
@@ -304,10 +308,39 @@ brand-wide staff rows. `test_telecaller_access.py` asserts both halves: a 200 on
 
 ### 4.2 `deny_clients` → `deny_outsiders`
 
-The leaderboard router is mounted with `dependencies=[Depends(deny_clients)]`. A telecaller must not
-see recruiters' names and scores either. Rather than a function named `deny_clients` that quietly
-also denies telecallers, it is **renamed `deny_outsiders`** and denies `{client, referee,
-telecaller}` — two call sites in `core/main.py` plus the `apps/backend/CLAUDE.md` reference.
+`deny_clients` guarded routes that authenticate but never resolve a tenant, where `get_tenant`'s
+refusal cannot run. Rather than a function named `deny_clients` that quietly also denies
+telecallers, it is **renamed `deny_outsiders`** and denies `{client, referee, telecaller}`. It
+guards three routes:
+
+| Route | Why |
+|---|---|
+| leaderboard router (`core/main.py`) | recruiters' names and scores |
+| `GET /api/v1/storage/sign` | a write credential for the agency's Cloudinary account |
+| `POST /api/v1/brands` | **found by the step-1 sweep.** See below |
+
+`POST /api/v1/brands` is onboarding and runs before any brand exists. Its only guard was "agency
+email address", which a telecaller on `@binge.consulting` passes, so a telecaller could have created
+a second brand. Per that handler's docstring, a second brand breaks the public application form. It
+also stops `ensure_employee_for_user` auto-assigning a brand to new signups, because that only acts
+when exactly one brand exists.
+
+> ⚠️ **Pre-existing, not fixed here:** any *recruiter* on the agency domain can still create a
+> second brand the same way. Closing that means changing the onboarding flow (e.g. refusing anyone
+> whose `Employee` already has a brand), which is outside this feature's scope.
+
+Referees were not denied by `deny_clients`. Nothing in the referee portal calls any of these three
+routes, so refusing them closes a gap that `storage/uploads.py`'s docstring already assumed was
+closed.
+
+### 4.2a Not a recruiter: `NON_RECRUITER_ROLES`
+
+Every recruiter roster in the codebase excluded `role $nin ["admin", "maintainer"]`, a deny-list, so
+any new role counted as a recruiter by default. A telecaller would have appeared on the leaderboard,
+in task progress, in the dashboard employee table and in recruiter pickers. The six copies are now
+one tuple, `auth/models.py: NON_RECRUITER_ROLES`. It stays a `$nin` rather than
+`role == "employee"` because `Employee` rows that predate the role field have none, and an equality
+match would silently drop those recruiters.
 
 ### 4.3 Provisioning
 
@@ -642,9 +675,10 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-1. **Role + access** — `UserRole.telecaller`, `get_telecaller_tenant`, `deny_outsiders` rename,
-   `TenantScope.is_telecaller`, provisioning, login redirect. *Ship with `test_telecaller_access.py`
-   green before anything else touches data.*
+1. **Role + access** — `UserRole.telecaller`, `get_tenant` refusal, `deny_outsiders` (3 routes),
+   `NON_RECRUITER_ROLES`, `get_inbox_viewer` + `Notification.employee_id`, `TenantScope.is_telecaller`,
+   promote support, login redirects, frontend guard/nav + `/leads` landing page.
+   *Ship with `test_telecaller_access.py` green before anything else touches data.*
 2. **Models + enums** — `IntakeLead`, `IntakeSourceConfig`, enums, `Candidate`/`Notification`
    changes, registration in `database.py` + `conftest.py`.
 3. **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, unit tests (no network).
@@ -679,15 +713,7 @@ Settled in review — recorded here so the reasoning is not lost:
 | Brand | **One brand for now** (Binge Consulting). No brand picker, but `brand_id` scoping kept everywhere so a second brand stays cheap (§3.2) |
 | Phone dedupe | **In-memory lookup per run**, not a stored field. Matches all 757 existing candidates with no backfill or write-path sync (§2.2) |
 | Provisioning | **Existing `migrate_user_roles.py promote`**, no new API endpoint (§4.3) |
+| Telecaller email domain | **In-house, `@binge.consulting`.** Promote-based provisioning stands. The §4.3 exposure window is accepted: it is the same one every recruiter signup already has |
 | Build scope | Backend + frontend, one PR |
 
-### Still open
-
-1. **Are telecallers on the `@binge.consulting` domain?** This decides provisioning, and it is the
-   one answer step 1 depends on.
-   - **Yes, in-house staff:** the design above stands. The exposure window in §4.3 is the same one
-     every recruiter signup already has.
-   - **No, contract callers with personal email:** they cannot sign up at all today, because
-     `may_sign_in()` refuses any non-agency address without a grant. They would need an allow-list
-     grant like `RefereeUser`. Assigning the telecaller role at grant time would also close the
-     exposure window, since they would never pass through `employee`.
+Nothing is open.
