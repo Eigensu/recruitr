@@ -224,6 +224,26 @@ async def get_viewer(
     return get_tenant(employee, user)
 
 
+def get_telecaller_tenant(
+    employee=Depends(get_current_employee),  # noqa: B008
+    user=Depends(get_current_user_doc),  # noqa: B008
+):
+    """TenantScope for the lead queue: telecallers, plus the people who run it.
+
+    The narrow counterpart to get_tenant's refusal. Recruiters are excluded on
+    purpose — the queue is screening work, not recruiting, and a recruiter with
+    no lead assigned to them has nothing to do here.
+    """
+    from app.modules.auth.models import UserRole
+
+    if user.role not in (UserRole.telecaller, UserRole.maintainer, UserRole.admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is not available to this account.",
+        )
+    return _staff_scope(employee, user)
+
+
 async def get_inbox_viewer(
     user=Depends(get_current_user_doc),  # noqa: B008
 ):

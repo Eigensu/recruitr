@@ -23,6 +23,13 @@ from app.modules.recruitment.schemas.client import (
     ClientUserInvite,
     ClientUserResponse,
 )
+from app.modules.recruitment.schemas.intake import (
+    IntakeAcceptRequest,
+    IntakeLeadResponse,
+    IntakeReassignRequest,
+    IntakeRejectRequest,
+    IntakeSyncResponse,
+)
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
     PipelineCandidateDroppedRequest,
@@ -64,6 +71,11 @@ from app.modules.recruitment.schemas.team import (
 __all__ = [
     # Candidate DTOs
     "CandidateCreate",
+    "IntakeAcceptRequest",
+    "IntakeLeadResponse",
+    "IntakeReassignRequest",
+    "IntakeRejectRequest",
+    "IntakeSyncResponse",
     "CandidateCreateStrict",
     "CandidateUpdate",
     "CandidateResponse",

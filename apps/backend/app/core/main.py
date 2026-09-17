@@ -23,6 +23,7 @@ from app.modules.recruitment.controller import (
     candidates_router,
     client_messaging_router,
     clients_router,
+    intake_router,
     pipeline_router,
     positions_router,
     public_router,
@@ -82,6 +83,7 @@ app.include_router(
 )
 app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
+app.include_router(intake_router, prefix="/api/v1/intake", tags=["Lead Intake"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])
 app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
