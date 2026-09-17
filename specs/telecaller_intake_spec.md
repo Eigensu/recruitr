@@ -657,9 +657,8 @@ New `tests/test_intake/`, following the existing per-area layout:
 |---|---|
 | `test_sheet_mapping.py` | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization, ragged rows, unmapped columns kept in `raw`. Built on the sheet's real 21-column header row |
 | `test_google_sheets_config.py` | the service-account key as raw JSON, as base64, and every unusable shape, each with an error that says what to fix |
-| `test_ingest_idempotency.py` | same `external_id` twice ⇒ one lead, one candidate; an existing candidate stored as `+91 98765 43210` matches a lead's `9876543210`; two lead ids for one phone *in the same run* ⇒ one candidate; rows older than `activated_at` are skipped by the poll |
 | `test_backfill_script.py` | report mode writes nothing; `--confirm` imports; re-running imports nothing new; `--unassigned` default leaves SLA clocks unstarted |
-| `test_round_robin.py` | even distribution; empty roster ⇒ `unassigned`, not a crash; concurrent assignment does not collide |
+| `test_ingest.py` | idempotent re-reads; phone/email dedupe across formats; the same person twice in one sheet; brand isolation; even round-robin distribution; empty roster ⇒ `unassigned`, not a crash; inactive/non-telecaller staff skipped; `assign=False` for the backfill; recruiters include rows written before the role field; the activation cutoff; and the report-mode preview agreeing with the real import |
 | `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
 | `test_recruiter_action_stamp.py` | first mapping stamps `actioned`; a second mapping does not re-stamp; a failing stamp does not roll back the mapping |
 | `test_sla_sweep.py` | breach fires exactly once per lead; re-running the sweep adds nothing; reassignment resets the clock |
@@ -677,7 +676,7 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -690,7 +689,10 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
 3. ✅ **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, `phone.py`, settings,
    `google-auth`, 60 unit tests (no network, no database). **Not yet verified against the live
    sheet** — that needs the service account below.
-4. **Ingest service + poll task** — round-robin, dedupe, `activated_at` cutoff, Celery beat entry, `POST /intake/sync`. Plus `scripts/backfill_intake_leads.py` (report mode first).
+4. ✅ **Ingest service + poll task** — `service/intake_service.py`, round-robin, dedupe,
+   `activated_at` cutoff, Celery beat entry every `INTAKE_POLL_MINUTES`, and
+   `scripts/backfill_intake_leads.py`. `POST /intake/sync` moved to step 5, where the intake
+   controller is created — an endpoint has nowhere to live until then.
 5. **Workflow endpoints** — accept / reject / reassign, `map_candidate` hook.
 6. **Analytics** — aggregations + endpoints + cache invalidation.
 7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
