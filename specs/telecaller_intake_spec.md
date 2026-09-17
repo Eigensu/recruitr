@@ -662,6 +662,7 @@ New `tests/test_intake/`, following the existing per-area layout:
 | `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
 | `test_recruiter_action_stamp.py` | first mapping stamps `actioned`; a second mapping does not re-stamp; a failing stamp does not roll back the mapping |
 | `test_sla_sweep.py` | breach fires exactly once per lead; re-running the sweep adds nothing; reassignment resets the clock |
+| `test_model_registration.py` | every recruitment `Document` is in `core/database.py`'s list, and `tests/conftest.py` registers the same set — the `CollectionWasNotInitialized` footgun, caught at commit time instead of at first query |
 | `test_telecaller_access.py` | **containment** — a telecaller is 403'd on candidates, positions, pipeline, clients, leaderboard, activity. Mirrors `test_pipeline/test_referee_portal_is_read_only.py` |
 | `test_intake_analytics.py` | funnel counts, median/p90 math, per-person grouping, brand isolation |
 
@@ -675,11 +676,15 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-1. **Role + access** — `UserRole.telecaller`, `get_tenant` refusal, `deny_outsiders` (3 routes),
+**Done:** 1 (`b5ff1aa`), 2. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
+and running the suite on FastAPI 0.122 while the app imported 0.141.
+
+1. ✅ **Role + access** — `UserRole.telecaller`, `get_tenant` refusal, `deny_outsiders` (3 routes),
    `NON_RECRUITER_ROLES`, `get_inbox_viewer` + `Notification.employee_id`, `TenantScope.is_telecaller`,
    promote support, login redirects, frontend guard/nav + `/leads` landing page.
    *Ship with `test_telecaller_access.py` green before anything else touches data.*
-2. **Models + enums** — `IntakeLead`, `IntakeSourceConfig`, enums, `Candidate`/`Notification`
+2. ✅ **Models + enums** — `IntakeLead`, `IntakeSourceConfig`, enums, `Candidate`/`Notification`
    changes, registration in `database.py` + `conftest.py`.
 3. **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, unit tests (no network).
 4. **Ingest service + poll task** — round-robin, dedupe, `activated_at` cutoff, Celery beat entry, `POST /intake/sync`. Plus `scripts/backfill_intake_leads.py` (report mode first).

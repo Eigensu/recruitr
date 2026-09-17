@@ -25,6 +25,10 @@ from app.modules.recruitment.enums import (
     EducationLevel,
     EstablishmentTag,
     Gender,
+    IntakeDecision,
+    IntakeLeadStatus,
+    IntakeRejectReason,
+    IntakeSource,
     NotificationKind,
     PaymentStatus,
     PipelineStage,
@@ -321,6 +325,11 @@ class Candidate(Document):
     # predate the field. Ownership gates who may open the CV: see
     # utils/cv_access.py, where a null owner means "shared, anyone may view".
     created_by_id: PydanticObjectId | None = None
+    # The recruiter an accepted inbound lead was assigned to — FK → employees._id.
+    # Deliberately not created_by_id: that field means "who sourced this person"
+    # and gates CV visibility, and a lead was sourced by an ad, not a recruiter.
+    # Reusing it would silently lock the lead's CV to whoever got the handoff.
+    assigned_recruiter_id: PydanticObjectId | None = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
@@ -346,6 +355,7 @@ class Candidate(Document):
             IndexModel("tags"),
             IndexModel([("brand_id", 1), ("current_stage", 1)]),
             IndexModel([("brand_id", 1), ("created_by_id", 1)]),
+            IndexModel([("brand_id", 1), ("assigned_recruiter_id", 1)]),
             IndexModel("created_at"),
         ]
 
@@ -670,6 +680,7 @@ class Notification(Document):
     # None (and absent, on rows predating the field) is a brand-wide staff row.
     employee_id: PydanticObjectId | None = None
     mapping_id: PydanticObjectId | None = None
+    intake_lead_id: PydanticObjectId | None = None
     kind: NotificationKind
     message: str
     created_at: datetime = Field(default_factory=_utcnow)
@@ -716,4 +727,152 @@ class RecruitmentTask(Document):
         indexes = [
             IndexModel([("brand_id", 1)]),
             IndexModel([("brand_id", 1), ("is_active", 1)]),
+        ]
+
+
+# ── Lead intake ──────────────────────────────────────────────────────────────
+
+
+class IntakeAttribution(BaseModel):
+    """Which ad, campaign and form a lead came from.
+
+    Snapshotted onto the lead rather than looked up later: these are Meta's ids
+    and names, we have no copy of that catalogue, and an ad that is renamed or
+    deleted must not change what an already-ingested lead says it came from.
+    """
+
+    ad_id: str | None = None
+    ad_name: str | None = None
+    adset_id: str | None = None
+    adset_name: str | None = None
+    campaign_id: str | None = None
+    campaign_name: str | None = None
+    form_id: str | None = None
+    form_name: str | None = None
+
+
+class IntakeLead(Document):
+    """One inbound lead, its review journey, and the timings behind both.
+
+    A separate document rather than fields on Candidate. Candidate already
+    carries ~45 fields and this workflow applies to a subset of its rows, so
+    this follows Mapping and ReferralRecord: a record *about* a candidate,
+    keyed to it, with its own lifecycle.
+
+    The two `*_response_seconds` fields are denormalised at action time so the
+    analytics aggregations can average and sort a plain number instead of
+    recomputing a date difference over nullable fields on every read.
+    """
+
+    brand_id: PydanticObjectId
+    candidate_id: PydanticObjectId  # FK → candidates._id; set even when duplicate
+
+    # ── Provenance ──
+    source: IntakeSource = IntakeSource.google_sheet
+    source_channel: str | None = None  # "Instagram" | "Facebook"
+    # Meta's own lead id. The idempotency key: re-reading the same sheet row
+    # must never create a second lead, which is what lets the poll read the
+    # whole range every run instead of tracking a cursor.
+    external_id: str
+    external_created_at: datetime | None = None  # the sheet's created_time
+    external_status: str | None = None  # the sheet's lead_status column, read-only
+    is_organic: bool | None = None
+    attribution: IntakeAttribution = Field(default_factory=IntakeAttribution)
+    # The row exactly as read, including columns this model does not map. A
+    # column added to the form is then never lost, and a mapping bug stays
+    # diagnosable after the fact.
+    raw: dict[str, str] = Field(default_factory=dict)
+
+    status: IntakeLeadStatus = IntakeLeadStatus.pending_telecaller
+    ingested_at: datetime = Field(default_factory=_utcnow)
+
+    # ── Telecaller leg ──
+    telecaller_id: PydanticObjectId | None = None  # FK → employees._id
+    telecaller_assigned_at: datetime | None = None
+    telecaller_actioned_at: datetime | None = None
+    telecaller_decision: IntakeDecision | None = None
+    telecaller_reject_reason: IntakeRejectReason | None = None
+    telecaller_notes: str | None = None
+    telecaller_response_seconds: int | None = None
+    # Stamped when the breach notification fires, and the reason it fires once:
+    # a lead stuck for a week raises one notification, not one per sweep.
+    telecaller_sla_breached_at: datetime | None = None
+
+    # ── Recruiter leg ──
+    recruiter_id: PydanticObjectId | None = None  # FK → employees._id
+    recruiter_assigned_at: datetime | None = None
+    recruiter_actioned_at: datetime | None = None
+    recruiter_action_mapping_id: PydanticObjectId | None = None
+    recruiter_response_seconds: int | None = None
+    recruiter_sla_breached_at: datetime | None = None
+
+    # Reassignment restarts the SLA clock for the new owner, so this counts how
+    # often that happened — otherwise a lead could be passed around indefinitely
+    # and never appear overdue.
+    reassignment_count: int = 0
+
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "intake_leads"
+        # No TTL: this is the permanent audit record of where every lead went,
+        # like CandidateEvent and unlike the 90-day ActivityLog.
+        indexes = [
+            IndexModel([("brand_id", 1), ("external_id", 1)], unique=True),
+            # The SLA sweep: open leads whose assignment is older than the cutoff.
+            IndexModel([("brand_id", 1), ("status", 1), ("telecaller_assigned_at", 1)]),
+            IndexModel([("brand_id", 1), ("status", 1), ("recruiter_assigned_at", 1)]),
+            IndexModel([("brand_id", 1), ("telecaller_id", 1), ("status", 1)]),
+            IndexModel([("brand_id", 1), ("recruiter_id", 1), ("status", 1)]),
+            IndexModel([("brand_id", 1), ("candidate_id", 1)]),
+            IndexModel([("brand_id", 1), ("ingested_at", -1)]),
+        ]
+
+
+class IntakeSourceConfig(Document):
+    """Which sheet to read, per brand, and how the last read went.
+
+    Editable by an admin so changing a tab name or range is not a deploy. The
+    service-account credentials deliberately stay in the environment: this row
+    is readable by anyone who can read the database, and a Google key is not.
+
+    One row today, for the single brand. It is keyed by brand_id under a unique
+    index anyway, so a second brand is another row rather than a migration.
+    """
+
+    brand_id: PydanticObjectId
+    spreadsheet_id: str
+    sheet_range: str = "Sheet1!A:U"
+    enabled: bool = False
+    default_source_channel: str = "Instagram"
+    # Stamped when enabled first turns true. The poll ignores leads older than
+    # this, so switching the integration on does not round-robin the sheet's
+    # entire history into telecaller queues in one tick and start an SLA clock
+    # on every one of them. History goes through scripts/backfill_intake_leads.py.
+    activated_at: datetime | None = None
+
+    last_synced_at: datetime | None = None  # last attempt, successful or not
+    last_success_at: datetime | None = None
+    last_row_count: int = 0
+    last_ingested_count: int = 0
+    last_skipped_count: int = 0
+    last_error: str | None = None  # surfaced in the admin UI
+    consecutive_failures: int = 0
+
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "intake_source_configs"
+        indexes = [
+            IndexModel([("brand_id", 1)], unique=True),
         ]
