@@ -3,7 +3,8 @@
 import type { KeyboardEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { IconFileText, IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { isAbsoluteUrl } from "@/lib/api/candidates";
 import { cn } from "@/lib/utils";
 import type { PipelineCard } from "@/types";
 
@@ -53,6 +54,9 @@ export default function KanbanCard({
   }
 
   const daysLabel = daysInStage === 1 ? "1 day" : `${daysInStage} days`;
+
+  const offerLetterHref =
+    card.offer_letter_url && isAbsoluteUrl(card.offer_letter_url) ? card.offer_letter_url : null;
 
   // The card body opens the action modal. Without this the client board could
   // never reach ClientActionModal: onCardClick was only ever wired to the
@@ -200,6 +204,22 @@ export default function KanbanCard({
               )}
             </div>
           )}
+
+        {offerLetterHref && (
+          <a
+            href={offerLetterHref}
+            target="_blank"
+            rel="noreferrer noopener"
+            // The card root opens the modal on click and on Enter — the latter
+            // with preventDefault, which would otherwise cancel this link.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="flex w-fit items-center gap-1 text-[10px] font-semibold text-emerald-400 hover:underline"
+          >
+            <IconFileText className="size-3 shrink-0" />
+            Offer letter
+          </a>
+        )}
 
         {card.stage === "candidate_dropped" && card.dropped_notes && (
           <div className="flex flex-col gap-1">

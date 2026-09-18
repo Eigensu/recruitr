@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { IconX, IconCheck } from "@tabler/icons-react";
+import { IconX, IconCheck, IconFileText } from "@tabler/icons-react";
 import type { PipelineCard, KanbanStage } from "@/types";
+import { isAbsoluteUrl } from "@/lib/api/candidates";
 import {
   setMappingInterviewDate,
   uploadMappingOffer,
@@ -42,6 +43,9 @@ export default function ClientActionModal({
   const [droppedNotes, setDroppedNotes] = useState("");
 
   if (!card) return null;
+
+  const offerLetterHref =
+    card.offer_letter_url && isAbsoluteUrl(card.offer_letter_url) ? card.offer_letter_url : null;
 
   async function handleAction(action: () => Promise<void>, { close = true } = {}) {
     setLoading(true);
@@ -112,6 +116,28 @@ export default function ClientActionModal({
                   {card.stage.replace(/_/g, " ")}
                 </span>
               </div>
+
+              {/* Above the per-stage actions rather than inside `selected`, so
+                  the letter stays one click away after the candidate joins —
+                  which is when anyone is most likely to go looking for it. */}
+              {card.offer_letter_url && (
+                <div className="flex items-center justify-between gap-2 text-sm text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
+                  <span className="flex items-center gap-2">
+                    <IconCheck className="size-4 shrink-0" /> Offer Uploaded
+                  </span>
+                  {offerLetterHref && (
+                    <a
+                      href={offerLetterHref}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center gap-1 text-xs hover:underline"
+                    >
+                      <IconFileText className="size-3.5 shrink-0" />
+                      View offer letter
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* SOURCED -> present to the client.
                   This used to share the `sent_to_client` branch below, so a
@@ -248,14 +274,9 @@ export default function ClientActionModal({
                       htmlFor="offer-letter-input"
                       className="text-xs font-semibold text-text-muted uppercase"
                     >
-                      Upload Offer Letter
+                      {card.offer_letter_url ? "Replace Offer Letter" : "Upload Offer Letter"}
                     </label>
                     <div className="flex flex-col gap-2">
-                      {card.offer_letter_url ? (
-                        <div className="flex items-center gap-2 text-sm text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
-                          <IconCheck className="size-4" /> Offer Uploaded
-                        </div>
-                      ) : null}
                       {/* Choosing the file uploads it. This used to only set
                           state, with a separate Upload button — disabled until
                           a file was picked — actually sending the request. A

@@ -14,7 +14,7 @@ import type {
  * before upload_cvs.py has run) — so the UI can still show a "CV on file" badge.
  * Returns null when there is no CV reference at all.
  */
-function isAbsoluteUrl(url: string): boolean {
+export function isAbsoluteUrl(url: string): boolean {
   try {
     const p = new URL(url);
     return p.protocol === "http:" || p.protocol === "https:";
