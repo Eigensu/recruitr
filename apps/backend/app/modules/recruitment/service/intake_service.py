@@ -325,6 +325,8 @@ async def ingest_leads(
             note=f"Inbound lead from {lead.source_channel}",
         )
 
+    if result.created or result.matched_existing:
+        await _drop_analytics_cache(brand_id)
     return result
 
 
@@ -528,6 +530,18 @@ async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId
 # ── Decisions ──────────────────────────────────────────────────────────────────
 
 
+async def _drop_analytics_cache(brand_id: PydanticObjectId) -> None:
+    """Clear the cached admin funnel after a lead write.
+
+    Imported inside the function rather than at module scope: intake_analytics
+    reads `as_utc` from here, and letting the read model depend on the write
+    model — never the other way round — is what keeps both importable.
+    """
+    from app.modules.recruitment.service.intake_analytics import invalidate
+
+    await invalidate(brand_id)
+
+
 def as_utc(value: datetime | None) -> datetime | None:
     """A timezone-aware copy of a datetime that may have come back from Mongo.
 
@@ -597,6 +611,7 @@ async def accept_lead(
             event_type=CandidateEventType.approved,
             note="Accepted by telecaller",
         )
+    await _drop_analytics_cache(lead.brand_id)
     return lead
 
 
@@ -636,6 +651,7 @@ async def reject_lead(
             event_type=CandidateEventType.declined,
             note=f"Rejected by telecaller ({reason.value})" if reason else "Rejected by telecaller",
         )
+    await _drop_analytics_cache(lead.brand_id)
     return lead
 
 
@@ -674,6 +690,7 @@ async def reassign_lead(
         candidate = await Candidate.get(lead.candidate_id)
         if candidate is not None:
             await candidate.set({"assigned_recruiter_id": assignee.id})
+    await _drop_analytics_cache(lead.brand_id)
     return lead
 
 
