@@ -77,8 +77,22 @@ For each of `worker` and `beat`:
    FRONTEND_URL=${{backend.FRONTEND_URL}}
    ```
 
-   Plus whichever variable holds the Resend API key on `backend` — the worker
-   sends the reminder and new-position emails.
+   ```
+   RESEND_API_KEY=<from https://resend.com/api-keys>
+   RESEND_FROM_EMAIL=<an address on a domain verified in Resend>
+   ```
+
+   **These two are not currently set on any Railway service.** Email is the
+   one part of the notification path that is not merely undeployed but
+   unconfigured: `EmailService._send_email` reads them with `os.getenv`, and
+   with no API key it logs a warning and returns. No mail is sent and nothing
+   raises, so a worker will happily run every reminder task to completion and
+   deliver nothing.
+
+   `RESEND_FROM_EMAIL` defaults to `onboarding@resend.dev`, Resend's sandbox
+   sender, which only delivers to the Resend account owner's own address. It
+   is enough to prove the pipeline works end to end and useless for reaching
+   an actual client, so a verified domain is needed before this is real.
 
    It never issues cookies or JWTs, so it does not need `JWT_SECRET`,
    `SESSION_SECRET`, `COOKIE_DOMAIN`, `CORS_ORIGINS` or the Google OAuth
