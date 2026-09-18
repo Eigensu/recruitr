@@ -14,7 +14,9 @@ class PipelineStage(StrEnum):
     on_hold = "on_hold"
 
 
-# Ordered columns on the Kanban board
+# Ordered columns on the Kanban board. Every stage needs one: the board query
+# only reads mappings in these stages, so a card moved to a stage missing here
+# drops off the board entirely — which is what on_hold did until it was added.
 KANBAN_STAGES: list[PipelineStage] = [
     PipelineStage.sourced,
     PipelineStage.sent_to_client,
@@ -23,6 +25,7 @@ KANBAN_STAGES: list[PipelineStage] = [
     PipelineStage.joined,
     PipelineStage.rejected,
     PipelineStage.candidate_dropped,
+    PipelineStage.on_hold,
 ]
 
 # Stages that close a mapping's active lifecycle
