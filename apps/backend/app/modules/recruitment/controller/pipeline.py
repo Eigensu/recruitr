@@ -728,9 +728,11 @@ async def upload_offer_letter(
     # the board was next opened, with no error anywhere to explain it.
     secure_url = result.get("secure_url")
     if not secure_url:
+        # mapping.id, not the mapping_id path parameter: the stored id cannot
+        # carry anything a caller typed into the log line.
         logger.error(
             "Offer letter upload for mapping %s returned no secure_url; payload keys: %s",
-            mapping_id,
+            mapping.id,
             sorted(result.keys()) if isinstance(result, dict) else type(result).__name__,
         )
         raise HTTPException(
