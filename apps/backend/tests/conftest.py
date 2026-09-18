@@ -42,8 +42,18 @@ from app.modules.recruitment.models import (
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def init_test_db() -> AsyncGenerator[None, None]:
-    """Initialize an isolated test database for each test, then drop it."""
+async def init_test_db(request) -> AsyncGenerator[None, None]:
+    """Initialize an isolated test database for each test, then drop it.
+
+    A test marked `no_db` opts out. Being autouse, this otherwise made a Mongo
+    instance a hard requirement for running *any* test, including pure unit
+    tests over a helper function that never touches the database — those would
+    spend 30s each failing server selection before their body ever ran.
+    """
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+
     # This fixture drops its database on teardown, and the repo-root .env points
     # MONGODB_URI at the live Atlas cluster — so an unguarded `uv run pytest`
     # creates and drops `<db>_test` on production. Same hazard the seeders guard
