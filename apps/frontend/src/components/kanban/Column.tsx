@@ -32,6 +32,9 @@ interface Props {
   label: string;
   cards: PipelineCard[];
   readOnly?: boolean;
+  /** Refuse drops without making the column read-only — used by the client
+   *  board to grey out stages the in-flight card isn't allowed to move to. */
+  dropDisabled?: boolean;
   isClientBoard?: boolean;
   onCardClick?: (card: PipelineCard) => void;
   onStageChange?: (card: PipelineCard, newStage: string) => void;
@@ -42,13 +45,14 @@ export default function KanbanColumn({
   label,
   cards,
   readOnly,
+  dropDisabled,
   isClientBoard,
   onCardClick,
   onStageChange,
 }: Readonly<Props>) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
-    disabled: readOnly,
+    disabled: readOnly || dropDisabled,
   });
   const accent = STAGE_ACCENT[stage];
   const dot = STAGE_DOT[stage];
@@ -59,6 +63,7 @@ export default function KanbanColumn({
         "flex flex-col min-w-60 w-60 rounded-2xl border bg-surface-panel",
         "transition-colors duration-150",
         isOver ? "border-yellow/40 bg-yellow/2" : "border-border",
+        dropDisabled && "opacity-50",
       )}
     >
       {/* Header */}

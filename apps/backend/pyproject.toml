@@ -38,3 +38,6 @@ known-first-party = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "no_db: pure unit test — skips the autouse Mongo fixture in tests/conftest.py.",
+]

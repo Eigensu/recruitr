@@ -157,3 +157,82 @@ async def test_the_joining_step_still_works_without_a_salary(portal, mapping):
 
     assert res.status_code == 200, res.text
     assert (await Mapping.get(mapping.id)).salary_offered is None
+
+
+async def test_the_board_carries_the_offer_letter_back(portal, mapping):
+    """Upload, then re-read the board — the round trip the portal performs.
+
+    Every other test here asserts the database write. None checked that
+    GET /pipeline/board, the only thing the UI actually renders, returns the
+    URL, so "upload it and go back and it is gone" could not have been caught.
+    """
+    await portal.put(_url(mapping.id), files=_PDF)
+
+    res = await portal.get("/api/v1/pipeline/board")
+
+    assert res.status_code == 200, res.text
+    cards = [m for col in res.json()["stages"] for m in col["mappings"]]
+    card = next(c for c in cards if c["mapping_id"] == str(mapping.id))
+    assert card["offer_letter_url"] == "https://cdn.test/offer.pdf"
+
+
+async def test_a_provider_payload_with_no_url_is_refused(portal, mapping, monkeypatch):
+    """A payload without secure_url used to be written as None behind a
+    200 {"success": true}. The caller only checks res.ok, so the upload
+    reported success while nothing was stored and no error was raised
+    anywhere — the offer letter was simply missing next time the board loaded.
+    """
+    from app.modules.storage import service as storage_service
+
+    monkeypatch.setattr(storage_service, "upload_offer_letter", lambda *_a, **_kw: {})
+
+    res = await portal.put(_url(mapping.id), files=_PDF)
+
+    assert res.status_code == 502
+    assert (await Mapping.get(mapping.id)).offer_letter_url is None
+
+
+@pytest.mark.no_db
+class TestOfferLetterPublicId:
+    """The Cloudinary public_id the upload builds.
+
+    `upload_bytes_to_cloudinary` passes `overwrite=False`. Cloudinary responds
+    to a public_id that already exists by returning the EXISTING asset rather
+    than storing the new bytes, so a deterministic public_id meant the second
+    candidate whose offer letter was named "Offer Letter.pdf" — the name most
+    HR systems emit — silently got the first candidate's document back, and
+    re-uploading a corrected letter did nothing at all. The upload reported
+    success either way.
+    """
+
+    def test_the_same_filename_never_collides(self):
+        from app.modules.storage.service import _unique_public_id
+
+        ids = {_unique_public_id("Offer Letter.pdf") for _ in range(500)}
+
+        assert len(ids) == 500
+
+    def test_the_extension_survives(self):
+        """resource_type="raw" serves the public_id verbatim, so dropping the
+        extension left a URL browsers would not open as a PDF."""
+        from app.modules.storage.service import _unique_public_id
+
+        assert _unique_public_id("Offer Letter.pdf").endswith(".pdf")
+        assert _unique_public_id("offer.PDF").endswith(".pdf")
+        assert "." not in _unique_public_id("no-extension")
+
+    @pytest.mark.parametrize(
+        "filename",
+        ["Offer Letter (final) v2.pdf", "résumé.pdf", "a/b\\c.pdf", "....pdf"],
+    )
+    def test_the_id_stays_url_safe_and_non_empty(self, filename):
+        import re
+
+        from app.modules.storage.service import _unique_public_id
+
+        assert re.fullmatch(r"[A-Za-z0-9_.-]+", _unique_public_id(filename))
+
+    def test_the_original_name_is_still_recognisable(self):
+        from app.modules.storage.service import _unique_public_id
+
+        assert _unique_public_id("Offer Letter.pdf").startswith("Offer-Letter-")

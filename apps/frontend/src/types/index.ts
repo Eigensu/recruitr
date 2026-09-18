@@ -401,24 +401,6 @@ export interface CloudinarySignature {
   folder: string;
 }
 
-// ── Kanban (legacy — kept for backward compat with old components) ────────────
-
-export interface KanbanColumn {
-  id: LegacyCandidateStatus;
-  title: string;
-  cards: CandidateCard[];
-}
-
-export interface CandidateCard {
-  id: string; // candidate_id — used as dnd-kit item id
-  name: string;
-  email: string | null;
-  extracted_skills: string[];
-  resume_url: string | null;
-  match_score?: number;
-  status: LegacyCandidateStatus;
-}
-
 // ── Pipeline Kanban (Phase D — real API types) ────────────────────────────────
 
 export type KanbanStage =

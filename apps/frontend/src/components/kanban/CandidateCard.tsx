@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef, type KeyboardEvent, type MouseEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { IconFileText, IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { isAbsoluteUrl } from "@/lib/api/candidates";
 import { cn } from "@/lib/utils";
 import type { PipelineCard } from "@/types";
 
@@ -22,6 +24,65 @@ function scoreColor(score: number | null): string {
   return "text-red-400 bg-red-500/10 border-red-500/20";
 }
 
+/** How long the card has sat in its stage, and the colour that age earns. */
+function stageAge(stageEnteredAt: string | undefined): { label: string; className: string } {
+  const days = stageEnteredAt
+    ? Math.floor((Date.now() - new Date(stageEnteredAt).getTime()) / (1000 * 3600 * 24))
+    : 0;
+  const label = days === 1 ? "1 day" : `${days} days`;
+  if (days > 5) return { label, className: "text-red-400 bg-red-400/10 border-red-400/20" };
+  if (days >= 2) return { label, className: "text-yellow bg-yellow/10 border-yellow/20" };
+  return { label, className: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20" };
+}
+
+/**
+ * Joining date and salary, shown from `selected`, which is where they are
+ * entered. Gating this on `joined` alone hid them for the whole wait until the
+ * joining date — and that move is left to a daily job — so a save that had
+ * worked looked, on both boards, like nothing had been stored.
+ */
+function JoiningDetails({ card }: Readonly<{ card: PipelineCard }>) {
+  if (card.stage !== "selected" && card.stage !== "joined") return null;
+  if (!card.joining_date && card.salary_offered == null) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {card.joining_date && (
+        <span className="text-[10px] text-text-muted">
+          {card.stage === "joined" ? "Joined" : "Joining"}:{" "}
+          <strong className="text-emerald-400">
+            {new Date(card.joining_date).toLocaleDateString()}
+          </strong>
+        </span>
+      )}
+      {card.salary_offered != null && (
+        <span className="text-[10px] text-text-muted">
+          Salary: <strong className="text-yellow">₹{card.salary_offered.toLocaleString()}</strong>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Opens the uploaded offer letter. Renders nothing unless it is an http(s) URL. */
+function OfferLetterLink({ url }: Readonly<{ url: string | null }>) {
+  if (!url || !isAbsoluteUrl(url)) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer noopener"
+      // The card root opens the modal on click and on Enter — the latter with
+      // preventDefault, which would otherwise cancel this link.
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      className="flex w-fit items-center gap-1 text-[10px] font-semibold text-emerald-400 hover:underline"
+    >
+      <IconFileText className="size-3 shrink-0" />
+      Offer letter
+    </a>
+  );
+}
+
 export default function KanbanCard({
   card,
   isDragOverlay = false,
@@ -38,26 +99,46 @@ export default function KanbanCard({
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
-  const daysInStage = card.stage_entered_at
-    ? Math.floor(
-        (new Date().getTime() - new Date(card.stage_entered_at).getTime()) / (1000 * 3600 * 24),
-      )
-    : 0;
+  const age = stageAge(card.stage_entered_at);
+  const gripRef = useRef<HTMLDivElement>(null);
 
-  let badgeStyle = "text-emerald-400 bg-emerald-400/10 border-emerald-400/20";
-  if (daysInStage >= 2 && daysInStage <= 5) {
-    badgeStyle = "text-yellow bg-yellow/10 border-yellow/20";
-  } else if (daysInStage > 5) {
-    badgeStyle = "text-red-400 bg-red-400/10 border-red-400/20";
-  }
-
-  const daysLabel = daysInStage === 1 ? "1 day" : `${daysInStage} days`;
+  // The card body opens the action modal. Without this the client board could
+  // never reach ClientActionModal: onCardClick was only ever wired to the
+  // "Upload Offer Letter" button, which only renders on `selected` cards.
+  // Drag is bound to the grip handle's `listeners`, not the root, so a root
+  // click handler doesn't swallow drags. A tap that lands on the grip is a
+  // drag attempt, not a request to open the card, so it is ignored here —
+  // rather than stopped by a click handler on the grip, which made a bare
+  // <div> interactive for the pointer only.
+  const clickable = !!onCardClick && !isDragOverlay && !readOnly;
+  const clickProps = clickable
+    ? {
+        onClick: (e: MouseEvent) => {
+          if (gripRef.current?.contains(e.target as Node)) return;
+          onCardClick?.(card);
+        },
+        onKeyDown: (e: KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onCardClick?.(card);
+          }
+        },
+        tabIndex: 0,
+        role: "button",
+        // Without an explicit name, this role="button" takes its accessible
+        // name from the card's whole text content — every label, badge and
+        // nested button's caption run together. Screen readers announce that
+        // wall of text as the control's name.
+        "aria-label": `Open ${card.candidate_name}`,
+      }
+    : {};
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...clickProps}
       className={cn(
         "group relative rounded-xl border bg-surface-panel p-3 select-none",
         "transition-all duration-150",
@@ -68,14 +149,29 @@ export default function KanbanCard({
           !isDragOverlay &&
           !readOnly &&
           "hover:border-border-strong hover:shadow-md cursor-grab",
+        clickable && "focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow",
         "border-border/60",
       )}
     >
-      {/* Drag handle */}
+      {/* Drag handle.
+          `touch-none` is load-bearing, not cosmetic: without touch-action none
+          the browser claims the gesture as a scroll and dnd-kit's pointer
+          sensor never gets to start a drag, so the board was completely
+          immovable on a phone. The hover-only reveal compounded it — a
+          touch device has no hover, so the handle was invisible too. Shown
+          by default where hover isn't available; the same pattern the
+          Positions board already uses.
+          The larger padding (offset by the negative margin so the layout is
+          unchanged) gives it a finger-sized tap target.
+          Hidden from assistive tech: the board has no keyboard sensor, so the
+          grip is pointer-only and there is nothing to do with it by keyboard
+          or screen reader. */}
       {!readOnly && (
         <div
+          ref={gripRef}
           {...listeners}
-          className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
+          aria-hidden="true"
+          className="absolute top-2.5 right-2.5 -m-2 p-2 touch-none cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-40 [@media(hover:none)]:opacity-40 transition-opacity"
         >
           <IconGripVertical className="size-3.5 text-text-muted" />
         </div>
@@ -93,10 +189,10 @@ export default function KanbanCard({
           <span
             className={cn(
               "text-[9px] px-1.5 py-0.5 rounded-sm border whitespace-nowrap shrink-0",
-              badgeStyle,
+              age.className,
             )}
           >
-            {daysLabel}
+            {age.label}
           </span>
         </div>
         <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
@@ -104,7 +200,9 @@ export default function KanbanCard({
 
       {/* Footer */}
       <div className="flex flex-col gap-1.5 mt-2">
-        {!readOnly && (
+        {/* Staff-only: `joined -> rejected` isn't in the client transition whitelist
+            (it would 403), and the match score is agency-internal. */}
+        {!readOnly && !isClientBoard && (
           <div className="flex items-center justify-between gap-2">
             <div className="flex-1">
               {card.stage === "joined" && onStageChange && (
@@ -134,24 +232,8 @@ export default function KanbanCard({
           </div>
         )}
 
-        {card.stage === "joined" && (card.joining_date || card.salary_offered) && (
-          <div className="flex flex-col gap-1">
-            {card.joining_date && (
-              <span className="text-[10px] text-text-muted">
-                Joined:{" "}
-                <strong className="text-emerald-400">
-                  {new Date(card.joining_date).toLocaleDateString()}
-                </strong>
-              </span>
-            )}
-            {card.salary_offered && (
-              <span className="text-[10px] text-text-muted">
-                Salary:{" "}
-                <strong className="text-yellow">₹{card.salary_offered.toLocaleString()}</strong>
-              </span>
-            )}
-          </div>
-        )}
+        <JoiningDetails card={card} />
+        <OfferLetterLink url={card.offer_letter_url} />
 
         {card.stage === "candidate_dropped" && card.dropped_notes && (
           <div className="flex flex-col gap-1">
@@ -217,10 +299,15 @@ export default function KanbanCard({
               </button>
             </>
           )}
-          {card.stage === "selected" && onCardClick && (
+          {/* Only until there is a letter: after that the card carries the
+              "Offer letter" link instead, and replacing it is in the modal. */}
+          {card.stage === "selected" && !card.offer_letter_url && onCardClick && (
             <button
               type="button"
-              onClick={() => onCardClick(card)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCardClick(card);
+              }}
               className="w-full rounded-lg bg-yellow/10 border border-yellow/20 px-3 py-1.5 text-[11px] font-semibold text-yellow hover:bg-yellow/20 transition-all"
             >
               Upload Offer Letter
