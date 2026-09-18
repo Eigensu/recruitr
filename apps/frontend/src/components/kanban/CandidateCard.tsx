@@ -285,7 +285,9 @@ export default function KanbanCard({
               </button>
             </>
           )}
-          {card.stage === "selected" && onCardClick && (
+          {/* Only until there is a letter: after that the card carries the
+              "Offer letter" link instead, and replacing it is in the modal. */}
+          {card.stage === "selected" && !card.offer_letter_url && onCardClick && (
             <button
               type="button"
               onClick={(e) => {
