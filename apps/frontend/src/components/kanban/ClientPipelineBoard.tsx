@@ -25,7 +25,14 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function fetchBoard(): Promise<PipelineBoardData> {
-  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, { credentials: "include" });
+  // no-store: the board is re-read after every action and whenever the user
+  // navigates back to it, so a cached response shows the state from before
+  // the action they just took — an uploaded offer letter looking like it was
+  // never saved. The page's server-side fetches already pass this.
+  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error(`Board fetch failed: ${res.status}`);
   return res.json();
 }

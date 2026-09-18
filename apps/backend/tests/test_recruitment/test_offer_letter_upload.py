@@ -159,6 +159,39 @@ async def test_the_joining_step_still_works_without_a_salary(portal, mapping):
     assert (await Mapping.get(mapping.id)).salary_offered is None
 
 
+async def test_the_board_carries_the_offer_letter_back(portal, mapping):
+    """Upload, then re-read the board — the round trip the portal performs.
+
+    Every other test here asserts the database write. None checked that
+    GET /pipeline/board, the only thing the UI actually renders, returns the
+    URL, so "upload it and go back and it is gone" could not have been caught.
+    """
+    await portal.put(_url(mapping.id), files=_PDF)
+
+    res = await portal.get("/api/v1/pipeline/board")
+
+    assert res.status_code == 200, res.text
+    cards = [m for col in res.json()["stages"] for m in col["mappings"]]
+    card = next(c for c in cards if c["mapping_id"] == str(mapping.id))
+    assert card["offer_letter_url"] == "https://cdn.test/offer.pdf"
+
+
+async def test_a_provider_payload_with_no_url_is_refused(portal, mapping, monkeypatch):
+    """A payload without secure_url used to be written as None behind a
+    200 {"success": true}. The caller only checks res.ok, so the upload
+    reported success while nothing was stored and no error was raised
+    anywhere — the offer letter was simply missing next time the board loaded.
+    """
+    from app.modules.storage import service as storage_service
+
+    monkeypatch.setattr(storage_service, "upload_offer_letter", lambda *_a, **_kw: {})
+
+    res = await portal.put(_url(mapping.id), files=_PDF)
+
+    assert res.status_code == 502
+    assert (await Mapping.get(mapping.id)).offer_letter_url is None
+
+
 @pytest.mark.no_db
 class TestOfferLetterPublicId:
     """The Cloudinary public_id the upload builds.
