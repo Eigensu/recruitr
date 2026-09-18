@@ -1125,7 +1125,7 @@ function MappingCard({ mapping }: Readonly<{ mapping: ApiCandidateMappingItem }>
 
       <div className="mt-3 pt-3 border-t border-border/40">
         <a
-          href={`/positions/${mapping.position_id}/pipeline`}
+          href={`/pipeline?position=${mapping.position_id}`}
           className="text-[11px] font-semibold text-text-muted hover:text-yellow transition-colors flex items-center gap-1"
         >
           View Pipeline <IconExternalLink className="size-3" />

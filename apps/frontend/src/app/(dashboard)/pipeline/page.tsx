@@ -26,7 +26,14 @@ async function serverFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export default async function PipelinePage() {
+interface PageProps {
+  // Deep link from the Positions page and the candidate drawer:
+  // /pipeline?position=<id> opens the board already narrowed to that role.
+  readonly searchParams: Promise<{ position?: string; client?: string }>;
+}
+
+export default async function PipelinePage({ searchParams }: PageProps) {
+  const { position: positionParam, client: clientParam } = await searchParams;
   const user = await getUserServer();
   const isClient = user?.role === "client";
 
@@ -79,9 +86,14 @@ export default async function PipelinePage() {
 
       <div className="flex-1 overflow-hidden p-5">
         {isClient ? (
-          <ClientPipelineBoard positions={positions} />
+          <ClientPipelineBoard positions={positions} initialPositionId={positionParam} />
         ) : (
-          <GlobalPipelineBoard employees={employees} positions={positions} />
+          <GlobalPipelineBoard
+            employees={employees}
+            positions={positions}
+            initialPositionId={positionParam}
+            initialClient={clientParam}
+          />
         )}
       </div>
     </div>

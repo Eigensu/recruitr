@@ -52,6 +52,11 @@ interface PositionOption {
 interface Props {
   readonly employees: readonly Employee[];
   readonly positions: readonly PositionOption[];
+  /** Seeded from /pipeline?position=<id> so a link in from the Positions page
+   *  lands on the board already narrowed to that role. */
+  readonly initialPositionId?: string;
+  /** Seeded from /pipeline?client=<name>. */
+  readonly initialClient?: string;
 }
 
 interface Filters {
@@ -88,15 +93,20 @@ const selectStyle = {
   border: "1px solid var(--color-border-val)",
 };
 
-export default function GlobalPipelineBoard({ employees, positions }: Props) {
+export default function GlobalPipelineBoard({
+  employees,
+  positions,
+  initialPositionId,
+  initialClient,
+}: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
-    position_id: "",
-    client: "",
+    position_id: initialPositionId ?? "",
+    client: initialClient ?? "",
   });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
