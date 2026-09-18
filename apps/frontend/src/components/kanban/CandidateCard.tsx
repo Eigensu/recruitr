@@ -187,7 +187,7 @@ export default function KanbanCard({
             been stored. */}
         {(card.stage === "selected" || card.stage === "joined") &&
           (card.joining_date || card.salary_offered != null) && (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {card.joining_date && (
                 <span className="text-[10px] text-text-muted">
                   {card.stage === "joined" ? "Joined" : "Joining"}:{" "}
