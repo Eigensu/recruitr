@@ -108,10 +108,17 @@ async def health() -> dict:
     # being synced. The app serves fine, so this is "degraded", not "down".
     body: dict = {"status": "ok", "version": settings.APP_VERSION}
     if database.index_sync_degraded:
+        collections = database.index_sync_degraded_collections
         body["status"] = "degraded"
         body["index_sync"] = {
             "synced": False,
-            "detail": "Index sync disabled for all models after a startup failure.",
+            "collections": collections,
+            "detail": (
+                "Index sync failed for "
+                + (", ".join(collections) if collections else "one or more collections")
+                + ". Their declared indexes, including unique constraints, are not "
+                "enforced. Every other collection synced normally."
+            ),
             "error": database.index_sync_error,
         }
     return body
