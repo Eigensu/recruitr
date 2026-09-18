@@ -45,6 +45,16 @@ celery_app.conf.update(
             "task": "intake.poll_google_sheet",
             "schedule": timedelta(minutes=settings.INTAKE_POLL_MINUTES),
         },
+        "intake-sla-sweep": {
+            "task": "intake.sla_sweep",
+            # Hourly, not daily: a 24-hour SLA reported once a day could be
+            # heard about 48 hours after assignment.
+            "schedule": crontab(minute=15),
+        },
+        "intake-sla-digest": {
+            "task": "intake.sla_digest",
+            "schedule": crontab(minute=0, hour=3),  # Runs daily at 03:00 UTC
+        },
         "recruitment-joining-dates": {
             "task": "recruitment.process_joining_dates",
             "schedule": crontab(minute=0, hour=2),  # Runs daily at 02:00 UTC

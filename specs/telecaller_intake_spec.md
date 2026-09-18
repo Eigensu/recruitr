@@ -643,14 +643,30 @@ breach notifications until the next working morning while leaving the measured t
 that keeps the analytics honest, which a paused clock would not.
 
 The `*_sla_breached_at` stamp is the dedupe key — the same guarantee `Mapping.reminders_sent` gives
-the existing reminder job. A lead stuck for a week raises one notification, not 168.
+the existing reminder job. A lead stuck for a week raises one notification, not 168. It is stamped
+whether or not there was anyone to notify: the breach is a fact about the lead, not about the
+delivery, and a brand with no admins yet is covered by the digest, which reports the present.
+
+**Recipients are admins *and* maintainers**, not admins alone. Reassigning a stuck lead is
+maintainer-gated and so are the intake reports, so that is exactly the set of people who can act on
+the alert — and an alert sent to someone with no way to act on it is only noise. The telecaller who
+owes the call is deliberately *not* notified: it was not asked for, and a nudge to the person who is
+already late is a different feature with a different tone.
 
 ### 8.2 Daily digest — `intake.sla_digest`, `crontab(minute=0, hour=3)`
 
-One email per admin listing every currently-overdue lead, grouped by telecaller, with ages and a
-deep link to `/leads?overdue=true`. New `EmailService.send_intake_sla_digest`, following the
-existing HTML-escaping and never-raise conventions in that class. **No email is sent when nothing
-is overdue** — a daily "all clear" trains people to ignore the alert.
+One email per admin listing every currently-overdue lead, grouped by whoever owes the action
+(longest wait first within a group), with ages and a deep link to `/leads?overdue=true`. New
+`EmailService.send_intake_sla_digest`, following the existing HTML-escaping and never-raise
+conventions in that class. **No email is sent when nothing is overdue** — a daily "all clear" trains
+people to ignore the alert.
+
+The digest also carries a count of leads sitting in **nobody's queue**. Those have no SLA clock by
+design — nobody was ever asked to do anything with them — which is precisely why they would
+otherwise accumulate unseen. One line, one count, no clock.
+
+Unlike the sweep, the digest reports the *current* state rather than the moment of crossing, which
+is what makes it the safety net: it does not depend on having caught the hour a lead went over.
 
 ---
 
@@ -705,7 +721,7 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6 (`dfdfb74`), 7. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -729,7 +745,9 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
    campaign breakdown, admin lead list), eight admin endpoints on the intake controller, and
    cache invalidation on every lead write. Percentiles are computed in Python rather than with
    Mongo's `$percentile`, which needs server 7.0 and would tie the report to a cluster version.
-7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
+7. ✅ **SLA sweep + digest** — `service/intake_sla.py`, the `intake.sla_sweep` (hourly) and
+   `intake.sla_digest` (daily) Celery tasks, `EmailService.send_intake_sla_digest`. Two
+   departures from the sketch below, both recorded in §8.
 8. **Frontend** — telecaller queue → admin lead list → analytics dashboard → nav/guard wiring.
 9. **Docs** — update `apps/backend/CLAUDE.md` (role table, new module) and `.env.example`.
 
