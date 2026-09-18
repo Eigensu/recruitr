@@ -239,7 +239,10 @@ export default function ClientActionModal({
               {card.stage === "selected" && (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-text-muted uppercase">
+                    <label
+                      htmlFor="offer-letter-input"
+                      className="text-xs font-semibold text-text-muted uppercase"
+                    >
                       Upload Offer Letter
                     </label>
                     <div className="flex flex-col gap-2">
@@ -257,6 +260,7 @@ export default function ClientActionModal({
                           moves in the same session and not one offer-letter
                           call. "I uploaded it" meant "I chose the file". */}
                       <input
+                        id="offer-letter-input"
                         type="file"
                         accept="application/pdf,.pdf"
                         disabled={loading}
