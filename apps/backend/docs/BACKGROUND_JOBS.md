@@ -33,46 +33,77 @@ arrives, the bell never populates, no reminder is sent, and candidates never
 transition to `joined` on their joining date. It looks like unimplemented
 features rather than undeployed processes.
 
-## Running them
+## Running them locally
 
-Local (both are part of `docker-compose up -d`):
+Both are part of the compose stack:
 
-```bash
+```
 docker-compose up -d worker beat
 docker-compose logs -f worker beat
 ```
 
-Directly, without compose:
+Or directly, from `apps/backend`, with `uv run celery` against
+`app.core.celery_app.celery_app` — `worker` for the queue consumer and `beat`
+for the scheduler, both at `--loglevel=info`.
 
-```bash
-cd apps/backend
-uv run celery -A app.core.celery_app.celery_app worker --loglevel=info
-uv run celery -A app.core.celery_app.celery_app beat   --loglevel=info
-```
+## Provisioning them in production
 
-Production (Railway) needs **two additional services** in the same project,
-both built from `apps/backend` with the same environment variables as the
-`backend` service — they need `MONGODB_URI`, `CELERY_BROKER_URL`,
-`CELERY_RESULT_BACKEND` and the Resend/email credentials:
+Production needs **two additional services** in the `Eigensu Recruitment`
+project, alongside `backend` and `redis`. Neither serves HTTP, so neither
+needs a domain or a `PORT`.
 
-| Service | Start command |
-| --- | --- |
-| `worker` | `celery -A app.core.celery_app.celery_app worker --loglevel=info` |
-| `beat` | `celery -A app.core.celery_app.celery_app beat --loglevel=info` |
+For each of `worker` and `beat`:
 
-Run exactly **one** beat replica. Two schedulers means every scheduled task
-fires twice, which means duplicate reminder emails.
+1. **New Service → GitHub Repo → `Eigensu/recruitr`.**
+2. **Settings → Source:** set *Root Directory* to `/apps/backend`, and the
+   branch to whatever `backend` currently deploys. The builder is the same
+   `apps/backend/Dockerfile` the API uses — only the start command differs.
+3. **Settings → Deploy → Custom Start Command:**
 
-The worker can scale horizontally. Task idempotency is handled by
-`Mapping.reminders_sent`, which records a key per (mapping, reminder type)
-before the reminder is considered sent.
+   | Service | Start command |
+   | --- | --- |
+   | `worker` | `celery -A app.core.celery_app.celery_app worker --loglevel=info` |
+   | `beat` | `celery -A app.core.celery_app.celery_app beat --loglevel=info` |
+
+4. **Variables.** Reference the API's rather than pasting secret values, so
+   there is one copy to rotate:
+
+   ```
+   MONGODB_URI=${{backend.MONGODB_URI}}
+   MONGODB_DB_NAME=${{backend.MONGODB_DB_NAME}}
+   CELERY_BROKER_URL=${{backend.CELERY_BROKER_URL}}
+   CELERY_RESULT_BACKEND=${{backend.CELERY_RESULT_BACKEND}}
+   REDIS_URL=${{backend.REDIS_URL}}
+   FRONTEND_URL=${{backend.FRONTEND_URL}}
+   ```
+
+   Plus whichever variable holds the Resend API key on `backend` — the worker
+   sends the reminder and new-position emails.
+
+   It never issues cookies or JWTs, so it does not need `JWT_SECRET`,
+   `SESSION_SECRET`, `COOKIE_DOMAIN`, `CORS_ORIGINS` or the Google OAuth
+   variables. `CLOUDINARY_*` is only needed if a task is later given file
+   uploads; none of the current ones upload.
+
+5. **Replicas: `beat` must stay at 1.** Two schedulers fire every scheduled
+   task twice, which means duplicate reminder emails to clients. `worker` can
+   scale horizontally — `Mapping.reminders_sent` records a key per (mapping,
+   reminder type) before a reminder counts as sent, so extra workers will not
+   double-send.
+
+### Confirming it worked
+
+After the first deploy, `worker` logs should show `celery@… ready.` followed
+by the registered task list, and `beat` should log a due-task line for
+`recruitment-reminders` at 01:30 UTC.
+
+Rather than waiting a day, the fastest proof is to create a position: the
+worker should log `recruitment.process_new_position_notifications` within
+seconds and the email should arrive.
 
 ## Checking whether they are alive
 
-```bash
-# Queued but unconsumed messages — a growing number means no worker.
-redis-cli -u "$CELERY_BROKER_URL" llen celery
-
-# Workers currently responding.
-cd apps/backend && uv run celery -A app.core.celery_app.celery_app inspect ping
-```
+A growing queue length on the broker's `celery` list means messages are being
+produced with nothing consuming them — the exact state production was in
+before these services existed. `celery … inspect ping` against the same app
+returns the workers currently responding, and an empty reply means none.
