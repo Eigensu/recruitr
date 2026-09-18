@@ -38,6 +38,8 @@ interface PositionOption {
 
 interface Props {
   readonly positions: readonly PositionOption[];
+  /** Seeded from /pipeline?position=<id> — see the Positions page link. */
+  readonly initialPositionId?: string;
 }
 
 interface Filters {
@@ -64,10 +66,10 @@ const selectStyle = {
   border: "1px solid var(--color-border-val)",
 };
 
-export default function ClientPipelineBoard({ positions }: Props) {
+export default function ClientPipelineBoard({ positions, initialPositionId }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({ position_id: "" });
+  const [filters, setFilters] = useState<Filters>({ position_id: initialPositionId ?? "" });
 
   // Modal state
   const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);

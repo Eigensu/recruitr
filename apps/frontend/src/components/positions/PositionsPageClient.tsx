@@ -1131,7 +1131,7 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
                     {selectedPosition.total_seats} seats
                   </span>
                   <a
-                    href={`/positions/${selectedPosition.id}/pipeline`}
+                    href={`/pipeline?position=${selectedPosition.id}`}
                     className="font-bold text-navy bg-yellow/70 hover:bg-yellow px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
                   >
                     Kanban Pipeline &rarr;
