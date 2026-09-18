@@ -282,3 +282,40 @@ def process_joining_dates() -> None:
     import asyncio
 
     asyncio.run(run())
+
+
+@celery_app.task(name="intake.sla_sweep")
+def sweep_intake_sla() -> None:
+    """Hourly: notify admins about leads that have just passed their SLA.
+
+    Hourly rather than daily. A daily sweep could let a breach sit another 24
+    hours before anyone heard, which would make a 24-hour SLA mean 48 in the
+    worst case. Each lead raises its alert exactly once, guarded by the
+    `*_sla_breached_at` stamp.
+    """
+    from app.core.database import init_db
+    from app.modules.recruitment.service.intake_sla import sweep_breaches
+
+    async def run():
+        await init_db()
+        await sweep_breaches()
+
+    asyncio.run(run())
+
+
+@celery_app.task(name="intake.sla_digest")
+def send_intake_sla_digest() -> None:
+    """Daily: email each brand's admins everything still overdue.
+
+    The counterpart to the hourly sweep: that one reports the moment a lead
+    crosses the line, this one reports where things stand. Sends nothing when
+    nothing is overdue.
+    """
+    from app.core.database import init_db
+    from app.modules.recruitment.service.intake_sla import send_digests
+
+    async def run():
+        await init_db()
+        await send_digests()
+
+    asyncio.run(run())
