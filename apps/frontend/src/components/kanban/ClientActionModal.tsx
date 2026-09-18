@@ -52,6 +52,18 @@ export default function ClientActionModal({
     }
   }
 
+  async function handleOfferFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    // Clear the input's value so picking the same file again after a failure
+    // still fires onChange.
+    e.target.value = "";
+    if (!file || !card) return;
+
+    setOfferFile(file);
+    await handleAction(() => uploadMappingOffer(card.mapping_id, file), { close: false });
+    setOfferFile(null);
+  }
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -236,30 +248,24 @@ export default function ClientActionModal({
                           <IconCheck className="size-4" /> Offer Uploaded
                         </div>
                       ) : null}
-                      <div className="flex gap-2">
-                        <input
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          onChange={(e) => setOfferFile(e.target.files?.[0] || null)}
-                          className="flex-1 rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleAction(
-                              async () => {
-                                await uploadMappingOffer(card.mapping_id, offerFile!);
-                                setOfferFile(null);
-                              },
-                              { close: false },
-                            )
-                          }
-                          disabled={loading || !offerFile}
-                          className="rounded-lg bg-yellow/10 border border-yellow/20 px-4 py-2 text-sm font-semibold text-yellow hover:bg-yellow/20 disabled:opacity-50"
-                        >
-                          Upload
-                        </button>
-                      </div>
+                      {/* Choosing the file uploads it. This used to only set
+                          state, with a separate Upload button — disabled until
+                          a file was picked — actually sending the request. A
+                          disabled button does nothing and says nothing, so
+                          picking a file and closing the dialog sent no request
+                          at all: the server logs show board fetches and stage
+                          moves in the same session and not one offer-letter
+                          call. "I uploaded it" meant "I chose the file". */}
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        disabled={loading}
+                        onChange={handleOfferFileChange}
+                        className="w-full rounded-lg bg-surface-2 border border-border px-3 py-1.5 text-sm text-text-primary file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-surface-panel file:text-text-primary file:text-xs disabled:opacity-50"
+                      />
+                      {loading && offerFile && (
+                        <p className="text-xs text-text-muted">Uploading {offerFile.name}…</p>
+                      )}
                     </div>
                   </div>
 
