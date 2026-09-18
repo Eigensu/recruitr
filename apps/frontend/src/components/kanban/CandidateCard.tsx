@@ -71,6 +71,11 @@ export default function KanbanCard({
         },
         tabIndex: 0,
         role: "button",
+        // Without an explicit name, this role="button" takes its accessible
+        // name from the card's whole text content — every label, badge and
+        // nested button's caption run together. Screen readers announce that
+        // wall of text as the control's name.
+        "aria-label": `Open ${card.candidate_name}`,
       }
     : {};
 
