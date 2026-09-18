@@ -15,7 +15,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   card: PipelineCard | null;
-  onStageChange: (newStage: KanbanStage) => void;
+  onStageChange: (newStage: KanbanStage) => void | Promise<void>;
   onActionComplete: () => void;
 }
 
@@ -38,13 +38,13 @@ export default function ClientActionModal({
 
   if (!card) return null;
 
-  async function handleAction(action: () => Promise<void>) {
+  async function handleAction(action: () => Promise<void>, { close = true } = {}) {
     setLoading(true);
     setError(null);
     try {
       await action();
       onActionComplete();
-      onClose();
+      if (close) onClose();
     } catch (err: unknown) {
       setError((err as Error).message || "Action failed");
     } finally {
@@ -96,12 +96,52 @@ export default function ClientActionModal({
                 </span>
               </div>
 
-              {/* SOURCED / SENT TO CLIENT -> Approve/Reject */}
-              {(card.stage === "sourced" || card.stage === "sent_to_client") && (
+              {/* SOURCED -> present to the client.
+                  This used to share the `sent_to_client` branch below, so a
+                  sourced candidate offered "Approve for Interview" — a decision
+                  that is the client's to make and only after they have been
+                  shown the candidate. Taking it also jumped straight to
+                  `interview`, skipping `sent_to_client`, so the candidate was
+                  never recorded as having been presented at all. */}
+              {card.stage === "sourced" && (
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => handleAction(() => Promise.resolve(onStageChange("interview")))}
+                    onClick={() =>
+                      handleAction(async () => {
+                        await onStageChange("sent_to_client");
+                      })
+                    }
+                    disabled={loading}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm font-semibold text-blue-400 hover:bg-blue-500/20 transition-all disabled:opacity-50"
+                  >
+                    <IconCheck className="size-4" /> Send to Client
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAction(async () => {
+                        await onStageChange("rejected");
+                      })
+                    }
+                    disabled={loading}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
+                  >
+                    <IconX className="size-4" /> Reject
+                  </button>
+                </div>
+              )}
+
+              {/* SENT TO CLIENT -> Approve/Reject */}
+              {card.stage === "sent_to_client" && (
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleAction(async () => {
+                        await onStageChange("interview");
+                      })
+                    }
                     disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
                   >
@@ -109,7 +149,11 @@ export default function ClientActionModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleAction(() => Promise.resolve(onStageChange("rejected")))}
+                    onClick={() =>
+                      handleAction(async () => {
+                        await onStageChange("rejected");
+                      })
+                    }
                     disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2.5 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
                   >
@@ -153,7 +197,11 @@ export default function ClientActionModal({
                   <div className="border-t border-border pt-4 flex gap-3">
                     <button
                       type="button"
-                      onClick={() => handleAction(() => Promise.resolve(onStageChange("selected")))}
+                      onClick={() =>
+                        handleAction(async () => {
+                          await onStageChange("selected");
+                        })
+                      }
                       disabled={loading}
                       className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-4 py-2 text-sm font-semibold text-indigo-400 hover:bg-indigo-500/20 transition-all disabled:opacity-50"
                     >
@@ -161,7 +209,11 @@ export default function ClientActionModal({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleAction(() => Promise.resolve(onStageChange("rejected")))}
+                      onClick={() =>
+                        handleAction(async () => {
+                          await onStageChange("rejected");
+                        })
+                      }
                       disabled={loading}
                       className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-2 text-sm font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50"
                     >
@@ -194,7 +246,13 @@ export default function ClientActionModal({
                         <button
                           type="button"
                           onClick={() =>
-                            handleAction(() => uploadMappingOffer(card.mapping_id, offerFile!))
+                            handleAction(
+                              async () => {
+                                await uploadMappingOffer(card.mapping_id, offerFile!);
+                                setOfferFile(null);
+                              },
+                              { close: false },
+                            )
                           }
                           disabled={loading || !offerFile}
                           className="rounded-lg bg-yellow/10 border border-yellow/20 px-4 py-2 text-sm font-semibold text-yellow hover:bg-yellow/20 disabled:opacity-50"
@@ -260,7 +318,6 @@ export default function ClientActionModal({
                       onClick={() =>
                         handleAction(async () => {
                           await setMappingDropped(card.mapping_id, droppedNotes);
-                          onStageChange("candidate_dropped");
                         })
                       }
                       disabled={loading || !droppedNotes}

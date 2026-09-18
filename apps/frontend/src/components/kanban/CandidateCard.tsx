@@ -94,11 +94,23 @@ export default function KanbanCard({
         "border-border/60",
       )}
     >
-      {/* Drag handle */}
+      {/* Drag handle.
+          `touch-none` is load-bearing, not cosmetic: without touch-action none
+          the browser claims the gesture as a scroll and dnd-kit's pointer
+          sensor never gets to start a drag, so the board was completely
+          immovable on a phone. The hover-only reveal compounded it — a
+          touch device has no hover, so the handle was invisible too. Shown
+          by default where hover isn't available; the same pattern the
+          Positions board already uses.
+          The larger padding (offset by the negative margin so the layout is
+          unchanged) gives it a finger-sized tap target. */}
       {!readOnly && (
         <div
           {...listeners}
-          className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-40 transition-opacity cursor-grab"
+          // The card root opens the modal; a tap that lands on the grip is a
+          // drag attempt, not a request to open it.
+          onClick={(e) => e.stopPropagation()}
+          className="absolute top-2.5 right-2.5 -m-2 p-2 touch-none cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-40 [@media(hover:none)]:opacity-40 transition-opacity"
         >
           <IconGripVertical className="size-3.5 text-text-muted" />
         </div>

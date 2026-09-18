@@ -102,7 +102,7 @@ export default function GlobalPipelineBoard({
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
+  const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
     position_id: initialPositionId ?? "",
@@ -183,6 +183,15 @@ export default function GlobalPipelineBoard({
         return true;
       });
   }, [board, filters]);
+
+  // Derived rather than stored: the modal must reflect the board's current row,
+  // so that state an action unlocks (an uploaded offer letter, a new stage) is
+  // visible as soon as the refetch lands, without reopening the card.
+  const selectedCard = selectedMappingId
+    ? (board?.stages
+        .flatMap((col) => col.mappings)
+        .find((m) => m.mapping_id === selectedMappingId) ?? null)
+    : null;
 
   // Find the active drag card across all columns
   const activeCard = useMemo((): PipelineCard | null => {
@@ -406,7 +415,7 @@ export default function GlobalPipelineBoard({
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
                 onStageChange={handleStageChange}
-                onCardClick={(card) => setSelectedCard(card)}
+                onCardClick={(card) => setSelectedMappingId(card.mapping_id)}
               />
             ))}
           </div>
@@ -418,24 +427,26 @@ export default function GlobalPipelineBoard({
       )}
       <ClientActionModal
         isOpen={!!selectedCard}
-        onClose={() => setSelectedCard(null)}
+        onClose={() => setSelectedMappingId(null)}
         card={selectedCard}
         onStageChange={async (newStage) => {
           if (!selectedCard) return;
+          // `new_stage` is what StageMoveRequest declares, and the session
+          // cookie is what authenticates it. This posted `to_stage` with no
+          // credentials, so every action in this modal 401'd or 422'd and then
+          // reported nothing but a console line — the modal just closed as if
+          // it had worked.
           const res = await fetch(
             `${API_URL}/api/v1/pipeline/mappings/${selectedCard.mapping_id}/move`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ to_stage: newStage }),
+              credentials: "include",
+              body: JSON.stringify({ new_stage: newStage }),
             },
           );
-          if (res.ok) {
-            setSelectedCard(null);
-            load();
-          } else {
-            console.error("Failed to move candidate");
-          }
+          if (!res.ok) throw new Error(await res.text());
+          load();
         }}
         onActionComplete={load}
       />

@@ -72,7 +72,7 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
   const [filters, setFilters] = useState<Filters>({ position_id: initialPositionId ?? "" });
 
   // Modal state
-  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
+  const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -194,6 +194,10 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
   }
 
   const activeCard = activeDragId ? findCard(activeDragId) : undefined;
+  // Derived rather than stored: the modal must reflect the board's current row,
+  // so that state an action unlocks (an uploaded offer letter, a new stage) is
+  // visible as soon as the refetch lands, without reopening the card.
+  const selectedCard = selectedMappingId ? (findCard(selectedMappingId) ?? null) : null;
   const hasFilters = filters.position_id;
   const selectCls = "rounded-lg px-2 py-1.5 text-xs outline-none";
 
@@ -287,7 +291,7 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
                   !isClientTransitionAllowed(activeCard.stage, col.stage)
                 }
                 isClientBoard={true}
-                onCardClick={(card) => setSelectedCard(card)}
+                onCardClick={(card) => setSelectedMappingId(card.mapping_id)}
                 onStageChange={handleStageChange}
               />
             ))}
@@ -301,7 +305,7 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
 
       <ClientActionModal
         isOpen={!!selectedCard}
-        onClose={() => setSelectedCard(null)}
+        onClose={() => setSelectedMappingId(null)}
         card={selectedCard}
         onStageChange={async (newStage) => {
           if (!selectedCard) return;

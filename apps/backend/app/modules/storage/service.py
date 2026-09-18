@@ -3,7 +3,9 @@
 import hashlib
 import hmac
 import io
+import re
 import time
+import uuid
 
 import cloudinary
 import cloudinary.uploader
@@ -55,6 +57,34 @@ def generate_upload_signature() -> dict:
     }
 
 
+def _unique_public_id(filename: str) -> str:
+    """Build a collision-proof Cloudinary public_id that keeps the extension.
+
+    Two bugs lived in the old `public_id=<filename stem>`:
+
+    1. It was deterministic, and the upload passes `overwrite=False`. When a
+       public_id already exists Cloudinary does not upload — it returns the
+       EXISTING asset. Two candidates whose offer letters were both named
+       "Offer Letter.pdf" (the common case — it is what most HR systems emit)
+       meant the second upload silently reported success while handing back the
+       first candidate's document, and re-uploading a corrected letter for one
+       candidate did nothing at all.
+    2. It stripped the extension. `resource_type="raw"` serves the public_id
+       verbatim, so the delivered URL ended without ".pdf" and browsers would
+       not open it as a PDF.
+
+    A random suffix fixes (1); keeping the extension fixes (2). The original
+    name is preserved (sanitised) so assets stay recognisable in the Cloudinary
+    console.
+    """
+    base, dot, ext = filename.rpartition(".")
+    if not dot:
+        base, ext = filename, ""
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", base).strip("-") or "upload"
+    public_id = f"{safe}-{uuid.uuid4().hex[:8]}"
+    return f"{public_id}.{ext.lower()}" if ext else public_id
+
+
 def upload_bytes_to_cloudinary(
     pdf_bytes: bytes, filename: str, folder: str = RESUME_FOLDER
 ) -> dict:
@@ -68,14 +98,12 @@ def upload_bytes_to_cloudinary(
     Returns:
         The Cloudinary upload result dict (includes public_id, secure_url).
     """
-    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
     return cloudinary.uploader.upload(
         pdf_bytes,
         resource_type="raw",
         folder=folder,
-        public_id=stem,
+        public_id=_unique_public_id(filename),
         overwrite=False,
-        use_filename=True,
     )
 
 
