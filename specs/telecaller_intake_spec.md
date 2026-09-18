@@ -597,8 +597,23 @@ POST /api/v1/intake/sync                  "Sync now" — enqueue an immediate po
 ```
 
 All are Mongo aggregations following `dashboard/repository.py` conventions (`$match` on `brand_id`
-first, `$facet` for multi-metric single round-trips). Cached through the existing
-`dashboard_cache` Redis helper with a 5-minute TTL, invalidated on any lead write.
+first). Cached through the existing `dashboard_cache` Redis helper with a 5-minute TTL,
+invalidated on any lead write — `map_candidate` already clears the whole brand namespace, so the
+recruiter leg rides along with it.
+
+Three decisions taken while building this:
+
+- **A date window filters `ingested_at`, on every metric.** A range therefore means "the leads
+  that arrived in it", followed wherever they got to — a cohort. Filtering each leg on its own
+  assignment date instead would let a lead be rejected in a window it never entered, and a funnel
+  whose parts do not sum to its total is not a report anyone can act on.
+- **The per-person tables and the headline numbers come from one `$group` stage**, parameterised
+  by leg, so the team total and the rows under it cannot disagree about what "overdue" means.
+- **Rates are `null`, never `0`, when nothing has happened yet.** A telecaller who has not yet
+  actioned anything has an *unknown* accept rate; 0% reads as someone who rejects everybody.
+
+`GET /intake/leads` is deliberately **not** cached: it is a working list read with a dozen filter
+combinations, and a five-minute-old answer to "what is overdue right now" is worse than the query.
 
 ---
 
@@ -690,7 +705,7 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -710,7 +725,10 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
 5. ✅ **Workflow endpoints** — `controller/intake.py` (queue, accept, reject, reassign, sync),
    `get_telecaller_tenant`, the `map_candidate` hook, and the containment sweep extended to cover
    the three new telecaller-reachable routes.
-6. **Analytics** — aggregations + endpoints + cache invalidation.
+6. ✅ **Analytics** — `service/intake_analytics.py` (funnel, both legs, per-person tables,
+   campaign breakdown, admin lead list), eight admin endpoints on the intake controller, and
+   cache invalidation on every lead write. Percentiles are computed in Python rather than with
+   Mongo's `$percentile`, which needs server 7.0 and would tie the report to a cluster version.
 7. **SLA sweep + digest** — Celery tasks, `Notification` targeting, email template.
 8. **Frontend** — telecaller queue → admin lead list → analytics dashboard → nav/guard wiring.
 9. **Docs** — update `apps/backend/CLAUDE.md` (role table, new module) and `.env.example`.
