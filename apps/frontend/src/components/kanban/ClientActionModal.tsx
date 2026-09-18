@@ -29,10 +29,15 @@ export default function ClientActionModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // States for different actions
+  // States for different actions. The joining fields start from what is saved,
+  // so reopening a card shows the stored details instead of a blank form that
+  // reads as though the last save never happened. Parents key this modal by
+  // mapping, so these initialisers run again for each card.
   const [interviewDate, setInterviewDate] = useState("");
-  const [joiningDate, setJoiningDate] = useState("");
-  const [salaryOffered, setSalaryOffered] = useState("");
+  const [joiningDate, setJoiningDate] = useState(card?.joining_date?.slice(0, 10) ?? "");
+  const [salaryOffered, setSalaryOffered] = useState(
+    card?.salary_offered == null ? "" : String(card.salary_offered),
+  );
   const [offerFile, setOfferFile] = useState<File | null>(null);
   const [droppedNotes, setDroppedNotes] = useState("");
 
@@ -278,6 +283,18 @@ export default function ClientActionModal({
                       <label className="text-xs font-semibold text-text-muted uppercase">
                         Set Joining Details
                       </label>
+                      {(card.joining_date || card.salary_offered != null) && (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-lg">
+                          <IconCheck className="size-4 shrink-0" />
+                          <span>
+                            Saved
+                            {card.joining_date &&
+                              ` · Joining ${new Date(card.joining_date).toLocaleDateString()}`}
+                            {card.salary_offered != null &&
+                              ` · ₹${card.salary_offered.toLocaleString()}`}
+                          </span>
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="date"
@@ -308,7 +325,7 @@ export default function ClientActionModal({
                         disabled={loading || !joiningDate || !salaryOffered}
                         className="w-full mt-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-sm font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-50"
                       >
-                        Save Details
+                        {card.joining_date ? "Update Details" : "Save Details"}
                       </button>
                     </div>
                   )}

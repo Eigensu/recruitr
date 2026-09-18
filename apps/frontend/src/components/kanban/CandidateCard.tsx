@@ -176,24 +176,30 @@ export default function KanbanCard({
           </div>
         )}
 
-        {card.stage === "joined" && (card.joining_date || card.salary_offered) && (
-          <div className="flex flex-col gap-1">
-            {card.joining_date && (
-              <span className="text-[10px] text-text-muted">
-                Joined:{" "}
-                <strong className="text-emerald-400">
-                  {new Date(card.joining_date).toLocaleDateString()}
-                </strong>
-              </span>
-            )}
-            {card.salary_offered && (
-              <span className="text-[10px] text-text-muted">
-                Salary:{" "}
-                <strong className="text-yellow">₹{card.salary_offered.toLocaleString()}</strong>
-              </span>
-            )}
-          </div>
-        )}
+        {/* Shown from `selected`, which is where the joining details are
+            entered. Gating this on `joined` alone hid them for the whole wait
+            until the joining date — and that move is left to a daily job — so
+            a save that had worked looked, on both boards, like nothing had
+            been stored. */}
+        {(card.stage === "selected" || card.stage === "joined") &&
+          (card.joining_date || card.salary_offered != null) && (
+            <div className="flex flex-col gap-1">
+              {card.joining_date && (
+                <span className="text-[10px] text-text-muted">
+                  {card.stage === "joined" ? "Joined" : "Joining"}:{" "}
+                  <strong className="text-emerald-400">
+                    {new Date(card.joining_date).toLocaleDateString()}
+                  </strong>
+                </span>
+              )}
+              {card.salary_offered != null && (
+                <span className="text-[10px] text-text-muted">
+                  Salary:{" "}
+                  <strong className="text-yellow">₹{card.salary_offered.toLocaleString()}</strong>
+                </span>
+              )}
+            </div>
+          )}
 
         {card.stage === "candidate_dropped" && card.dropped_notes && (
           <div className="flex flex-col gap-1">
