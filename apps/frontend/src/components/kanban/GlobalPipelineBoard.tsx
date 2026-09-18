@@ -433,6 +433,7 @@ export default function GlobalPipelineBoard({
         </DndContext>
       )}
       <ClientActionModal
+        key={selectedCard?.mapping_id ?? "none"}
         isOpen={!!selectedCard}
         onClose={() => setSelectedMappingId(null)}
         card={selectedCard}
