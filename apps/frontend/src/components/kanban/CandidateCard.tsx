@@ -1,5 +1,6 @@
 "use client";
 
+import type { KeyboardEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { IconGripVertical, IconSparkles } from "@tabler/icons-react";
@@ -53,11 +54,32 @@ export default function KanbanCard({
 
   const daysLabel = daysInStage === 1 ? "1 day" : `${daysInStage} days`;
 
+  // The card body opens the action modal. Without this the client board could
+  // never reach ClientActionModal: onCardClick was only ever wired to the
+  // "Upload Offer Letter" button, which only renders on `selected` cards.
+  // Drag is bound to the grip handle's `listeners`, not the root, so a root
+  // click handler doesn't swallow drags.
+  const clickable = !!onCardClick && !isDragOverlay && !readOnly;
+  const clickProps = clickable
+    ? {
+        onClick: () => onCardClick?.(card),
+        onKeyDown: (e: KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onCardClick?.(card);
+          }
+        },
+        tabIndex: 0,
+        role: "button",
+      }
+    : {};
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
+      {...clickProps}
       className={cn(
         "group relative rounded-xl border bg-surface-panel p-3 select-none",
         "transition-all duration-150",
@@ -68,6 +90,7 @@ export default function KanbanCard({
           !isDragOverlay &&
           !readOnly &&
           "hover:border-border-strong hover:shadow-md cursor-grab",
+        clickable && "focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow",
         "border-border/60",
       )}
     >
@@ -104,7 +127,9 @@ export default function KanbanCard({
 
       {/* Footer */}
       <div className="flex flex-col gap-1.5 mt-2">
-        {!readOnly && (
+        {/* Staff-only: `joined -> rejected` isn't in the client transition whitelist
+            (it would 403), and the match score is agency-internal. */}
+        {!readOnly && !isClientBoard && (
           <div className="flex items-center justify-between gap-2">
             <div className="flex-1">
               {card.stage === "joined" && onStageChange && (
@@ -220,7 +245,10 @@ export default function KanbanCard({
           {card.stage === "selected" && onCardClick && (
             <button
               type="button"
-              onClick={() => onCardClick(card)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCardClick(card);
+              }}
               className="w-full rounded-lg bg-yellow/10 border border-yellow/20 px-3 py-1.5 text-[11px] font-semibold text-yellow hover:bg-yellow/20 transition-all"
             >
               Upload Offer Letter
