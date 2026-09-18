@@ -51,6 +51,9 @@ _client: AsyncMongoClient | None = None
 # rather than buried in startup logs.
 index_sync_degraded: bool = False
 index_sync_error: str | None = None
+# The collections that could not sync, so /health can name them rather than
+# implying the whole database is unconstrained.
+index_sync_degraded_collections: list[str] = []
 
 # Matches the exit code uvicorn uses when application startup fails, so the
 # gunicorn master reports the same "Worker failed to boot" as before.
@@ -100,39 +103,82 @@ def _abort_boot(message: str, *args: object, exc_info: bool = False) -> NoReturn
     os._exit(_BOOT_FAILURE_EXIT_CODE)
 
 
+# 85: IndexOptionsConflict, 86: IndexKeySpecsConflict, 8000: QuotaExceeded.
+_INDEX_CONFLICT_CODES = frozenset({85, 86, 8000})
+
+
+def _is_index_conflict(e: pymongo.errors.OperationFailure) -> bool:
+    return e.code in _INDEX_CONFLICT_CODES or "quota" in str(e).lower()
+
+
 async def _init_beanie(database, document_models: list) -> None:
-    """Register document models, degrading to skip_indexes on index conflicts."""
+    """Register document models, isolating any that cannot sync their indexes.
+
+    init_beanie creates every model's indexes in one pass, so a single
+    conflicting index used to take the whole pass down and the only recovery
+    was skip_indexes=True for ALL of them. One stale index on one collection
+    therefore silently switched off every unique constraint in the system —
+    a far worse outcome than the drift that caused it, and invisible unless
+    someone read the startup logs.
+
+    On conflict each model is now registered on its own, so only the models
+    that genuinely conflict lose their indexes and every other collection keeps
+    its constraints enforced.
+    """
+    global index_sync_degraded, index_sync_error
+
     try:
         await init_beanie(
             database=database,
             document_models=document_models,
             allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
         )
+        return
     except pymongo.errors.OperationFailure as e:
-        # Catch known OperationFailure codes during index creation:
-        # 85: IndexOptionsConflict, 86: IndexKeySpecsConflict, 8000: QuotaExceeded
-        if e.code in (85, 86, 8000) or "quota" in str(e).lower():
-            global index_sync_degraded, index_sync_error
-            index_sync_degraded = True
-            index_sync_error = f"({e.code}) {e}"
+        if not _is_index_conflict(e):
+            raise
+        first_error = e
+
+    degraded: list[str] = []
+    for model in document_models:
+        try:
+            await init_beanie(
+                database=database,
+                document_models=[model],
+                allow_index_dropping=settings.ALLOW_INDEX_DROPPING,
+            )
+        except pymongo.errors.OperationFailure as e:
+            if not _is_index_conflict(e):
+                raise
+            collection = getattr(getattr(model, "Settings", None), "name", model.__name__)
+            degraded.append(collection)
             logging.critical(
-                "MongoDB index sync FAILED (%s). Starting with skip_indexes=True, which "
-                "disables index synchronisation for ALL %d models — not just the one that "
-                "conflicted. Declared indexes, including unique constraints, will NOT be "
-                "created while this persists. Run scripts/inspect_indexes.py to see the "
-                "drift and scripts/fix_ttl_indexes.py to repair it. Error: %s",
+                "MongoDB index sync FAILED for %s (%s): %s. This collection's declared "
+                "indexes, including any unique constraint, are NOT enforced. Run "
+                "scripts/inspect_indexes.py to see the drift and "
+                "scripts/fix_index_conflicts.py --confirm to repair it.",
+                collection,
                 e.code,
-                len(document_models),
-                e,
+                _brief(e),
             )
             await init_beanie(
                 database=database,
-                document_models=document_models,
+                document_models=[model],
                 allow_index_dropping=False,
                 skip_indexes=True,
             )
-        else:
-            raise
+
+    if degraded:
+        index_sync_degraded = True
+        index_sync_error = f"({first_error.code}) {_brief(first_error)}"
+        index_sync_degraded_collections.extend(degraded)
+        logging.critical(
+            "MongoDB index sync degraded for %d of %d models: %s. Every other model "
+            "synced normally and keeps its constraints.",
+            len(degraded),
+            len(document_models),
+            ", ".join(degraded),
+        )
 
 
 async def init_db() -> None:

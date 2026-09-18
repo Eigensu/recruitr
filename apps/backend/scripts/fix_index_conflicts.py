@@ -87,6 +87,36 @@ def declared_indexes() -> list[tuple[str, dict]]:
     return out
 
 
+def _key_items(index: dict) -> list:
+    """An index's key spec as a comparable list of (field, direction) pairs."""
+    return list((index.get("key") or {}).items())
+
+
+def find_same_key_index(live: dict[str, dict], want: dict) -> str | None:
+    """Name of a live index with this key spec but a different name, if any.
+
+    MongoDB refuses createIndex when the requested key pattern already exists
+    under another name — IndexOptionsConflict (85), "Index already exists with
+    a different name". Renaming an index is not a thing, so the only repair is
+    to drop the old one and create the declared one.
+
+    This is the case matching purely on name misses, and it misses it in the
+    worst possible direction: the declared name is absent, so the index reads
+    as "not created yet, init_beanie will make it on the next boot" — while
+    every boot fails on precisely this conflict and degrades to skip_indexes.
+    Candidate's brand_id+email index is the live example: it gained a
+    partialFilterExpression and an explicit name when email became optional,
+    and the original auto-named brand_id_1_email_1 was never dropped.
+    """
+    want_key = _key_items(want)
+    for name, live_index in live.items():
+        if name == "_id_":
+            continue
+        if name != want.get("name") and _key_items(live_index) == want_key:
+            return name
+    return None
+
+
 def diff(live: dict, want: dict) -> dict:
     """Option and key-spec drift between a live index and its declared definition.
 
@@ -98,8 +128,7 @@ def diff(live: dict, want: dict) -> dict:
     as "already correct" because only unique/sparse/etc were compared.
     """
     changed = {}
-    live_key = list((live.get("key") or {}).items())
-    want_key = list((want.get("key") or {}).items())
+    live_key, want_key = _key_items(live), _key_items(want)
     if live_key != want_key:
         changed["key"] = (live_key, want_key)
     for key in COMPARABLE_KEYS:
@@ -129,7 +158,15 @@ def main() -> int:
         live = {i["name"]: i for i in db[coll].list_indexes()}
         name = want.get("name")
         if name not in live:
-            print(f"  {coll}.{name}: absent — init_beanie will create it on next boot")
+            stale = find_same_key_index(live, want)
+            if stale is None:
+                print(f"  {coll}.{name}: absent — init_beanie will create it on next boot")
+                continue
+            # Not absent: the same keys are already indexed under another name,
+            # which is what makes createIndex fail with 85 on every boot.
+            print(f"  {coll}.{name}: key spec already indexed as {stale!r}")
+            print(f"      {_key_items(want)} — drop {stale!r}, create {name!r}")
+            todo.append((coll, want, stale))
             continue
         changed = diff(live[name], want)
         if not changed:
@@ -138,7 +175,7 @@ def main() -> int:
         print(f"  {coll}.{name}: option drift")
         for key, (have, need) in changed.items():
             print(f"      {key}: {have!r} -> {need!r}")
-        todo.append((coll, want))
+        todo.append((coll, want, name))
 
     if not todo:
         print("\nNothing to repair.")
@@ -152,11 +189,14 @@ def main() -> int:
 
     print()
     failures = []
-    for coll, want in todo:
+    for coll, want, drop_name in todo:
         name = want["name"]
         key = list(want["key"].items())
         kwargs = {k: want[k] for k in COMPARABLE_KEYS if k in want}
-        db[coll].drop_index(name)
+        # drop_name is the index that currently holds this key spec. It is the
+        # declared name for ordinary option drift, and the old auto-generated
+        # name when the declaration gained an explicit one.
+        db[coll].drop_index(drop_name)
         try:
             db[coll].create_index(key, name=name, **kwargs)
         except Exception as exc:  # noqa: BLE001
@@ -164,7 +204,11 @@ def main() -> int:
             # (often uniqueness) is unenforced until this is re-run and
             # succeeds. Reported explicitly rather than left to a stack trace,
             # since which index is in that state matters for what to do next.
-            print(f"  FAILED {coll}.{name}: dropped but recreate failed ({exc}) — re-run to retry")
+            print(
+                f"  FAILED {coll}.{name}: dropped {drop_name!r} but recreate failed ({exc}) "
+                f"— re-run to retry. If this is a duplicate-key error the collection holds "
+                f"rows the new constraint forbids; resolve those first."
+            )
             failures.append((coll, name))
             continue
         print(f"  recreated {coll}.{name}")
@@ -174,7 +218,7 @@ def main() -> int:
 
     print("\nVerifying:")
     ok = True
-    for coll, want in todo:
+    for coll, want, _drop_name in todo:
         name = want["name"]
         live = {i["name"]: i for i in db[coll].list_indexes()}
         changed = diff(live.get(name, {}), want)
