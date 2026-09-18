@@ -282,6 +282,31 @@ async def test_board_returns_stage_columns_for_staff(staff: AsyncClient, seeded)
 
 
 @pytest.mark.asyncio
+async def test_board_has_a_column_for_every_stage(staff: AsyncClient, seeded) -> None:
+    # The board reads only mappings in the stages it has columns for, so a
+    # stage without one is a stage whose cards silently leave the board.
+    res = await staff.get("/api/v1/pipeline/board")
+    assert res.status_code == 200, res.text
+    assert {col["stage"] for col in res.json()["stages"]} == {s.value for s in PipelineStage}
+
+
+@pytest.mark.asyncio
+async def test_card_moved_on_hold_stays_on_the_board(staff: AsyncClient, seeded) -> None:
+    # on_hold had no column, so dragging a card there made it vanish until
+    # someone moved it back by some other route.
+    mapping = seeded["mine"]
+    res = await staff.post(
+        f"/api/v1/pipeline/mappings/{mapping.id}/move", json={"new_stage": "on_hold"}
+    )
+    assert res.status_code == 200, res.text
+
+    board = (await staff.get("/api/v1/pipeline/board")).json()
+    on_hold = {col["stage"]: col for col in board["stages"]}["on_hold"]
+    assert [m["mapping_id"] for m in on_hold["mappings"]] == [str(mapping.id)]
+    assert on_hold["count"] == 1
+
+
+@pytest.mark.asyncio
 async def test_board_shows_a_client_only_their_own_pipeline(client_1: AsyncClient, seeded) -> None:
     res = await client_1.get("/api/v1/pipeline/board")
     assert res.status_code == 200, res.text
