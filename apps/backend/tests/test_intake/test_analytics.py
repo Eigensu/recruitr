@@ -635,3 +635,50 @@ async def test_a_recruiter_cannot_read_the_reports(http):
     res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("rec"))
 
     assert res.status_code == 403
+
+
+# ── Who a lead can go to ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_the_picker_offers_both_rosters_with_their_current_load(http, boss):
+    caller = await _staff("caller", UserRole.telecaller)
+    recruiter = await _staff("rec", UserRole.employee)
+    await _lead(telecaller=caller, telecaller_hours_ago=1)
+    await _lead(telecaller=caller, telecaller_hours_ago=1)
+    await _lead(
+        status=IntakeLeadStatus.pending_recruiter, recruiter=recruiter, recruiter_hours_ago=1
+    )
+    # Finished, so it is not part of anybody's current load.
+    await _lead(status=IntakeLeadStatus.rejected, telecaller=caller)
+
+    body = (await http.get("/api/v1/intake/assignees", headers=await _headers("boss"))).json()
+
+    assert [(row["name"], row["open_leads"]) for row in body["telecallers"]] == [("Caller", 2)]
+    assert [(row["name"], row["open_leads"]) for row in body["recruiters"]] == [("Rec", 1)]
+
+
+@pytest.mark.asyncio
+async def test_someone_with_an_empty_queue_is_still_offered(http, boss):
+    await _staff("idle", UserRole.telecaller)
+
+    body = (await http.get("/api/v1/intake/assignees", headers=await _headers("boss"))).json()
+
+    # The whole point of reassigning is to find somebody who is free.
+    assert body["telecallers"] == [
+        {
+            "id": body["telecallers"][0]["id"],
+            "name": "Idle",
+            "email": "idle@binge.consulting",
+            "open_leads": 0,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_telecaller_cannot_list_the_roster(http):
+    await _staff("caller", UserRole.telecaller)
+
+    res = await http.get("/api/v1/intake/assignees", headers=await _headers("caller"))
+
+    assert res.status_code == 403
