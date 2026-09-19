@@ -680,6 +680,21 @@ is what makes it the safety net: it does not depend on having caught the hour a 
 | `/leads` | admin/maintainer | All leads + filters (status, telecaller, recruiter, overdue, campaign, date range). Reassign action. |
 | `/leads/analytics` | admin/maintainer | The observability dashboard (§7.1). |
 
+**As built**, with three departures worth recording:
+
+- **No SLA arithmetic in the browser.** The card shows *elapsed* waiting time and takes `overdue`
+  straight from the response. An earlier cut fetched `TELECALLER_SLA_HOURS` and counted down to it,
+  which meant a second copy of a configuration value deciding, in the browser, whether somebody was
+  late — and disagreeing with the alerts and the reports the moment it was changed. The server owns
+  that judgement.
+- **The phone number is the largest element on the card**, and a real `tel:` link. The screen exists
+  to be worked from a handset, one lead at a time.
+- **Reject opens inline on the card, not in a modal.** Six reasons on a phone is a tap, not a
+  dialog. Accept stays one tap, with an optional note.
+- The reassign picker shows each person's **current open-lead count**, and offers the telecaller
+  roster or the recruiter roster depending on which leg the lead is waiting on — the backend moves
+  whichever leg is open, so offering the other list would silently hand it to the wrong person.
+
 ### 9.2 Wiring
 
 - **Sidebar**: a `TELECALLER_NAV_CONFIG` array in `nav-config.ts`, mirroring the existing
@@ -721,7 +736,7 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6 (`dfdfb74`), 7. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6 (`dfdfb74`), 7 (`112e4cf`), 8. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -748,7 +763,11 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
 7. ✅ **SLA sweep + digest** — `service/intake_sla.py`, the `intake.sla_sweep` (hourly) and
    `intake.sla_digest` (daily) Celery tasks, `EmailService.send_intake_sla_digest`. Two
    departures from the sketch below, both recorded in §8.
-8. **Frontend** — telecaller queue → admin lead list → analytics dashboard → nav/guard wiring.
+8. ✅ **Frontend** — `components/leads/` (queue, card, admin list, reassign dialog, per-leg table,
+   funnel bar), `/leads` branching on role, `/leads/analytics`, a maintainer-gated `Leads` nav
+   item, and `lib/api/intake.ts`. One backend addition fell out of it: `GET /intake/assignees`,
+   because `/teams/employees` deliberately hides telecallers, so the reassign picker had no
+   roster to draw from.
 9. **Docs** — update `apps/backend/CLAUDE.md` (role table, new module) and `.env.example`.
 
 Steps 1–2 are a safe first commit; 3–5 are the functional core; 6–8 are additive.

@@ -329,6 +329,22 @@ async def leg_by_person(
     return table
 
 
+async def open_lead_counts(brand_id: PydanticObjectId, *, leg: str) -> dict[Any, int]:
+    """How many leads each person is currently holding on this leg.
+
+    Shown next to every name in the reassign picker: handing a stuck lead to
+    whoever already has the longest queue is the one move guaranteed not to
+    help, and the number is the only thing that makes that visible.
+    """
+    rows = await _aggregate(
+        [
+            {_MATCH: {"brand_id": brand_id, "status": _OPEN_STATUS[leg]}},
+            {_GROUP: {"_id": f"${leg}_id", "count": {_SUM: 1}}},
+        ]
+    )
+    return {row["_id"]: int(row["count"]) for row in rows if row.get("_id")}
+
+
 # ── Funnel ─────────────────────────────────────────────────────────────────────
 
 

@@ -12,6 +12,7 @@
     GET  /intake/analytics/campaigns    what the ad spend produced (maintainer+)
     GET  /intake/leads                  every lead, filtered       (maintainer+)
     GET  /intake/leads/{id}             one lead and its timings   (maintainer+)
+    GET  /intake/assignees              who a lead can be given to (maintainer+)
     GET  /intake/config                 sheet connection + health  (maintainer+)
     PUT  /intake/config                 point it at a sheet        (admin)
 
@@ -45,6 +46,8 @@ from app.modules.recruitment.enums import IntakeLeadStatus
 from app.modules.recruitment.models import Candidate, Employee, IntakeLead, IntakeSourceConfig
 from app.modules.recruitment.schemas import (
     IntakeAcceptRequest,
+    IntakeAssignee,
+    IntakeAssigneesResponse,
     IntakeCampaignResponse,
     IntakeConfigResponse,
     IntakeConfigUpdate,
@@ -61,6 +64,7 @@ from app.modules.recruitment.service import intake_analytics
 from app.modules.recruitment.service.intake_service import (
     accept_lead,
     as_utc,
+    assignment_roster,
     poll_google_sheet,
     reassign_lead,
     reject_lead,
@@ -453,6 +457,36 @@ async def one_lead(tenant: _Staff, lead_id: str):
         candidates.get(lead.candidate_id),
         telecaller=employees.get(lead.telecaller_id),
         recruiter=employees.get(lead.recruiter_id),
+    )
+
+
+@router.get("/assignees", response_model=IntakeAssigneesResponse, dependencies=[_RequireMaintainer])
+async def assignees(tenant: _Staff):
+    """Who a waiting lead can be handed to, and what each of them already holds.
+
+    Drawn from the same roster the round-robin uses, so the picker cannot offer
+    somebody the assignment would then refuse. The open-lead count is there
+    because handing a stuck lead to whoever already has the longest queue is the
+    one move guaranteed not to help.
+    """
+
+    async def roster(*, telecallers: bool) -> list[IntakeAssignee]:
+        leg = intake_analytics.TELECALLER if telecallers else intake_analytics.RECRUITER
+        people = await assignment_roster(tenant.brand_id, telecallers=telecallers)
+        load = await intake_analytics.open_lead_counts(tenant.brand_id, leg=leg)
+        return [
+            IntakeAssignee(
+                id=str(person.id),
+                name=person.name,
+                email=person.email,
+                open_leads=load.get(person.id, 0),
+            )
+            for person in people
+        ]
+
+    return IntakeAssigneesResponse(
+        telecallers=await roster(telecallers=True),
+        recruiters=await roster(telecallers=False),
     )
 
 
