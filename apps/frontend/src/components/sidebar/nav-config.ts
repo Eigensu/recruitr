@@ -41,6 +41,15 @@ export const NAV_CONFIG: NavItemConfig[] = [
   { href: "/company", label: "Company Profile", icon: IconBuilding, clientOnly: true },
   { href: "/candidates", label: "Candidates", icon: IconUsers, hideForClient: true },
   { href: "/pipeline", label: "Pipeline", icon: IconLayoutKanban },
+  {
+    // Maintainer-gated: the lead queue and its reports are closed to recruiters
+    // on the server, so showing them the item would only produce a 403.
+    href: "/leads",
+    label: "Leads",
+    icon: IconPhoneCall,
+    maintainerOnly: true,
+    hideForClient: true,
+  },
   { href: "/leaderboard", label: "Leaderboard", icon: IconTrophy, hideForClient: true },
   {
     href: "/clients",

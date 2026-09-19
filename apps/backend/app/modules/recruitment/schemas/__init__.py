@@ -25,6 +25,8 @@ from app.modules.recruitment.schemas.client import (
 )
 from app.modules.recruitment.schemas.intake import (
     IntakeAcceptRequest,
+    IntakeAssignee,
+    IntakeAssigneesResponse,
     IntakeCampaignResponse,
     IntakeCampaignRow,
     IntakeConfigResponse,
@@ -83,6 +85,8 @@ __all__ = [
     # Candidate DTOs
     "CandidateCreate",
     "IntakeAcceptRequest",
+    "IntakeAssignee",
+    "IntakeAssigneesResponse",
     "IntakeCampaignResponse",
     "IntakeCampaignRow",
     "IntakeConfigResponse",

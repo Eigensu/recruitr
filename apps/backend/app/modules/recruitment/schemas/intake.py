@@ -238,3 +238,24 @@ class IntakeConfigUpdate(BaseModel):
     @classmethod
     def _clean_spreadsheet_id(cls, value: str | None) -> str | None:
         return None if value is None else _spreadsheet_id(value)
+
+
+class IntakeAssignee(BaseModel):
+    """Somebody a lead can be handed to, and how much they are already holding."""
+
+    id: str
+    name: str
+    email: str | None = None
+    open_leads: int = 0
+
+
+class IntakeAssigneesResponse(BaseModel):
+    """The two rosters the round-robin draws from, for the reassign picker.
+
+    Separate lists rather than one flat roster with a role field: a lead waiting
+    on a telecaller can only go to a telecaller, and flattening them would put
+    the wrong half of the company in the dropdown.
+    """
+
+    telecallers: list[IntakeAssignee] = Field(default_factory=list)
+    recruiters: list[IntakeAssignee] = Field(default_factory=list)

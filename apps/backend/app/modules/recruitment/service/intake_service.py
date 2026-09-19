@@ -156,6 +156,17 @@ async def _roster(brand_id: PydanticObjectId, *, telecallers: bool) -> list[Empl
     )
 
 
+async def assignment_roster(brand_id: PydanticObjectId, *, telecallers: bool) -> list[Employee]:
+    """The people a lead may be handed to on this leg.
+
+    Public because the reassign picker has to offer exactly the list the
+    round-robin draws from: a picker showing someone the assigner cannot
+    actually be given a lead — or hiding someone who already holds one — would
+    be lying about who is available.
+    """
+    return await _roster(brand_id, telecallers=telecallers)
+
+
 async def next_assignee(brand_id: PydanticObjectId, *, telecallers: bool) -> Employee | None:
     """The next person in the round-robin, or None if nobody is available.
 
