@@ -1,6 +1,11 @@
-"""Email notification service for Referee operations."""
+"""Email notification service for Referee and pipeline operations.
 
-import html
+Subjects and layout live in Resend Templates (one per method below, referenced
+by name), not here. This module's job is to pick the template and hand it the
+data. Copy changes are made in the Resend dashboard and take effect without a
+deploy; adding or renaming a *variable* is still a change on both sides.
+"""
+
 import logging
 import os
 from datetime import datetime
@@ -9,36 +14,67 @@ import resend
 
 logger = logging.getLogger(__name__)
 
+# Template names as published in Resend. The send API accepts a template's name
+# in place of its uuid, so these stay readable and survive a template being
+# recreated.
+TPL_NEW_POSITION = "new-position-notification"
+TPL_CLIENT_ACTION = "client-action-reminder"
+TPL_INTERVIEW_FOLLOWUP = "interview-followup"
+TPL_OFFER_REMINDER = "offer-letter-reminder"
+TPL_REFERRAL_ACTIONED = "referral-actioned"
+TPL_REFERRAL_JOINED = "referral-joined"
+TPL_REFERRAL_PAYMENT = "referral-payment"
+
+
+def _text(value: object) -> str:
+    """Neutralise markup in a value that lands in the template's HTML body.
+
+    Resend substitutes variables verbatim — a value containing a tag arrives in
+    the message as a tag — so escaping stays this module's responsibility, as it
+    was when the bodies were built here.
+
+    Only `<` and `>` are escaped, deliberately not `&`. Every variable also
+    feeds a subject line, which is plain text: escaping `&` there would render
+    a client named "Smith & Co" as "Smith &amp; Co" in the inbox. A bare `&` in
+    an HTML body is displayed as-is by mail clients, so this trades a malformed
+    entity in the pathological case for correctness in the common one.
+    """
+    return str(value).replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _url(value: str) -> str:
+    """Escape a value that lands in an href, where a quote would break out."""
+    return _text(value).replace('"', "&quot;")
+
 
 class EmailService:
     @staticmethod
-    def _send_email(to: str, subject: str, body: str) -> None:
-        """Internal helper to transmit email or log safely if unconfigured."""
+    def _send_template(to: str, template: str, variables: dict[str, object]) -> None:
+        """Send one templated email, or log and return if Resend is unconfigured."""
         api_key = os.getenv("RESEND_API_KEY")
         from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
         if not api_key:
-            # The body is never logged: these carry candidate names, joining
+            # Variables are never logged: they carry candidate names, joining
             # dates and payment amounts, and an unconfigured environment is
             # exactly the one whose logs are least likely to be protected.
             logger.warning(
                 "Email delivery infrastructure is implemented/configured, but "
                 "live delivery could not be verified because provider credentials are unavailable. "
-                f"Would have sent subject='{subject}' (recipient and body redacted)"
+                f"Would have sent template='{template}' (recipient and variables redacted)"
             )
             return
 
         resend.api_key = api_key
         # Recipient omitted: these are candidate and referee addresses, and the
-        # subject alone is enough to trace a delivery through the logs.
-        logger.info(f"Sending email via Resend: {subject}")
+        # template name alone is enough to trace a delivery through the logs.
+        logger.info(f"Sending email via Resend template: {template}")
         try:
             resend.Emails.send(
                 {
                     "from": from_email,
                     "to": to,
-                    "subject": subject,
-                    "html": body.replace("\n", "<br>"),
+                    "template": {"id": template, "variables": variables},
                 }
             )
         except Exception:
@@ -51,93 +87,93 @@ class EmailService:
         cls, email: str, candidate_name: str, stage: str, portal_url: str
     ) -> None:
         """Send notification when a referred candidate's CV is actioned."""
-        subject = "Your referral is now being reviewed"
-        body = (
-            f"Hello,\n\n"
-            f"Your referred candidate, {html.escape(candidate_name)}, is currently being reviewed by our team.\n"
-            f"Current Stage: {html.escape(stage)}\n\n"
-            f"View their progress in your Binge Connect portal: {html.escape(portal_url)}\n\n"
-            f"Best,\nThe Binge Connect Team"
+        cls._send_template(
+            to=email,
+            template=TPL_REFERRAL_ACTIONED,
+            variables={
+                "CANDIDATE_NAME": _text(candidate_name),
+                "STAGE": _text(stage),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_referee_joined(
         cls, email: str, candidate_name: str, joining_date: datetime, portal_url: str
     ) -> None:
         """Send notification when a referred candidate joins."""
-        subject = "Your referred candidate has joined"
-        date_str = joining_date.strftime("%Y-%m-%d")
-        body = (
-            f"Hello,\n\n"
-            f"Great news! Your referred candidate, {html.escape(candidate_name)}, joined on {html.escape(date_str)}.\n"
-            f"The 7 calendar-day eligibility period has started. "
-            f"Your earning status is currently 'Pending' until the eligibility period is completed.\n\n"
-            f"Check your portal for updates: {html.escape(portal_url)}\n\n"
-            f"Best,\nThe Binge Connect Team"
+        cls._send_template(
+            to=email,
+            template=TPL_REFERRAL_JOINED,
+            variables={
+                "CANDIDATE_NAME": _text(candidate_name),
+                "JOINING_DATE": joining_date.strftime("%Y-%m-%d"),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_referee_payment(
         cls, email: str, amount: float, cycle_month: str, payment_ref: str, portal_url: str
     ) -> None:
         """Send notification when a payment batch is processed."""
-        subject = "Your Binge Connect payment has been processed"
-        body = (
-            f"Hello,\n\n"
-            f"Your Binge Connect payment for the {html.escape(cycle_month)} cycle has been successfully processed.\n"
-            f"Amount Paid: ₹{amount:,.2f}\n"
-            f"Payment Reference: {html.escape(payment_ref)}\n\n"
-            f"View your payment history: {html.escape(portal_url)}\n\n"
-            f"Best,\nThe Binge Connect Team"
+        cls._send_template(
+            to=email,
+            template=TPL_REFERRAL_PAYMENT,
+            # Formatted here rather than as a Resend number variable, which
+            # would render 25000.0 as "25000" with no currency.
+            variables={
+                "AMOUNT": f"₹{amount:,.2f}",
+                "CYCLE_MONTH": _text(cycle_month),
+                "PAYMENT_REF": _text(payment_ref),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_client_action_reminder(
         cls, email: str, candidate_name: str, position_code: str, portal_url: str
     ) -> None:
         """Send a reminder to a client when a candidate has been pending action."""
-        subject = f"Action Required: Candidate {candidate_name} pending review"
-        body = (
-            f"Hello,\n\n"
-            f"The candidate {html.escape(candidate_name)} has been waiting for your review on position {html.escape(position_code)} for over 2 days.\n\n"
-            f"Please log in to your portal to review their profile and update their status:\n"
-            f"{html.escape(portal_url)}\n\n"
-            f"Best,\nThe Recruitment Team"
+        cls._send_template(
+            to=email,
+            template=TPL_CLIENT_ACTION,
+            variables={
+                "CANDIDATE_NAME": _text(candidate_name),
+                "POSITION_CODE": _text(position_code),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_interview_followup(
         cls, email: str, candidate_name: str, position_code: str, portal_url: str
     ) -> None:
         """Send an interview follow-up reminder to a client."""
-        subject = f"Action Required: Interview feedback for {candidate_name}"
-        body = (
-            f"Hello,\n\n"
-            f"An interview was scheduled for {html.escape(candidate_name)} on position {html.escape(position_code)} over 2 days ago.\n\n"
-            f"Please log in to your portal to submit your feedback and update their status (Selected / Rejected):\n"
-            f"{html.escape(portal_url)}\n\n"
-            f"Best,\nThe Recruitment Team"
+        cls._send_template(
+            to=email,
+            template=TPL_INTERVIEW_FOLLOWUP,
+            variables={
+                "CANDIDATE_NAME": _text(candidate_name),
+                "POSITION_CODE": _text(position_code),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_offer_upload_reminder(
         cls, email: str, candidate_name: str, position_code: str, portal_url: str
     ) -> None:
         """Send an offer letter upload reminder to a client."""
-        subject = f"Action Required: Offer letter pending for {candidate_name}"
-        body = (
-            f"Hello,\n\n"
-            f"The candidate {html.escape(candidate_name)} was marked as Selected for position {html.escape(position_code)} over 2 days ago, but an offer letter has not been uploaded yet.\n\n"
-            f"Please log in to your portal to upload the offer letter and proceed with their onboarding:\n"
-            f"{html.escape(portal_url)}\n\n"
-            f"Best,\nThe Recruitment Team"
+        cls._send_template(
+            to=email,
+            template=TPL_OFFER_REMINDER,
+            variables={
+                "CANDIDATE_NAME": _text(candidate_name),
+                "POSITION_CODE": _text(position_code),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
 
     @classmethod
     def send_new_position_notification(
@@ -154,22 +190,23 @@ class EmailService:
         created_by: str,
         portal_url: str,
     ) -> None:
-        import html
-
-        subject = f"New Position Created — {role} — {client_name}"
-        body = (
-            f"Hello,\n\n"
-            f"A new position has been created in the Client Portal.\n\n"
-            f"Client: {html.escape(client_name)}\n"
-            f"Created By: {html.escape(created_by)}\n"
-            f"Role: {html.escape(role)}\n"
-            f"Category: {html.escape(category)}\n"
-            f"Salary: {html.escape(salary) if salary else 'N/A'}\n"
-            f"No. of Positions: {seats}\n"
-            f"City: {html.escape(city) if city else 'N/A'}\n"
-            f"Mumbai Area: {html.escape(mumbai_area) if mumbai_area else 'N/A'}\n"
-            f"Seniority: {html.escape(seniority)}\n\n"
-            f"View in Portal: {html.escape(portal_url)}\n\n"
-            f"Best,\nThe Binge Connect Team"
+        """Notify internal staff that a client created a new position."""
+        # Empty optionals become "N/A" as they did when this built the body
+        # itself; the template's fallback_value only covers a variable that is
+        # absent, not one sent as an empty string.
+        cls._send_template(
+            to=email,
+            template=TPL_NEW_POSITION,
+            variables={
+                "ROLE": _text(role),
+                "CLIENT_NAME": _text(client_name),
+                "CATEGORY": _text(category or "N/A"),
+                "SALARY": _text(salary or "N/A"),
+                "SEATS": seats,
+                "CITY": _text(city or "N/A"),
+                "MUMBAI_AREA": _text(mumbai_area or "N/A"),
+                "SENIORITY": _text(seniority or "N/A"),
+                "CREATED_BY": _text(created_by),
+                "PORTAL_URL": _url(portal_url),
+            },
         )
-        cls._send_email(to=email, subject=subject, body=body)
