@@ -33,7 +33,9 @@ interface Props {
   cards: PipelineCard[];
   readOnly?: boolean;
   /** Refuse drops without making the column read-only — used by the client
-   *  board to grey out stages the in-flight card isn't allowed to move to. */
+   *  board to grey out stages the in-flight card isn't allowed to move to.
+   *  These columns remain droppable so collision detection does not skip past
+   *  them; handleStageChange remains responsible for rejecting the move. */
   dropDisabled?: boolean;
   isClientBoard?: boolean;
   onCardClick?: (card: PipelineCard) => void;
@@ -52,7 +54,7 @@ export default function KanbanColumn({
 }: Readonly<Props>) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
-    disabled: readOnly || dropDisabled,
+    disabled: readOnly,
   });
   const accent = STAGE_ACCENT[stage];
   const dot = STAGE_DOT[stage];

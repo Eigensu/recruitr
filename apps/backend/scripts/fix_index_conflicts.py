@@ -3,6 +3,7 @@
 Usage:
     python3 scripts/fix_index_conflicts.py            # dry run, changes nothing
     python3 scripts/fix_index_conflicts.py --confirm  # apply
+    python3 scripts/fix_index_conflicts.py --stale-index COLLECTION DECLARED LIVE
 
 MongoDB will not change an existing index's options via createIndex — if a
 model redefines an index that already exists (same name, different unique /
@@ -37,7 +38,21 @@ from app.core.config import settings  # noqa: E402
 # fields like 'v' or 'ns' that Mongo adds to the live listing). Deliberately
 # excludes 'key' — that's compared separately in diff() and must never reach
 # create_index() as a kwarg (it's a positional arg there, not an option).
-COMPARABLE_KEYS = ["unique", "sparse", "partialFilterExpression", "expireAfterSeconds"]
+COMPARABLE_KEYS = [
+    "unique",
+    "sparse",
+    "partialFilterExpression",
+    "expireAfterSeconds",
+    "collation",
+]
+
+
+class StaleIndexSelectionRequired(ValueError):
+    """Raised when a stale same-key index cannot be selected safely."""
+
+    def __init__(self, candidates: list[str]):
+        self.candidates = candidates
+        super().__init__("stale index selection required")
 
 
 def _describe_uri(uri: str) -> str:
@@ -92,8 +107,10 @@ def _key_items(index: dict) -> list:
     return list((index.get("key") or {}).items())
 
 
-def find_same_key_index(live: dict[str, dict], want: dict) -> str | None:
-    """Name of a live index with this key spec but a different name, if any.
+def find_same_key_index(
+    live: dict[str, dict], want: dict, explicit_name: str | None = None
+) -> str | None:
+    """Find the unambiguous same-key, same-options index under another name.
 
     MongoDB refuses createIndex when the requested key pattern already exists
     under another name — IndexOptionsConflict (85), "Index already exists with
@@ -107,14 +124,35 @@ def find_same_key_index(live: dict[str, dict], want: dict) -> str | None:
     Candidate's brand_id+email index is the live example: it gained a
     partialFilterExpression and an explicit name when email became optional,
     and the original auto-named brand_id_1_email_1 was never dropped.
+
+    A key pattern alone is not enough to choose an index to delete: MongoDB can
+    expose multiple same-key definitions whose behavior differs by uniqueness,
+    sparsity, partial filter, TTL, or collation. Only select automatically when
+    exactly one candidate also matches every declared option. Option drift or
+    otherwise indistinguishable candidates require an explicit operator choice.
     """
     want_key = _key_items(want)
-    for name, live_index in live.items():
-        if name == "_id_":
-            continue
-        if name != want.get("name") and _key_items(live_index) == want_key:
-            return name
-    return None
+    candidates = {
+        name: live_index
+        for name, live_index in live.items()
+        if name not in {"_id_", want.get("name")} and _key_items(live_index) == want_key
+    }
+    if explicit_name is not None:
+        if explicit_name not in candidates:
+            raise StaleIndexSelectionRequired(list(candidates))
+        return explicit_name
+
+    if not candidates:
+        return None
+
+    option_matches = [
+        name
+        for name, live_index in candidates.items()
+        if all(live_index.get(key) == want.get(key) for key in COMPARABLE_KEYS)
+    ]
+    if len(option_matches) == 1:
+        return option_matches[0]
+    raise StaleIndexSelectionRequired(list(candidates))
 
 
 def diff(live: dict, want: dict) -> dict:
@@ -141,7 +179,22 @@ def diff(live: dict, want: dict) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--confirm", action="store_true", help="apply the changes")
+    ap.add_argument(
+        "--stale-index",
+        action="append",
+        nargs=3,
+        default=[],
+        metavar=("COLLECTION", "DECLARED", "LIVE"),
+        help="explicitly choose the live index to replace for an ambiguous declared index",
+    )
     args = ap.parse_args()
+
+    explicit_stale = {}
+    for coll, declared_name, live_name in args.stale_index:
+        key = (coll, declared_name)
+        if key in explicit_stale and explicit_stale[key] != live_name:
+            ap.error(f"conflicting --stale-index selections for {coll}.{declared_name}")
+        explicit_stale[key] = live_name
 
     uri = settings.MONGODB_URI
     print(f"cluster : {_describe_uri(uri)}")
@@ -152,13 +205,26 @@ def main() -> int:
     db = client[settings.MONGODB_DB_NAME]
 
     todo = []
+    selection_errors = False
+    used_explicit = set()
     for coll, want in declared_indexes():
         if coll not in db.list_collection_names():
             continue
         live = {i["name"]: i for i in db[coll].list_indexes()}
         name = want.get("name")
         if name not in live:
-            stale = find_same_key_index(live, want)
+            selection_key = (coll, name)
+            explicit_name = explicit_stale.get(selection_key)
+            if explicit_name is not None:
+                used_explicit.add(selection_key)
+            try:
+                stale = find_same_key_index(live, want, explicit_name)
+            except StaleIndexSelectionRequired as exc:
+                candidates = ", ".join(repr(candidate) for candidate in exc.candidates)
+                print(f"  {coll}.{name}: same-key indexes need explicit selection: {candidates}")
+                print(f"      use --stale-index {coll!r} {name!r} <LIVE_INDEX>")
+                selection_errors = True
+                continue
             if stale is None:
                 print(f"  {coll}.{name}: absent — init_beanie will create it on next boot")
                 continue
@@ -176,6 +242,15 @@ def main() -> int:
         for key, (have, need) in changed.items():
             print(f"      {key}: {have!r} -> {need!r}")
         todo.append((coll, want, name))
+
+    for coll, declared_name in explicit_stale.keys() - used_explicit:
+        print(f"  {coll}.{declared_name}: unused --stale-index selection")
+        selection_errors = True
+
+    if selection_errors:
+        print("\nNo indexes changed; resolve stale-index selections and re-run.")
+        client.close()
+        return 2
 
     if not todo:
         print("\nNothing to repair.")

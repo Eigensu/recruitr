@@ -236,3 +236,12 @@ class TestOfferLetterPublicId:
         from app.modules.storage.service import _unique_public_id
 
         assert _unique_public_id("Offer Letter.pdf").startswith("Offer-Letter-")
+
+    def test_the_full_uuid_is_used(self):
+        import re
+
+        from app.modules.storage.service import _unique_public_id
+
+        assert re.fullmatch(
+            r"Offer-Letter-[0-9a-f]{32}\.pdf", _unique_public_id("Offer Letter.pdf")
+        )

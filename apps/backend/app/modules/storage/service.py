@@ -81,7 +81,7 @@ def _unique_public_id(filename: str) -> str:
     if not dot:
         base, ext = filename, ""
     safe = re.sub(r"[^A-Za-z0-9_-]+", "-", base).strip("-") or "upload"
-    public_id = f"{safe}-{uuid.uuid4().hex[:8]}"
+    public_id = f"{safe}-{uuid.uuid4().hex}"
     return f"{public_id}.{ext.lower()}" if ext else public_id
 
 

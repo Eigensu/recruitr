@@ -29,11 +29,16 @@ async function serverFetch<T>(path: string): Promise<T> {
 interface PageProps {
   // Deep link from the Positions page and the candidate drawer:
   // /pipeline?position=<id> opens the board already narrowed to that role.
-  readonly searchParams: Promise<{ position?: string; client?: string }>;
+  readonly searchParams: Promise<{
+    position?: string | string[];
+    client?: string | string[];
+  }>;
 }
 
 export default async function PipelinePage({ searchParams }: PageProps) {
-  const { position: positionParam, client: clientParam } = await searchParams;
+  const { position, client } = await searchParams;
+  const positionParam = Array.isArray(position) ? position[0] : position;
+  const clientParam = Array.isArray(client) ? client[0] : client;
   const user = await getUserServer();
   const isClient = user?.role === "client";
 
