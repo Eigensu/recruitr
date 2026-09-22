@@ -8,6 +8,7 @@ import {
   IconUser,
   IconCalendarEvent,
   IconTrash,
+  IconEdit,
 } from "@tabler/icons-react";
 import { useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -15,11 +16,13 @@ import type { UserInfo } from "@/types";
 import {
   listTasks,
   createTask,
+  updateTask,
   deleteTask,
   type TaskResponse,
   type TrackedActivityType,
 } from "@/lib/api/tasks";
 import { listTeams, listTeamEmployees, type Team, type EmployeeTeamInfo } from "@/lib/api/teams";
+import { parseApiDate, toDateInputValue } from "@/lib/utils";
 
 interface ChecklistSettingsTabProps {
   readonly user: UserInfo | null;
@@ -32,6 +35,7 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskResponse | null>(null);
 
   const isMaintainer = user?.role === "admin" || user?.role === "maintainer";
 
@@ -130,19 +134,25 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
               key={task.id}
               task={task}
               isMaintainer={isMaintainer}
+              onEdit={() => setEditingTask(task)}
               onDelete={() => handleDelete(task.id)}
             />
           ))}
         </div>
       )}
 
-      {showCreateModal && isMaintainer && (
-        <CreateTaskModal
+      {(showCreateModal || editingTask !== null) && isMaintainer && (
+        <TaskFormModal
+          editTask={editingTask || undefined}
           teams={teams}
           employees={employees}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingTask(null);
+          }}
           onSuccess={() => {
             setShowCreateModal(false);
+            setEditingTask(null);
             fetchTasks();
           }}
         />
@@ -156,10 +166,12 @@ export default function ChecklistSettingsTab({ user }: ChecklistSettingsTabProps
 function TaskCard({
   task,
   isMaintainer,
+  onEdit,
   onDelete,
 }: {
   readonly task: TaskResponse;
   readonly isMaintainer: boolean;
+  readonly onEdit: () => void;
   readonly onDelete: () => void;
 }) {
   const isCompleted = task.completed_count >= task.target_count;
@@ -202,19 +214,28 @@ function TaskCard({
             <div className="flex flex-col items-end text-xs text-text-muted">
               <span className="flex items-center gap-1">
                 <IconCalendarEvent className="w-3.5 h-3.5" />
-                Due {new Date(task.due_date).toLocaleDateString()}
+                Due {parseApiDate(task.due_date).toLocaleDateString()}
               </span>
               <span className="flex items-center gap-1 mt-1 opacity-70">{assigneeLabel}</span>
             </div>
 
             {isMaintainer && (
-              <button
-                onClick={onDelete}
-                className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
-                title="Delete Task"
-              >
-                <IconTrash className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={onEdit}
+                  className="p-1.5 text-text-muted hover:text-blue-500 hover:bg-blue-500/10 rounded-md transition-colors"
+                  title="Edit Task"
+                >
+                  <IconEdit className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onDelete}
+                  className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors"
+                  title="Delete Task"
+                >
+                  <IconTrash className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -268,12 +289,14 @@ function TaskCard({
 
 // ── CREATE TASK MODAL ──────────────────────────────────────────────────────
 
-function CreateTaskModal({
+function TaskFormModal({
+  editTask,
   teams,
   employees,
   onClose,
   onSuccess,
 }: {
+  readonly editTask?: TaskResponse;
   readonly teams: Team[];
   readonly employees: EmployeeTeamInfo[];
   readonly onClose: () => void;
@@ -282,49 +305,74 @@ function CreateTaskModal({
   const apiFetch = useApiFetch();
   const toast = useToast();
 
-  const [submitting, setSubmitting] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [targetCount, setTargetCount] = useState("5");
-  const [trackedActivity, setTrackedActivity] = useState<TrackedActivityType>("mapped");
-  const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">("all");
-  const [assigneeId, setAssigneeId] = useState("");
+  const today = toDateInputValue(new Date());
 
-  const today = new Date().toISOString().split("T")[0];
-  const [dueDate, setDueDate] = useState(today);
+  const [title, setTitle] = useState(editTask?.title ?? "");
+  const [description, setDescription] = useState(editTask?.description ?? "");
+  const [trackedActivity, setTrackedActivity] = useState<TrackedActivityType>(
+    editTask?.tracked_activity_type ?? "all_activities",
+  );
+  const [targetCount, setTargetCount] = useState(editTask ? String(editTask.target_count) : "");
+
+  const initialDueDate = editTask ? toDateInputValue(parseApiDate(editTask.due_date)) : today;
+  const [dueDate, setDueDate] = useState(initialDueDate);
+
+  // An existing task may already be overdue; only its start date bounds the picker.
+  const minDueDate = editTask ? toDateInputValue(parseApiDate(editTask.start_date)) : today;
+
+  const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">(
+    editTask?.assignee_type ?? "all",
+  );
+  const [assigneeId, setAssigneeId] = useState(editTask?.assignee_id ?? "");
+  const [submitting, setSubmitting] = useState(false);
+
+  const isSaving = editTask !== undefined;
+
+  const getButtonText = () => {
+    if (submitting) return isSaving ? "Saving..." : "Creating...";
+    return isSaving ? "Save Changes" : "Create Task";
+  };
+  const buttonText = getButtonText();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !targetCount || !dueDate) return;
-    if ((assigneeType === "single" || assigneeType === "team") && !assigneeId) {
-      toast("Please select an assignee", "error");
-      return;
-    }
-
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      // Start of day today, due date at end of day
-      const startObj = new Date();
-      startObj.setHours(0, 0, 0, 0);
-
-      const dueObj = new Date(dueDate);
+      const [y, m, d] = dueDate.split("-").map(Number);
+      const dueObj = new Date(y, m - 1, d);
       dueObj.setHours(23, 59, 59, 999);
 
-      await createTask(apiFetch, {
-        title,
-        description: description || undefined,
-        tracked_activity_type: trackedActivity,
-        target_count: Number.parseInt(targetCount, 10),
-        assignee_type: assigneeType,
-        assignee_id: assigneeType === "all" ? undefined : assigneeId,
-        start_date: startObj.toISOString(),
-        due_date: dueObj.toISOString(),
-      });
+      const targetCountNum = Number.parseInt(targetCount, 10);
+      const finalAssigneeId = assigneeType === "all" ? undefined : assigneeId;
+      const finalDescription = description || null;
 
-      toast("Task created successfully", "success");
+      const fields = {
+        title,
+        tracked_activity_type: trackedActivity,
+        target_count: targetCountNum,
+        assignee_type: assigneeType,
+        assignee_id: finalAssigneeId,
+        due_date: dueObj.toISOString(),
+      };
+
+      if (editTask) {
+        // `null` rather than `undefined` so an emptied description is actually cleared.
+        await updateTask(apiFetch, editTask.id, { ...fields, description: finalDescription });
+        toast("Task updated successfully", "success");
+      } else {
+        const startObj = new Date();
+        startObj.setHours(0, 0, 0, 0);
+        await createTask(apiFetch, {
+          ...fields,
+          description: finalDescription ?? undefined,
+          start_date: startObj.toISOString(),
+        });
+        toast("Task created successfully", "success");
+      }
+
       onSuccess();
     } catch {
-      toast("Failed to create task", "error");
+      toast(editTask ? "Failed to update task" : "Failed to create task", "error");
     } finally {
       setSubmitting(false);
     }
@@ -334,7 +382,9 @@ function CreateTaskModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-surface border border-border rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-surface-2">
-          <h2 className="text-lg font-bold text-text-primary">Create New Task</h2>
+          <h2 className="text-lg font-bold text-text-primary">
+            {editTask ? "Edit Task" : "Create New Task"}
+          </h2>
           <button onClick={onClose} className="text-text-muted hover:text-text-primary text-xl">
             &times;
           </button>
@@ -378,6 +428,7 @@ function CreateTaskModal({
               onChange={(e) => setTrackedActivity(e.target.value as TrackedActivityType)}
               className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
             >
+              <option value="all_activities">All Activities</option>
               <option value="mapped">Candidate Mapped</option>
               <option value="stage_moved">Candidate Moved</option>
               <option value="rejected">Candidate Rejected</option>
@@ -411,7 +462,7 @@ function CreateTaskModal({
                 id="task-due-date"
                 type="date"
                 required
-                min={today}
+                min={minDueDate}
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
@@ -493,7 +544,7 @@ function CreateTaskModal({
               disabled={submitting}
               className="px-4 py-2 bg-navy text-white dark:bg-yellow dark:text-navy text-sm font-bold rounded-lg disabled:opacity-50"
             >
-              {submitting ? "Creating..." : "Create Task"}
+              {buttonText}
             </button>
           </div>
         </form>

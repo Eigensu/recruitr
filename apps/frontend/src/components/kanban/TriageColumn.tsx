@@ -13,15 +13,15 @@ interface Props {
 }
 
 const HEADER_ACCENT: Record<LegacyCandidateStatus, string> = {
-  pending: "text-amber-400 border-amber-500/30 bg-amber-500/5",
-  accepted: "text-emerald-400 border-emerald-500/30 bg-emerald-500/5",
-  rejected: "text-red-400 border-red-500/30 bg-red-500/5",
+  pending: "text-text-primary border-amber-500/30 bg-amber-500/10",
+  accepted: "text-text-primary border-emerald-500/30 bg-emerald-500/10",
+  rejected: "text-text-primary border-red-500/30 bg-red-500/10",
 };
 
 const HEADER_DOT: Record<LegacyCandidateStatus, string> = {
-  pending: "bg-amber-400",
-  accepted: "bg-emerald-400",
-  rejected: "bg-red-400",
+  pending: "bg-amber-500",
+  accepted: "bg-emerald-500",
+  rejected: "bg-red-500",
 };
 
 export default function TriageColumn({ id, label, cards }: Readonly<Props>) {

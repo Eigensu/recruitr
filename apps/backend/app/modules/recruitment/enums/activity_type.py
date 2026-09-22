@@ -6,6 +6,7 @@ from enum import StrEnum
 class ActivityType(StrEnum):
     """Activity types recorded in the activity feed (analytics + leaderboard)."""
 
+    all_activities = "all_activities"
     mapped = "mapped"
     stage_moved = "stage_moved"
     offer_sent = "offer_sent"
