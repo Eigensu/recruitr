@@ -84,6 +84,14 @@ export const ESTABLISHMENT_TAG_OPTIONS = [
   { value: "Other", label: "Other" },
 ] as const;
 
+/**
+ * Selecting this reveals a free-text box; the typed value is stored instead.
+ * The actual role catalog is not duplicated here — it is fetched from
+ * GET /api/v1/positions/role-catalog, the same source Positions uses and the
+ * backend validates PositionCreate/PositionUpdate against.
+ */
+export const CURRENT_ROLE_OTHER = "Other";
+
 export const SPECIALIZATION_OPTIONS: Record<string, string[]> = {
   BOH: ["Continental", "Pastry", "Bakery", "Pan-Asian", "Japanese", "Indian / Tandoor"],
   Service: ["Service", "Guest Relations", "Bar", "Coffee", "Operations"],

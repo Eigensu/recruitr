@@ -323,7 +323,7 @@ function CandidateInfo({
 function CandidateTags({ tags }: { tags: string[] }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {tags.slice(0, 4).map((tag) => (
+      {tags.slice(0, 6).map((tag) => (
         <span
           key={tag}
           className={`${tag.startsWith("Edu:") ? "block" : "inline-flex items-center gap-1"} rounded-full px-2 py-0.5 text-[10px] font-semibold truncate max-w-[120px]`}
@@ -336,9 +336,9 @@ function CandidateTags({ tags }: { tags: string[] }) {
           {tag}
         </span>
       ))}
-      {tags.length > 4 && (
+      {tags.length > 6 && (
         <span className="text-[10px] px-2 py-0.5 rounded-full border border-border text-text-muted font-medium">
-          +{tags.length - 4}
+          +{tags.length - 6}
         </span>
       )}
     </div>
@@ -537,6 +537,9 @@ export default function CandidateCard({
             <CandidateTags
               tags={
                 [
+                  candidate.establishment_tag
+                    ? `Establishment: ${candidate.establishment_tag}`
+                    : null,
                   candidate.communication ? `Comm: ${candidate.communication}` : null,
                   candidate.education ? `Edu: ${candidate.education}` : null,
                   candidate.brand_experience ? `Exp: ${candidate.brand_experience}` : null,
@@ -544,9 +547,6 @@ export default function CandidateCard({
                     ? `Dept: ${candidate.department.replace("Kitchen (BOH)", "BOH").replace("Front of House (Service)", "Service")}`
                     : null,
                   candidate.specialization ? `Spec: ${candidate.specialization}` : null,
-                  candidate.establishment_tag
-                    ? `Establishment: ${candidate.establishment_tag}`
-                    : null,
                 ].filter(Boolean) as string[]
               }
             />

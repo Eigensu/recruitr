@@ -42,6 +42,7 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.service import map_candidate as service_map_candidate
 from app.modules.recruitment.service import unmap_candidate as service_unmap_candidate
+from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.matching import _get_effective_requirements
 
@@ -260,6 +261,14 @@ async def get_position_filters(viewer: _Viewer) -> PositionFiltersResponse:
     clients = await Client.find(match).sort("name").to_list()
     client_options = [ClientOption(id=str(c.id), code=c.code, name=c.name) for c in clients]
     return PositionFiltersResponse(clients=client_options, statuses=["open", "on_hold", "closed"])
+
+
+@router.get("/role-catalog")
+async def get_role_catalog(_: _Viewer) -> dict[str, list[str]]:
+    """Role options grouped by department — the single source of truth for
+    both the position and candidate role dropdowns, and the same catalog
+    PositionCreate/PositionUpdate validate `role` against."""
+    return {dept.value: roles for dept, roles in ROLES_BY_CATEGORY.items()}
 
 
 # ── List ───────────────────────────────────────────────────────────────────────

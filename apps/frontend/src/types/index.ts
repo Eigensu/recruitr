@@ -189,6 +189,10 @@ export interface CandidateFilters {
   gender?: string;
   role?: string;
   salary?: string;
+  department?: string;
+  establishment_tag?: string;
+  communication?: string;
+  education?: string;
   status?: string;
   page: number;
   limit: number;

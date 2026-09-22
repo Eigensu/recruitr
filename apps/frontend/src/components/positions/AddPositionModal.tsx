@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconX, IconBriefcase, IconPlus, IconCheck } from "@tabler/icons-react";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import {
   createPosition,
+  getRoleCatalog,
   updatePosition,
   type PositionCreatePayload,
   type PositionUpdatePayload,
@@ -45,83 +46,6 @@ const EMPTY_FORM = {
   notes: "",
 };
 
-const ROLES_BY_CATEGORY: Record<string, string[]> = {
-  Service: [
-    "Bar Assistant",
-    "Bar Manager",
-    "Bar Supervisor",
-    "Barback",
-    "Barista",
-    "Bartender",
-    "Café Manager",
-    "Café Supervisor",
-    "Captain",
-    "Cashier",
-    "Counter Sales",
-    "Duty Manager",
-    "F&B Executive",
-    "F&B Supervisor",
-    "Floor Supervisor",
-    "Front Office Executive",
-    "GRE",
-    "Hostess",
-    "Mixologist",
-    "Outlet Manager",
-    "Shift Manager",
-    "Sommelier",
-    "Steward",
-    "Waiter / Server",
-    "RM",
-    "ARM",
-    "Head Bartender",
-    "Beverage Head",
-  ],
-  BOH: [
-    "CDP",
-    "Commi 1",
-    "Commi 2",
-    "Commi 3",
-    "DCDP",
-    "Executive Chef",
-    "Food Production Manager",
-    "Head Baker",
-    "Head Chef",
-    "Kitchen Supervisor",
-    "Packaging Assistant",
-    "Sous Chef",
-    "Staff Cook",
-    "Store Manager",
-    "Storekeeper",
-  ],
-  Corporate: [
-    "Accountant / Accounts",
-    "Admin / Back Office",
-    "Brand Manager",
-    "Business Development",
-    "Community Manager",
-    "Content Strategist",
-    "CRM",
-    "Data Analyst",
-    "EA / PA",
-    "F&B Controller",
-    "General Manager",
-    "Graphic Designer",
-    "HR",
-    "Lawyer",
-    "Marketing",
-    "MIS Executive",
-    "Operations Head",
-    "Payroll",
-    "PR",
-    "Project Manager",
-    "Purchase",
-    "Sales",
-    "Social Media",
-    "Supply Chain / SCM",
-    "Training Manager / L&D",
-  ],
-};
-
 function positionToForm(p: ApiPosition) {
   return {
     clientId: p.client_id,
@@ -149,6 +73,29 @@ export default function AddPositionModal({
   const apiFetch = useApiFetch();
   const { isClient } = useCurrentUser();
   const isEditing = Boolean(position);
+
+  const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  // A failed fetch keeps whatever catalog we already have: emptying it leaves
+  // the required Role select with no options, which blocks submission and can
+  // hide the role an edited position already holds.
+  const loadRoleCatalog = useCallback(() => {
+    // Both writes stay inside the async callbacks: a synchronous reset here
+    // would be a setState directly in the effect below. It also means a retry
+    // keeps the banner up until it actually succeeds, instead of flashing.
+    getRoleCatalog(apiFetch)
+      .then((catalog) => {
+        setRoleCatalog(catalog);
+        setCatalogFailed(false);
+      })
+      .catch(() => setCatalogFailed(true));
+  }, [apiFetch]);
+  useEffect(() => {
+    if (!isOpen) return;
+    loadRoleCatalog();
+  }, [isOpen, loadRoleCatalog]);
+  // Only worth surfacing when there is nothing to fall back on.
+  const showCatalogError = catalogFailed && Object.keys(roleCatalog).length === 0;
 
   const [form, setForm] = useState(position ? positionToForm(position) : EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -308,6 +255,19 @@ export default function AddPositionModal({
                 </div>
               )}
 
+              {showCatalogError && (
+                <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center justify-between gap-3">
+                  <span>Couldn&apos;t load the role list.</span>
+                  <button
+                    type="button"
+                    onClick={loadRoleCatalog}
+                    className="shrink-0 font-semibold underline hover:no-underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
               <form id="add-position-form" onSubmit={handleSubmit} className="space-y-4">
                 {!isClient && (
                   <div>
@@ -450,7 +410,7 @@ export default function AddPositionModal({
                     >
                       <option value="">Select Role...</option>
                       {form.department &&
-                        ROLES_BY_CATEGORY[form.department]?.map((r) => (
+                        roleCatalog[form.department]?.map((r) => (
                           <option key={r} value={r}>
                             {r}
                           </option>

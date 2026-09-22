@@ -57,6 +57,13 @@ export function getPositionFilters(apiFetch: ApiFetch): Promise<ApiPositionFilte
   return apiFetch("/api/v1/positions/filters");
 }
 
+/** Role options grouped by department — shared source of truth for the
+ *  position and candidate role dropdowns; mirrors the backend's own
+ *  ROLES_BY_CATEGORY validation. */
+export function getRoleCatalog(apiFetch: ApiFetch): Promise<Record<string, string[]>> {
+  return apiFetch("/api/v1/positions/role-catalog");
+}
+
 export function getTopCandidates(
   apiFetch: ApiFetch,
   positionId: string,
