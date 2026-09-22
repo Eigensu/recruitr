@@ -8,3 +8,19 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * Parse a datetime string returned by the API.
+ * The backend serializes naive UTC (no offset), which `new Date()` would read as local time.
+ */
+export function parseApiDate(value: string): Date {
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasTimezone ? value : `${value}Z`);
+}
+
+/** Format a date as the local `YYYY-MM-DD` string an `<input type="date">` expects. */
+export function toDateInputValue(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}

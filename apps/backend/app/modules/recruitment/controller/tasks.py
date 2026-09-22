@@ -3,7 +3,6 @@ from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.common.utils.datetime_utils import normalize_datetime
-from app.dependencies import (
 from app.core.dependencies import (
     get_tenant,
     get_viewer,

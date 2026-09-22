@@ -67,7 +67,8 @@ export async function deleteTask(apiFetch: ApiFetch, taskId: string): Promise<vo
 
 export interface TaskUpdatePayload {
   title?: string;
-  description?: string;
+  /** `null` clears the stored description; omitting the field leaves it untouched. */
+  description?: string | null;
   tracked_activity_type?: TrackedActivityType;
   target_count?: number;
   assignee_type?: TaskAssignmentType;

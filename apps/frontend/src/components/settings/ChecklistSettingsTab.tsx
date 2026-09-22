@@ -22,6 +22,7 @@ import {
   type TrackedActivityType,
 } from "@/lib/api/tasks";
 import { listTeams, listTeamEmployees, type Team, type EmployeeTeamInfo } from "@/lib/api/teams";
+import { parseApiDate, toDateInputValue } from "@/lib/utils";
 
 interface ChecklistSettingsTabProps {
   readonly user: UserInfo | null;
@@ -213,7 +214,7 @@ function TaskCard({
             <div className="flex flex-col items-end text-xs text-text-muted">
               <span className="flex items-center gap-1">
                 <IconCalendarEvent className="w-3.5 h-3.5" />
-                Due {new Date(task.due_date).toLocaleDateString()}
+                Due {parseApiDate(task.due_date).toLocaleDateString()}
               </span>
               <span className="flex items-center gap-1 mt-1 opacity-70">{assigneeLabel}</span>
             </div>
@@ -304,7 +305,7 @@ function TaskFormModal({
   const apiFetch = useApiFetch();
   const toast = useToast();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = toDateInputValue(new Date());
 
   const [title, setTitle] = useState(editTask?.title ?? "");
   const [description, setDescription] = useState(editTask?.description ?? "");
@@ -313,8 +314,11 @@ function TaskFormModal({
   );
   const [targetCount, setTargetCount] = useState(editTask ? String(editTask.target_count) : "");
 
-  const initialDueDate = editTask ? new Date(editTask.due_date).toISOString().split("T")[0] : today;
+  const initialDueDate = editTask ? toDateInputValue(parseApiDate(editTask.due_date)) : today;
   const [dueDate, setDueDate] = useState(initialDueDate);
+
+  // An existing task may already be overdue; only its start date bounds the picker.
+  const minDueDate = editTask ? toDateInputValue(parseApiDate(editTask.start_date)) : today;
 
   const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">(
     editTask?.assignee_type ?? "all",
@@ -323,13 +327,12 @@ function TaskFormModal({
   const [submitting, setSubmitting] = useState(false);
 
   const isSaving = editTask !== undefined;
-  const buttonText = submitting
-    ? isSaving
-      ? "Saving..."
-      : "Creating..."
-    : isSaving
-      ? "Save Changes"
-      : "Create Task";
+
+  const getButtonText = () => {
+    if (submitting) return isSaving ? "Saving..." : "Creating...";
+    return isSaving ? "Save Changes" : "Create Task";
+  };
+  const buttonText = getButtonText();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -341,31 +344,28 @@ function TaskFormModal({
 
       const targetCountNum = Number.parseInt(targetCount, 10);
       const finalAssigneeId = assigneeType === "all" ? undefined : assigneeId;
-      const finalDescription = description || undefined;
+      const finalDescription = description || null;
+
+      const fields = {
+        title,
+        tracked_activity_type: trackedActivity,
+        target_count: targetCountNum,
+        assignee_type: assigneeType,
+        assignee_id: finalAssigneeId,
+        due_date: dueObj.toISOString(),
+      };
 
       if (editTask) {
-        await updateTask(apiFetch, editTask.id, {
-          title,
-          description: finalDescription,
-          tracked_activity_type: trackedActivity,
-          target_count: targetCountNum,
-          assignee_type: assigneeType,
-          assignee_id: finalAssigneeId,
-          due_date: dueObj.toISOString(),
-        });
+        // `null` rather than `undefined` so an emptied description is actually cleared.
+        await updateTask(apiFetch, editTask.id, { ...fields, description: finalDescription });
         toast("Task updated successfully", "success");
       } else {
         const startObj = new Date();
         startObj.setHours(0, 0, 0, 0);
         await createTask(apiFetch, {
-          title,
-          description: finalDescription,
-          tracked_activity_type: trackedActivity,
-          target_count: targetCountNum,
-          assignee_type: assigneeType,
-          assignee_id: finalAssigneeId,
+          ...fields,
+          description: finalDescription ?? undefined,
           start_date: startObj.toISOString(),
-          due_date: dueObj.toISOString(),
         });
         toast("Task created successfully", "success");
       }
@@ -462,7 +462,7 @@ function TaskFormModal({
                 id="task-due-date"
                 type="date"
                 required
-                min={today}
+                min={minDueDate}
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
