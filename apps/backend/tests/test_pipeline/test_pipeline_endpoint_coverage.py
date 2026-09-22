@@ -282,6 +282,66 @@ async def test_board_returns_stage_columns_for_staff(staff: AsyncClient, seeded)
 
 
 @pytest.mark.asyncio
+async def test_board_has_a_column_for_every_stage(staff: AsyncClient, seeded) -> None:
+    # The board reads only mappings in the stages it has columns for, so a
+    # stage without one is a stage whose cards silently leave the board.
+    res = await staff.get("/api/v1/pipeline/board")
+    assert res.status_code == 200, res.text
+    assert {col["stage"] for col in res.json()["stages"]} == {s.value for s in PipelineStage}
+
+
+@pytest.mark.asyncio
+async def test_card_moved_on_hold_stays_on_the_board(staff: AsyncClient, seeded) -> None:
+    # on_hold had no column, so dragging a card there made it vanish until
+    # someone moved it back by some other route.
+    mapping = seeded["mine"]
+    res = await staff.post(
+        f"/api/v1/pipeline/mappings/{mapping.id}/move", json={"new_stage": "on_hold"}
+    )
+    assert res.status_code == 200, res.text
+
+    board = (await staff.get("/api/v1/pipeline/board")).json()
+    on_hold = {col["stage"]: col for col in board["stages"]}["on_hold"]
+    assert [m["mapping_id"] for m in on_hold["mappings"]] == [str(mapping.id)]
+    assert on_hold["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_joining_details_saved_by_a_recruiter_reach_both_boards(
+    staff: AsyncClient, seeded
+) -> None:
+    # Joining details are entered while the candidate is still `selected` and
+    # live on the mapping, which both boards read. Saved from the recruiter's
+    # modal, they must come back on the client's board too.
+    mapping = seeded["mine"]
+    await mapping.set({"stage": PipelineStage.selected, "offer_letter_url": "https://x/o.pdf"})
+
+    res = await staff.put(
+        f"/api/v1/pipeline/mappings/{mapping.id}/joining-date",
+        json={"joining_date": "2026-10-01T00:00:00Z", "salary_offered": 650000},
+    )
+    assert res.status_code == 200, res.text
+
+    def card(board: dict) -> dict:
+        return next(
+            m
+            for col in board["stages"]
+            for m in col["mappings"]
+            if m["mapping_id"] == str(mapping.id)
+        )
+
+    mine = card((await staff.get("/api/v1/pipeline/board")).json())
+    assert mine["stage"] == "selected"
+    assert mine["joining_date"].startswith("2026-10-01")
+    assert mine["salary_offered"] == 650000
+
+    app.dependency_overrides[get_viewer] = lambda: _CLIENT_SCOPE_1
+    theirs = card((await staff.get("/api/v1/pipeline/board")).json())
+    assert theirs["joining_date"].startswith("2026-10-01")
+    assert theirs["salary_offered"] == 650000
+
+
+@pytest.mark.asyncio
 async def test_board_shows_a_client_only_their_own_pipeline(client_1: AsyncClient, seeded) -> None:
     res = await client_1.get("/api/v1/pipeline/board")
     assert res.status_code == 200, res.text

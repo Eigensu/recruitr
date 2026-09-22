@@ -15,6 +15,7 @@ Endpoints:
 from __future__ import annotations
 
 import contextlib
+import logging
 import re
 from datetime import datetime
 from typing import Annotated, Literal
@@ -60,6 +61,8 @@ from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
 from app.modules.storage import service as storage_service
 from app.modules.storage.uploads import read_offer_letter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -716,9 +719,34 @@ async def upload_offer_letter(
     file_bytes, filename = await read_offer_letter(file)
     result = storage_service.upload_offer_letter(file_bytes, filename)
 
-    mapping.offer_letter_url = result.get("secure_url")
+    # Never report success without a URL. This used to assign
+    # result.get("secure_url") straight onto the mapping: when the provider
+    # answered with anything that lacked that key the mapping was saved with
+    # offer_letter_url=None and the endpoint still returned 200 {"success":
+    # true}. The caller only checks res.ok, so the upload looked like it had
+    # worked while nothing was stored — the offer letter was simply gone when
+    # the board was next opened, with no error anywhere to explain it.
+    secure_url = result.get("secure_url")
+    if not secure_url:
+        # mapping.id, not the mapping_id path parameter: the stored id cannot
+        # carry anything a caller typed into the log line.
+        logger.error(
+            "Offer letter upload for mapping %s returned no secure_url; payload keys: %s",
+            mapping.id,
+            sorted(result.keys()) if isinstance(result, dict) else type(result).__name__,
+        )
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "The file store did not return a URL for the offer letter. It was not saved.",
+        )
+
+    mapping.offer_letter_url = secure_url
     await mapping.save()
-    return {"success": True, "offer_letter_url": mapping.offer_letter_url}
+
+    # Read back rather than echoing what we just assigned, so the response
+    # reflects what the database actually holds.
+    saved = await Mapping.get(mapping.id)
+    return {"success": True, "offer_letter_url": saved.offer_letter_url if saved else None}
 
 
 @router.put("/mappings/{mapping_id}/joining-date")

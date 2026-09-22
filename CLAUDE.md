@@ -33,7 +33,10 @@ pnpm --filter frontend format   # prettier --write .
 
 # Backend only (from repo root, uses uv)
 pnpm dev:backend                 # uvicorn app.core.main:app --reload --port 8000
-cd apps/backend && uv sync       # install deps (uv.lock is the source of truth; requirements.txt is kept in sync for Docker)
+# requirements.txt is the real dependency list (Docker installs it); requirements-dev.txt
+# adds pytest on top. Do NOT `uv sync` — pyproject.toml declares only `resend`, so it
+# would uninstall FastAPI and everything else from .venv.
+cd apps/backend && uv pip install -r requirements.txt -r requirements-dev.txt
 # Tests refuse to run unless MONGODB_URI is local — see the note below.
 cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest             # full suite
 cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytest tests/test_recruitment/test_candidates_api.py           # single file
@@ -41,6 +44,13 @@ cd apps/backend && MONGODB_URI="mongodb://localhost:27017/recruitr" uv run pytes
 cd apps/backend && uv run ruff check .                    # lint
 cd apps/backend && uv run ruff format .                    # format
 ```
+
+Install the dev requirements before running the tests. Without pytest in `.venv`, `uv run
+pytest` silently falls through to whatever pytest is on `PATH` and runs the suite against *that*
+interpreter's packages — which is how the suite ran on FastAPI 0.122 while the app imported
+0.141, long enough for a route-discovery difference between them to hide a test that had stopped
+checking anything. `uv run python -c "import fastapi; print(fastapi.__version__)"` and
+`uv run pytest --version` should agree on the same `.venv`.
 
 Backend tests spin up a real MongoDB (`{MONGODB_DB_NAME}_test`) per test via a `pytest_asyncio`
 autouse fixture in `tests/conftest.py` — a Mongo instance must be reachable at `MONGODB_URI`. Use

@@ -19,7 +19,14 @@ import ClientActionModal from "./ClientActionModal";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function fetchBoard(): Promise<PipelineBoardData> {
-  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, { credentials: "include" });
+  // no-store: the board is re-read after every action and whenever the user
+  // navigates back to it, so a cached response shows the state from before
+  // the action they just took — an uploaded offer letter looking like it was
+  // never saved. The page's server-side fetches already pass this.
+  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error(`Board fetch failed: ${res.status}`);
   return res.json();
 }
@@ -52,6 +59,11 @@ interface PositionOption {
 interface Props {
   readonly employees: readonly Employee[];
   readonly positions: readonly PositionOption[];
+  /** Seeded from /pipeline?position=<id> so a link in from the Positions page
+   *  lands on the board already narrowed to that role. */
+  readonly initialPositionId?: string;
+  /** Seeded from /pipeline?client=<name>. */
+  readonly initialClient?: string;
 }
 
 interface Filters {
@@ -88,15 +100,20 @@ const selectStyle = {
   border: "1px solid var(--color-border-val)",
 };
 
-export default function GlobalPipelineBoard({ employees, positions }: Props) {
+export default function GlobalPipelineBoard({
+  employees,
+  positions,
+  initialPositionId,
+  initialClient,
+}: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
+  const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
-    position_id: "",
-    client: "",
+    position_id: initialPositionId ?? "",
+    client: initialClient ?? "",
   });
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -173,6 +190,15 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
         return true;
       });
   }, [board, filters]);
+
+  // Derived rather than stored: the modal must reflect the board's current row,
+  // so that state an action unlocks (an uploaded offer letter, a new stage) is
+  // visible as soon as the refetch lands, without reopening the card.
+  const selectedCard = selectedMappingId
+    ? (board?.stages
+        .flatMap((col) => col.mappings)
+        .find((m) => m.mapping_id === selectedMappingId) ?? null)
+    : null;
 
   // Find the active drag card across all columns
   const activeCard = useMemo((): PipelineCard | null => {
@@ -396,7 +422,7 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
                 onStageChange={handleStageChange}
-                onCardClick={(card) => setSelectedCard(card)}
+                onCardClick={(card) => setSelectedMappingId(card.mapping_id)}
               />
             ))}
           </div>
@@ -407,25 +433,28 @@ export default function GlobalPipelineBoard({ employees, positions }: Props) {
         </DndContext>
       )}
       <ClientActionModal
+        key={selectedCard?.mapping_id ?? "none"}
         isOpen={!!selectedCard}
-        onClose={() => setSelectedCard(null)}
+        onClose={() => setSelectedMappingId(null)}
         card={selectedCard}
         onStageChange={async (newStage) => {
           if (!selectedCard) return;
+          // `new_stage` is what StageMoveRequest declares, and the session
+          // cookie is what authenticates it. This posted `to_stage` with no
+          // credentials, so every action in this modal 401'd or 422'd and then
+          // reported nothing but a console line — the modal just closed as if
+          // it had worked.
           const res = await fetch(
             `${API_URL}/api/v1/pipeline/mappings/${selectedCard.mapping_id}/move`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ to_stage: newStage }),
+              credentials: "include",
+              body: JSON.stringify({ new_stage: newStage }),
             },
           );
-          if (res.ok) {
-            setSelectedCard(null);
-            load();
-          } else {
-            console.error("Failed to move candidate");
-          }
+          if (!res.ok) throw new Error(await res.text());
+          load();
         }}
         onActionComplete={load}
       />

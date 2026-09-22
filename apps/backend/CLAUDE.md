@@ -16,9 +16,12 @@ cross-cutting notes.
 - `core/database.py` — Beanie/Mongo init. **Every Beanie Document model must be registered in the
   `document_models` list here** (and mirrored in `tests/conftest.py`'s fixture) or it fails at
   query time with `CollectionWasNotInitialized` instead of at startup. If Mongo index sync fails
-  (conflicting/quota-exceeded indexes), it falls back to `skip_indexes=True` for *all* models and
-  flips `/health` to `"degraded"` — see `scripts/inspect_indexes.py` / `fix_ttl_indexes.py` /
-  `fix_index_conflicts.py`.
+  (conflicting/quota-exceeded indexes), each model is re-registered individually so only the
+  models that actually conflict fall back to `skip_indexes=True` — the rest keep their indexes,
+  unique constraints included. `/health` flips to `"degraded"` and names the affected
+  collections. See `scripts/inspect_indexes.py` to view the drift and
+  `scripts/fix_index_conflicts.py` to repair it (`fix_ttl_indexes.py` only compares
+  `expireAfterSeconds`, so it cannot fix an option or name conflict).
 - `core/dependencies.py` — the auth/tenant dependency chain used across nearly every route. Understand
   this before touching any endpoint:
   - `get_current_user` → decodes the `access_token` HttpOnly cookie (or `Authorization: Bearer`)

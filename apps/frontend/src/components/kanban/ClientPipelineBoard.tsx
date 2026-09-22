@@ -1,18 +1,38 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
 import KanbanColumn from "./Column";
+import KanbanCard from "./CandidateCard";
+import ClientActionModal from "./ClientActionModal";
 import {
   CLIENT_STAGES,
   CLIENT_STAGE_LABELS,
+  isClientTransitionAllowed,
   type ClientStage,
 } from "@/lib/constants/client-pipeline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function fetchBoard(): Promise<PipelineBoardData> {
-  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, { credentials: "include" });
+  // no-store: the board is re-read after every action and whenever the user
+  // navigates back to it, so a cached response shows the state from before
+  // the action they just took — an uploaded offer letter looking like it was
+  // never saved. The page's server-side fetches already pass this.
+  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, {
+    credentials: "include",
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error(`Board fetch failed: ${res.status}`);
   return res.json();
 }
@@ -25,6 +45,8 @@ interface PositionOption {
 
 interface Props {
   readonly positions: readonly PositionOption[];
+  /** Seeded from /pipeline?position=<id> — see the Positions page link. */
+  readonly initialPositionId?: string;
 }
 
 interface Filters {
@@ -45,25 +67,57 @@ function mapToClientStage(stage: KanbanStage): ClientStage | null {
   }
 }
 
-import { DndContext } from "@dnd-kit/core";
-
-import ClientActionModal from "./ClientActionModal";
-
 const selectStyle = {
   background: "var(--color-canvas-val)",
   color: "var(--color-text-primary)",
   border: "1px solid var(--color-border-val)",
 };
 
-export default function ClientPipelineBoard({ positions }: Props) {
+export default function ClientPipelineBoard({ positions, initialPositionId }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<Filters>({ position_id: "" });
+  const [filters, setFilters] = useState<Filters>({ position_id: initialPositionId ?? "" });
 
   // Modal state
-  const [selectedCard, setSelectedCard] = useState<PipelineCard | null>(null);
+  const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  function findCard(mappingId: string): PipelineCard | undefined {
+    return board?.stages.flatMap((col) => col.mappings).find((m) => m.mapping_id === mappingId);
+  }
+
+  /** Move the card between columns before the request lands, so the board
+   *  doesn't sit still until the refetch returns. `load()` reconciles. */
+  function applyStageLocally(mappingId: string, newStage: KanbanStage) {
+    setBoard((prev) => {
+      if (!prev) return prev;
+      let moved: PipelineCard | undefined;
+      const stripped = prev.stages.map((col) => {
+        const idx = col.mappings.findIndex((m) => m.mapping_id === mappingId);
+        if (idx === -1) return col;
+        moved = { ...col.mappings[idx], stage: newStage };
+        return { ...col, mappings: col.mappings.filter((_, i) => i !== idx), count: col.count - 1 };
+      });
+      if (!moved) return prev;
+      const finalCard = moved;
+      return {
+        stages: stripped.map((col) =>
+          col.stage === newStage
+            ? { ...col, mappings: [...col.mappings, finalCard], count: col.count + 1 }
+            : col,
+        ),
+      };
+    });
+  }
 
   async function handleStageChange(card: PipelineCard, newStage: string) {
+    // The backend rejects anything outside the client whitelist with a 403, so
+    // checking here keeps an illegal move from ever leaving the browser.
+    if (!isClientTransitionAllowed(card.stage, newStage)) return;
+
+    applyStageLocally(card.mapping_id, newStage as KanbanStage);
     try {
       const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${card.mapping_id}/move`, {
         method: "POST",
@@ -75,8 +129,28 @@ export default function ClientPipelineBoard({ positions }: Props) {
       load();
     } catch (err) {
       console.error(err);
+      // Roll the optimistic move back by re-reading the server's state.
+      load();
       alert("Failed to change stage: " + err);
     }
+  }
+
+  function handleDragStart(e: DragStartEvent) {
+    setActiveDragId(e.active.id as string);
+  }
+
+  async function handleDragEnd(e: DragEndEvent) {
+    setActiveDragId(null);
+    const { active, over } = e;
+    if (!over || !board) return;
+
+    const card = findCard(active.id as string);
+    if (!card) return;
+
+    const newStage = over.id as string;
+    if (card.stage === newStage) return;
+
+    await handleStageChange(card, newStage);
   }
 
   function load() {
@@ -126,6 +200,11 @@ export default function ClientPipelineBoard({ positions }: Props) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  const activeCard = activeDragId ? findCard(activeDragId) : undefined;
+  // Derived rather than stored: the modal must reflect the board's current row,
+  // so that state an action unlocks (an uploaded offer letter, a new stage) is
+  // visible as soon as the refetch lands, without reopening the card.
+  const selectedCard = selectedMappingId ? (findCard(selectedMappingId) ?? null) : null;
   const hasFilters = filters.position_id;
   const selectCls = "rounded-lg px-2 py-1.5 text-xs outline-none";
 
@@ -199,27 +278,42 @@ export default function ClientPipelineBoard({ positions }: Props) {
           ))}
         </div>
       ) : (
-        <DndContext>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
           <div className="flex flex-1 gap-4 overflow-x-auto pb-2">
             {clientStagesData.map((col) => (
               <KanbanColumn
                 key={col.stage}
-                stage={col.stage as unknown as import("@/types").KanbanStage}
+                stage={col.stage as unknown as KanbanStage}
                 label={col.label}
                 cards={col.mappings}
-                readOnly={true}
+                readOnly={false}
+                dropDisabled={
+                  !!activeCard &&
+                  activeCard.stage !== col.stage &&
+                  !isClientTransitionAllowed(activeCard.stage, col.stage)
+                }
                 isClientBoard={true}
-                onCardClick={(card) => setSelectedCard(card)}
+                onCardClick={(card) => setSelectedMappingId(card.mapping_id)}
                 onStageChange={handleStageChange}
               />
             ))}
           </div>
+
+          <DragOverlay>
+            {activeCard ? <KanbanCard card={activeCard} isClientBoard isDragOverlay /> : null}
+          </DragOverlay>
         </DndContext>
       )}
 
       <ClientActionModal
+        key={selectedCard?.mapping_id ?? "none"}
         isOpen={!!selectedCard}
-        onClose={() => setSelectedCard(null)}
+        onClose={() => setSelectedMappingId(null)}
         card={selectedCard}
         onStageChange={async (newStage) => {
           if (!selectedCard) return;
