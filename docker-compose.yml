@@ -14,14 +14,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # Runs to completion, and services that need to write wait for that via
+  # service_completed_successfully. Mongo's ping healthcheck answers before
+  # rs.initiate() has run, so "healthy" is not yet "writable".
   mongo-init:
     image: mongo:7
     depends_on:
       mongo:
         condition: service_healthy
-    entrypoint: >
-      mongosh --host mongo --eval
-      "rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] })"
+    # Idempotent on purpose: mongo_data is a named volume, so every run after
+    # the first finds the replica set already initiated, and a bare
+    # rs.initiate() would exit non-zero and strand everything waiting on it.
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo
+      - --quiet
+      - --eval
+      - |
+        try {
+          rs.status();
+        } catch (err) {
+          // 94 = NotYetInitialized; anything else is a real failure.
+          if (err.code !== 94) { throw err; }
+          rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] });
+        }
+        // Initiating is not the same as having finished the election.
+        for (let i = 0; i < 60; i++) {
+          if (db.hello().isWritablePrimary) { quit(0); }
+          sleep(1000);
+        }
+        print('mongo-init: timed out waiting for a writable primary');
+        quit(1);
     restart: "no"
 
   redis:
@@ -36,6 +60,52 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Celery worker — consumes the queue that position creation writes to via
+  # .delay(). Without a worker running, those messages simply accumulate in
+  # Redis and the new-position notification is never sent.
+  worker:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command:
+      ["celery", "-A", "app.core.celery_app.celery_app", "worker", "--loglevel=info"]
+    env_file: [.env]
+    environment:
+      # Overridden rather than inherited from .env on purpose: the repo-root
+      # .env points MONGODB_URI at the live Atlas cluster, and these jobs write
+      # (stage moves, notifications, reminder emails). A local compose stack
+      # must not drive production.
+      MONGODB_URI: mongodb://mongo:27017/recruitr
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      # Not just `mongo: service_healthy` — a task picked up in the window
+      # between the ping passing and the replica set existing calls init_db()
+      # against a node with no writable primary.
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Celery beat — the scheduler. Everything in celery_app.py's beat_schedule
+  # (the 2-day reminders, the joining-date transition) fires from here and
+  # from nowhere else.
+  beat:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.core.celery_app.celery_app", "beat", "--loglevel=info"]
+    env_file: [.env]
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/recruitr
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
 
 volumes:
   mongo_data:
