@@ -42,6 +42,12 @@ docker-compose up -d worker beat
 docker-compose logs -f worker beat
 ```
 
+That pulls in `mongo`, `mongo-init` and `redis` as dependencies. The worker
+waits for `mongo-init` to exit successfully rather than for Mongo's
+healthcheck, because the ping passes before `rs.initiate()` has run and a task
+picked up in that window would hit a node with no writable primary. On a first
+run this adds the few seconds the replica-set election takes.
+
 Or directly, from `apps/backend`, with `uv run celery` against
 `app.core.celery_app.celery_app` — `worker` for the queue consumer and `beat`
 for the scheduler, both at `--loglevel=info`.
