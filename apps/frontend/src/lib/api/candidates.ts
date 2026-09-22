@@ -56,6 +56,10 @@ const STRING_FILTER_KEYS = [
   "gender",
   "role",
   "salary",
+  "department",
+  "establishment_tag",
+  "communication",
+  "education",
   "status",
 ] as const satisfies readonly (keyof CandidateFilters)[];
 

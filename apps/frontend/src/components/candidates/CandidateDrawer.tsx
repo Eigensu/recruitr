@@ -847,7 +847,10 @@ function EditForm({
         phone: form.phone.trim() || undefined,
         previous_company: form.previous_company.trim() || undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : undefined,
-        current_role: resolvedRole() || undefined,
+        // Sent even when empty: the department-change handler below clears the
+        // role, and the PATCH drops unset/null fields, so "" is the only value
+        // that actually clears a stale out-of-department role.
+        current_role: resolvedRole(),
         city: form.city.trim() || undefined,
         area: form.area.trim() || undefined,
         gender: form.gender.trim() || undefined,

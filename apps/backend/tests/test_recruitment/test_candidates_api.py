@@ -166,6 +166,89 @@ async def test_list_experience_filter_gt5(client_a: AsyncClient) -> None:
     assert res.json()["items"][0]["experience_years"] == 7
 
 
+# ── Structured-tag filters (Candidate Directory filter bar) ────────────────────
+# BASE_PAYLOAD is Service / Bachelor's / Excellent with no establishment tag, so
+# each case adds one contrasting candidate and asserts the exact stored value —
+# these are exact-match branches, so a renamed field would silently match none.
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_department(client_a: AsyncClient) -> None:
+    await _create_via_api(client_a)  # department: Service
+    await _create_via_api(
+        client_a,
+        {"email": "boh@test.com", "department": "BOH", "specialization": "Kitchen"},
+    )
+
+    res = await client_a.get("/api/v1/candidates?department=BOH")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    assert len(items) == 1
+    assert items[0]["department"] == "BOH"
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_establishment_tag(client_a: AsyncClient) -> None:
+    await _create_via_api(client_a, {"email": "cafe@test.com", "establishment_tag": "Cafe"})
+    await _create_via_api(client_a, {"email": "hotel@test.com", "establishment_tag": "Hotel"})
+
+    res = await client_a.get("/api/v1/candidates?establishment_tag=Hotel")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    assert len(items) == 1
+    assert items[0]["establishment_tag"] == "Hotel"
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_communication(client_a: AsyncClient) -> None:
+    await _create_via_api(client_a)  # communication: Excellent
+    await _create_via_api(client_a, {"email": "avg@test.com", "communication": "Average"})
+
+    res = await client_a.get("/api/v1/candidates?communication=Average")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    assert len(items) == 1
+    assert items[0]["communication"] == "Average"
+
+
+@pytest.mark.asyncio
+async def test_list_filter_by_education(client_a: AsyncClient) -> None:
+    await _create_via_api(client_a)  # education: Bachelor's
+    await _create_via_api(client_a, {"email": "masters@test.com", "education": "Master's"})
+
+    res = await client_a.get("/api/v1/candidates?education=Master%27s")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    assert len(items) == 1
+    assert items[0]["education"] == "Master's"
+
+
+@pytest.mark.asyncio
+async def test_list_structured_tag_filters_combine(client_a: AsyncClient) -> None:
+    """Each filter narrows the same match, so mismatched pairs return nothing."""
+    await _create_via_api(
+        client_a,
+        {
+            "email": "boh-cafe@test.com",
+            "department": "BOH",
+            "specialization": "Kitchen",
+            "establishment_tag": "Cafe",
+        },
+    )
+    await _create_via_api(
+        client_a,
+        {"email": "service-hotel@test.com", "establishment_tag": "Hotel"},
+    )
+
+    res = await client_a.get("/api/v1/candidates?department=BOH&establishment_tag=Cafe")
+    assert res.status_code == 200
+    assert res.json()["meta"]["total"] == 1
+
+    res = await client_a.get("/api/v1/candidates?department=BOH&establishment_tag=Hotel")
+    assert res.status_code == 200
+    assert res.json()["meta"]["total"] == 0
+
+
 # ── Referee attribution (External Candidates tab) ──────────────────────────────
 # CandidateCreateStrict/the manual-add endpoint never resolves connect_code to
 # referee_id — only the public application form does that (public_controller.py)

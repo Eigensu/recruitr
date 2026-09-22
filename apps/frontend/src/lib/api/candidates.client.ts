@@ -7,48 +7,14 @@ import type {
   CandidateReferrerOption,
   PaginatedResponse,
 } from "@/types";
+import { buildCandidateQuery } from "./candidates";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-// Plain truthy string/enum filters — one line each would be identical but for
-// the key, which is exactly what pushed this past Sonar's cognitive-complexity
-// budget as a flat if-chain. Looping over the field list keeps it one branch.
-const STRING_FILTER_KEYS = [
-  "search",
-  "source",
-  "source_channel",
-  "created_by",
-  "referee_id",
-  "city",
-  "gender",
-  "role",
-  "salary",
-  "department",
-  "establishment_tag",
-  "communication",
-  "education",
-  "status",
-] as const satisfies readonly (keyof CandidateFilters)[];
-
-function buildQuery(filters: Partial<CandidateFilters>): string {
-  const params = new URLSearchParams();
-  for (const key of STRING_FILTER_KEYS) {
-    const value = filters[key];
-    if (value) params.set(key, String(value));
-  }
-  if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
-  if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
-  if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
-  if (filters.page) params.set("page", String(filters.page));
-  if (filters.limit) params.set("limit", String(filters.limit));
-  const qs = params.toString();
-  return qs ? `?${qs}` : "";
-}
 
 export async function clientFetchCandidates(
   filters: Partial<CandidateFilters>,
 ): Promise<PaginatedResponse<ApiCandidate>> {
-  const res = await fetch(`${API_URL}/api/v1/candidates${buildQuery(filters)}`, {
+  const res = await fetch(`${API_URL}/api/v1/candidates${buildCandidateQuery(filters)}`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error(`Candidates fetch failed: ${res.status}`);

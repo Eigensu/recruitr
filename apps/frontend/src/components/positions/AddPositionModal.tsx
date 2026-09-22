@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconX, IconBriefcase, IconPlus, IconCheck } from "@tabler/icons-react";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
@@ -75,12 +75,27 @@ export default function AddPositionModal({
   const isEditing = Boolean(position);
 
   const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  // A failed fetch keeps whatever catalog we already have: emptying it leaves
+  // the required Role select with no options, which blocks submission and can
+  // hide the role an edited position already holds.
+  const loadRoleCatalog = useCallback(() => {
+    // Both writes stay inside the async callbacks: a synchronous reset here
+    // would be a setState directly in the effect below. It also means a retry
+    // keeps the banner up until it actually succeeds, instead of flashing.
+    getRoleCatalog(apiFetch)
+      .then((catalog) => {
+        setRoleCatalog(catalog);
+        setCatalogFailed(false);
+      })
+      .catch(() => setCatalogFailed(true));
+  }, [apiFetch]);
   useEffect(() => {
     if (!isOpen) return;
-    getRoleCatalog(apiFetch)
-      .then(setRoleCatalog)
-      .catch(() => setRoleCatalog({}));
-  }, [isOpen, apiFetch]);
+    loadRoleCatalog();
+  }, [isOpen, loadRoleCatalog]);
+  // Only worth surfacing when there is nothing to fall back on.
+  const showCatalogError = catalogFailed && Object.keys(roleCatalog).length === 0;
 
   const [form, setForm] = useState(position ? positionToForm(position) : EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -237,6 +252,19 @@ export default function AddPositionModal({
               {error && (
                 <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                   {error}
+                </div>
+              )}
+
+              {showCatalogError && (
+                <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center justify-between gap-3">
+                  <span>Couldn&apos;t load the role list.</span>
+                  <button
+                    type="button"
+                    onClick={loadRoleCatalog}
+                    className="shrink-0 font-semibold underline hover:no-underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
                 </div>
               )}
 
