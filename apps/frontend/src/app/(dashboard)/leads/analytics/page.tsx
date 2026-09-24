@@ -175,7 +175,7 @@ export default function LeadAnalyticsPage() {
   const source = overview?.source;
 
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-7xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
@@ -205,7 +205,7 @@ export default function LeadAnalyticsPage() {
               className={cn(
                 "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
                 days === range.days
-                  ? "bg-yellow/15 text-yellow"
+                  ? "bg-yellow/15 text-navy dark:text-yellow"
                   : "text-text-secondary hover:text-text-primary",
               )}
             >
@@ -344,7 +344,7 @@ export default function LeadAnalyticsPage() {
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
                       groupBy === group.value
-                        ? "bg-yellow/15 text-yellow"
+                        ? "bg-yellow/15 text-navy dark:text-yellow"
                         : "text-text-secondary hover:text-text-primary",
                     )}
                   >
@@ -408,6 +408,6 @@ export default function LeadAnalyticsPage() {
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -99,7 +99,7 @@ export default function LeadCard({ lead, busy, onAccept, onReject }: LeadCardPro
       {lead.phone && (
         <a
           href={`tel:${lead.phone}`}
-          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-yellow/20 bg-yellow/10 px-4 py-3 font-heading text-lg font-bold tracking-wide text-yellow transition-colors hover:bg-yellow/20 active:scale-[0.99]"
+          className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-navy/20 bg-yellow/10 px-4 py-3 font-heading text-lg font-bold tracking-wide text-navy transition-colors hover:bg-yellow/20 active:scale-[0.99] dark:border-yellow/20 dark:text-yellow"
         >
           <IconPhone className="size-5" />
           {lead.phone}
@@ -122,7 +122,7 @@ export default function LeadCard({ lead, busy, onAccept, onReject }: LeadCardPro
           rows={2}
           maxLength={2000}
           placeholder="What did they say?"
-          className="mt-3 w-full resize-none rounded-lg border border-border bg-canvas p-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-yellow/40 focus:outline-none"
+          className="mt-3 w-full resize-none rounded-lg border border-border bg-canvas p-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-navy/40 focus:outline-none dark:focus:border-yellow/40"
         />
       )}
 
@@ -175,7 +175,7 @@ export default function LeadCard({ lead, busy, onAccept, onReject }: LeadCardPro
             className={cn(
               "rounded-lg border p-2 transition-colors",
               showNotes
-                ? "border-yellow/30 bg-yellow/10 text-yellow"
+                ? "border-navy/30 bg-yellow/10 text-navy dark:border-yellow/30 dark:text-yellow"
                 : "border-border text-text-muted hover:text-text-secondary",
             )}
           >

@@ -79,7 +79,7 @@ export default function TelecallerQueue() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-2xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
       <header className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
@@ -135,6 +135,6 @@ export default function TelecallerQueue() {
           </AnimatePresence>
         </div>
       )}
-    </main>
+    </div>
   );
 }
