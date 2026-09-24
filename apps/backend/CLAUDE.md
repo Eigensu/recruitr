@@ -62,6 +62,63 @@ cross-cutting notes.
 - Gamification/leaderboard credit is fire-and-forget from the recruitment service layer — a
   duplicate award or Redis failure must never roll back the domain write that triggered it.
 
+## Inbound lead intake
+
+Meta lead-ad candidates land in a Google Sheet, are ingested on a schedule, screened by a
+telecaller, then handed to a recruiter. Design doc and decisions log:
+`specs/telecaller_intake_spec.md`.
+
+| Piece | Where |
+|---|---|
+| Sheet read — service account, `spreadsheets.readonly` | `recruitment/utils/google_sheets.py` |
+| Column mapping, row parsing, phone normalisation | `recruitment/utils/{lead_sheet,phone}.py` |
+| Ingest, round-robin, accept / reject / reassign | `recruitment/service/intake_service.py` |
+| Funnel, per-leg timings, campaign report | `recruitment/service/intake_analytics.py` |
+| Hourly breach sweep, daily digest | `recruitment/service/intake_sla.py` |
+| HTTP | `recruitment/controller/intake.py` |
+| Scheduled jobs | `recruitment/tasks.py` + the beat schedule in `core/celery_app.py` |
+| Historical import | `scripts/backfill_intake_leads.py` (report-only unless `--confirm`) |
+
+These sit *beside* `service/_impl.py` rather than inside it — the direction `resume_service.py`
+started. Import them by module path; only `_impl` is off-limits.
+
+**Timestamps read back from Mongo are naive, and Python raises on comparing them to an aware
+`datetime` rather than guessing.** `intake_service.as_utc()` is the single place that fixes it, and
+every comparison between a stored timestamp and "now" must go through it. This is not theoretical:
+it was found by a test after it had already shipped in code that would have crashed every poll the
+moment the integration was switched on. `intake_analytics` and `intake_sla` both import `as_utc`
+from `intake_service`; the read and alert models depend on the write model and never the reverse,
+which is what keeps all three importable.
+
+**Ingest is idempotent.** `(brand_id, external_id)` is unique on `IntakeLead`, so re-reading a row
+is a no-op — which is what lets the poll read the whole range every run instead of tracking a
+cursor into someone else's spreadsheet. Dedupe against *people* already in the pool is separate,
+and is an in-memory index built per run (`_ContactIndex`), not a stored field: a stored
+`phone_normalized` would have missed every candidate created before it existed.
+
+**Two doors into this module, on purpose.** The queue routes take `get_telecaller_tenant`, the only
+dependency that admits the role. Everything under `/intake/analytics`, `/intake/leads` (the admin
+list), `/intake/assignees` and `/intake/config` takes plain `get_tenant`, so the refusal that
+protects the rest of the app also keeps a telecaller out of the reports about their own response
+times. `/leads/mine` must stay declared *before* `/leads/{lead_id}` or the path parameter swallows
+it — there is a test for exactly that.
+
+**Assignment rosters** come from `intake_service.assignment_roster()`, which is what the round-robin
+itself draws from. Do not build a picker out of `GET /teams/employees`: that endpoint deliberately
+hides `NON_RECRUITER_ROLES`, telecallers included, so it would offer names the assignment then
+refuses. `GET /intake/assignees` is the one for this.
+
+**Analytics are cached** in the `dashboard_cache` Redis namespace under `<brand>:intake:*` and
+dropped by `intake_analytics.invalidate()` after every lead write. `map_candidate` already clears
+`<brand>:*`, so the recruiter leg rides along with it. The admin lead list is deliberately *not*
+cached — a five-minute-old answer to "what is overdue right now" is worse than the query.
+
+**SLA alerts fire once per lead**, guarded by the `*_sla_breached_at` stamp, which is set whether or
+not there was anyone to notify: the breach is a fact about the lead, not about the delivery. A
+reassignment clears it so the new owner starts clean. Recipients are admins *and* maintainers —
+reassigning is maintainer-gated, so that is exactly the set who can act on the alert.
+
+
 ## Auth model
 
 Custom JWT (not Clerk, not a third-party auth provider), issued on `/api/v1/auth/login` or
