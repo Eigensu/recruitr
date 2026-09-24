@@ -99,3 +99,8 @@ Backend architecture and auth model → `apps/backend/CLAUDE.md`. Frontend archi
 - Redis is optional in dev (`REDIS_ENABLED` flag) and backs the dashboard/leaderboard cache
   (`app/common/extras/redis_cache.py`) plus the Celery broker/result backend for background jobs
   (`app/core/celery_app.py`).
+- **Some features only work with Celery beat running.** The beat schedule in `core/celery_app.py`
+  is the full list; the inbound lead pipeline in particular depends on three of them (sheet poll,
+  hourly SLA sweep, daily digest), so without a beat process leads are never ingested and nobody is
+  ever told a lead has gone unactioned. See `specs/telecaller_intake_spec.md` and the "Inbound lead
+  intake" section of `apps/backend/CLAUDE.md`.

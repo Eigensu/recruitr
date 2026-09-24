@@ -1,6 +1,10 @@
 # Telecaller Intake Pipeline — Technical Specification
 
-**Status:** Draft for review · **Branch:** `claude/cool-ptolemy-9a4fsq`
+**Status:** Built — all nine steps landed (§11) · **Branch:** `claude/cool-ptolemy-9a4fsq`
+
+**Not yet verified against the live sheet.** Everything below is covered by tests against a local
+Mongo, but no code path here has read the real spreadsheet: that needs the service account in §13.
+Nor has the UI been opened in a browser — it type-checks and lints, which is not the same thing.
 
 Adds a **Telecaller** role, a **live Google Sheets ingest** of Meta (Instagram) lead-ad
 candidates, a **two-leg review workflow** (telecaller → recruiter), **admin observability** on
@@ -711,20 +715,22 @@ is what makes it the safety net: it does not depend on having caught the hour a 
 
 ## 10. Testing
 
-New `tests/test_intake/`, following the existing per-area layout:
+`tests/test_intake/`, following the existing per-area layout. **199 tests** across the feature (183
+of them in `tests/test_intake/`), inside a suite of 406.
 
-| File | Covers |
-|---|---|
-| `test_sheet_mapping.py` | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization, ragged rows, unmapped columns kept in `raw`. Built on the sheet's real 21-column header row |
-| `test_google_sheets_config.py` | the service-account key as raw JSON, as base64, and every unusable shape, each with an error that says what to fix |
-| `test_backfill_script.py` | report mode writes nothing; `--confirm` imports; re-running imports nothing new; `--unassigned` default leaves SLA clocks unstarted |
-| `test_ingest.py` | idempotent re-reads; phone/email dedupe across formats; the same person twice in one sheet; brand isolation; even round-robin distribution; empty roster ⇒ `unassigned`, not a crash; inactive/non-telecaller staff skipped; `assign=False` for the backfill; recruiters include rows written before the role field; the activation cutoff; and the report-mode preview agreeing with the real import |
-| `test_telecaller_decisions.py` | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; wrong-telecaller and wrong-status ⇒ 409/403 |
-| `test_recruiter_action_stamp.py` | first mapping stamps `actioned`; a second mapping does not re-stamp; a failing stamp does not roll back the mapping |
-| `test_sla_sweep.py` | breach fires exactly once per lead; re-running the sweep adds nothing; reassignment resets the clock |
-| `test_model_registration.py` | every recruitment `Document` is in `core/database.py`'s list, and `tests/conftest.py` registers the same set — the `CollectionWasNotInitialized` footgun, caught at commit time instead of at first query |
-| `test_telecaller_access.py` | **containment** — a telecaller is 403'd on candidates, positions, pipeline, clients, leaderboard, activity. Mirrors `test_pipeline/test_referee_portal_is_read_only.py` |
-| `test_intake_analytics.py` | funnel counts, median/p90 math, per-person grouping, brand isolation |
+| File | Tests | Covers |
+|---|---|---|
+| `test_sheet_mapping.py` | 53 | header normalization, the `f&b (in years)` column, `"2-3 years"`/`"fresher"` parsing, blank-name/blank-phone skips, phone normalization, ragged rows, unmapped columns kept in `raw`. Built on the sheet's real 21-column header row |
+| `test_google_sheets_config.py` | 7 | the service-account key as raw JSON, as base64, and every unusable shape, each with an error that says what to fix |
+| `test_ingest.py` | 24 | idempotent re-reads; phone/email dedupe across formats; the same person twice in one sheet; brand isolation; even round-robin distribution; empty roster ⇒ `unassigned`, not a crash; inactive/non-telecaller staff skipped; `assign=False` for the backfill; recruiters include rows written before the role field; the activation cutoff; report-mode preview agreeing with the real import |
+| `test_backfill_script.py` | 8 | report mode writes nothing; `--confirm` imports; re-running imports nothing new; imported history lands in nobody's queue with no clock started |
+| `test_decisions.py` | 15 | accept ⇒ candidate APPROVED + recruiter assigned + timings; reject ⇒ REJECTED, still `is_active`, no recruiter; ownership (403) and double-action (409); the queue's ordering and inlined phone; reassignment restarting the clock and counting the hand-off |
+| `test_recruiter_action_stamp.py` | 5 | first mapping stamps `actioned`; a second does not re-stamp; a failing stamp does not roll back the mapping |
+| `test_analytics.py` | 37 | funnel counts summing to the total; median/average/p90 on one sample; overdue and oldest-pending; accept-rate denominators; null-not-zero rates; per-person grouping and a departed employee; campaign grouping; window semantics; cache-key separation; the admin list's filters, pagination and route ordering; the assignee roster |
+| `test_config_api.py` | 11 | an unconfigured brand gets a form not a 404; a pasted sheet URL is accepted as an id; the key is never returned; `activated_at` stamped once and never moved; maintainer may read but not rewire |
+| `test_sla_alerts.py` | 23 | a breach fires exactly once per lead across repeated sweeps; finished and unassigned leads never breach; reassignment lets it fire again for the new owner; a brand with no admins is stamped anyway; the alert reaches the admin inbox and not the telecaller's; digest grouping, the unassigned count, silence when nothing is overdue, and HTML escaping in the mail |
+| `test_model_registration.py` | 3 | every recruitment `Document` is in `core/database.py`'s list, and `tests/conftest.py` registers the same set — the `CollectionWasNotInitialized` footgun, caught at commit time instead of at first query |
+| `test_telecaller_access.py` | 13 | **containment** — an OpenAPI-wide sweep signs in as a real telecaller and asserts every route outside a seven-entry allow-list (sign-in, their own account, the notification inbox, and the three queue routes) refuses them, with a non-vacuity guard so a route-discovery change cannot make it pass by checking nothing. It found a real hole: `POST /brands` was reachable |
 
 Plus `pnpm --filter frontend lint`, `uv run ruff check .`, `ruff format`.
 
@@ -736,7 +742,8 @@ host, so the command-line override is mandatory.
 
 ## 11. Build order
 
-**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6 (`dfdfb74`), 7 (`112e4cf`), 8. Test tooling was fixed alongside them — `requirements-dev.txt` pins
+**Done:** 1 (`b5ff1aa`), 2 (`454a30c`), 3 (`a90d59a`), 4 (`a475473`), 5 (`1b33c52`), 6 (`dfdfb74`),
+7 (`112e4cf`), 8 (`0c2dc59`), 9. Test tooling was fixed alongside them — `requirements-dev.txt` pins
 pytest into the project venv, because `uv run pytest` had been falling through to a global pytest
 and running the suite on FastAPI 0.122 while the app imported 0.141.
 
@@ -748,7 +755,7 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
    changes, registration in `database.py` + `conftest.py`.
 3. ✅ **Sheet client + mapping** — `google_sheets.py`, `lead_sheet.py`, `phone.py`, settings,
    `google-auth`, 60 unit tests (no network, no database). **Not yet verified against the live
-   sheet** — that needs the service account below.
+   sheet** — that needs the service account in §13.
 4. ✅ **Ingest service + poll task** — `service/intake_service.py`, round-robin, dedupe,
    `activated_at` cutoff, Celery beat entry every `INTAKE_POLL_MINUTES`, and
    `scripts/backfill_intake_leads.py`. `POST /intake/sync` moved to step 5, where the intake
@@ -768,9 +775,12 @@ and running the suite on FastAPI 0.122 while the app imported 0.141.
    item, and `lib/api/intake.ts`. One backend addition fell out of it: `GET /intake/assignees`,
    because `/teams/employees` deliberately hides telecallers, so the reassign picker had no
    roster to draw from.
-9. **Docs** — update `apps/backend/CLAUDE.md` (role table, new module) and `.env.example`.
+9. ✅ **Docs** — an "Inbound lead intake" section in `apps/backend/CLAUDE.md` (module map, the
+   `as_utc` rule, the two dependency doors, cache and alert invariants), a note in the root
+   `CLAUDE.md` that three of these features do not work without Celery beat, the service-account
+   steps in `.env.example`, and §13 below.
 
-Steps 1–2 are a safe first commit; 3–5 are the functional core; 6–8 are additive.
+Steps 1–2 were the safe first commit; 3–5 the functional core; 6–9 additive.
 
 ---
 
@@ -798,3 +808,39 @@ Settled in review — recorded here so the reasoning is not lost:
 | Build scope | Backend + frontend, one PR |
 
 Nothing is open.
+
+---
+
+## 13. Turning it on
+
+Nothing in §5–§8 runs until a service account exists. The steps, once:
+
+1. **Enable the Google Sheets API** on a GCP project. Skipping this is the usual cause of a 403
+   that looks like a sharing problem.
+2. **Create a service account** and download a JSON key. Grant it **no IAM role** — IAM governs
+   Google Cloud resources and a spreadsheet is not one, so an IAM role would widen its power over
+   the project while doing nothing for the sheet. Access comes from step 3 alone.
+3. **Share the spreadsheet** with the service account's `client_email` as **Viewer**. Viewer, not
+   Editor: the code requests `spreadsheets.readonly`, so no code path can write back to the
+   advertiser's sheet — which is what keeps "sheet write-back is out of scope" true in the
+   permissions rather than only in the code.
+4. **Set the environment** (`.env.example` carries the same notes):
+   `GOOGLE_SERVICE_ACCOUNT_JSON` (raw JSON, or base64 of the same file for platforms that mangle
+   the PEM block), `GOOGLE_SHEETS_ENABLED=true`, `INTAKE_SPREADSHEET_ID`, and an
+   `INTAKE_SHEET_RANGE` whose tab name matches the real one — a wrong tab gives a 404 that reads
+   like a missing spreadsheet.
+5. **Run a Celery worker and beat.** Without beat nothing is ingested and no SLA alert ever fires.
+6. **Promote at least one telecaller**: `scripts/migrate_user_roles.py promote <email> telecaller`.
+   With an empty roster, ingested leads are filed `unassigned` rather than dropped, and the daily
+   digest counts them — but nobody is calling anyone.
+
+**First run:** use `POST /intake/sync` (the "Sync now" button on `/leads`, admin only) rather than
+waiting for the scheduled poll. It runs inline and reports what happened, including the reason when
+nothing did. The connection's health also sits at the top of `/leads/analytics`, so a silently
+failing poll is visible instead of looking like a quiet day.
+
+**Enabling stamps `activated_at`, once.** Only leads that arrive after that point are ingested by
+the poll. The sheet's existing history goes through `scripts/backfill_intake_leads.py`, which
+writes nothing until `--confirm` and prints first how many of those people you already have. That
+is deliberate: importing a few hundred old leads has visible consequences for whoever has to ring
+them, and it should be a decision made with the numbers in front of you.
