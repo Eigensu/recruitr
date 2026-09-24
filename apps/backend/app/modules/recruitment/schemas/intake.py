@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -15,7 +15,30 @@ from app.modules.recruitment.enums import (
 )
 
 
-class IntakeLeadResponse(BaseModel):
+class _UtcTimestamps(BaseModel):
+    """Serialise every datetime with its timezone, because Mongo drops it.
+
+    The driver stores UTC and hands it back **naive**, and Pydantic then writes
+    it out as `2026-09-24T02:50:12` with no offset. JavaScript parses a
+    date-time in that form as *local* time, so every elapsed time on the screen
+    came out wrong by the viewer's UTC offset — five and a half hours in IST.
+    That produced a queue reading "waiting 1d 3h" on a lead the server, quite
+    correctly, did not consider overdue against a 24-hour limit.
+
+    The same naive-datetime trap as `intake_service.as_utc`, one layer out: this
+    is the wire, that one is the comparison. Stamping it here rather than at
+    each call site means a field added later cannot quietly reintroduce it.
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _stamp_utc(cls, value: object) -> object:
+        if isinstance(value, datetime) and value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value
+
+
+class IntakeLeadResponse(_UtcTimestamps):
     """One lead as the queue shows it.
 
     Carries the candidate's contact details inline rather than making the client
@@ -139,7 +162,7 @@ class IntakeRejectReasonCount(BaseModel):
     count: int
 
 
-class IntakeSourceStatus(BaseModel):
+class IntakeSourceStatus(_UtcTimestamps):
     """How the sheet connection itself is doing, so a silent failure is visible."""
 
     configured: bool = False
@@ -150,7 +173,7 @@ class IntakeSourceStatus(BaseModel):
     consecutive_failures: int = 0
 
 
-class IntakeOverviewResponse(BaseModel):
+class IntakeOverviewResponse(_UtcTimestamps):
     start_date: datetime | None = None
     end_date: datetime | None = None
     funnel: IntakeFunnel
@@ -198,7 +221,7 @@ def _spreadsheet_id(value: str) -> str:
     return found.group(1) if found else value
 
 
-class IntakeConfigResponse(BaseModel):
+class IntakeConfigResponse(_UtcTimestamps):
     """The sheet connection as the settings screen shows it.
 
     Deliberately never carries the service-account key: it lives in the

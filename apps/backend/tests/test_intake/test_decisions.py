@@ -318,3 +318,27 @@ async def test_an_actioned_lead_cannot_be_reassigned(http, caller):
     )
 
     assert res.status_code == 409
+
+
+# ── What goes over the wire ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_timestamps_leave_with_their_timezone(http, caller):
+    """Naive timestamps on the wire are read as local time by the browser.
+
+    Mongo returns UTC without a timezone, and `new Date("2026-09-24T02:50:12")`
+    in JavaScript means 02:50 *local*. The queue therefore showed every waiting
+    time inflated by the viewer's offset — "waiting 8h" on a lead assigned two
+    hours earlier, and a lead reading "1d 3h" that the server, correctly, did
+    not consider overdue against a 24-hour limit. Caught by opening the page in
+    a browser; no backend test could see it, because both sides of every
+    comparison in Python were already aware.
+    """
+    await _lead(telecaller=caller, assigned_at=datetime.now(UTC) - timedelta(hours=2))
+
+    row = (await http.get("/api/v1/intake/leads/mine", headers=await _headers("caller"))).json()[0]
+
+    for field in ("ingested_at", "telecaller_assigned_at"):
+        parsed = datetime.fromisoformat(row[field])
+        assert parsed.tzinfo is not None, f"{field} went out naive: {row[field]!r}"

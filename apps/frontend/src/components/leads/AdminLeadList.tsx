@@ -115,7 +115,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
   const meta = data?.meta;
 
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-7xl p-4 duration-300 animate-in fade-in sm:p-6 lg:p-8">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
@@ -330,6 +330,6 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           }}
         />
       )}
-    </main>
+    </div>
   );
 }
