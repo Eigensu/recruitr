@@ -39,7 +39,9 @@ jobs:
 
       - name: Install dependencies
         working-directory: apps/backend
-        run: pip install -r requirements-dev.txt
+        # Wheels only, so no package's setup script runs on the runner. Every
+        # dependency ships a manylinux wheel for this Python.
+        run: pip install --only-binary ':all:' -r requirements-dev.txt
 
       # Lint before tests: a 10-second failure should not wait on a 3-minute
       # suite. `continue-on-error` is deliberately absent — these pass on main
@@ -60,7 +62,7 @@ jobs:
       # replica-set discovery hands back.
       - name: Start MongoDB replica set
         run: |
-          docker run -d --name mongo -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          docker run -d --name mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
           for _ in $(seq 1 30); do
             if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
               break
@@ -122,6 +124,6 @@ jobs:
 
       # actionlint also runs shellcheck over every `run:` block.
       - name: Lint workflow files
-        uses: docker://rhysd/actionlint:latest
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
         with:
           args: -color
