@@ -8,10 +8,18 @@ from beanie import PydanticObjectId
 
 from app.core.celery_app import celery_app
 from app.core.config import settings
+from app.modules.auth.models import UserRole
 from app.modules.dashboard.services.email_service import EmailService
 from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.enums.pipeline_stage import PipelineStage
-from app.modules.recruitment.models import Candidate, ClientUser, Mapping, Notification, Position
+from app.modules.recruitment.models import (
+    Candidate,
+    ClientUser,
+    Employee,
+    Mapping,
+    Notification,
+    Position,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,13 +115,22 @@ async def _send_client_reminders(mapping: Mapping, reminder_type: str) -> None:
     # spec's "these functionalities also to exist with my team" requirement.
     await _create_notification(mapping, reminder_type, None, candidate.full_name)
 
+    position = await Position.get(mapping.position_id)
+    portal_url = f"{settings.FRONTEND_URL}/pipeline"
+
+    # Email the brand's admins alongside that staff notification, so a quiet
+    # client gets chased even when nobody opens the bell.
+    if position:
+        await _send_admin_reminders(
+            mapping, reminder_type, candidate.full_name, position, portal_url
+        )
+
     if not mapping.client_id:
         return
 
     # Client-facing in-app notification, alongside the existing email below.
     await _create_notification(mapping, reminder_type, mapping.client_id, candidate.full_name)
 
-    position = await Position.get(mapping.position_id)
     if not position:
         return
 
@@ -125,8 +142,6 @@ async def _send_client_reminders(mapping: Mapping, reminder_type: str) -> None:
 
     if not client_users:
         return
-
-    portal_url = f"{settings.FRONTEND_URL}/pipeline"
 
     for user in client_users:
         if reminder_type == "client_action":
@@ -150,6 +165,38 @@ async def _send_client_reminders(mapping: Mapping, reminder_type: str) -> None:
                 position_code=position.code,
                 portal_url=portal_url,
             )
+
+
+# Method names rather than bound methods, so tests can monkeypatch EmailService.
+_ADMIN_REMINDER_EMAIL = {
+    "client_action": "send_admin_client_action_reminder",
+    "interview_followup": "send_admin_interview_followup",
+    "offer_upload": "send_admin_offer_upload_reminder",
+}
+
+
+async def _send_admin_reminders(
+    mapping: Mapping,
+    reminder_type: str,
+    candidate_name: str,
+    position: Position,
+    portal_url: str,
+) -> None:
+    admins = await Employee.find(
+        Employee.brand_id == mapping.brand_id,
+        Employee.is_active == True,  # noqa: E712
+        Employee.role == UserRole.admin.value,
+    ).to_list()
+
+    send = getattr(EmailService, _ADMIN_REMINDER_EMAIL[reminder_type])
+    for admin in admins:
+        send(
+            email=admin.email,
+            candidate_name=candidate_name,
+            position_code=position.code,
+            client_name=position.client_name,
+            portal_url=portal_url,
+        )
 
 
 @celery_app.task(name="recruitment.process_reminders")

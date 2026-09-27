@@ -5,7 +5,7 @@ from beanie import PydanticObjectId
 
 from app.modules.brands.models import Brand
 from app.modules.recruitment.enums.pipeline_stage import PipelineStage
-from app.modules.recruitment.models import Candidate, ClientUser, Mapping, Position
+from app.modules.recruitment.models import Candidate, ClientUser, Employee, Mapping, Position
 from app.modules.recruitment.tasks import _process_reminders_async
 
 
@@ -34,6 +34,17 @@ def mock_email_service(monkeypatch):
         "app.modules.dashboard.services.email_service.EmailService.send_offer_upload_reminder",
         mock_offer_upload,
     )
+    for reminder_type, method in (
+        ("admin_client_action", "send_admin_client_action_reminder"),
+        ("admin_interview_followup", "send_admin_interview_followup"),
+        ("admin_offer_upload", "send_admin_offer_upload_reminder"),
+    ):
+        monkeypatch.setattr(
+            f"app.modules.dashboard.services.email_service.EmailService.{method}",
+            lambda *args, _type=reminder_type, **kwargs: sent_emails.append(
+                (_type, kwargs.get("email"))
+            ),
+        )
     return sent_emails
 
 
@@ -58,6 +69,18 @@ async def test_process_reminders(
         is_active=True,
     )
     await client_user.insert()
+
+    # Only the active admin in this brand should get the admin copies.
+    await Employee(brand_id=brand.id, name="Admin", email="admin@test.com", role="admin").insert()
+    await Employee(
+        brand_id=brand.id, name="Recruiter", email="recruiter@test.com", role="employee"
+    ).insert()
+    await Employee(
+        brand_id=brand.id, name="Ex Admin", email="ex@test.com", role="admin", is_active=False
+    ).insert()
+    await Employee(
+        brand_id=PydanticObjectId(), name="Other", email="other@test.com", role="admin"
+    ).insert()
 
     position = Position(
         brand_id=brand.id,
@@ -161,7 +184,10 @@ async def test_process_reminders(
     assert ("client_action", "client@test.com") in mock_email_service
     assert ("interview_followup", "client@test.com") in mock_email_service
     assert ("offer_upload", "client@test.com") in mock_email_service
-    assert len(mock_email_service) == 3
+    assert ("admin_client_action", "admin@test.com") in mock_email_service
+    assert ("admin_interview_followup", "admin@test.com") in mock_email_service
+    assert ("admin_offer_upload", "admin@test.com") in mock_email_service
+    assert len(mock_email_service) == 6
 
     mock_email_service.clear()
 
