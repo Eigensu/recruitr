@@ -40,6 +40,13 @@ function waitingOn(lead: IntakeLead): { label: string; at: string | null } {
   return { label: lead.telecaller_name ?? "—", at: null };
 }
 
+function onRecruiterLeg(lead: IntakeLead): boolean {
+  return (
+    lead.status === "pending_recruiter" ||
+    (lead.status === "unassigned" && lead.telecaller_decision === "accept")
+  );
+}
+
 export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }) {
   const apiFetch = useApiFetch();
   const toast = useToast();
@@ -319,10 +326,9 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           lead={reassigning}
           // A lead waiting on a recruiter can only go to a recruiter: the
           // backend moves whichever leg is open, so offering the other roster
-          // would silently hand it to the wrong person.
-          people={
-            reassigning.status === "pending_recruiter" ? rosters.recruiters : rosters.telecallers
-          }
+          // would silently hand it to the wrong person. An accepted lead that
+          // found no recruiter is `unassigned` but is still on that leg.
+          people={onRecruiterLeg(reassigning) ? rosters.recruiters : rosters.telecallers}
           onClose={() => setReassigning(null)}
           onDone={() => {
             setReassigning(null);

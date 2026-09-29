@@ -37,7 +37,7 @@ export default function LegStatsTable({
               <th className="border-b border-border p-2 text-right font-semibold">p90</th>
               <th className="border-b border-border p-2 text-right font-semibold">Within SLA</th>
               {showDecisions && (
-                <th className="border-b border-border p-2 text-right font-semibold">Accepted</th>
+                <th className="border-b border-border p-2 text-right font-semibold">Accept rate</th>
               )}
             </tr>
           </thead>

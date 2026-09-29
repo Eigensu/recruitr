@@ -152,7 +152,11 @@ async def test_a_slow_recruiter_is_reported_too(chief):
 )
 async def test_a_finished_lead_is_never_late(chief, status):
     caller = await _staff("caller", UserRole.telecaller)
-    await _lead(status=status, telecaller=caller, hours_ago=200)
+    lead = await _lead(status=status, telecaller=caller, hours_ago=200)
+    # _lead only stamps the clock for the status that is waiting, which would
+    # leave this lead with no timestamp and make the status filter untested.
+    old = datetime.now(UTC) - timedelta(hours=200)
+    await lead.set({"telecaller_assigned_at": old, "recruiter_assigned_at": old})
 
     assert (await sweep_breaches()).breached == 0
 
@@ -238,6 +242,28 @@ async def test_a_telecaller_does_not_see_the_complaint_about_themselves(http, ch
 
 
 # ── The digest ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_two_people_with_one_name_are_two_groups_in_the_digest(chief):
+    twins = []
+    for suffix in ("a", "b"):
+        twin = Employee(
+            brand_id=_BRAND,
+            name="Amit Shah",
+            email=f"amit.{suffix}@binge.consulting",
+            role=UserRole.telecaller.value,
+        )
+        await twin.insert()
+        twins.append(twin)
+        await _lead(telecaller=twin, hours_ago=30)
+
+    digest = (await build_digests())[0]
+
+    names = [group["name"] for group in digest.groups]
+    assert len(names) == 2
+    assert len(set(names)) == 2
+    assert all(name.startswith("Amit Shah") for name in names)
 
 
 @pytest.mark.asyncio

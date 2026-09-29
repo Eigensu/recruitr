@@ -33,7 +33,7 @@ def init_test_db():
     seconds each. These are pure functions, so the module pays ~100s for a
     connection it never uses.
     """
-    yield
+    return None
 
 
 HEADERS = [
