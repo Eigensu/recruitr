@@ -240,7 +240,17 @@ def parse_timestamp(raw: str | None) -> datetime | None:
     return None
 
 
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+def _looks_like_email(text: str) -> bool:
+    """One "@", no whitespace, and a dotted domain — checked without a regex.
+
+    The regex this replaces backtracked quadratically on a long domain with no
+    valid dot, and the sheet is untrusted input.
+    """
+    if text.count("@") != 1 or any(char.isspace() for char in text):
+        return False
+    local, _, domain = text.partition("@")
+    host, dot, tld = domain.rpartition(".")
+    return bool(local and dot and host and tld)
 
 
 def parse_email(raw: str | None) -> str | None:
@@ -253,7 +263,7 @@ def parse_email(raw: str | None) -> str | None:
     if not raw:
         return None
     text = raw.strip().lower()
-    return text if _EMAIL.match(text) else None
+    return text if _looks_like_email(text) else None
 
 
 # ── Rows ───────────────────────────────────────────────────────────────────────
@@ -304,6 +314,49 @@ _ATTRIBUTION_FIELDS = (
 )
 
 
+def _skip_reason(fields: dict[str, str], phone_normalized: str | None) -> str | None:
+    """Why a row cannot become a lead, or None when it can."""
+    if not fields.get("external_id"):
+        return "no lead id"
+    if not fields.get("full_name"):
+        return "no name"
+    if not phone_normalized:
+        # Without a phone there is nothing for a telecaller to call, and
+        # nothing to deduplicate on.
+        return "no usable phone number"
+    return None
+
+
+def _parsed_lead(
+    fields: dict[str, str],
+    phone_normalized: str | None,
+    raw: dict[str, str],
+    default_source_channel: str,
+) -> ParsedLead:
+    role_interest = fields.get("role_interest") or None
+    education = fields.get("education") or None
+    return ParsedLead(
+        external_id=fields["external_id"],
+        full_name=fields["full_name"],
+        phone=fields["phone"],
+        phone_normalized=phone_normalized,  # type: ignore[arg-type]
+        email=parse_email(fields.get("email")),
+        city=fields.get("city") or None,
+        current_role=fields.get("current_role") or None,
+        experience_years=parse_experience_years(fields.get("experience_years")),
+        education=education,
+        education_level=parse_education_level(education),
+        role_interest=role_interest,
+        department=infer_department(role_interest),
+        source_channel=parse_source_channel(fields.get("platform"), default_source_channel),
+        external_created_at=parse_timestamp(fields.get("created_time")),
+        external_status=fields.get("lead_status") or None,
+        is_organic=parse_bool(fields.get("is_organic")),
+        attribution={name: fields.get(name) or None for name in _ATTRIBUTION_FIELDS},
+        raw=raw,
+    )
+
+
 def parse_rows(
     values: list[list[str]],
     *,
@@ -335,46 +388,11 @@ def parse_rows(
             for index, name in columns.items()
         }
 
-        external_id = fields.get("external_id", "")
-        full_name = fields.get("full_name", "")
-        phone = fields.get("phone", "")
-        phone_normalized = normalize_phone(phone)
-
-        if not external_id:
-            skipped.append(SkippedRow(row_number, "no lead id", raw))
+        phone_normalized = normalize_phone(fields.get("phone", ""))
+        reason = _skip_reason(fields, phone_normalized)
+        if reason:
+            skipped.append(SkippedRow(row_number, reason, raw))
             continue
-        if not full_name:
-            skipped.append(SkippedRow(row_number, "no name", raw))
-            continue
-        if not phone_normalized:
-            # Without a phone there is nothing for a telecaller to call, and
-            # nothing to deduplicate on.
-            skipped.append(SkippedRow(row_number, "no usable phone number", raw))
-            continue
-
-        role_interest = fields.get("role_interest") or None
-        education = fields.get("education") or None
-        leads.append(
-            ParsedLead(
-                external_id=external_id,
-                full_name=full_name,
-                phone=phone,
-                phone_normalized=phone_normalized,
-                email=parse_email(fields.get("email")),
-                city=fields.get("city") or None,
-                current_role=fields.get("current_role") or None,
-                experience_years=parse_experience_years(fields.get("experience_years")),
-                education=education,
-                education_level=parse_education_level(education),
-                role_interest=role_interest,
-                department=infer_department(role_interest),
-                source_channel=parse_source_channel(fields.get("platform"), default_source_channel),
-                external_created_at=parse_timestamp(fields.get("created_time")),
-                external_status=fields.get("lead_status") or None,
-                is_organic=parse_bool(fields.get("is_organic")),
-                attribution={name: fields.get(name) or None for name in _ATTRIBUTION_FIELDS},
-                raw=raw,
-            )
-        )
+        leads.append(_parsed_lead(fields, phone_normalized, raw, default_source_channel))
 
     return leads, skipped

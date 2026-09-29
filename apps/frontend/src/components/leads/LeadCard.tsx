@@ -38,7 +38,7 @@ const REASONS = Object.keys(REJECT_REASON_LABELS) as IntakeRejectReason[];
  * copy of the SLA limit: the limit is configuration, and a stale copy in the
  * browser would quietly disagree with the alerts and the reports.
  */
-function WaitingBadge({ lead }: { lead: IntakeLead }) {
+function WaitingBadge({ lead }: Readonly<{ lead: IntakeLead }>) {
   const waited = elapsedHours(lead.telecaller_assigned_at);
   if (waited === null) return null;
   return (
@@ -56,7 +56,10 @@ function WaitingBadge({ lead }: { lead: IntakeLead }) {
   );
 }
 
-function Meta({ icon: Icon, children }: { icon: typeof IconMapPin; children: React.ReactNode }) {
+function Meta({
+  icon: Icon,
+  children,
+}: Readonly<{ icon: typeof IconMapPin; children: React.ReactNode }>) {
   if (!children) return null;
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-text-secondary">
@@ -66,7 +69,7 @@ function Meta({ icon: Icon, children }: { icon: typeof IconMapPin; children: Rea
   );
 }
 
-export default function LeadCard({ lead, busy, onAccept, onReject }: LeadCardProps) {
+export default function LeadCard({ lead, busy, onAccept, onReject }: Readonly<LeadCardProps>) {
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
   const [rejecting, setRejecting] = useState(false);

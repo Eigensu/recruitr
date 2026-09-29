@@ -830,7 +830,7 @@ Nothing in §5–§8 runs until a service account exists. The steps, once:
    `INTAKE_SHEET_RANGE` whose tab name matches the real one — a wrong tab gives a 404 that reads
    like a missing spreadsheet.
 5. **Run a Celery worker and beat.** Without beat nothing is ingested and no SLA alert ever fires.
-6. **Promote at least one telecaller**: `scripts/migrate_user_roles.py promote <email> telecaller`.
+6. **Promote at least one telecaller**: `python -m scripts.migrate_user_roles promote --email <email> --role telecaller`.
    With an empty roster, ingested leads are filed `unassigned` rather than dropped, and the daily
    digest counts them — but nobody is calling anyone.
 

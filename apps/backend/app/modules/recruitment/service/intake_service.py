@@ -248,6 +248,53 @@ async def _already_ingested_ids(
     return {row.external_id for row in existing}
 
 
+async def _insert_candidate(
+    lead: ParsedLead, brand_id: PydanticObjectId, result: IngestResult
+) -> Candidate | None:
+    """Create the candidate for a new lead, or None when the email collides."""
+    candidate = _candidate_from(lead, brand_id)
+    try:
+        await candidate.insert()
+    except DuplicateKeyError:
+        # Candidate.email is uniquely indexed per brand. The contact index is
+        # built from live candidates only, so an archived record with the same
+        # address still collides here.
+        result.errors.append(f"{lead.external_id}: duplicate email {lead.email}")
+        return None
+    return candidate
+
+
+async def _initial_assignment(
+    brand_id: PydanticObjectId, *, duplicate: bool, assign: bool
+) -> tuple[Employee | None, IntakeLeadStatus]:
+    """Who screens a new lead, and the status that puts it in their queue."""
+    if duplicate or not assign:
+        return None, (IntakeLeadStatus.duplicate if duplicate else IntakeLeadStatus.unassigned)
+    telecaller = await next_assignee(brand_id, telecallers=True)
+    if telecaller is None:
+        return None, IntakeLeadStatus.unassigned
+    return telecaller, IntakeLeadStatus.pending_telecaller
+
+
+async def _insert_lead(
+    lead: ParsedLead,
+    *,
+    created_candidate: Candidate | None,
+    **fields,
+) -> bool:
+    """Insert the lead row. False when another run got there first."""
+    try:
+        await _lead_from(lead, **fields).insert()
+    except DuplicateKeyError:
+        # Another run ingested this lead between the pre-check and here. The
+        # candidate just created belongs to that run's lead, so retire this
+        # copy rather than leaving an orphan in the directory.
+        if created_candidate is not None:
+            await created_candidate.set({"is_active": False})
+        return False
+    return True
+
+
 async def ingest_leads(
     leads: Sequence[ParsedLead],
     *,
@@ -278,43 +325,23 @@ async def ingest_leads(
         created_candidate: Candidate | None = None
 
         if existing_id is None:
-            created_candidate = _candidate_from(lead, brand_id)
-            try:
-                await created_candidate.insert()
-            except DuplicateKeyError:
-                # Candidate.email is uniquely indexed per brand. The contact
-                # index is built from live candidates only, so an archived
-                # record with the same address still collides here.
-                result.errors.append(f"{lead.external_id}: duplicate email {lead.email}")
+            created_candidate = await _insert_candidate(lead, brand_id, result)
+            if created_candidate is None:
                 continue
             candidate_id = created_candidate.id
 
-        telecaller = None
-        if existing_id is not None:
-            status = IntakeLeadStatus.duplicate
-        elif assign:
-            telecaller = await next_assignee(brand_id, telecallers=True)
-            status = (
-                IntakeLeadStatus.pending_telecaller if telecaller else IntakeLeadStatus.unassigned
-            )
-        else:
-            status = IntakeLeadStatus.unassigned
-
-        try:
-            await _lead_from(
-                lead,
-                brand_id=brand_id,
-                candidate_id=candidate_id,  # type: ignore[arg-type]
-                status=status,
-                telecaller=telecaller,
-                assigned_at=stamp,
-            ).insert()
-        except DuplicateKeyError:
-            # Another run ingested this lead between the pre-check and here.
-            # The candidate just created belongs to that run's lead, so retire
-            # this copy rather than leaving an orphan in the directory.
-            if created_candidate is not None:
-                await created_candidate.set({"is_active": False})
+        telecaller, status = await _initial_assignment(
+            brand_id, duplicate=existing_id is not None, assign=assign
+        )
+        if not await _insert_lead(
+            lead,
+            brand_id=brand_id,
+            candidate_id=candidate_id,  # type: ignore[arg-type]
+            status=status,
+            telecaller=telecaller,
+            assigned_at=stamp,
+            created_candidate=created_candidate,
+        ):
             result.already_ingested += 1
             continue
 
@@ -579,6 +606,27 @@ def _elapsed_seconds(since: datetime | None, until: datetime) -> int | None:
     return max(0, int((until - since).total_seconds()))
 
 
+class LeadAlreadyDecided(Exception):
+    """The lead left `pending_telecaller` before this decision could be written."""
+
+
+async def _decide_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
+    """Write a telecaller's decision only if the lead is still waiting on one.
+
+    The controller's status check reads a copy, so two requests (the telecaller
+    and a maintainer, say) can both pass it. Filtering the write on the status
+    makes the loser match nothing, and it must not go on to record a second
+    candidate event.
+    """
+    result = await IntakeLead.find_one(
+        {"_id": lead.id, "status": IntakeLeadStatus.pending_telecaller.value}
+    ).update({"$set": updates})
+    if result is None or result.matched_count == 0:
+        raise LeadAlreadyDecided(str(lead.id))
+    for attr, value in updates.items():
+        setattr(lead, attr, value)
+
+
 async def accept_lead(
     lead: IntakeLead, *, notes: str | None = None, now: datetime | None = None
 ) -> IntakeLead:
@@ -592,7 +640,8 @@ async def accept_lead(
     stamp = now or datetime.now(UTC)
     recruiter = await next_assignee(lead.brand_id, telecallers=False)
 
-    await lead.set(
+    await _decide_pending(
+        lead,
         {
             "status": (
                 IntakeLeadStatus.pending_recruiter if recruiter else IntakeLeadStatus.unassigned
@@ -604,7 +653,7 @@ async def accept_lead(
             "recruiter_id": recruiter.id if recruiter else None,
             "recruiter_assigned_at": stamp if recruiter else None,
             "updated_at": stamp,
-        }
+        },
     )
 
     candidate = await Candidate.get(lead.candidate_id)
@@ -641,7 +690,8 @@ async def reject_lead(
     """
     stamp = now or datetime.now(UTC)
 
-    await lead.set(
+    await _decide_pending(
+        lead,
         {
             "status": IntakeLeadStatus.rejected,
             "telecaller_decision": IntakeDecision.reject,
@@ -650,7 +700,7 @@ async def reject_lead(
             "telecaller_notes": notes,
             "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
             "updated_at": stamp,
-        }
+        },
     )
 
     candidate = await Candidate.get(lead.candidate_id)
@@ -666,6 +716,20 @@ async def reject_lead(
     return lead
 
 
+def waiting_on_recruiter(lead: IntakeLead) -> bool:
+    """Whether a reassigned lead goes to the recruiter leg rather than a telecaller.
+
+    Decided from the telecaller's decision, not the status alone: accept_lead
+    files an accepted lead as `unassigned` when no recruiter is free, and that
+    lead's screening is done. Sending it back to a telecaller would let them
+    reject a candidate who is already approved.
+    """
+    return lead.status == IntakeLeadStatus.pending_recruiter or (
+        lead.status == IntakeLeadStatus.unassigned
+        and lead.telecaller_decision == IntakeDecision.accept
+    )
+
+
 async def reassign_lead(
     lead: IntakeLead, *, assignee: Employee, now: datetime | None = None
 ) -> IntakeLead:
@@ -677,13 +741,14 @@ async def reassign_lead(
     being a way to keep a lead permanently fresh unnoticed.
     """
     stamp = now or datetime.now(UTC)
-    recruiter_leg = lead.status == IntakeLeadStatus.pending_recruiter
+    recruiter_leg = waiting_on_recruiter(lead)
     updates: dict[str, object] = {
         "reassignment_count": lead.reassignment_count + 1,
         "updated_at": stamp,
     }
     if recruiter_leg:
         updates |= {
+            "status": IntakeLeadStatus.pending_recruiter,
             "recruiter_id": assignee.id,
             "recruiter_assigned_at": stamp,
             "recruiter_sla_breached_at": None,

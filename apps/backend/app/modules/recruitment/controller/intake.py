@@ -62,12 +62,14 @@ from app.modules.recruitment.schemas import (
 )
 from app.modules.recruitment.service import intake_analytics
 from app.modules.recruitment.service.intake_service import (
+    LeadAlreadyDecided,
     accept_lead,
     as_utc,
     assignment_roster,
     poll_google_sheet,
     reassign_lead,
     reject_lead,
+    waiting_on_recruiter,
 )
 
 router = APIRouter()
@@ -116,6 +118,12 @@ def _pending_or_409(lead: IntakeLead) -> None:
             status.HTTP_409_CONFLICT,
             f"This lead is {lead.status.value.replace('_', ' ')} and cannot be actioned again.",
         )
+
+
+def _already_decided() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Someone else actioned this lead a moment ago. Reload to see it."
+    )
 
 
 def _is_overdue(lead: IntakeLead, now: datetime) -> bool:
@@ -217,7 +225,10 @@ async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)
 
-    await accept_lead(lead, notes=payload.notes)
+    try:
+        await accept_lead(lead, notes=payload.notes)
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
     return await _fetch_response(lead)
 
 
@@ -228,7 +239,10 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)
 
-    await reject_lead(lead, reason=payload.reason, notes=payload.notes)
+    try:
+        await reject_lead(lead, reason=payload.reason, notes=payload.notes)
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
     return await _fetch_response(lead)
 
 
@@ -253,21 +267,22 @@ async def reassign(tenant: _Telecaller, lead_id: str, payload: IntakeReassignReq
             f"This lead is {lead.status.value.replace('_', ' ')} and is nobody's to do.",
         )
 
-    assignee = await Employee.find_one(
-        {
-            "_id": to_object_id(payload.employee_id, "employee_id"),
-            "brand_id": tenant.brand_id,
-            "is_active": True,
-        }
-    )
+    # The same roster the picker offers, for the leg this lead is waiting on:
+    # any active employee would let a recruiter own a telecaller queue they
+    # cannot open, or a telecaller own a recruiter's lead.
+    roster = await assignment_roster(tenant.brand_id, telecallers=not waiting_on_recruiter(lead))
+    target = to_object_id(payload.employee_id, "employee_id")
+    assignee = next((person for person in roster if person.id == target), None)
     if assignee is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Employee not found")
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "That person cannot take this lead."
+        )
 
     await reassign_lead(lead, assignee=assignee)
     return await _fetch_response(lead)
 
 
-@router.post("/sync", response_model=IntakeSyncResponse, dependencies=[_RequireAdmin])
+@router.post("/sync", dependencies=[_RequireAdmin])
 async def sync_now(tenant: _Telecaller) -> IntakeSyncResponse:
     """Read the sheet now instead of waiting for the next scheduled poll.
 

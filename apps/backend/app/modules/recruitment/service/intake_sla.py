@@ -21,7 +21,7 @@ the measured times alone — a paused clock would quietly flatter the analytics.
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -148,6 +148,19 @@ def _breach_message(item: OverdueLead) -> str:
 # ── Hourly sweep ───────────────────────────────────────────────────────────────
 
 
+async def _claim_breach(lead: IntakeLead, *, leg: str, now: datetime) -> bool:
+    """Stamp the breach if, and only if, nobody else has since. True when we did."""
+    result = await IntakeLead.find_one(
+        {
+            "_id": lead.id,
+            "status": _OPEN_STATUS[leg].value,
+            f"{leg}_assigned_at": getattr(lead, f"{leg}_assigned_at"),
+            f"{leg}_sla_breached_at": None,
+        }
+    ).update({"$set": {f"{leg}_sla_breached_at": now}})
+    return result is not None and result.matched_count > 0
+
+
 async def sweep_breaches(*, now: datetime | None = None) -> SweepResult:
     """Alert on every lead that has just crossed its SLA, once each.
 
@@ -176,7 +189,15 @@ async def sweep_breaches(*, now: datetime | None = None) -> SweepResult:
         if not leads:
             continue
 
-        described = await _describe(leads, leg=leg, now=now)
+        # Claim each lead before notifying about it. The claim is conditional on
+        # the lead still being unstamped and still on the assignment we read, so
+        # an overlapping sweep loses it and a reassignment made since the read
+        # is not stamped as breached before its new owner has had the lead.
+        claimed = [lead for lead in leads if await _claim_breach(lead, leg=leg, now=now)]
+        if not claimed:
+            continue
+
+        described = await _describe(claimed, leg=leg, now=now)
         rows: list[Notification] = []
         watchers_by_brand: dict[PydanticObjectId, list[Employee]] = {}
 
@@ -195,10 +216,14 @@ async def sweep_breaches(*, now: datetime | None = None) -> SweepResult:
             )
 
         if rows:
-            await Notification.insert_many(rows)
-        await IntakeLead.find({"_id": {"$in": [item.lead_id for item in described]}}).update(
-            {"$set": {f"{leg}_sla_breached_at": now}}
-        )
+            try:
+                await Notification.insert_many(rows)
+            except Exception:
+                # Release the claims so the next sweep retries the delivery.
+                await IntakeLead.find({"_id": {"$in": [lead.id for lead in claimed]}}).update(
+                    {"$set": {f"{leg}_sla_breached_at": None}}
+                )
+                raise
 
         result.breached += len(described)
         result.notified += len(rows)
@@ -225,6 +250,14 @@ class BrandDigest:
     groups: list[dict]  # [{"name", "leg", "leads": [{"name", "hours"}]}]
     total: int
     unassigned: int
+
+
+def _owner_label(owner_id: PydanticObjectId | None, names: dict, shared_names: Counter) -> str:
+    """The owner's name, with a short id suffix when another owner shares it."""
+    name = names[owner_id]
+    if owner_id is not None and shared_names[name] > 1:
+        return f"{name} (#{str(owner_id)[-4:]})"
+    return name
 
 
 async def build_digests(*, now: datetime | None = None) -> list[BrandDigest]:
@@ -254,9 +287,12 @@ async def build_digests(*, now: datetime | None = None) -> list[BrandDigest]:
             logger.warning("Intake SLA digest: brand %s has overdue leads and no admins", brand_id)
             continue
 
-        grouped: dict[tuple[str, str], list[OverdueLead]] = defaultdict(list)
+        # By id, not name: two people called the same thing are two workloads.
+        grouped: dict[tuple[PydanticObjectId | None, str], list[OverdueLead]] = defaultdict(list)
         for item in items:
-            grouped[(item.owner_name, item.leg)].append(item)
+            grouped[(item.owner_id, item.leg)].append(item)
+        names = {item.owner_id: item.owner_name for item in items}
+        shared_names = Counter(names.values())
 
         digests.append(
             BrandDigest(
@@ -264,7 +300,7 @@ async def build_digests(*, now: datetime | None = None) -> list[BrandDigest]:
                 recipients=[watcher.email for watcher in watchers if watcher.email],
                 groups=[
                     {
-                        "name": name,
+                        "name": _owner_label(owner_id, names, shared_names),
                         "leg": _LEG_LABEL[leg],
                         # Longest wait first: that is the one to chase.
                         "leads": [
@@ -272,7 +308,9 @@ async def build_digests(*, now: datetime | None = None) -> list[BrandDigest]:
                             for row in sorted(rows, key=lambda row: -row.hours)
                         ],
                     }
-                    for (name, leg), rows in sorted(grouped.items(), key=lambda pair: -len(pair[1]))
+                    for (owner_id, leg), rows in sorted(
+                        grouped.items(), key=lambda pair: -len(pair[1])
+                    )
                 ],
                 total=len(items),
                 unassigned=await IntakeLead.find(
