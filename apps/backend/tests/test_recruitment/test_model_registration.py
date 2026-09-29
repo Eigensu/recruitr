@@ -40,7 +40,17 @@ def _registered_models(relative_path: str) -> set[str]:
             continue
 
         if isinstance(value, ast.List):
-            names |= {element.id for element in value.elts if isinstance(element, ast.Name)}
+            # Class names only. `database.py`'s index-conflict fallback re-registers
+            # one model at a time as `document_models=[model]`, and that loop
+            # variable is indistinguishable from a registration to a reader this
+            # naive — it was picked up as a model called "model" the first time the
+            # two branches met. A registration list enumerates classes, so anything
+            # not named like one is not one.
+            names |= {
+                element.id
+                for element in value.elts
+                if isinstance(element, ast.Name) and element.id[:1].isupper()
+            }
 
     return names
 
