@@ -26,7 +26,7 @@ _KEY = {
 @pytest.fixture(autouse=True)
 def init_test_db():
     """Shadow conftest's autouse fixture; these tests touch no database."""
-    yield
+    return None
 
 
 @pytest.fixture

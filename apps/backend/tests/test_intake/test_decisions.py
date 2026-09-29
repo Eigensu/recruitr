@@ -320,6 +320,59 @@ async def test_an_actioned_lead_cannot_be_reassigned(http, caller):
     assert res.status_code == 409
 
 
+@pytest.mark.asyncio
+async def test_a_telecaller_lead_cannot_be_given_to_a_recruiter(http, caller):
+    await _staff("boss", UserRole.maintainer)
+    recruiter = await _staff("recruiter", UserRole.employee)
+    lead = await _lead(telecaller=caller)
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/reassign",
+        json={"employee_id": str(recruiter.id)},
+        headers=await _headers("boss"),
+    )
+
+    assert res.status_code == 422
+    assert (await IntakeLead.get(lead.id)).telecaller_id == caller.id
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_lead_with_no_recruiter_goes_to_a_recruiter_when_reassigned(http, caller):
+    await _staff("boss", UserRole.maintainer)
+    recruiter = await _staff("recruiter", UserRole.employee)
+    lead = await _lead(telecaller=caller, status=IntakeLeadStatus.unassigned)
+    await lead.set({"telecaller_decision": IntakeDecision.accept})
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/reassign",
+        json={"employee_id": str(recruiter.id)},
+        headers=await _headers("boss"),
+    )
+
+    assert res.status_code == 200
+    moved = await IntakeLead.get(lead.id)
+    assert moved.status == IntakeLeadStatus.pending_recruiter
+    assert moved.recruiter_id == recruiter.id
+    assert moved.telecaller_id == caller.id
+
+
+@pytest.mark.asyncio
+async def test_a_stale_copy_cannot_decide_a_lead_twice(caller):
+    from app.modules.recruitment.service.intake_service import (
+        LeadAlreadyDecided,
+        accept_lead,
+        reject_lead,
+    )
+
+    lead = await _lead(telecaller=caller)
+    stale = await IntakeLead.get(lead.id)
+    await accept_lead(lead)
+
+    with pytest.raises(LeadAlreadyDecided):
+        await reject_lead(stale)
+    assert (await IntakeLead.get(lead.id)).telecaller_decision == IntakeDecision.accept
+
+
 # ── What goes over the wire ────────────────────────────────────────────────────
 
 

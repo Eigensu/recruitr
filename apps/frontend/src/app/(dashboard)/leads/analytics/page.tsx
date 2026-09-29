@@ -51,12 +51,12 @@ function Stat({
   value,
   hint,
   tone,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   hint?: string;
   tone?: "alert";
-}) {
+}>) {
   return (
     <div
       className={cn(
@@ -81,7 +81,7 @@ function Stat({
 }
 
 /** The headline row for one leg: the three numbers that describe its speed. */
-function LegSummary({ title, stats }: { title: string; stats: IntakeLegStats }) {
+function LegSummary({ title, stats }: Readonly<{ title: string; stats: IntakeLegStats }>) {
   return (
     <section className="rounded-xl border border-border bg-surface p-4">
       <header className="mb-3 flex items-baseline justify-between gap-2">
@@ -110,6 +110,51 @@ function LegSummary({ title, stats }: { title: string; stats: IntakeLegStats }) 
   );
 }
 
+type IntakeSource = IntakeOverview["source"];
+
+function sourceIsHealthy(source: IntakeSource): boolean {
+  return source.enabled && !source.last_error;
+}
+
+/** One line saying where the sheet connection stands. */
+function sourceMessage(source: IntakeSource): string {
+  if (!source.configured) return "No sheet connected yet.";
+  if (!source.enabled) return "Lead intake is switched off.";
+  if (source.last_error) return `Last sync failed: ${source.last_error}`;
+  if (source.last_success_at) {
+    return `Last synced ${new Date(source.last_success_at).toLocaleString()}`;
+  }
+  return "Connected, waiting for the first sync.";
+}
+
+/**
+ * The sheet connection. A silent failure here looks exactly like "no leads
+ * today", so it is stated rather than left to be inferred.
+ */
+function SourceBanner({ source }: Readonly<{ source: IntakeSource }>) {
+  const healthy = sourceIsHealthy(source);
+  return (
+    <div
+      className={cn(
+        "mb-6 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm",
+        healthy
+          ? "border-border bg-surface text-text-secondary"
+          : "border-red-500/25 bg-red-500/5 text-red-400",
+      )}
+    >
+      {healthy ? (
+        <IconPlugConnected className="size-4 shrink-0 text-emerald-400" />
+      ) : (
+        <IconPlugConnectedX className="size-4 shrink-0" />
+      )}
+      <span>{sourceMessage(source)}</span>
+      {source.consecutive_failures > 1 && (
+        <span className="font-semibold">({source.consecutive_failures} in a row)</span>
+      )}
+    </div>
+  );
+}
+
 export default function LeadAnalyticsPage() {
   const apiFetch = useApiFetch();
   const router = useRouter();
@@ -131,31 +176,38 @@ export default function LeadAnalyticsPage() {
   // `loading` is raised in the range/grouping handlers, never synchronously in
   // the effect: setState in an effect body cascades a render, which is what
   // react-hooks/set-state-in-effect forbids.
-  const load = useCallback((): Promise<void> => {
-    const window = days
-      ? { start_date: new Date(Date.now() - days * 86_400_000).toISOString() }
-      : {};
-    return Promise.all([
-      fetchOverview(apiFetch, window),
-      fetchTelecallerStats(apiFetch, window),
-      fetchRecruiterStats(apiFetch, window),
-      fetchCampaigns(apiFetch, groupBy, window),
-    ])
-      .then(([o, t, r, c]) => {
-        setOverview(o);
-        setTelecallers(t);
-        setRecruiters(r);
-        setCampaigns(c.rows);
-      })
-      .catch((err: unknown) => {
-        toast(apiErrorMessage(err, "Could not load the intake report."), "error");
-      });
-  }, [apiFetch, days, groupBy, toast]);
+  const load = useCallback(
+    (isCancelled: () => boolean = () => false): Promise<void> => {
+      const window = days
+        ? { start_date: new Date(Date.now() - days * 86_400_000).toISOString() }
+        : {};
+      return Promise.all([
+        fetchOverview(apiFetch, window),
+        fetchTelecallerStats(apiFetch, window),
+        fetchRecruiterStats(apiFetch, window),
+        fetchCampaigns(apiFetch, groupBy, window),
+      ])
+        .then(([o, t, r, c]) => {
+          // A slower response for a range the user has already left must not
+          // overwrite the numbers for the one they are looking at.
+          if (isCancelled()) return;
+          setOverview(o);
+          setTelecallers(t);
+          setRecruiters(r);
+          setCampaigns(c.rows);
+        })
+        .catch((err: unknown) => {
+          if (isCancelled()) return;
+          toast(apiErrorMessage(err, "Could not load the intake report."), "error");
+        });
+    },
+    [apiFetch, days, groupBy, toast],
+  );
 
   useEffect(() => {
     if (authLoading || !isMaintainer) return undefined;
     let cancelled = false;
-    load().finally(() => {
+    load(() => cancelled).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => {
@@ -215,38 +267,7 @@ export default function LeadAnalyticsPage() {
         </div>
       </header>
 
-      {/* The sheet connection. A silent failure here looks exactly like "no
-          leads today", so it is stated rather than left to be inferred. */}
-      {source && (
-        <div
-          className={cn(
-            "mb-6 flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm",
-            source.last_error || !source.enabled
-              ? "border-red-500/25 bg-red-500/5 text-red-400"
-              : "border-border bg-surface text-text-secondary",
-          )}
-        >
-          {source.last_error || !source.enabled ? (
-            <IconPlugConnectedX className="size-4 shrink-0" />
-          ) : (
-            <IconPlugConnected className="size-4 shrink-0 text-emerald-400" />
-          )}
-          <span>
-            {!source.configured
-              ? "No sheet connected yet."
-              : !source.enabled
-                ? "Lead intake is switched off."
-                : source.last_error
-                  ? `Last sync failed: ${source.last_error}`
-                  : source.last_success_at
-                    ? `Last synced ${new Date(source.last_success_at).toLocaleString()}`
-                    : "Connected, waiting for the first sync."}
-          </span>
-          {source.consecutive_failures > 1 && (
-            <span className="font-semibold">({source.consecutive_failures} in a row)</span>
-          )}
-        </div>
-      )}
+      {source && <SourceBanner source={source} />}
 
       {loading && !overview ? (
         <div className="flex h-64 items-center justify-center">

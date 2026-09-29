@@ -250,7 +250,8 @@ async def test_recruiters_include_rows_written_before_the_role_field_existed():
 
     chosen = await next_assignee(_BRAND, telecallers=False)
 
-    assert chosen is not None and chosen.name == "Legacy"
+    assert chosen is not None
+    assert chosen.name == "Legacy"
 
 
 # ── Activation cutoff ──────────────────────────────────────────────────────────

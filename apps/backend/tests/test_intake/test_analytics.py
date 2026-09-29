@@ -493,9 +493,9 @@ def test_two_windows_do_not_share_a_cache_entry():
 
 def test_two_brands_do_not_share_a_cache_entry():
     args = {"start": None, "end": None}
-    assert intake_analytics._cache_key(
-        "overview", PydanticObjectId(), **args
-    ) != intake_analytics._cache_key("overview", PydanticObjectId(), **args)
+    first = intake_analytics._cache_key("overview", PydanticObjectId(), **args)
+    second = intake_analytics._cache_key("overview", PydanticObjectId(), **args)
+    assert first != second
 
 
 # ── Lead list ──────────────────────────────────────────────────────────────────

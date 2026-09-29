@@ -45,19 +45,24 @@ export default function ReassignDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
-      onClick={onClose}
-      role="presentation"
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+      {/* The backdrop is its own button rather than a click handler on a
+          presentational wrapper, so dismissing it is available to keyboards
+          and assistive tech and the dialog needs no stopPropagation. */}
+      <button
+        type="button"
+        aria-label="Close"
+        tabIndex={-1}
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+      />
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={`Reassign ${lead.full_name}`}
-        className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-2xl"
+        className="relative w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-2xl"
       >
         <header className="mb-4 flex items-start justify-between gap-3">
           <div>

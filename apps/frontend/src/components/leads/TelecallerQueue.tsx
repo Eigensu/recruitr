@@ -22,6 +22,12 @@ import {
  * bottom is the same thing as working it in the order that keeps people inside
  * the day.
  */
+function queueSummary(count: number): string {
+  if (count === 0) return "Nothing waiting.";
+  const people = count === 1 ? "person" : "people";
+  return `${count} ${people} to call, longest wait first.`;
+}
+
 export default function TelecallerQueue() {
   const apiFetch = useApiFetch();
   const toast = useToast();
@@ -85,11 +91,7 @@ export default function TelecallerQueue() {
           <h1 className="font-heading text-2xl font-bold tracking-tight text-text-primary">
             Your queue
           </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            {leads.length === 0
-              ? "Nothing waiting."
-              : `${leads.length} ${leads.length === 1 ? "person" : "people"} to call, longest wait first.`}
-          </p>
+          <p className="mt-1 text-sm text-text-secondary">{queueSummary(leads.length)}</p>
         </div>
         <button
           type="button"
