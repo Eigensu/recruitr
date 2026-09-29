@@ -23,8 +23,9 @@ interface Props {
   /** `refereeId` is passed only by "Clear all" in external mode, so the referee
    *  and the filters are cleared by a single parent update. */
   onFilterChange: (filters: Partial<CandidateFilters>, refereeId?: string) => void;
-  /** "external" locks the source select and swaps it for a Referee filter. */
-  mode?: "all" | "external";
+  /** "internal" hides the source select (the tab fixes it); "external" also swaps
+   *  it for a Referee filter. */
+  mode?: "all" | "internal" | "external";
   referees?: readonly CandidateReferrerOption[];
   /** Controlled — the External tab drives this from a referee badge click too. */
   refereeId?: string;
