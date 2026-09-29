@@ -65,7 +65,20 @@ export default function CandidatesClient({
   // Referrals, public-form applicants, and manually-tagged external candidates
   // — pending and approved together, lazy-loaded the first time the tab opens
   // so it never slows down the default "All Candidates" load.
-  const [activeTab, setActiveTab] = useState<"all" | "external">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "internal" | "external">("all");
+
+  // ── Internal Candidates tab ──────────────────────────────────────────────
+  // Candidates the team added itself (source=internal, or none on legacy rows).
+  // Lazy-loaded on first open like the External tab.
+  const [internalCandidates, setInternalCandidates] = useState<ApiCandidate[]>([]);
+  const [internalTotal, setInternalTotal] = useState(0);
+  const [internalPage, setInternalPage] = useState(1);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const [internalLoadingMore, setInternalLoadingMore] = useState(false);
+  const [internalLoaded, setInternalLoaded] = useState(false);
+  const [internalFilters, setInternalFilters] = useState<Partial<CandidateFilters>>({});
+  // Bumped by every internal fetch; a response whose id is stale is dropped.
+  const internalRequestRef = useRef(0);
   const [externalCandidates, setExternalCandidates] = useState<ApiCandidate[]>([]);
   const [externalTotal, setExternalTotal] = useState(0);
   const [externalPage, setExternalPage] = useState(1);
@@ -111,6 +124,60 @@ export default function CandidatesClient({
     } finally {
       setLoadingMore(false);
     }
+  }
+
+  async function loadInternalCandidates(filters: Partial<CandidateFilters> = internalFilters) {
+    const requestId = ++internalRequestRef.current;
+    setInternalLoading(true);
+    try {
+      const data = await clientFetchCandidates({
+        ...filters,
+        source: "internal",
+        page: 1,
+        limit: PAGE_SIZE,
+      });
+      if (requestId !== internalRequestRef.current) return;
+      setInternalCandidates(data.items ?? []);
+      setInternalTotal(data.meta?.total ?? 0);
+      setInternalPage(1);
+      // Success only, so a failed first load is retried when the tab reopens.
+      setInternalLoaded(true);
+    } catch {
+      if (requestId !== internalRequestRef.current) return;
+      setInternalCandidates([]);
+      setInternalTotal(0);
+      setInternalPage(1);
+    } finally {
+      if (requestId === internalRequestRef.current) setInternalLoading(false);
+    }
+  }
+
+  async function handleLoadMoreInternal() {
+    const nextPage = internalPage + 1;
+    const requestId = internalRequestRef.current;
+    setInternalLoadingMore(true);
+    try {
+      const data = await clientFetchCandidates({
+        ...internalFilters,
+        source: "internal",
+        page: nextPage,
+        limit: PAGE_SIZE,
+      });
+      // A filter change while this was in flight replaced the list underneath it.
+      if (requestId !== internalRequestRef.current) return;
+      setInternalCandidates((prev) => [...prev, ...(data.items ?? [])]);
+      setInternalTotal(data.meta?.total ?? internalTotal);
+      setInternalPage(nextPage);
+    } catch {
+      // leave existing internal candidates as-is
+    } finally {
+      setInternalLoadingMore(false);
+    }
+  }
+
+  function handleInternalFilterChange(filters: Partial<CandidateFilters>) {
+    setInternalFilters(filters);
+    loadInternalCandidates(filters);
   }
 
   async function loadExternalCandidates(
@@ -197,8 +264,15 @@ export default function CandidatesClient({
     }
   }
 
-  function handleTabChange(tab: "all" | "external") {
+  function handleTabChange(tab: "all" | "internal" | "external") {
     setActiveTab(tab);
+    if (tab === "internal") {
+      // The filter bar remounts empty on every open, so drop any filters left
+      // from the last visit rather than show results its inputs don't explain.
+      const hadFilters = Object.values(internalFilters).some((v) => v !== undefined && v !== "");
+      setInternalFilters({});
+      if (!internalLoaded || hadFilters) loadInternalCandidates({});
+    }
     if (tab === "external" && !externalLoaded) {
       loadExternalCandidates();
       loadExternalReferees();
@@ -225,6 +299,8 @@ export default function CandidatesClient({
   }
 
   function handleCandidateAdded(candidate: ApiCandidate) {
+    // New candidates are added from the All tab; the Internal tab reloads on next open.
+    setInternalLoaded(false);
     const hasFilters = Object.values(activeFilters).some((v) => v !== undefined && v !== "");
     if (!hasFilters && page === 1) {
       setCandidates((prev) => [candidate, ...prev]);
@@ -247,6 +323,7 @@ export default function CandidatesClient({
     // that list needs the same refresh — otherwise the card keeps the old data.
     setPendingCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setExternalCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setInternalCandidates((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     setSelectedCandidate(updated);
   }
 
@@ -267,6 +344,9 @@ export default function CandidatesClient({
       setPendingCandidates((prev) => prev.filter((c) => c.id !== id));
       setExternalCandidates((prev) => prev.filter((c) => c.id !== id));
       if (wasExternal) setExternalTotal((t) => Math.max(0, t - 1));
+      const wasInternal = internalCandidates.some((c) => c.id === id);
+      setInternalCandidates((prev) => prev.filter((c) => c.id !== id));
+      if (wasInternal) setInternalTotal((t) => Math.max(0, t - 1));
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Failed to delete candidate", "error");
@@ -326,6 +406,7 @@ export default function CandidatesClient({
   }
 
   function handleBulkComplete() {
+    setInternalLoaded(false);
     clientFetchCandidates({ page: 1, limit: PAGE_SIZE })
       .then((data) => {
         setCandidates(data.items ?? []);
@@ -340,6 +421,13 @@ export default function CandidatesClient({
   const candidateLabel = total === 1 ? "1 candidate" : `${total} candidates`;
   const countLabel = hasMore ? `Showing ${candidates.length} of ${candidateLabel}` : candidateLabel;
 
+  const hasMoreInternal = internalCandidates.length < internalTotal;
+  const internalCandidateLabel =
+    internalTotal === 1 ? "1 candidate" : `${internalTotal} candidates`;
+  const internalLabel = hasMoreInternal
+    ? `Showing ${internalCandidates.length} of ${internalCandidateLabel}`
+    : internalCandidateLabel;
+
   const hasMoreExternal = externalCandidates.length < externalTotal;
   const externalCandidateLabel =
     externalTotal === 1 ? "1 candidate" : `${externalTotal} candidates`;
@@ -353,6 +441,7 @@ export default function CandidatesClient({
         {(
           [
             { key: "all", label: "All Candidates" },
+            { key: "internal", label: "Internal Candidates" },
             { key: "external", label: "External Candidates" },
           ] as const
         ).map((tab) => (
@@ -375,7 +464,11 @@ export default function CandidatesClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          {activeTab === "all" ? countLabel : externalLabel}
+          {activeTab === "all"
+            ? countLabel
+            : activeTab === "internal"
+              ? internalLabel
+              : externalLabel}
         </span>
         {activeTab === "all" && (
           <div className="flex gap-2">
@@ -503,6 +596,69 @@ export default function CandidatesClient({
                 }}
               >
                 {loadingMore ? "Loading…" : `Load more (${total - candidates.length} remaining)`}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "internal" && (
+        <>
+          <CandidateFilterBar
+            availableTags={availableTags}
+            availableRoles={availableRoles}
+            recruiters={recruiters}
+            onFilterChange={handleInternalFilterChange}
+            mode="internal"
+          />
+
+          {internalLoading && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <CandidateCardSkeleton key={i} />
+              ))}
+            </div>
+          )}
+          {!internalLoading && internalCandidates.length === 0 && (
+            <div
+              className="py-12 text-center text-sm"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              No internal candidates found. Adjust your filters or add a new candidate.
+            </div>
+          )}
+          {!internalLoading && internalCandidates.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {internalCandidates.map((c) => (
+                <CandidateCard
+                  key={c.id}
+                  candidate={c}
+                  onClick={() => setSelectedCandidate(c)}
+                  isMaintainer={isMaintainer}
+                  onDelete={handleDeleteCandidate}
+                  onViewReferee={handleViewReferee}
+                />
+              ))}
+            </div>
+          )}
+
+          {!internalLoading && hasMoreInternal && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={handleLoadMoreInternal}
+                disabled={internalLoadingMore}
+                className="rounded-lg px-5 py-2 text-sm font-medium"
+                style={{
+                  background: "var(--color-surface-val)",
+                  color: "var(--color-text-primary)",
+                  border: "1px solid var(--color-border-val)",
+                  opacity: internalLoadingMore ? 0.6 : 1,
+                }}
+              >
+                {internalLoadingMore
+                  ? "Loading…"
+                  : `Load more (${internalTotal - internalCandidates.length} remaining)`}
               </button>
             </div>
           )}
