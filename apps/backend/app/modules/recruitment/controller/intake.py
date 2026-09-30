@@ -17,6 +17,9 @@
     GET  /intake/leads                  every lead, filtered       (maintainer+)
     GET  /intake/leads/{id}             one lead and its timings   (maintainer+)
     GET  /intake/assignees              who a lead can be given to (maintainer+)
+    GET  /intake/telecallers            the telecaller roster      (maintainer+)
+    POST /intake/telecallers            make someone a telecaller  (admin)
+    PATCH /intake/telecallers/{id}      pause / resume one         (admin)
     GET  /intake/config                 sheet connection + health  (maintainer+)
     PUT  /intake/config                 point it at a sheet        (admin)
 
@@ -72,17 +75,23 @@ from app.modules.recruitment.schemas import (
     IntakeRejectRequest,
     IntakeSyncResponse,
     IntakeTeamOption,
+    IntakeTelecaller,
+    IntakeTelecallerCreate,
+    IntakeTelecallerUpdate,
     TenantScope,
 )
 from app.modules.recruitment.service import intake_analytics
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
     TeamHasNoRecruiters,
+    TelecallerConflict,
     accept_lead,
     as_utc,
     assign_to_team,
     assignment_roster,
+    list_telecallers,
     poll_google_sheet,
+    provision_telecaller,
     reassign_lead,
     reject_lead,
     team_roster,
@@ -646,6 +655,81 @@ async def assignees(tenant: _Staff):
         telecallers=await roster(telecallers=True),
         recruiters=await roster(telecallers=False),
     )
+
+
+# ── Telecallers ───────────────────────────────────────────────────────────────
+
+
+async def _telecaller_rows(
+    tenant: TenantScope, people: list[tuple[Employee, bool]]
+) -> list[IntakeTelecaller]:
+    load = await intake_analytics.open_lead_counts(tenant.brand_id, leg=intake_analytics.TELECALLER)
+    return [
+        IntakeTelecaller(
+            id=str(person.id),
+            name=person.name,
+            email=person.email,
+            is_active=person.is_active,
+            has_account=has_account,
+            open_leads=load.get(person.id, 0),
+        )
+        for person, has_account in people
+    ]
+
+
+@router.get(
+    "/telecallers", response_model=list[IntakeTelecaller], dependencies=[_RequireMaintainer]
+)
+async def telecallers(tenant: _Staff):
+    """Every telecaller in the brand, paused ones included — unlike /assignees,
+    which is the live rotation and so leaves the paused ones out."""
+    return await _telecaller_rows(tenant, await list_telecallers(tenant.brand_id))
+
+
+@router.post(
+    "/telecallers",
+    response_model=IntakeTelecaller,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[_RequireAdmin],
+)
+async def add_telecaller(tenant: _Staff, payload: IntakeTelecallerCreate):
+    """Make an address a telecaller, now or at their first sign-in.
+
+    Admin only: this is the one endpoint that grants somebody access to the
+    workspace, and an address provisioned here may sign up even from outside
+    AGENCY_EMAIL_DOMAINS.
+    """
+    try:
+        employee, has_account = await provision_telecaller(
+            tenant.brand_id, email=str(payload.email), name=payload.name
+        )
+    except TelecallerConflict as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await intake_analytics.invalidate(tenant.brand_id)
+    return (await _telecaller_rows(tenant, [(employee, has_account)]))[0]
+
+
+@router.patch(
+    "/telecallers/{employee_id}",
+    response_model=IntakeTelecaller,
+    dependencies=[_RequireAdmin],
+)
+async def update_telecaller(tenant: _Staff, employee_id: str, payload: IntakeTelecallerUpdate):
+    """Pause or resume a telecaller. Paused, they get no new leads and drop out of
+    the reassign picker; leads they already hold stay with them until reassigned."""
+    employee = await Employee.find_one(
+        {
+            "_id": to_object_id(employee_id, "employee_id"),
+            "brand_id": tenant.brand_id,
+            "role": UserRole.telecaller.value,
+        }
+    )
+    if employee is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Telecaller not found")
+    await employee.set({"is_active": payload.is_active, "updated_at": datetime.now(UTC)})
+    await intake_analytics.invalidate(tenant.brand_id)
+    people = await list_telecallers(tenant.brand_id)
+    return next(row for row in await _telecaller_rows(tenant, people) if row.id == str(employee.id))
 
 
 # ── Configuration ──────────────────────────────────────────────────────────────
