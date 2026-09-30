@@ -597,7 +597,6 @@ GET /api/v1/intake/leads                  paginated, filter by status/telecaller
 GET /api/v1/intake/leads/{id}             one lead + its full timing trail
 GET /api/v1/intake/config                 sheet config + last sync status
 PUT /api/v1/intake/config                 update config (admin)
-POST /api/v1/intake/sync                  "Sync now" — enqueue an immediate poll (admin)
 ```
 
 All are Mongo aggregations following `dashboard/repository.py` conventions (`$match` on `brand_id`
@@ -632,7 +631,7 @@ about it, which defeats a 24-hour SLA.
 for each lead where status == pending_telecaller
                 and telecaller_assigned_at < now − TELECALLER_SLA_HOURS
                 and telecaller_sla_breached_at is None:
-    → one Notification(kind=telecaller_sla_breach, employee_id=<each admin>) per admin
+    → one Notification(kind=telecaller_sla_breach, employee_id=<each admin or maintainer>) per recipient
     → stamp telecaller_sla_breached_at = now        # fires exactly once per lead
 ```
 
