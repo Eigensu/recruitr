@@ -56,6 +56,27 @@ async def has_provisioned_employee(email: str) -> bool:
     return employee is not None and employee.brand_id is not None
 
 
+async def provisioned_role(email: str):
+    """The staff role an admin set up for this address before it had an account.
+
+    Only telecaller is carried over. Login copies User.role onto Employee.role,
+    so an account created with the default role would overwrite the telecaller
+    an admin provisioned the moment it first signed in. Every other role is
+    still granted by hand, and an address nobody provisioned stays an employee.
+    """
+    from app.modules.auth.models import UserRole
+    from app.modules.recruitment.models import Employee
+
+    employee = await Employee.find_one({"email": email.strip().lower()})
+    if (
+        employee is not None
+        and employee.brand_id is not None
+        and employee.role == UserRole.telecaller.value
+    ):
+        return UserRole.telecaller
+    return UserRole.employee
+
+
 async def may_hold_staff_account(email: str) -> bool:
     """Whether this address may be given, or keep, agency access."""
     return is_agency_email(email) or await has_provisioned_employee(email)

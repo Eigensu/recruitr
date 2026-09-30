@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
-from app.modules.auth.models import NON_RECRUITER_ROLES, UserRole
+from app.modules.auth.models import NON_RECRUITER_ROLES, User, UserRole
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
@@ -174,6 +174,93 @@ async def assignment_roster(brand_id: PydanticObjectId, *, telecallers: bool) ->
     be lying about who is available.
     """
     return await _roster(brand_id, telecallers=telecallers)
+
+
+class TelecallerConflict(Exception):
+    """The address belongs to somebody who cannot be made a telecaller here."""
+
+
+# Roles an admin may turn into a telecaller. Management is left out so a slip of
+# the keyboard cannot demote an admin, and client/referee accounts are
+# outsiders whose grants live elsewhere — giving one an Employee row would put
+# an employer inside the agency's workspace.
+_CONVERTIBLE_ROLES = frozenset({UserRole.employee.value, UserRole.telecaller.value})
+
+
+async def provision_telecaller(
+    brand_id: PydanticObjectId, *, email: str, name: str | None
+) -> tuple[Employee, bool]:
+    """Make this address an active telecaller in the brand. Returns (employee, has_account).
+
+    Writes both halves at once. User.role is what every guard reads and
+    Employee.role is only a mirror of it that login refreshes, so setting just
+    the User — which is all `migrate_user_roles promote` does — leaves the
+    person out of the roster until their next sign-in, and setting just the
+    Employee is undone *by* that sign-in. Someone without an account yet gets
+    the Employee row alone; `auth.access.provisioned_role` then makes their
+    account a telecaller from the moment it is created.
+    """
+    email = email.strip().lower()
+    user = await User.find_one({"email": email})
+    employee = await Employee.find_one({"email": email})
+
+    if user is not None and user.role.value not in _CONVERTIBLE_ROLES:
+        raise TelecallerConflict(
+            f"{email} is a {user.role.value} account and cannot be made a telecaller."
+        )
+    if employee is not None:
+        if employee.brand_id is not None and employee.brand_id != brand_id:
+            raise TelecallerConflict(f"{email} belongs to another workspace.")
+        if employee.role not in _CONVERTIBLE_ROLES:
+            raise TelecallerConflict(
+                f"{email} is a {employee.role} and cannot be made a telecaller."
+            )
+
+    display_name = (name or "").strip() or (user.full_name if user else None) or email
+
+    if employee is None:
+        employee = Employee(
+            brand_id=brand_id,
+            user_id=user.id if user else None,
+            name=display_name,
+            email=email,
+            role=UserRole.telecaller.value,
+        )
+        try:
+            await employee.insert()
+        except DuplicateKeyError:
+            # Created between the lookup and the insert — by their own sign-in,
+            # most likely. Go round once more against the row that now exists.
+            return await provision_telecaller(brand_id, email=email, name=name)
+    else:
+        updates: dict[str, object] = {
+            "brand_id": brand_id,
+            "role": UserRole.telecaller.value,
+            "is_active": True,
+            "updated_at": datetime.now(UTC),
+        }
+        if name and name.strip():
+            updates["name"] = name.strip()
+        if user is not None and employee.user_id is None:
+            updates["user_id"] = user.id
+        await employee.set(updates)
+
+    if user is not None and user.role != UserRole.telecaller:
+        await user.set({"role": UserRole.telecaller, "updated_at": datetime.now(UTC)})
+
+    return employee, user is not None
+
+
+async def list_telecallers(brand_id: PydanticObjectId) -> list[tuple[Employee, bool]]:
+    """Every telecaller in the brand, paused ones included, with whether each has signed up."""
+    people = (
+        await Employee.find({"brand_id": brand_id, "role": UserRole.telecaller.value})
+        .sort("name")
+        .to_list()
+    )
+    emails = [person.email for person in people]
+    registered = {u.email for u in await User.find({"email": {"$in": emails}}).to_list()}
+    return [(person, person.email in registered) for person in people]
 
 
 async def next_assignee(brand_id: PydanticObjectId, *, telecallers: bool) -> Employee | None:

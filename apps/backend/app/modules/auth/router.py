@@ -15,6 +15,7 @@ from app.modules.auth.access import (
     NOT_AUTHORIZED,
     find_client_authorization,
     may_sign_in,
+    provisioned_role,
 )
 from app.modules.auth.models import User, UserRole
 from app.modules.auth.schemas import (
@@ -133,7 +134,7 @@ async def signup(user_in: UserCreate) -> dict:
     if await User.find_one(User.email == email):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email already registered.")
 
-    role = UserRole.employee
+    role = await provisioned_role(email)
     if is_client:
         role = UserRole.client
     elif is_referee:
@@ -338,7 +339,12 @@ async def _find_or_create_google_user(
         await user.save()
         return user, False
 
-    user = User(email=email, full_name=full_name, google_id=google_id)
+    user = User(
+        email=email,
+        full_name=full_name,
+        google_id=google_id,
+        role=await provisioned_role(email),
+    )
     await user.insert()
     return user, True
 

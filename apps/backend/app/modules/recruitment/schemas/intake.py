@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.common.dtos.pagination import PaginationMeta
 from app.modules.recruitment.enums import (
@@ -385,6 +385,35 @@ class IntakeAssignee(BaseModel):
     id: str
     name: str
     email: str | None = None
+    open_leads: int = 0
+
+
+class IntakeTelecallerCreate(BaseModel):
+    """Make somebody a telecaller, whether or not they have signed up yet."""
+
+    email: EmailStr
+    name: str | None = Field(default=None, max_length=200)
+
+
+class IntakeTelecallerUpdate(BaseModel):
+    """Take a telecaller out of the lead rotation, or put them back in it."""
+
+    is_active: bool
+
+
+class IntakeTelecaller(BaseModel):
+    """One row of the telecaller roster on the settings screen.
+
+    `has_account` separates someone who can already open their queue from
+    someone provisioned ahead of their first sign-in — the admin needs to know
+    which of the two to chase.
+    """
+
+    id: str
+    name: str
+    email: str
+    is_active: bool
+    has_account: bool
     open_leads: int = 0
 
 

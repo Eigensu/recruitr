@@ -47,6 +47,9 @@ from app.modules.recruitment.schemas.intake import (
     IntakeSourceStatus,
     IntakeSyncResponse,
     IntakeTeamOption,
+    IntakeTelecaller,
+    IntakeTelecallerCreate,
+    IntakeTelecallerUpdate,
 )
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
@@ -96,6 +99,9 @@ __all__ = [
     "IntakeCandidateDetails",
     "IntakeCandidateDraft",
     "IntakeAssigneesResponse",
+    "IntakeTelecaller",
+    "IntakeTelecallerCreate",
+    "IntakeTelecallerUpdate",
     "IntakeCampaignResponse",
     "IntakeCampaignRow",
     "IntakeConfigResponse",
