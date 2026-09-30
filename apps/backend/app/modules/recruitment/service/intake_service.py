@@ -327,8 +327,15 @@ async def ingest_leads(
         if existing_id is None:
             created_candidate = await _insert_candidate(lead, brand_id, result)
             if created_candidate is None:
-                continue
-            candidate_id = created_candidate.id
+                # The email belongs to an archived candidate (the contact index
+                # only holds live ones): the same person, so file the lead as a
+                # duplicate of them rather than skipping it on every poll.
+                archived = await Candidate.find_one({"brand_id": brand_id, "email": lead.email})
+                if archived is None:
+                    continue
+                existing_id = candidate_id = archived.id
+            else:
+                candidate_id = created_candidate.id
 
         telecaller, status = await _initial_assignment(
             brand_id, duplicate=existing_id is not None, assign=assign
@@ -475,6 +482,14 @@ async def poll_google_sheet() -> IngestResult | None:
     result.rows_read = max(len(values) - 1, 0)
     result.unusable = len(skipped)
     result.before_cutoff = len(leads) - len(current)
+    if result.errors:
+        # Rows that could not be ingested are retried next poll; say so rather
+        # than letting them fail quietly forever.
+        logger.warning(
+            "Intake poll could not ingest %d row(s): %s",
+            len(result.errors),
+            "; ".join(result.errors[:20]),
+        )
 
     await config.set(
         {
@@ -760,7 +775,16 @@ async def reassign_lead(
             "telecaller_assigned_at": stamp,
             "telecaller_sla_breached_at": None,
         }
-    await lead.set(updates)
+    # Conditional on the status that was read, like accept and reject: a
+    # telecaller deciding the lead while the reassign dialog was open must not
+    # have that decision overwritten and the lead dropped back into a queue.
+    written = await IntakeLead.find_one({"_id": lead.id, "status": lead.status.value}).update(
+        {"$set": updates}
+    )
+    if written is None or written.matched_count == 0:
+        raise LeadAlreadyDecided(str(lead.id))
+    for attr, value in updates.items():
+        setattr(lead, attr, value)
 
     if recruiter_leg:
         candidate = await Candidate.get(lead.candidate_id)

@@ -27,7 +27,11 @@ from app.modules.recruitment.models import (
     Employee,
     IntakeLead,
 )
-from app.modules.recruitment.service.intake_service import as_utc
+from app.modules.recruitment.service.intake_service import (
+    LeadAlreadyDecided,
+    as_utc,
+    reassign_lead,
+)
 
 _BRAND = PydanticObjectId()
 
@@ -289,6 +293,23 @@ async def test_reassignment_restarts_the_clock_for_the_new_owner(http, caller):
     assert moved.telecaller_sla_breached_at is None
     # ...but the hand-off is counted, so this cannot hide a lead forever.
     assert moved.reassignment_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_reassign_does_not_overwrite_a_decision_made_while_it_was_open(caller):
+    other = await _staff("other", UserRole.telecaller)
+    lead = await _lead(telecaller=caller)
+    stale = await IntakeLead.get(lead.id)
+    # The telecaller accepts while the maintainer still has the dialog open.
+    await lead.set({"status": IntakeLeadStatus.pending_recruiter})
+
+    with pytest.raises(LeadAlreadyDecided):
+        await reassign_lead(stale, assignee=other)
+
+    kept = await IntakeLead.get(lead.id)
+    assert kept.status == IntakeLeadStatus.pending_recruiter
+    assert kept.telecaller_id == caller.id
+    assert kept.reassignment_count == 0
 
 
 @pytest.mark.asyncio
