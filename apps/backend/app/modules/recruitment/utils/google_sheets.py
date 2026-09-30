@@ -21,6 +21,7 @@ import binascii
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -152,17 +153,32 @@ async def fetch_values(spreadsheet_id: str, sheet_range: str) -> list[list[str]]
     if not spreadsheet_id:
         raise SheetConfigurationError("No spreadsheet configured.")
 
-    token = await _tokens.token()
-    url = _VALUES_URL.format(spreadsheet_id=spreadsheet_id, range=sheet_range)
+    # Everything that can fail below surfaces as SheetReadError or
+    # SheetConfigurationError, the two the poll records on the config row;
+    # anything else would escape the task and leave the banner saying "synced".
+    try:
+        token = await _tokens.token()
+    except SheetConfigurationError:
+        raise
+    except Exception as exc:  # google.auth TransportError / RefreshError
+        raise SheetReadError(f"Could not obtain a Google access token: {exc}") from exc
+    # The range is admin-typed tab text; a '#', '?' or '/' in it would otherwise
+    # cut the path short and come back as a misleading 404.
+    url = _VALUES_URL.format(
+        spreadsheet_id=quote(spreadsheet_id, safe=""), range=quote(sheet_range, safe="")
+    )
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        response = await client.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            # Formatted values, so a number typed into a cell arrives as it is
-            # displayed rather than as a float, and dates keep their text form.
-            params={"majorDimension": "ROWS", "valueRenderOption": "FORMATTED_VALUE"},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            response = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {token}"},
+                # Formatted values, so a number typed into a cell arrives as it is
+                # displayed rather than as a float, and dates keep their text form.
+                params={"majorDimension": "ROWS", "valueRenderOption": "FORMATTED_VALUE"},
+            )
+    except httpx.HTTPError as exc:
+        raise SheetReadError(f"Could not reach the Sheets API: {exc}") from exc
 
     if response.status_code == httpx.codes.UNAUTHORIZED:
         # A revoked or rotated key: drop the cached token so the next attempt
@@ -181,5 +197,8 @@ async def fetch_values(spreadsheet_id: str, sheet_range: str) -> list[list[str]]
     if response.status_code >= httpx.codes.BAD_REQUEST:
         raise SheetReadError(f"Sheets API returned {response.status_code}: {response.text[:200]}")
 
-    values = response.json().get("values", [])
+    try:
+        values = response.json().get("values", [])
+    except ValueError as exc:
+        raise SheetReadError("Sheets API returned a response that was not JSON.") from exc
     return [[str(cell) for cell in row] for row in values]

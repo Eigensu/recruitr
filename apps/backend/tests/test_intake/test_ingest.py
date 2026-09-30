@@ -154,6 +154,26 @@ async def test_an_email_match_also_counts_as_the_same_person(callers):
 
 
 @pytest.mark.asyncio
+async def test_a_lead_whose_email_belongs_to_an_archived_candidate_is_still_filed(callers):
+    # The contact index only holds live candidates, but the unique email index
+    # covers archived ones too: without a fallback the insert collided and the
+    # row was skipped silently on every poll, forever.
+    archived = Candidate(
+        brand_id=_BRAND, full_name="Asha R", email="asha@example.com", is_active=False
+    )
+    await archived.insert()
+
+    result = await ingest_leads(_leads(_row()), brand_id=_BRAND)
+
+    assert result.matched_existing == 1
+    lead = await IntakeLead.find_one({"brand_id": _BRAND})
+    assert lead is not None
+    assert lead.candidate_id == archived.id
+    assert lead.status == IntakeLeadStatus.duplicate
+    assert await Candidate.find({"brand_id": _BRAND}).count() == 1
+
+
+@pytest.mark.asyncio
 async def test_the_same_person_twice_in_one_sheet_creates_one_candidate(callers):
     # Meta issues a new lead id each time someone submits the form again, so
     # both rows are new to the external_id check.

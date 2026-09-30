@@ -74,8 +74,10 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
     change();
   }
 
+  // isCancelled lets the effect drop a response that lost the race to a newer
+  // filter, so the table never shows rows for controls it no longer matches.
   const load = useCallback(
-    (): Promise<void> =>
+    (isCancelled: () => boolean = () => false): Promise<void> =>
       fetchLeads(apiFetch, {
         page,
         limit: PAGE_SIZE,
@@ -83,8 +85,11 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
         overdue: overdue || undefined,
         telecaller_id: telecallerId || undefined,
       })
-        .then(setData)
+        .then((next) => {
+          if (!isCancelled()) setData(next);
+        })
         .catch((err: unknown) => {
+          if (isCancelled()) return;
           toast(apiErrorMessage(err, "Could not load leads."), "error");
         }),
     [apiFetch, page, status, overdue, telecallerId, toast],
@@ -92,7 +97,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
 
   useEffect(() => {
     let cancelled = false;
-    load().finally(() => {
+    load(() => cancelled).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => {

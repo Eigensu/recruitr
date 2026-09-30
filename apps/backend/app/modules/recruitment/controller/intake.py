@@ -278,7 +278,10 @@ async def reassign(tenant: _Telecaller, lead_id: str, payload: IntakeReassignReq
             status.HTTP_422_UNPROCESSABLE_ENTITY, "That person cannot take this lead."
         )
 
-    await reassign_lead(lead, assignee=assignee)
+    try:
+        await reassign_lead(lead, assignee=assignee)
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
     return await _fetch_response(lead)
 
 
