@@ -159,6 +159,9 @@ async def public_apply(
     full_name: Annotated[str, Form()],
     email: Annotated[str, Form()],
     phone: Annotated[str, Form(min_length=1)],
+    # ₹ per month, like every candidate salary. Current is required on every
+    # external form; expected is optional.
+    current_salary: Annotated[float, Form(ge=0)],
     # Must stay a Form field: the client submits multipart/form-data, and a
     # Query-declared param would be read from the URL only and silently ignored.
     brand_id: Annotated[
@@ -168,6 +171,7 @@ async def public_apply(
     city: Annotated[str | None, Form()] = None,
     education_level: Annotated[str | None, Form()] = None,
     source_channel: Annotated[str | None, Form(description="How the applicant found us")] = None,
+    expected_salary: Annotated[float | None, Form(ge=0)] = None,
     connect_code: Annotated[
         str | None, Form(description="Optional connect code for referrals")
     ] = None,
@@ -205,6 +209,9 @@ async def public_apply(
             phone=phone,
             city=city,
             current_role=current_role,
+            # Stamped salary_period="monthly" by Candidate's Insert hook.
+            salary=current_salary,
+            expected_salary=expected_salary,
             education_level=education_level,
             experience_years=parsed_exp,
             skills=parsed_skills,
