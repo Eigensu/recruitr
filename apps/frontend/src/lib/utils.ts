@@ -18,6 +18,11 @@ export function parseApiDate(value: string): Date {
   return new Date(hasTimezone ? value : `${value}Z`);
 }
 
+/** A candidate salary. Both current and expected are stored as ₹ per month. */
+export function formatMonthlySalary(amount: number): string {
+  return `₹${amount.toLocaleString("en-IN")}/mo`;
+}
+
 /** Format a date as the local `YYYY-MM-DD` string an `<input type="date">` expects. */
 export function toDateInputValue(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");

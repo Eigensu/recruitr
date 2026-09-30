@@ -313,10 +313,10 @@ export function ExpectedSalaryField(
 ) {
   return (
     <TextField
-      label="Expected Salary *"
+      label="Expected Salary (₹/month) *"
       type="number"
       min="0"
-      placeholder="e.g. 85000"
+      placeholder="e.g. 35000"
       {...props}
     />
   );
@@ -326,7 +326,13 @@ export function CurrentSalaryField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return (
-    <TextField label="Current Salary *" type="number" min="0" placeholder="e.g. 60000" {...props} />
+    <TextField
+      label="Current Salary (₹/month) *"
+      type="number"
+      min="0"
+      placeholder="e.g. 30000"
+      {...props}
+    />
   );
 }
 
