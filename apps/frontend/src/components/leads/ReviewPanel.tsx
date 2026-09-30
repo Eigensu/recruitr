@@ -39,7 +39,17 @@ function teamLabel(team: IntakeTeamOption): string {
  * the candidate, and the rotation keeps work even inside it without anyone
  * having to track who had the last one.
  */
-export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => void }) {
+export default function ReviewPanel({
+  onChanged,
+  onOpen,
+  opening,
+}: {
+  readonly onChanged?: () => void;
+  /** Show the lead's full candidate profile. The parent owns the drawer. */
+  readonly onOpen?: (lead: IntakeLead) => void;
+  /** candidate_id of the profile being fetched, for a spinner on that row. */
+  readonly opening?: string | null;
+}) {
   const apiFetch = useApiFetch();
   const toast = useToast();
 
@@ -220,7 +230,25 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                      <span className="font-medium text-text-primary">{lead.full_name}</span>
+                      {onOpen ? (
+                        // The row is a <label> for the checkbox; preventDefault
+                        // keeps opening the profile from also selecting the lead.
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onOpen(lead);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-left font-medium text-text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:underline"
+                        >
+                          {lead.full_name}
+                          {opening === lead.candidate_id && (
+                            <IconLoader2 className="size-3.5 animate-spin text-text-muted" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="font-medium text-text-primary">{lead.full_name}</span>
+                      )}
                       <span className="text-xs text-text-muted">
                         {lead.telecaller_name ? `Screened by ${lead.telecaller_name}` : "Screened"}
                         {waited !== null && ` · ${formatHours(waited)} ago`}
