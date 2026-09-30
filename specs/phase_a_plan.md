@@ -30,7 +30,7 @@ below (A5–A7) must branch from `main` *after* those merge, or be stacked on th
 |---|---|
 | Naukri import destination | **Telecaller queue** — same round-robin, review step and SLA clocks as Meta sheet leads |
 | Naukri import mechanism | **Upload screen**, reusable for every future Naukri export (not a one-off script) |
-| Who can import | **Everyone** on staff (recruiters, maintainers, admins) — see §5 for telecallers |
+| Who can import | **Everyone** on staff (recruiters, maintainers, admins); **not telecallers** |
 | Salary unit | **₹/month** for candidate **current** (`salary`) and **expected** (`expected_salary`) salary, for everything entered from now on |
 | Existing salary data | **Not touched.** No migration, no division of prod values. Only the Naukri import converts (its yearly figures → monthly at parse time) |
 | Position salary, `salary_offered` | **Unchanged** |
@@ -374,9 +374,8 @@ gets 403 on `archived=true`.
 
 ## 5. Still to confirm
 
-| # | Blocks | Point |
-|---|---|---|
-| C1 | A5 | "Everyone can import" is read as every **staff** role that can open the Leads page — recruiters, maintainers, admins. **Telecallers are excluded**: they only reach their own queue by design (`get_telecaller_tenant`), and an importer's leads would round-robin back into telecaller queues including their own. Say if telecallers should import too. |
+Nothing. Telecallers are confirmed out of Naukri imports: they only reach their own queue by
+design (`get_telecaller_tenant`), and imported leads round-robin back into telecaller queues.
 
 ---
 
