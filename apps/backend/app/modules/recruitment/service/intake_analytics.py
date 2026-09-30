@@ -345,6 +345,21 @@ async def open_lead_counts(brand_id: PydanticObjectId, *, leg: str) -> dict[Any,
     return {row["_id"]: int(row["count"]) for row in rows if row.get("_id")}
 
 
+async def open_leads_by_team(brand_id: PydanticObjectId) -> dict[Any, int]:
+    """Leads each team's recruiters have been handed and not yet mapped.
+
+    Shown beside each team in the review picker, for the same reason the
+    reassign picker shows a per-person count.
+    """
+    rows = await _aggregate(
+        [
+            {_MATCH: {"brand_id": brand_id, "status": _OPEN_STATUS[RECRUITER]}},
+            {_GROUP: {"_id": "$team_id", "count": {_SUM: 1}}},
+        ]
+    )
+    return {row["_id"]: int(row["count"]) for row in rows if row.get("_id")}
+
+
 # ── Funnel ─────────────────────────────────────────────────────────────────────
 
 

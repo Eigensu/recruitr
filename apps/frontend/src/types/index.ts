@@ -303,6 +303,7 @@ export interface RecruiterOption {
 export type CandidateEventType =
   | "created"
   | "applied"
+  | "screened"
   | "approved"
   | "declined"
   | "mapped"

@@ -14,6 +14,7 @@ import {
   clientApproveCandidate,
   clientRejectCandidate,
 } from "@/lib/api/candidates.client";
+import { apiErrorMessage } from "@/lib/api";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/components/ui/Toast";
 import CandidateFilterBar from "./CandidateFilterBar";
@@ -361,7 +362,7 @@ export default function CandidatesClient({
     try {
       updated = await clientApproveCandidate(id);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Failed to approve candidate", "error");
+      toast(apiErrorMessage(err, "Failed to approve candidate"), "error");
       return;
     }
 
@@ -401,7 +402,7 @@ export default function CandidatesClient({
       if (selectedCandidate?.id === id) setSelectedCandidate(null);
       toast("Candidate rejected", "success");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Failed to reject candidate", "error");
+      toast(apiErrorMessage(err, "Failed to reject candidate"), "error");
     }
   }
 
