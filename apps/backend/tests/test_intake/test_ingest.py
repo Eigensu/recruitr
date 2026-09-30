@@ -373,12 +373,30 @@ def test_the_activation_cutoff_survives_a_naive_timestamp():
 @pytest.mark.asyncio
 async def test_a_stored_assignment_time_still_measures_a_response(callers):
     # Same hazard on the other leg: telecaller_assigned_at comes back naive.
+    from app.modules.recruitment.schemas import IntakeCandidateDetails
     from app.modules.recruitment.service.intake_service import accept_lead
 
     await ingest_leads(_leads(_row()), brand_id=_BRAND)
     stored = await IntakeLead.find_one({"brand_id": _BRAND})
     assert stored.telecaller_assigned_at.tzinfo is None
 
-    await accept_lead(stored)
+    await accept_lead(
+        stored,
+        details=IntakeCandidateDetails(
+            full_name="Asha Rao",
+            phone="9876543210",
+            communication="Good",
+            education="Graduate",
+            department="Service",
+            specialization="Steward",
+            current_role="Steward",
+            experience_years=2,
+            city="Mumbai",
+            gender="female",
+            expected_salary=450000,
+            salary=360000,
+            notice_period="30 days",
+        ),
+    )
 
     assert (await IntakeLead.get(stored.id)).telecaller_response_seconds is not None

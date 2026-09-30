@@ -38,6 +38,9 @@ _ALLOWED_PATHS = {
     "/api/v1/intake/leads/mine",
     "/api/v1/intake/leads/{lead_id}/accept",
     "/api/v1/intake/leads/{lead_id}/reject",
+    # The accept form: the candidate on their own lead, and the role dropdown.
+    "/api/v1/intake/leads/{lead_id}/candidate",
+    "/api/v1/intake/role-catalog",
 }
 
 _PATH_PARAM = re.compile(r"\{[^}]+\}")

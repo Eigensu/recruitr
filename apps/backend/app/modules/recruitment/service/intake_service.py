@@ -1,4 +1,7 @@
-"""Turning parsed sheet rows into candidates, leads, and telecaller assignments.
+"""Turning inbound candidates into leads, and moving leads through review.
+
+    ingest (sheet) / public form → telecaller → reviewer assigns a team
+                                              → team round-robin picks a recruiter
 
 The sheet read itself lives in `utils/google_sheets.py` and the parsing in
 `utils/lead_sheet.py`; everything here is database work, so it is testable
@@ -42,18 +45,24 @@ from app.modules.recruitment.models import (
     IntakeAttribution,
     IntakeLead,
     IntakeSourceConfig,
+    Team,
 )
 from app.modules.recruitment.repository import next_seq, record_candidate_event
-from app.modules.recruitment.schemas import TenantScope
+from app.modules.recruitment.schemas import IntakeCandidateDetails, TenantScope
 from app.modules.recruitment.utils.lead_sheet import ParsedLead, parse_rows
 from app.modules.recruitment.utils.phone import normalize_phone
 
 logger = logging.getLogger(__name__)
 
-# Counter keys for the two round-robin cursors. next_seq() is an atomic $inc,
-# so two workers assigning at the same moment get different numbers.
+# Counter keys for the round-robin cursors. next_seq() is an atomic $inc, so
+# two workers assigning at the same moment get different numbers. Recruiters
+# are picked per team, so each team keeps its own cursor (`_team_cursor`).
 _TELECALLER_CURSOR = "intake_telecaller_rr"
 _RECRUITER_CURSOR = "intake_recruiter_rr"
+
+
+def _team_cursor(team_id: PydanticObjectId) -> str:
+    return f"intake_team_rr:{team_id}"
 
 
 @dataclass
@@ -181,6 +190,26 @@ async def next_assignee(brand_id: PydanticObjectId, *, telecallers: bool) -> Emp
     cursor = _TELECALLER_CURSOR if telecallers else _RECRUITER_CURSOR
     seq = await next_seq(brand_id, cursor)
     return roster[seq % len(roster)]
+
+
+async def team_roster(brand_id: PydanticObjectId, team_id: PydanticObjectId) -> list[Employee]:
+    """Active recruiters on one team, in the stable order its round-robin uses.
+
+    The same recruiter filter as `_roster` — a maintainer or telecaller who
+    happens to sit on a team is not someone to hand a candidate to.
+    """
+    return (
+        await Employee.find(
+            {
+                "brand_id": brand_id,
+                "team_id": team_id,
+                "is_active": True,
+                "role": {"$nin": list(NON_RECRUITER_ROLES)},
+            }
+        )
+        .sort("_id")
+        .to_list()
+    )
 
 
 # ── Ingest ─────────────────────────────────────────────────────────────────────
@@ -373,6 +402,69 @@ async def ingest_leads(
     if result.created or result.matched_existing:
         await _drop_analytics_cache(brand_id)
     return result
+
+
+# ── Public form ────────────────────────────────────────────────────────────────
+
+
+async def open_lead_for_application(
+    candidate: Candidate, *, now: datetime | None = None
+) -> IntakeLead | None:
+    """Put a public-form applicant (or a referral) into a telecaller's queue.
+
+    The external id is the candidate's own id: there is no upstream lead id,
+    and the unique `(brand_id, external_id)` index then guarantees one lead per
+    applicant however many times this is retried. No contact dedupe here — the
+    form already refuses an email the brand holds, and the candidate row exists
+    by the time this runs.
+    """
+    stamp = now or datetime.now(UTC)
+    telecaller = await next_assignee(candidate.brand_id, telecallers=True)
+    lead = IntakeLead(
+        brand_id=candidate.brand_id,
+        candidate_id=candidate.id,
+        source=IntakeSource.public_form,
+        source_channel=candidate.source_channel,
+        external_id=f"candidate:{candidate.id}",
+        external_created_at=stamp,
+        status=(IntakeLeadStatus.pending_telecaller if telecaller else IntakeLeadStatus.unassigned),
+        telecaller_id=telecaller.id if telecaller else None,
+        telecaller_assigned_at=stamp if telecaller else None,
+        ingested_at=stamp,
+    )
+    try:
+        await lead.insert()
+    except DuplicateKeyError:
+        return None
+    await _drop_analytics_cache(candidate.brand_id)
+    return lead
+
+
+# Leads still waiting on screening or review. A candidate with one of these is
+# the intake flow's to decide, not the External tab's approve button.
+_SCREENING_STATUSES = (
+    IntakeLeadStatus.pending_telecaller.value,
+    IntakeLeadStatus.pending_review.value,
+)
+
+
+async def open_lead_for(brand_id: PydanticObjectId, candidate_id: PydanticObjectId) -> bool:
+    """Whether this candidate is still being screened or reviewed by intake.
+
+    `unassigned` counts only before a telecaller decided: an accepted lead
+    filed unassigned by the old flow has already been screened.
+    """
+    lead = await IntakeLead.find_one(
+        {
+            "brand_id": brand_id,
+            "candidate_id": candidate_id,
+            "$or": [
+                {"status": {"$in": list(_SCREENING_STATUSES)}},
+                {"status": IntakeLeadStatus.unassigned.value, "telecaller_decision": None},
+            ],
+        }
+    )
+    return lead is not None
 
 
 # ── Configuration ──────────────────────────────────────────────────────────────
@@ -643,51 +735,130 @@ async def _decide_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
 
 
 async def accept_lead(
-    lead: IntakeLead, *, notes: str | None = None, now: datetime | None = None
+    lead: IntakeLead,
+    *,
+    details: IntakeCandidateDetails,
+    notes: str | None = None,
+    now: datetime | None = None,
 ) -> IntakeLead:
-    """Telecaller accepted: approve the candidate and hand them to a recruiter.
+    """Telecaller accepted: save what they learned and send the lead to review.
 
-    The recruiter is chosen by the same round-robin that picked the telecaller.
-    If there is none, the lead waits as `unassigned` with the candidate already
-    approved — the screening call happened either way, and hiding that work
-    because the desk is empty would be a lie about what the telecaller did.
+    No recruiter is picked here. An admin or maintainer decides which team the
+    candidate goes to (`assign_to_team`), and the candidate stays PENDING — out
+    of the recruiter directory — until then, so nobody maps them before a team
+    owns them.
     """
     stamp = now or datetime.now(UTC)
-    recruiter = await next_assignee(lead.brand_id, telecallers=False)
 
     await _decide_pending(
         lead,
         {
-            "status": (
-                IntakeLeadStatus.pending_recruiter if recruiter else IntakeLeadStatus.unassigned
-            ),
+            "status": IntakeLeadStatus.pending_review,
             "telecaller_decision": IntakeDecision.accept,
             "telecaller_actioned_at": stamp,
             "telecaller_notes": notes,
             "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
-            "recruiter_id": recruiter.id if recruiter else None,
-            "recruiter_assigned_at": stamp if recruiter else None,
             "updated_at": stamp,
         },
     )
 
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is not None:
-        await candidate.set(
-            {
-                # Into the recruiter directory, which filters to APPROVED.
-                "status": CandidateStatus.approved,
-                "assigned_recruiter_id": recruiter.id if recruiter else None,
-            }
-        )
+        fields = details.model_dump()
+        # The form only ever fills a CV link in; clearing it would throw away
+        # a link the applicant sent.
+        if not fields.get("cv_link"):
+            fields.pop("cv_link")
+        try:
+            await candidate.set(fields)
+        except DuplicateKeyError:
+            # The email the telecaller typed belongs to another candidate. The
+            # decision already stands, so keep everything else they entered.
+            fields.pop("email", None)
+            await candidate.set(fields)
+            logger.warning("Intake accept: email for lead %s collides; kept the old one", lead.id)
         await record_candidate_event(
             scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
             candidate_id=lead.candidate_id,
-            event_type=CandidateEventType.approved,
-            note="Accepted by telecaller",
+            event_type=CandidateEventType.screened,
+            note=f"Screened by telecaller: {notes}" if notes else "Screened by telecaller",
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead
+
+
+class TeamHasNoRecruiters(Exception):
+    """The chosen team has nobody the round-robin could hand a lead to."""
+
+
+async def assign_to_team(
+    leads: Sequence[IntakeLead],
+    *,
+    team: Team,
+    reviewer_id: PydanticObjectId | None,
+    now: datetime | None = None,
+) -> tuple[list[IntakeLead], list[IntakeLead]]:
+    """Hand reviewed leads to a team; its own round-robin picks each recruiter.
+
+    Returns (assigned, skipped). A lead is skipped when it is no longer awaiting
+    review — another reviewer got there first — which the conditional write
+    detects, so two reviewers cannot both assign the same lead.
+
+    The recruiter's SLA clock starts here, not at the telecaller's accept: until
+    now there was nobody specific to be late.
+    """
+    roster = await team_roster(team.brand_id, team.id)
+    if not roster:
+        raise TeamHasNoRecruiters(str(team.id))
+
+    stamp = now or datetime.now(UTC)
+    assigned: list[IntakeLead] = []
+    skipped: list[IntakeLead] = []
+    for lead in leads:
+        if lead.status != IntakeLeadStatus.pending_review:
+            skipped.append(lead)
+            continue
+        seq = await next_seq(team.brand_id, _team_cursor(team.id))
+        recruiter = roster[seq % len(roster)]
+        updates: dict[str, object] = {
+            "status": IntakeLeadStatus.pending_recruiter,
+            "team_id": team.id,
+            "reviewed_by_id": reviewer_id,
+            "reviewed_at": stamp,
+            "recruiter_id": recruiter.id,
+            "recruiter_assigned_at": stamp,
+            "recruiter_sla_breached_at": None,
+            "updated_at": stamp,
+        }
+        result = await IntakeLead.find_one(
+            {"_id": lead.id, "status": IntakeLeadStatus.pending_review.value}
+        ).update({"$set": updates})
+        if result is None or result.matched_count == 0:
+            skipped.append(lead)
+            continue
+        for attr, value in updates.items():
+            setattr(lead, attr, value)
+
+        candidate = await Candidate.get(lead.candidate_id)
+        if candidate is not None:
+            await candidate.set(
+                {
+                    # Into the recruiter directory, which filters to APPROVED.
+                    "status": CandidateStatus.approved,
+                    "assigned_recruiter_id": recruiter.id,
+                }
+            )
+            await record_candidate_event(
+                scope=TenantScope(brand_id=lead.brand_id, employee_id=reviewer_id),
+                candidate_id=lead.candidate_id,
+                event_type=CandidateEventType.approved,
+                note=f"Assigned to {team.name} ({recruiter.name})",
+            )
+        assigned.append(lead)
+
+    if assigned:
+        await _drop_analytics_cache(team.brand_id)
+    return assigned, skipped
 
 
 async def reject_lead(
@@ -734,10 +905,10 @@ async def reject_lead(
 def waiting_on_recruiter(lead: IntakeLead) -> bool:
     """Whether a reassigned lead goes to the recruiter leg rather than a telecaller.
 
-    Decided from the telecaller's decision, not the status alone: accept_lead
-    files an accepted lead as `unassigned` when no recruiter is free, and that
-    lead's screening is done. Sending it back to a telecaller would let them
-    reject a candidate who is already approved.
+    Decided from the telecaller's decision, not the status alone: leads accepted
+    before the review step existed could be filed `unassigned` when no
+    recruiter was free, and that lead's screening is done. Sending it back to a
+    telecaller would let them reject a candidate who is already approved.
     """
     return lead.status == IntakeLeadStatus.pending_recruiter or (
         lead.status == IntakeLeadStatus.unassigned

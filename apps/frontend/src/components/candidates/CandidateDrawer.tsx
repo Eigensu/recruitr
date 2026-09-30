@@ -712,6 +712,8 @@ function eventSummary(event: ApiCandidateHistoryEvent): string {
       return "Applied through the public form";
     case "created":
       return "Added to the talent pool";
+    case "screened":
+      return "Screened by a telecaller";
     case "approved":
       return "Application approved";
     case "declined":

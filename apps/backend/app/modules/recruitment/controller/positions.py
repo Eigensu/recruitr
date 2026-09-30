@@ -23,7 +23,7 @@ from pymongo.errors import DuplicateKeyError
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.core.dependencies import get_tenant, get_viewer, require_maintainer
-from app.modules.recruitment.enums import PositionStatus, Seniority
+from app.modules.recruitment.enums import CandidateStatus, PositionStatus, Seniority
 from app.modules.recruitment.models import Candidate, Client, Mapping, Position
 from app.modules.recruitment.repository import generate_position_code
 from app.modules.recruitment.schemas import (
@@ -624,6 +624,13 @@ async def reopen_position(
 
 # ── Top candidates (with match scoring) ────────────────────────────────────────
 
+# Who may be suggested for, and mapped to, a position: the directory's own rule.
+# A PENDING candidate is still with a telecaller or awaiting a team, and a
+# REJECTED one was turned away — suggesting either would let a recruiter skip
+# the intake flow. Records predating the status field count as approved, as
+# they do in the directory.
+_MAPPABLE = {"$or": [{"status": CandidateStatus.approved.value}, {"status": {"$exists": False}}]}
+
 
 @router.get("/{position_id}/top-candidates")
 async def get_top_candidates(
@@ -677,7 +684,7 @@ async def get_top_candidates(
     )
 
     pipeline = [
-        {_MATCH: {"brand_id": tenant.brand_id, "is_active": True}},
+        {_MATCH: {"brand_id": tenant.brand_id, "is_active": True, **_MAPPABLE}},
         {
             _ADD_FIELDS: {
                 "id": {_TO_STR: "$_id"},
@@ -816,6 +823,12 @@ async def map_candidate_to_position(
     )
     if not cand:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_CANDIDATE_NOT_FOUND)
+    if cand.status != CandidateStatus.approved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Only approved candidates can be put forward. This one is "
+            f"{cand.status.value.lower()} — approve them first.",
+        )
 
     # Check if already mapped
     existing = await Mapping.find_one(

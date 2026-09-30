@@ -5,13 +5,17 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.common.dtos.pagination import PaginationMeta
 from app.modules.recruitment.enums import (
+    Department,
+    EstablishmentTag,
+    Gender,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
+    IntakeSource,
 )
 
 
@@ -48,6 +52,7 @@ class IntakeLeadResponse(_UtcTimestamps):
 
     id: str
     status: IntakeLeadStatus
+    source: IntakeSource = IntakeSource.google_sheet
     candidate_id: str
     full_name: str
     phone: str | None = None
@@ -68,6 +73,9 @@ class IntakeLeadResponse(_UtcTimestamps):
     telecaller_reject_reason: IntakeRejectReason | None = None
     telecaller_notes: str | None = None
     telecaller_response_seconds: int | None = None
+    team_id: str | None = None
+    team_name: str | None = None
+    reviewed_at: datetime | None = None
     recruiter_id: str | None = None
     recruiter_assigned_at: datetime | None = None
     recruiter_actioned_at: datetime | None = None
@@ -83,7 +91,90 @@ class IntakeLeadResponse(_UtcTimestamps):
     overdue: bool = False
 
 
+class IntakeCandidateDetails(BaseModel):
+    """What a telecaller fills in on the call before accepting a lead.
+
+    The same required fields as adding a candidate by hand
+    (`CandidateCreateStrict`) except two. Brand experience is left to the
+    recruiter, who is the one placing the person with a brand. The CV link is
+    optional: a telecaller is on the phone, and a lead from an Instagram ad
+    usually has no CV to link to — requiring one would make accept impossible.
+    Source is not asked for at all: every lead here is external by definition.
+    """
+
+    full_name: str = Field(..., min_length=1)
+    # Not EmailStr: that rejects addresses the public form and the sheet ingest
+    # already stored (reserved domains, for one), and a telecaller cannot
+    # accept a lead over an email they never typed. Same shape check as ingest.
+    email: str | None = None
+    phone: str = Field(..., min_length=1)
+    communication: str = Field(..., min_length=1)
+    education: str = Field(..., min_length=1)
+    department: Department
+    specialization: str = Field(..., min_length=1)
+    establishment_tag: EstablishmentTag | None = None
+    current_role: str = Field(..., min_length=1)
+    experience_years: float = Field(..., ge=0)
+    city: str = Field(..., min_length=1)
+    area: str | None = None
+    gender: Gender
+    age: int | None = Field(default=None, gt=0)
+    expected_salary: float = Field(..., ge=0)
+    salary: float = Field(..., ge=0)
+    notice_period: str = Field(..., min_length=1)
+    cv_link: str | None = None
+
+    @model_validator(mode="after")
+    def _clean(self) -> IntakeCandidateDetails:
+        if self.cv_link is not None:
+            self.cv_link = self.cv_link.strip() or None
+        if self.cv_link and not re.match(r"^https?://", self.cv_link, re.IGNORECASE):
+            raise ValueError("CV Link must be a valid HTTP(S) URL")
+        if self.email is not None and self.email.strip():
+            # Imported here: the utils package imports schemas at load time.
+            from app.modules.recruitment.utils.lead_sheet import parse_email
+
+            email = parse_email(self.email)
+            if email is None:
+                raise ValueError("Email doesn't look like an email address")
+            self.email = email
+        else:
+            self.email = None
+        return self
+
+
+class IntakeCandidateDraft(BaseModel):
+    """The candidate as the system holds them now, to prefill the accept form.
+
+    Every field optional and loosely typed: this is whatever the ad form or the
+    public application captured, and a value that does not fit a dropdown is
+    still worth showing the telecaller rather than dropping.
+    """
+
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    communication: str | None = None
+    education: str | None = None
+    department: str | None = None
+    specialization: str | None = None
+    establishment_tag: str | None = None
+    current_role: str | None = None
+    experience_years: float | None = None
+    city: str | None = None
+    area: str | None = None
+    gender: str | None = None
+    age: int | None = None
+    expected_salary: float | None = None
+    salary: float | None = None
+    notice_period: str | None = None
+    cv_link: str | None = None
+    # Not editable here, but the telecaller should know it is on file.
+    has_resume: bool = False
+
+
 class IntakeAcceptRequest(BaseModel):
+    details: IntakeCandidateDetails
     notes: str | None = Field(default=None, max_length=2000)
 
 
@@ -94,6 +185,30 @@ class IntakeRejectRequest(BaseModel):
 
 class IntakeReassignRequest(BaseModel):
     employee_id: str
+
+
+class IntakeAssignTeamRequest(BaseModel):
+    """Hand one or more reviewed leads to a team."""
+
+    lead_ids: list[str] = Field(..., min_length=1, max_length=100)
+    team_id: str
+
+
+class IntakeAssignTeamResponse(BaseModel):
+    """What happened to each lead. Partial success is normal: another reviewer
+    may have assigned some of the selection a moment earlier."""
+
+    assigned: list[IntakeLeadResponse] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)  # lead ids no longer awaiting review
+
+
+class IntakeTeamOption(BaseModel):
+    """A team a reviewer can assign to, and how loaded it already is."""
+
+    id: str
+    name: str
+    recruiters: int  # active recruiters the round-robin can pick from
+    open_leads: int  # leads its recruiters have not yet mapped
 
 
 class IntakeSyncResponse(BaseModel):
@@ -152,6 +267,7 @@ class IntakeFunnel(BaseModel):
     pending_telecaller: int = 0
     unassigned: int = 0
     rejected: int = 0
+    pending_review: int = 0
     pending_recruiter: int = 0
     actioned: int = 0
     duplicate: int = 0

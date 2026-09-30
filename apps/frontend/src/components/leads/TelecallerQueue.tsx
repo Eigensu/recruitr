@@ -5,6 +5,7 @@ import { AnimatePresence } from "motion/react";
 import { IconLoader2, IconPhoneCall, IconRefresh } from "@tabler/icons-react";
 import { useApiFetch, apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
+import AcceptLeadDialog from "@/components/leads/AcceptLeadDialog";
 import LeadCard from "@/components/leads/LeadCard";
 import {
   acceptLead,
@@ -34,6 +35,7 @@ export default function TelecallerQueue() {
   const [leads, setLeads] = useState<IntakeLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState<{ lead: IntakeLead; notes: string } | null>(null);
 
   // State is only ever set from a promise callback, never synchronously in the
   // effect body — the same shape useCurrentUser uses, and what keeps React from
@@ -59,9 +61,11 @@ export default function TelecallerQueue() {
   }, [load]);
 
   /**
-   * Both decisions share this: the card leaves the list as soon as the server
-   * confirms. No optimistic removal — a failed accept that had already vanished
-   * from the screen would look like a call that was logged when it was not.
+   * Reject goes through this (accept goes through AcceptLeadDialog, which
+   * follows the same rule): the card leaves the list only once the server
+   * confirms. No optimistic removal — a failed decision that had already
+   * vanished from the screen would look like a call that was logged when it
+   * was not.
    */
   async function decide(lead: IntakeLead, action: () => Promise<IntakeLead>, done: string) {
     setBusyId(lead.id);
@@ -118,13 +122,7 @@ export default function TelecallerQueue() {
                 key={lead.id}
                 lead={lead}
                 busy={busyId === lead.id}
-                onAccept={(notes) =>
-                  decide(
-                    lead,
-                    () => acceptLead(apiFetch, lead.id, notes),
-                    `${lead.full_name} passed to a recruiter.`,
-                  )
-                }
+                onAccept={(notes) => setAccepting({ lead, notes })}
                 onReject={(reason: IntakeRejectReason | undefined, notes) =>
                   decide(
                     lead,
@@ -136,6 +134,23 @@ export default function TelecallerQueue() {
             ))}
           </AnimatePresence>
         </div>
+      )}
+
+      {accepting && (
+        <AcceptLeadDialog
+          lead={accepting.lead}
+          initialNotes={accepting.notes}
+          onClose={() => setAccepting(null)}
+          onSubmit={async (details, notes) => {
+            // Errors propagate to the dialog, which keeps the form and what
+            // was typed into it rather than losing a call's worth of notes.
+            await acceptLead(apiFetch, accepting.lead.id, details, notes);
+            const done = accepting.lead;
+            setAccepting(null);
+            setLeads((prev) => prev.filter((row) => row.id !== done.id));
+            toast(`${done.full_name} sent for review.`, "success");
+          }}
+        />
       )}
     </div>
   );
