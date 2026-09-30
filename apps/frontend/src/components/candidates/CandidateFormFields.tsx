@@ -627,6 +627,7 @@ export function StructuredCandidateTags({
   form,
   errors,
   onChange,
+  hideBrandExperience = false,
 }: Readonly<{
   form: {
     communication?: string;
@@ -638,6 +639,8 @@ export function StructuredCandidateTags({
   };
   errors?: Record<string, string>;
   onChange: (updates: Partial<typeof form>) => void;
+  /** The telecaller's accept form leaves brand experience to the recruiter. */
+  hideBrandExperience?: boolean;
 }>) {
   return (
     <>
@@ -651,11 +654,13 @@ export function StructuredCandidateTags({
         onChange={(v) => onChange({ education: v })}
         error={errors?.education}
       />
-      <BrandExperienceField
-        value={form.brand_experience || ""}
-        onChange={(v) => onChange({ brand_experience: v })}
-        error={errors?.brand_experience}
-      />
+      {!hideBrandExperience && (
+        <BrandExperienceField
+          value={form.brand_experience || ""}
+          onChange={(v) => onChange({ brand_experience: v })}
+          error={errors?.brand_experience}
+        />
+      )}
       <DepartmentField
         value={form.department || ""}
         onChange={(dept) => onChange({ department: dept, specialization: "" })}

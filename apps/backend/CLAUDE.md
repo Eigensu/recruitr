@@ -64,15 +64,30 @@ cross-cutting notes.
 
 ## Inbound lead intake
 
-Meta lead-ad candidates land in a Google Sheet, are ingested on a schedule, screened by a
-telecaller, then handed to a recruiter. Design doc and decisions log:
+Every external candidate is screened by a telecaller before a recruiter sees them. Meta lead-ad
+candidates land in a Google Sheet and are ingested on a schedule; public-form applications
+(referrals included — they come through the same form with a connect code) open a lead as they
+are submitted (`intake_service.open_lead_for_application`). Design doc and decisions log:
 `specs/telecaller_intake_spec.md`.
+
+```
+pending_telecaller ──accept + details form──▶ pending_review ──admin picks a team──▶ pending_recruiter ──first mapping──▶ actioned
+        └──reject──▶ rejected                   (no SLA clock)     (team round-robin)     (recruiter SLA)
+```
+
+**Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
+minus brand experience, CV link optional) and parks the lead in `pending_review` with the
+candidate still PENDING. **`POST /intake/leads/assign-team`** (maintainer+) picks the recruiter
+with a per-team round-robin (`Counter` key `intake_team_rr:<team_id>`, roster =
+`intake_service.team_roster`), approves the candidate, and starts the recruiter SLA clock. The
+External tab's approve/reject refuses (409) any candidate whose lead is still being screened or
+reviewed (`open_lead_for`), so the two paths cannot both decide one person.
 
 | Piece | Where |
 |---|---|
 | Sheet read — service account, `spreadsheets.readonly` | `recruitment/utils/google_sheets.py` |
 | Column mapping, row parsing, phone normalisation | `recruitment/utils/{lead_sheet,phone}.py` |
-| Ingest, round-robin, accept / reject / reassign | `recruitment/service/intake_service.py` |
+| Ingest, round-robin, accept / reject / team assignment / reassign | `recruitment/service/intake_service.py` |
 | Funnel, per-leg timings, campaign report | `recruitment/service/intake_analytics.py` |
 | Hourly breach sweep, daily digest | `recruitment/service/intake_sla.py` |
 | HTTP | `recruitment/controller/intake.py` |

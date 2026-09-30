@@ -798,6 +798,13 @@ class IntakeLead(Document):
     # a lead stuck for a week raises one notification, not one per sweep.
     telecaller_sla_breached_at: datetime | None = None
 
+    # ── Review ──
+    # An admin or maintainer hands an accepted lead to a team; the recruiter
+    # inside it is then picked by that team's own round-robin.
+    team_id: PydanticObjectId | None = None  # FK → teams._id
+    reviewed_by_id: PydanticObjectId | None = None  # FK → employees._id
+    reviewed_at: datetime | None = None
+
     # ── Recruiter leg ──
     recruiter_id: PydanticObjectId | None = None  # FK → employees._id
     recruiter_assigned_at: datetime | None = None

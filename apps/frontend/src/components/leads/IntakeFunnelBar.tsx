@@ -24,6 +24,12 @@ const SEGMENTS: {
     dot: "bg-yellow/70",
   },
   {
+    key: "pending_review",
+    label: "Awaiting a team",
+    bar: "bg-violet-500/70",
+    dot: "bg-violet-500/70",
+  },
+  {
     key: "pending_recruiter",
     label: "With a recruiter",
     bar: "bg-blue-500/70",

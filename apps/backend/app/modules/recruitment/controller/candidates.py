@@ -59,6 +59,7 @@ from app.modules.recruitment.schemas import (
     ResumeConfirm,
     TenantScope,
 )
+from app.modules.recruitment.service.intake_service import open_lead_for
 from app.modules.recruitment.utils.cv_access import can_view_cv, mask_cv_rows
 from app.modules.storage.service import extract_text_from_file
 
@@ -793,11 +794,27 @@ async def delete_candidate(
 # ── Status Update ─────────────────────────────────────────────────────────────
 
 
+async def _refuse_if_in_intake(tenant: TenantScope, doc: Candidate) -> None:
+    """Keep the External tab from deciding a candidate the lead flow owns.
+
+    Approving here would put them in the directory with no telecaller details
+    and no team, and leave their lead waiting in someone's queue for a call
+    that no longer matters. Candidates with no open lead — applications from
+    before the flow existed — can still be decided here.
+    """
+    if await open_lead_for(tenant.brand_id, doc.id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This candidate is being screened on the Leads page. Decide them there.",
+        )
+
+
 @router.post("/{candidate_id}/approve")
 async def approve_candidate(
     tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    await _refuse_if_in_intake(tenant, doc)
     await doc.set({"status": CandidateStatus.approved})
     await record_candidate_event(
         scope=tenant,
@@ -813,6 +830,7 @@ async def reject_candidate(
     tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    await _refuse_if_in_intake(tenant, doc)
     await doc.set({"status": CandidateStatus.rejected})
     await record_candidate_event(
         scope=tenant,
