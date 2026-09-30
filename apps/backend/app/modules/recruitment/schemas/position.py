@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, model_validator
 from app.common.dtos.pagination import PaginatedResponse
 from app.modules.recruitment.enums.department import Department
 from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
+from app.modules.recruitment.enums.position_status import PositionStatus
+from app.modules.recruitment.enums.seniority import Seniority
 
 # The candidate scales, in ascending order. A position stores the minimum it will
 # accept on each; they must stay in step with COMMUNICATION_OPTIONS and
@@ -101,21 +103,34 @@ class PositionCreate(BaseModel):
         return self
 
 
+# Fields a position can't be without. PATCH treats an explicit null as "clear
+# this", so on these it has to be refused rather than written.
+_REQUIRED_ON_UPDATE = frozenset(
+    {"role", "department", "seniority", "requirements", "total_seats", "status"}
+)
+
+
 class PositionUpdate(BaseModel):
+    """PATCH body: exactly the fields the caller sent are written.
+
+    Omitted leaves a field alone; null clears it, except on _REQUIRED_ON_UPDATE.
+    Approval is not here: it has its own endpoint (PUT /positions/{id}/approval),
+    and an approval_status sent to PATCH is ignored, as it always was.
+    """
+
     role: str | None = None
     department: Department | None = None
     salary: str | None = None
     mumbai_area: str | None = None
     city: str | None = None
     train_line: str | None = None
-    seniority: str | None = None
+    seniority: Seniority | None = None
     requirements: list[str] | None = None
     # Sent as null to clear the minimum; omitted to leave it as it is.
     communication: CommunicationLevel | None = None
     brand_experience: BrandExperienceLevel | None = None
     total_seats: int | None = Field(default=None, ge=0)
-    status: str | None = None
-    approval_status: PositionApprovalStatus | None = None
+    status: PositionStatus | None = None
     assigned_employee_id: str | None = None
     target_close: datetime | None = None
     notes: str | None = None
@@ -124,6 +139,10 @@ class PositionUpdate(BaseModel):
     def validate_category_and_role(self) -> "PositionUpdate":
         from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
 
+        for name in sorted(_REQUIRED_ON_UPDATE & self.model_fields_set):
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} can't be cleared")
+
         if self.department and self.role:
             allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
             if self.role not in allowed_roles:
@@ -131,7 +150,9 @@ class PositionUpdate(BaseModel):
                     f"Role '{self.role}' is not valid for category '{self.department.value}'"
                 )
 
-        # also if city is provided and it is not mumbai, clear mumbai_area if not explicitly provided
+        # A position moved out of Mumbai loses its Mumbai area. Assigning the
+        # field marks it as sent, so the handler writes the null — before the
+        # handler honoured fields_set, this rule was computed and then dropped.
         if self.city is not None and self.city.strip().lower() != "mumbai":
             self.mumbai_area = None
 

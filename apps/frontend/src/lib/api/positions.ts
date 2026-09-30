@@ -17,19 +17,20 @@ export interface PositionCreatePayload {
   notes?: string;
 }
 
+/** PATCH body: an omitted field is left alone, `null` clears an optional one. */
 export interface PositionUpdatePayload {
   role?: string;
   department?: string;
-  salary?: string;
-  mumbai_area?: string;
-  city?: string;
+  salary?: string | null;
+  mumbai_area?: string | null;
+  city?: string | null;
   seniority?: string;
   requirements?: string[];
   /** `null` clears the minimum; omitting the field leaves it untouched. */
   communication?: string | null;
   brand_experience?: string | null;
   total_seats?: number;
-  notes?: string;
+  notes?: string | null;
 }
 
 export interface PositionListParams {

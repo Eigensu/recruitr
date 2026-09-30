@@ -106,7 +106,8 @@ export interface ApiPosition {
   client_id: string;
   client_name: string;
   role: string;
-  salary: number | null;
+  /** Free text, e.g. "30k - 40k" — the API has always sent a string. */
+  salary: string | null;
   department: string | null;
   mumbai_area: string | null;
   city: string | null;

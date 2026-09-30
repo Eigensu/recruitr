@@ -173,19 +173,21 @@ export default function AddPositionModal({
 
     try {
       if (isEditing && position) {
+        // null, not undefined, for an emptied optional field: undefined drops
+        // the key from the JSON, and an omitted field is left as it was — so
+        // clearing the salary or notes here never reached the server.
         const payload: PositionUpdatePayload = {
           role: form.role.trim(),
           department: form.department.trim() || undefined,
-          salary: String(form.salary).trim() || undefined,
-          mumbai_area: form.mumbaiArea.trim() || undefined,
-          city: form.city.trim() || undefined,
+          salary: form.salary.trim() || null,
+          mumbai_area: form.mumbaiArea.trim() || null,
+          city: form.city.trim() || null,
           seniority: form.seniority,
           requirements,
-          // null rather than undefined: picking "No minimum" must clear a stored one.
           communication: form.communication || null,
           brand_experience: form.brandExperience || null,
           total_seats,
-          notes: form.notes.trim() || undefined,
+          notes: form.notes.trim() || null,
         };
         const updated = await updatePosition(apiFetch, position.id, payload);
         onUpdated?.(updated);
@@ -195,7 +197,7 @@ export default function AddPositionModal({
           client_id: form.clientId,
           role: form.role.trim(),
           department: form.department.trim() || undefined,
-          salary: String(form.salary).trim() || undefined,
+          salary: form.salary.trim() || undefined,
           mumbai_area: form.mumbaiArea.trim() || undefined,
           city: form.city.trim() || undefined,
           seniority: form.seniority,
