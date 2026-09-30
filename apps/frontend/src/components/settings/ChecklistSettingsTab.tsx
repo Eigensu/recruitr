@@ -214,7 +214,8 @@ function TaskCard({
             <div className="flex flex-col items-end text-xs text-text-muted">
               <span className="flex items-center gap-1">
                 <IconCalendarEvent className="w-3.5 h-3.5" />
-                Due {parseApiDate(task.due_date).toLocaleDateString()}
+                {parseApiDate(task.start_date).toLocaleDateString()} –{" "}
+                {parseApiDate(task.due_date).toLocaleDateString()}
               </span>
               <span className="flex items-center gap-1 mt-1 opacity-70">{assigneeLabel}</span>
             </div>
@@ -314,11 +315,23 @@ function TaskFormModal({
   );
   const [targetCount, setTargetCount] = useState(editTask ? String(editTask.target_count) : "");
 
+  const initialStartDate = editTask ? toDateInputValue(parseApiDate(editTask.start_date)) : today;
+  const [startDate, setStartDate] = useState(initialStartDate);
+  // Once a task has started its window is fixed: the backend refuses to move
+  // the start, since recruiters have already been counting against it.
+  const hasStarted = editTask ? parseApiDate(editTask.start_date) <= new Date() : false;
+
   const initialDueDate = editTask ? toDateInputValue(parseApiDate(editTask.due_date)) : today;
   const [dueDate, setDueDate] = useState(initialDueDate);
 
   // An existing task may already be overdue; only its start date bounds the picker.
-  const minDueDate = editTask ? toDateInputValue(parseApiDate(editTask.start_date)) : today;
+  const minDueDate = startDate;
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    // YYYY-MM-DD compares correctly as a string.
+    if (value && dueDate < value) setDueDate(value);
+  };
 
   const [assigneeType, setAssigneeType] = useState<"single" | "team" | "all">(
     editTask?.assignee_type ?? "all",
@@ -338,6 +351,12 @@ function TaskFormModal({
     e.preventDefault();
     setSubmitting(true);
     try {
+      // The window runs from local midnight on the start date to the last
+      // millisecond of the due date, both in the creator's own timezone.
+      const [sy, sm, sd] = startDate.split("-").map(Number);
+      const startObj = new Date(sy, sm - 1, sd);
+      startObj.setHours(0, 0, 0, 0);
+
       const [y, m, d] = dueDate.split("-").map(Number);
       const dueObj = new Date(y, m - 1, d);
       dueObj.setHours(23, 59, 59, 999);
@@ -356,12 +375,18 @@ function TaskFormModal({
       };
 
       if (editTask) {
+        // Only send the start when it was actually moved: an untouched start
+        // round-trips through the date input as local midnight, which need not
+        // be the exact instant stored for tasks created before it was editable.
+        const startChanged = !hasStarted && startDate !== initialStartDate;
         // `null` rather than `undefined` so an emptied description is actually cleared.
-        await updateTask(apiFetch, editTask.id, { ...fields, description: finalDescription });
+        await updateTask(apiFetch, editTask.id, {
+          ...fields,
+          description: finalDescription,
+          ...(startChanged && { start_date: startObj.toISOString() }),
+        });
         toast("Task updated successfully", "success");
       } else {
-        const startObj = new Date();
-        startObj.setHours(0, 0, 0, 0);
         await createTask(apiFetch, {
           ...fields,
           description: finalDescription ?? undefined,
@@ -439,20 +464,41 @@ function TaskFormModal({
             </select>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="task-target-count" className="text-sm font-medium text-text-primary">
+              Target Count
+            </label>
+            <input
+              type="number"
+              id="task-target-count"
+              min="1"
+              required
+              value={targetCount}
+              onChange={(e) => setTargetCount(e.target.value)}
+              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="task-target-count" className="text-sm font-medium text-text-primary">
-                Target Count
+              <label htmlFor="task-start-date" className="text-sm font-medium text-text-primary">
+                Start Date
               </label>
               <input
-                type="number"
-                id="task-target-count"
-                min="1"
+                id="task-start-date"
+                type="date"
                 required
-                value={targetCount}
-                onChange={(e) => setTargetCount(e.target.value)}
-                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary"
+                min={hasStarted ? undefined : today}
+                disabled={hasStarted}
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
               />
+              {hasStarted && (
+                <span className="text-xs text-text-muted">
+                  Already started — the start date can&apos;t change.
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="task-due-date" className="text-sm font-medium text-text-primary">
