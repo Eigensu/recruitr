@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/positions";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createClient } from "@/lib/api/clients";
+import { BRAND_EXPERIENCE_OPTIONS, COMMUNICATION_OPTIONS } from "@/lib/constants/candidate";
 import type { ApiClientOption, ApiPosition, ApiPositionFilters } from "@/types";
 
 interface Props {
@@ -42,6 +43,8 @@ const EMPTY_FORM = {
   city: "",
   seniority: "Mid",
   requirements: "",
+  communication: "",
+  brandExperience: "",
   totalSeats: "1",
   notes: "",
 };
@@ -56,6 +59,8 @@ function positionToForm(p: ApiPosition) {
     city: p.city ?? "",
     seniority: p.seniority,
     requirements: (p.requirements ?? []).join(", "),
+    communication: p.communication ?? "",
+    brandExperience: p.brand_experience ?? "",
     totalSeats: String(p.total_seats),
     notes: p.notes ?? "",
   };
@@ -176,6 +181,9 @@ export default function AddPositionModal({
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
+          // null rather than undefined: picking "No minimum" must clear a stored one.
+          communication: form.communication || null,
+          brand_experience: form.brandExperience || null,
           total_seats,
           notes: form.notes.trim() || undefined,
         };
@@ -192,6 +200,8 @@ export default function AddPositionModal({
           city: form.city.trim() || undefined,
           seniority: form.seniority,
           requirements,
+          communication: form.communication || undefined,
+          brand_experience: form.brandExperience || undefined,
           total_seats,
           notes: form.notes.trim() || undefined,
         };
@@ -517,6 +527,46 @@ export default function AddPositionModal({
                       onChange={(e) => setForm({ ...form, requirements: e.target.value })}
                       className={INPUT_CLS}
                     />
+                  </div>
+                </div>
+
+                {/* The least a candidate needs, on the same scales as the candidate form. */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="pos-communication" className={LABEL_CLS}>
+                      Minimum communication
+                    </label>
+                    <select
+                      id="pos-communication"
+                      value={form.communication}
+                      onChange={(e) => setForm({ ...form, communication: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">No minimum</option>
+                      {COMMUNICATION_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="pos-brand-experience" className={LABEL_CLS}>
+                      Minimum brand experience
+                    </label>
+                    <select
+                      id="pos-brand-experience"
+                      value={form.brandExperience}
+                      onChange={(e) => setForm({ ...form, brandExperience: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">No minimum</option>
+                      {BRAND_EXPERIENCE_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

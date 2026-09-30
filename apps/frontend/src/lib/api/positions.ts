@@ -11,6 +11,8 @@ export interface PositionCreatePayload {
   city?: string;
   seniority?: string;
   requirements?: string[];
+  communication?: string;
+  brand_experience?: string;
   total_seats?: number;
   notes?: string;
 }
@@ -23,6 +25,9 @@ export interface PositionUpdatePayload {
   city?: string;
   seniority?: string;
   requirements?: string[];
+  /** `null` clears the minimum; omitting the field leaves it untouched. */
+  communication?: string | null;
+  brand_experience?: string | null;
   total_seats?: number;
   notes?: string;
 }

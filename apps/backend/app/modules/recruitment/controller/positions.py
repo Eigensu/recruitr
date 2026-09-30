@@ -406,6 +406,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
         train_line=data.train_line,
         seniority=Seniority(data.seniority),
         requirements=reqs,
+        communication=data.communication,
+        brand_experience=data.brand_experience,
         total_seats=data.total_seats,
         filled_seats=0,
         remaining_seats=data.total_seats,
@@ -457,6 +459,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
         assigned_employee_id=None,
         assigned_employee_name=None,
         requirements=doc.requirements or [],
+        communication=doc.communication,
+        brand_experience=doc.brand_experience,
         date_opened=doc.date_opened,
         target_close=doc.target_close,
         notes=doc.notes,
@@ -491,6 +495,8 @@ async def get_position(viewer: _Viewer, position_id: str) -> PositionListItem:
         assigned_employee_id=None,
         assigned_employee_name=None,
         requirements=doc.requirements or [],
+        communication=doc.communication,
+        brand_experience=doc.brand_experience,
         date_opened=doc.date_opened,
         target_close=doc.target_close,
         notes=doc.notes,
@@ -533,6 +539,11 @@ async def update_position(
         update["target_close"] = data.target_close
     if data.notes is not None:
         update["notes"] = data.notes
+    # Checked against fields_set rather than None, unlike the fields above:
+    # "no minimum" is a real choice, so an explicit null has to clear it.
+    for field in ("communication", "brand_experience"):
+        if field in data.model_fields_set:
+            update[field] = getattr(data, field)
 
     if update:
         await doc.set(update)
@@ -559,6 +570,8 @@ async def update_position(
         assigned_employee_id=None,
         assigned_employee_name=None,
         requirements=doc.requirements or [],
+        communication=doc.communication,
+        brand_experience=doc.brand_experience,
         date_opened=doc.date_opened,
         target_close=doc.target_close,
         notes=doc.notes,
@@ -616,6 +629,8 @@ async def reopen_position(
         assigned_employee_id=None,
         assigned_employee_name=None,
         requirements=doc.requirements or [],
+        communication=doc.communication,
+        brand_experience=doc.brand_experience,
         date_opened=doc.date_opened,
         target_close=doc.target_close,
         notes=doc.notes,
