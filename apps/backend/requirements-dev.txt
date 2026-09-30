@@ -9,6 +9,11 @@
 # between them.
 #
 #   uv pip install -r requirements.txt -r requirements-dev.txt
+#
+# CI installs requirements-dev.lock instead: the same set resolved to exact,
+# hash-pinned versions for the Linux runner. After changing this file or
+# requirements.txt, regenerate it with the command at the top of the lock (add
+# `--upgrade` to pick up new releases) and commit both.
 
 -r requirements.txt
 

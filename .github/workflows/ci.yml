@@ -35,13 +35,17 @@ jobs:
         with:
           python-version: "3.12" # matches apps/backend/Dockerfile
           cache: pip
-          cache-dependency-path: apps/backend/requirements-dev.txt
+          cache-dependency-path: apps/backend/requirements-dev.lock
 
       - name: Install dependencies
         working-directory: apps/backend
-        # Wheels only, so no package's setup script runs on the runner. Every
-        # dependency ships a manylinux wheel for this Python.
-        run: pip install --only-binary ':all:' -r requirements-dev.txt
+        # Installs the hash-pinned lock, not the `>=` ranges in requirements*.txt,
+        # so every run gets the same versions and a tampered or re-uploaded
+        # artifact fails the hash check. `--no-deps` because the lock already
+        # lists every transitive dependency. Wheels only, so no package's setup
+        # script runs on the runner — every dependency ships a manylinux wheel
+        # for this Python. Regenerate with the command at the top of the lock.
+        run: pip install --require-hashes --no-deps --only-binary ':all:' -r requirements-dev.lock
 
       # Lint before tests: a 10-second failure should not wait on a 3-minute
       # suite. `continue-on-error` is deliberately absent — these pass on main
