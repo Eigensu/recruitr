@@ -123,6 +123,9 @@ export interface ApiPosition {
   assigned_employee_id: string | null;
   assigned_employee_name: string | null;
   requirements: string[];
+  /** Minimum on the candidate scales; null means no minimum. */
+  communication: string | null;
+  brand_experience: string | null;
   date_opened: string;
   target_close: string | null;
   notes: string | null;

@@ -238,6 +238,10 @@ class Position(Document):
     train_line: str | None = None
     seniority: Seniority = Seniority.mid
     requirements: list[str] = Field(default_factory=list)  # lowercased keywords
+    # The least a candidate needs, on the same scales Candidate.communication and
+    # Candidate.brand_experience use. None means no minimum.
+    communication: str | None = None  # "Basic" | "Good" | "Excellent"
+    brand_experience: str | None = None  # "Low" | "Mid" | "Premium"
     total_seats: int = 0
     filled_seats: int = 0
     remaining_seats: int = 0
