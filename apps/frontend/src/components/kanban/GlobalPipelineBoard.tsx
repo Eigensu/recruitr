@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -11,10 +11,16 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import type { PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
+import type { ApiCandidate, PipelineBoardData, PipelineCard, KanbanStage } from "@/types";
+import CandidateDrawer from "@/components/candidates/CandidateDrawer";
+import { useToast } from "@/components/ui/Toast";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
+import { getCandidate } from "@/lib/api/candidates";
 import KanbanColumn from "./Column";
 import KanbanCard from "./CandidateCard";
 import ClientActionModal from "./ClientActionModal";
+import JoiningDetailsPanel from "./JoiningDetailsPanel";
+import OfferLetterDialog from "./OfferLetterDialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -110,6 +116,17 @@ export default function GlobalPipelineBoard({
   const [loading, setLoading] = useState(true);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
+  const [offerLetterMappingId, setOfferLetterMappingId] = useState<string | null>(null);
+  // A joined card opens the candidate drawer rather than the action modal:
+  // there is nothing left to decide, and what's wanted is the joining date and
+  // the person's whole history.
+  const [viewing, setViewing] = useState<{ mappingId: string; candidate: ApiCandidate } | null>(
+    null,
+  );
+  // Drops a slow candidate fetch that lands after another card was clicked.
+  const openingRef = useRef<string | null>(null);
+  const apiFetch = useApiFetch();
+  const toast = useToast();
   const [filters, setFilters] = useState<Filters>({
     recruiter_id: "",
     position_id: initialPositionId ?? "",
@@ -193,12 +210,36 @@ export default function GlobalPipelineBoard({
 
   // Derived rather than stored: the modal must reflect the board's current row,
   // so that state an action unlocks (an uploaded offer letter, a new stage) is
-  // visible as soon as the refetch lands, without reopening the card.
-  const selectedCard = selectedMappingId
-    ? (board?.stages
-        .flatMap((col) => col.mappings)
-        .find((m) => m.mapping_id === selectedMappingId) ?? null)
-    : null;
+  // visible as soon as the refetch lands, without reopening the card. The
+  // offer-letter dialog and the joining details read the board the same way.
+  function cardById(mappingId: string | null): PipelineCard | null {
+    if (!mappingId) return null;
+    return (
+      board?.stages.flatMap((col) => col.mappings).find((m) => m.mapping_id === mappingId) ?? null
+    );
+  }
+  const selectedCard = cardById(selectedMappingId);
+  const offerLetterCard = cardById(offerLetterMappingId);
+  const viewingCard = cardById(viewing?.mappingId ?? null);
+
+  async function openJoinedCard(card: PipelineCard) {
+    const id = card.mapping_id;
+    openingRef.current = id;
+    try {
+      const candidate = await getCandidate(apiFetch, card.candidate_id);
+      if (openingRef.current === id) setViewing({ mappingId: id, candidate });
+    } catch (err) {
+      if (openingRef.current === id)
+        toast(apiErrorMessage(err, "Could not load this candidate."), "error");
+    } finally {
+      if (openingRef.current === id) openingRef.current = null;
+    }
+  }
+
+  function handleCardClick(card: PipelineCard) {
+    if (card.stage === "joined") openJoinedCard(card);
+    else setSelectedMappingId(card.mapping_id);
+  }
 
   // Find the active drag card across all columns
   const activeCard = useMemo((): PipelineCard | null => {
@@ -422,7 +463,8 @@ export default function GlobalPipelineBoard({
                 label={STAGE_LABELS[col.stage as KanbanStage] ?? col.label}
                 cards={col.mappings}
                 onStageChange={handleStageChange}
-                onCardClick={(card) => setSelectedMappingId(card.mapping_id)}
+                onCardClick={handleCardClick}
+                onOfferLetterClick={(card) => setOfferLetterMappingId(card.mapping_id)}
               />
             ))}
           </div>
@@ -457,6 +499,22 @@ export default function GlobalPipelineBoard({
           load();
         }}
         onActionComplete={load}
+      />
+      <OfferLetterDialog
+        key={`offer-${offerLetterCard?.mapping_id ?? "none"}`}
+        card={offerLetterCard}
+        onClose={() => setOfferLetterMappingId(null)}
+        onUploaded={load}
+      />
+      <CandidateDrawer
+        candidate={viewing?.candidate ?? null}
+        onClose={() => setViewing(null)}
+        onUpdate={(candidate) => setViewing((prev) => (prev ? { ...prev, candidate } : prev))}
+        topSection={
+          viewingCard ? (
+            <JoiningDetailsPanel key={viewingCard.mapping_id} card={viewingCard} onSaved={load} />
+          ) : null
+        }
       />
     </div>
   );

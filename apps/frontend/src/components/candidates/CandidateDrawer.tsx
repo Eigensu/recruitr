@@ -65,6 +65,9 @@ interface CandidateDrawerProps {
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
+  /** Shown above the candidate's details (view mode only): what the drawer
+   *  was opened from, e.g. the joining details of a placement on the board. */
+  topSection?: React.ReactNode;
 }
 
 export default function CandidateDrawer({
@@ -74,6 +77,7 @@ export default function CandidateDrawer({
   isMaintainer,
   onApprove,
   onReject,
+  topSection,
 }: Readonly<CandidateDrawerProps>) {
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
@@ -163,6 +167,7 @@ export default function CandidateDrawer({
               isMaintainer={isMaintainer}
               onApprove={onApprove}
               onReject={onReject}
+              topSection={topSection}
             />
           </motion.div>
         </>
@@ -182,6 +187,7 @@ function DrawerInner({
   isMaintainer,
   onApprove,
   onReject,
+  topSection,
 }: Readonly<{
   candidate: ApiCandidate;
   onClose: () => void;
@@ -193,6 +199,7 @@ function DrawerInner({
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
+  topSection?: React.ReactNode;
 }>) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -341,6 +348,7 @@ function DrawerInner({
           loadingHistory={loadingHistory}
           showReviewHint={canDecide}
           onEdit={() => setIsEditing(true)}
+          topSection={topSection}
         />
       )}
 
@@ -414,6 +422,7 @@ function ViewBody({
   loadingHistory,
   showReviewHint,
   onEdit,
+  topSection,
 }: Readonly<{
   candidate: ApiCandidate;
   loadingMappings: boolean;
@@ -422,9 +431,11 @@ function ViewBody({
   loadingHistory: boolean;
   showReviewHint?: boolean;
   onEdit: () => void;
+  topSection?: React.ReactNode;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
+      {topSection}
       {showReviewHint && (
         <section className="rounded-xl border border-yellow/20 bg-yellow/5 p-4">
           <p className="text-xs leading-relaxed text-text-secondary">
