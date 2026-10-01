@@ -113,7 +113,9 @@ export default function KanbanCard({
   // drag attempt, not a request to open the card, so it is ignored here —
   // rather than stopped by a click handler on the grip, which made a bare
   // <div> interactive for the pointer only.
-  const clickable = !!onCardClick && !isDragOverlay && !readOnly;
+  // A read-only card (the board's archive) can't be dragged or acted on, but
+  // still opens when clicked if it is given somewhere to open.
+  const clickable = !!onCardClick && !isDragOverlay;
   // A joined card on the staff board carries its own Offer letter button, so
   // the plain link below would only repeat it.
   const offerLetterButton =
@@ -145,7 +147,11 @@ export default function KanbanCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      // dnd-kit's attributes describe a draggable — and, once dragging is
+      // disabled, add aria-disabled="true", which announces a read-only card
+      // that still opens as a disabled button. Only a card that can be dragged
+      // gets them.
+      {...(readOnly ? {} : attributes)}
       {...clickProps}
       className={cn(
         "group relative rounded-xl border bg-surface-panel p-3 select-none",
@@ -157,6 +163,7 @@ export default function KanbanCard({
           !isDragOverlay &&
           !readOnly &&
           "hover:border-border-strong hover:shadow-md cursor-grab",
+        readOnly && clickable && "cursor-pointer hover:border-border-strong hover:shadow-md",
         clickable && "focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow",
         "border-border/60",
       )}

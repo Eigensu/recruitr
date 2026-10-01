@@ -78,3 +78,8 @@ ROLES_BY_CATEGORY = {
         "Training Manager / L&D",
     ],
 }
+
+# A joined card leaves the staff pipeline board this many days after it was
+# moved to Joined (Mapping.joined_at), into the board's Archived view. Nothing is
+# deleted, and the client board keeps every joined card.
+JOINED_ARCHIVE_DAYS = 100

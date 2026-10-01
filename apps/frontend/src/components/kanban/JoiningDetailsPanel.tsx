@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { IconCalendarEvent, IconCheck } from "@tabler/icons-react";
 import { setMappingJoiningDate } from "@/lib/api/pipeline";
 import type { PipelineCard } from "@/types";
@@ -14,9 +14,57 @@ const INPUT =
  * candidate's whole history, across every position.
  *
  * The parent keys this by mapping, so the fields start again from what is
- * saved for each card.
+ * saved for each card. `readOnly` (an archived card) shows what is saved
+ * without the form.
  */
 export default function JoiningDetailsPanel({
+  card,
+  onSaved,
+  readOnly = false,
+}: Readonly<{ card: PipelineCard; onSaved: () => void; readOnly?: boolean }>) {
+  if (readOnly) return <SavedJoiningDetails card={card} />;
+  return <JoiningDetailsForm card={card} onSaved={onSaved} />;
+}
+
+function PanelShell({ card, children }: Readonly<{ card: PipelineCard; children: ReactNode }>) {
+  return (
+    <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <IconCalendarEvent className="size-4 shrink-0 text-emerald-400" />
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+          Joining details
+        </h3>
+      </div>
+      <p className="mb-3 truncate text-xs text-text-secondary">
+        {card.position_role} · {card.position_client}
+      </p>
+      {children}
+    </section>
+  );
+}
+
+function SavedJoiningDetails({ card }: Readonly<{ card: PipelineCard }>) {
+  return (
+    <PanelShell card={card}>
+      <dl className="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <dt className="text-[10px] font-semibold uppercase text-text-muted">Joining date</dt>
+          <dd className="mt-1 text-text-primary">
+            {card.joining_date ? new Date(card.joining_date).toLocaleDateString() : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] font-semibold uppercase text-text-muted">Salary offered</dt>
+          <dd className="mt-1 text-text-primary">
+            {card.salary_offered == null ? "—" : `₹${card.salary_offered.toLocaleString()}`}
+          </dd>
+        </div>
+      </dl>
+    </PanelShell>
+  );
+}
+
+function JoiningDetailsForm({
   card,
   onSaved,
 }: Readonly<{ card: PipelineCard; onSaved: () => void }>) {
@@ -51,17 +99,7 @@ export default function JoiningDetailsPanel({
   }
 
   return (
-    <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <IconCalendarEvent className="size-4 shrink-0 text-emerald-400" />
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-          Joining details
-        </h3>
-      </div>
-      <p className="mb-3 truncate text-xs text-text-secondary">
-        {card.position_role} · {card.position_client}
-      </p>
-
+    <PanelShell card={card}>
       {error && (
         <div className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-400">
           {error}
@@ -110,6 +148,6 @@ export default function JoiningDetailsPanel({
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
-    </section>
+    </PanelShell>
   );
 }
