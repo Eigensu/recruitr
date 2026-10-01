@@ -18,11 +18,27 @@ import type { PublicBrand } from "@/types";
 
 // The API stores email as a plain string with no format check, so a typo here
 // is stored silently and the applicant simply never hears back. Validate it.
+function isRupeeAmount(value: string): boolean {
+  const n = Number(value);
+  return value !== "" && Number.isFinite(n) && n >= 0;
+}
+
 const schema = z
   .object({
     fullName: z.string().trim().min(1, "Enter your name."),
     email: z.string().trim().email("Enter a valid email address."),
     phone: z.string().trim().min(6, "Enter a phone number we can reach you on."),
+    // ₹ per month, like every candidate salary. Kept as the typed string and
+    // sent as-is; the API parses it.
+    currentSalary: z
+      .string()
+      .trim()
+      .min(1, "Enter your current monthly salary.")
+      .refine(isRupeeAmount, "Enter an amount in rupees, e.g. 25000."),
+    expectedSalary: z
+      .string()
+      .trim()
+      .refine((v) => v === "" || isRupeeAmount(v), "Enter an amount in rupees, e.g. 30000."),
     sourceChannel: z.string(),
     sourceChannelOther: z.string().trim(),
   })
@@ -140,6 +156,8 @@ type ApplicationFormState = {
   city: string;
   currentRole: string;
   educationLevel: string;
+  currentSalary: string;
+  expectedSalary: string;
   sourceChannel: string;
   sourceChannelOther: string;
   connectCode: string;
@@ -149,7 +167,10 @@ type ApplicationFormState = {
 function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string, string> {
   const next: Record<string, string> = {};
   issues.forEach((issue) => {
-    if (issue.path[0]) next[issue.path[0] as string] = issue.message;
+    const key = issue.path[0] as string | undefined;
+    // Keep the first: zod reports every failing check, and the later ones are
+    // the less specific — an empty salary fails "required" and then "amount".
+    if (key && !(key in next)) next[key] = issue.message;
   });
   return next;
 }
@@ -174,6 +195,8 @@ function buildApplicationFormData(
   if (form.city) formData.append("city", form.city);
   if (form.currentRole) formData.append("current_role", form.currentRole);
   if (form.educationLevel) formData.append("education_level", form.educationLevel);
+  formData.append("current_salary", validated.currentSalary);
+  if (validated.expectedSalary) formData.append("expected_salary", validated.expectedSalary);
   // "Other" carries no information on its own — send what they typed instead.
   const channel =
     form.sourceChannel === SOURCE_CHANNEL_OTHER
@@ -210,6 +233,8 @@ export default function ApplicationForm({
     city: "",
     currentRole: "",
     educationLevel: "",
+    currentSalary: "",
+    expectedSalary: "",
     sourceChannel: startingSourceChannel,
     sourceChannelOther: "",
     connectCode: startingConnectCode,
@@ -226,6 +251,8 @@ export default function ApplicationForm({
       fullName: form.fullName,
       email: form.email,
       phone: form.phone,
+      currentSalary: form.currentSalary,
+      expectedSalary: form.expectedSalary,
       sourceChannel: form.sourceChannel,
       sourceChannelOther: form.sourceChannelOther,
     });
@@ -439,6 +466,47 @@ export default function ApplicationForm({
                   options={EDUCATION_LEVELS}
                   placeholder="Select..."
                 />
+                <div>
+                  <label htmlFor="currentSalary" className={labelCls}>
+                    Current salary (₹/month) <span className="text-yellow">*</span>
+                  </label>
+                  <input
+                    id="currentSalary"
+                    name="currentSalary"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    required
+                    aria-invalid={!!fieldErrors.currentSalary}
+                    aria-describedby={fieldErrors.currentSalary ? "currentSalary-error" : undefined}
+                    className={fieldErrors.currentSalary ? inputErrorCls : inputCls}
+                    placeholder="e.g. 25000"
+                    value={form.currentSalary}
+                    onChange={(e) => setForm({ ...form, currentSalary: e.target.value })}
+                  />
+                  <FieldError id="currentSalary-error" message={fieldErrors.currentSalary} />
+                </div>
+                <div>
+                  <label htmlFor="expectedSalary" className={labelCls}>
+                    Expected salary (₹/month)
+                  </label>
+                  <input
+                    id="expectedSalary"
+                    name="expectedSalary"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    aria-invalid={!!fieldErrors.expectedSalary}
+                    aria-describedby={
+                      fieldErrors.expectedSalary ? "expectedSalary-error" : undefined
+                    }
+                    className={fieldErrors.expectedSalary ? inputErrorCls : inputCls}
+                    placeholder="e.g. 30000"
+                    value={form.expectedSalary}
+                    onChange={(e) => setForm({ ...form, expectedSalary: e.target.value })}
+                  />
+                  <FieldError id="expectedSalary-error" message={fieldErrors.expectedSalary} />
+                </div>
               </div>
             </Section>
 

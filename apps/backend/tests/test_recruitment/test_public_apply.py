@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.dependencies import get_tenant, require_maintainer
 from app.core.main import app
 from app.modules.brands.models import Brand
-from app.modules.recruitment.models import Candidate
+from app.modules.recruitment.models import Candidate, RefereeUser
 from app.modules.recruitment.schemas import TenantScope
 
 _BRAND = PydanticObjectId()
@@ -52,6 +52,7 @@ APPLICATION = {
     "city": "Mumbai",
     "education_level": "Bachelors",
     "source_channel": "LinkedIn",
+    "current_salary": "28000",  # ₹ per month; required on every external form
 }
 
 
@@ -125,3 +126,72 @@ async def test_pending_application_is_hidden_from_the_default_directory(
 
     res = await client.get("/api/v1/candidates", params={"status": "PENDING"})
     assert [c["full_name"] for c in res.json()["items"]] == ["Rhea Kapoor"]
+
+
+# ── Salary: current required, expected optional, both ₹ per month ────────────
+
+
+async def _stored(email: str = "rhea@applicant.test") -> dict:
+    return await Candidate.get_motor_collection().find_one({"email": email})
+
+
+@pytest.mark.asyncio
+async def test_current_salary_is_stored_as_monthly(brand: Brand, client: AsyncClient) -> None:
+    res = await client.post("/api/v1/public/apply", data=APPLICATION)
+
+    assert res.status_code == 201, res.text
+    assert (res.json()["salary"], res.json()["expected_salary"]) == (28000, None)
+    stored = await _stored()
+    assert stored["salary"] == 28000
+    assert stored["salary_period"] == "monthly"
+
+
+@pytest.mark.asyncio
+async def test_expected_salary_is_stored_when_given(brand: Brand, client: AsyncClient) -> None:
+    res = await client.post(
+        "/api/v1/public/apply", data={**APPLICATION, "expected_salary": "35000"}
+    )
+
+    assert res.status_code == 201, res.text
+    stored = await _stored()
+    assert (stored["salary"], stored["expected_salary"]) == (28000, 35000)
+
+
+@pytest.mark.asyncio
+async def test_current_salary_is_required(brand: Brand, client: AsyncClient) -> None:
+    form = {k: v for k, v in APPLICATION.items() if k != "current_salary"}
+
+    res = await client.post("/api/v1/public/apply", data=form)
+
+    assert res.status_code == 422
+    assert await Candidate.find_all().count() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_bad_salary_is_refused(brand: Brand, client: AsyncClient) -> None:
+    for bad in (
+        {"current_salary": "-1"},
+        {"current_salary": "about 30k"},
+        {"expected_salary": "-5"},
+    ):
+        res = await client.post("/api/v1/public/apply", data={**APPLICATION, **bad})
+        assert res.status_code == 422, (bad, res.text)
+
+    assert await Candidate.find_all().count() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_referral_stores_the_salary_too(brand: Brand, client: AsyncClient) -> None:
+    """The referee refer page submits the same form, carrying a connect code."""
+    referee = RefereeUser(brand_id=_BRAND, email="ref@x.test", connect_code="BINGE7")
+    await referee.insert()
+
+    res = await client.post(
+        "/api/v1/public/apply",
+        data={**APPLICATION, "connect_code": "binge7", "expected_salary": "33000"},
+    )
+
+    assert res.status_code == 201, res.text
+    stored = await _stored()
+    assert stored["referee_id"] == referee.id
+    assert (stored["salary"], stored["expected_salary"]) == (28000, 33000)
