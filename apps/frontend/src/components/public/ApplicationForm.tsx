@@ -167,7 +167,10 @@ type ApplicationFormState = {
 function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string, string> {
   const next: Record<string, string> = {};
   issues.forEach((issue) => {
-    if (issue.path[0]) next[issue.path[0] as string] = issue.message;
+    const key = issue.path[0] as string | undefined;
+    // Keep the first: zod reports every failing check, and the later ones are
+    // the less specific — an empty salary fails "required" and then "amount".
+    if (key && !(key in next)) next[key] = issue.message;
   });
   return next;
 }
