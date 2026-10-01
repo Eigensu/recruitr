@@ -177,7 +177,7 @@ export default function CandidatesClient({
 
   function handleInternalFilterChange(filters: Partial<CandidateFilters>) {
     setInternalFilters(filters);
-    loadInternalCandidates(filters);
+    void loadInternalCandidates(filters);
   }
 
   async function loadExternalCandidates(
@@ -271,7 +271,7 @@ export default function CandidatesClient({
       // from the last visit rather than show results its inputs don't explain.
       const hadFilters = Object.values(internalFilters).some((v) => v !== undefined && v !== "");
       setInternalFilters({});
-      if (!internalLoaded || hadFilters) loadInternalCandidates({});
+      if (!internalLoaded || hadFilters) void loadInternalCandidates({});
     }
     if (tab === "external" && !externalLoaded) {
       loadExternalCandidates();
@@ -435,6 +435,8 @@ export default function CandidatesClient({
     ? `Showing ${externalCandidates.length} of ${externalCandidateLabel}`
     : externalCandidateLabel;
 
+  const tabLabel = { all: countLabel, internal: internalLabel, external: externalLabel }[activeTab];
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--color-border-val)" }}>
@@ -464,11 +466,7 @@ export default function CandidatesClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          {activeTab === "all"
-            ? countLabel
-            : activeTab === "internal"
-              ? internalLabel
-              : externalLabel}
+          {tabLabel}
         </span>
         {activeTab === "all" && (
           <div className="flex gap-2">
