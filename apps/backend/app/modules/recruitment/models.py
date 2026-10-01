@@ -801,6 +801,9 @@ class IntakeLead(Document):
 
     status: IntakeLeadStatus = IntakeLeadStatus.pending_telecaller
     ingested_at: datetime = Field(default_factory=_utcnow)
+    # The staff member who put this lead in — set for an upload or a hand-added
+    # lead, null for the scheduled sheet poll and the public form.
+    submitted_by_id: PydanticObjectId | None = None  # FK → employees._id
 
     # ── Telecaller leg ──
     telecaller_id: PydanticObjectId | None = None  # FK → employees._id
@@ -854,6 +857,8 @@ class IntakeLead(Document):
             IndexModel([("brand_id", 1), ("recruiter_id", 1), ("status", 1)]),
             IndexModel([("brand_id", 1), ("candidate_id", 1)]),
             IndexModel([("brand_id", 1), ("ingested_at", -1)]),
+            # "My submitted leads".
+            IndexModel([("brand_id", 1), ("submitted_by_id", 1), ("ingested_at", -1)]),
         ]
 
 
