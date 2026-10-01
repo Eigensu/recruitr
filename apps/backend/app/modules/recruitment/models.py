@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
 
-from beanie import Document, PydanticObjectId, Replace, Update, before_event
+from beanie import Document, Insert, PydanticObjectId, Replace, Update, before_event
 from pydantic import BaseModel, Field
 from pymongo import IndexModel
 
@@ -309,12 +309,20 @@ class Candidate(Document):
     resume_public_id: str | None = None  # Cloudinary public_id
     resume_raw_text: str | None = None
     current_role: str | None = None
+    # Both salaries are ₹ per month. `salary` is the current one.
     expected_salary: float | None = None
     notice_period: str | None = None
     source: str | None = None  # internal | external — how the candidate entered the system
     source_channel: str | None = None  # where they came from: LinkedIn, Naukri, referral, …
     connect_code: str | None = None
     salary: float | None = None
+    # "monthly" once a salary was written under the per-month convention (Oct
+    # 2026). Absent on rows saved before it: their figures were never migrated
+    # and may be yearly, and this is how a later clean-up finds exactly those.
+    # Defaults to None, not "monthly" — a default would be written back the next
+    # time any old row is saved for an unrelated reason, relabelling its yearly
+    # figure as monthly. Set by stamp_salary_period below and on update.
+    salary_period: Literal["monthly"] | None = None
     notes: str | None = None
     current_stage: PipelineStage = PipelineStage.sourced  # denormalized latest stage
     status: CandidateStatus = CandidateStatus.approved
@@ -337,6 +345,14 @@ class Candidate(Document):
     @before_event(Update, Replace)
     def update_timestamp(self) -> None:
         _touch(self)
+
+    @before_event(Insert)
+    def stamp_salary_period(self) -> None:
+        # Every new row is written under the per-month convention, whichever
+        # path creates it. Insert only: Replace and Save also fire for old rows
+        # saved for unrelated reasons, and those must stay unmarked.
+        if self.salary is not None or self.expected_salary is not None:
+            self.salary_period = "monthly"
 
     class Settings:
         name = "candidates"
@@ -785,6 +801,9 @@ class IntakeLead(Document):
 
     status: IntakeLeadStatus = IntakeLeadStatus.pending_telecaller
     ingested_at: datetime = Field(default_factory=_utcnow)
+    # The staff member who put this lead in — set for an upload or a hand-added
+    # lead, null for the scheduled sheet poll and the public form.
+    submitted_by_id: PydanticObjectId | None = None  # FK → employees._id
 
     # ── Telecaller leg ──
     telecaller_id: PydanticObjectId | None = None  # FK → employees._id
@@ -838,6 +857,8 @@ class IntakeLead(Document):
             IndexModel([("brand_id", 1), ("recruiter_id", 1), ("status", 1)]),
             IndexModel([("brand_id", 1), ("candidate_id", 1)]),
             IndexModel([("brand_id", 1), ("ingested_at", -1)]),
+            # "My submitted leads".
+            IndexModel([("brand_id", 1), ("submitted_by_id", 1), ("ingested_at", -1)]),
         ]
 
 

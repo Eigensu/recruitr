@@ -19,7 +19,7 @@ export type IntakeLeadStatus =
   | "actioned"
   | "duplicate";
 
-export type IntakeSource = "google_sheet" | "public_form";
+export type IntakeSource = "google_sheet" | "public_form" | "naukri_import";
 
 export type IntakeDecision = "accept" | "reject";
 
@@ -449,4 +449,95 @@ export function formatHours(hours: number | null): string {
 export function elapsedHours(assignedAt: string | null): number | null {
   if (!assignedAt) return null;
   return (Date.now() - new Date(assignedAt).getTime()) / 3_600_000;
+}
+
+// ── Naukri import ─────────────────────────────────────────────────────────────
+
+/**
+ * What would happen to one row: `new` becomes a lead for the telecallers;
+ * `matched_existing` is someone already in the pool (filed as a duplicate);
+ * `already_ingested` was imported before; `duplicate_in_sheet` is on an
+ * earlier row of the same file.
+ */
+export type NaukriRowOutcome =
+  | "new"
+  | "matched_existing"
+  | "already_ingested"
+  | "duplicate_in_sheet";
+
+export const NAUKRI_OUTCOME_LABELS: Record<NaukriRowOutcome, string> = {
+  new: "New lead",
+  matched_existing: "Already in the pool",
+  already_ingested: "Imported before",
+  duplicate_in_sheet: "Repeated in this file",
+};
+
+export interface NaukriPreviewRow {
+  row_number: number;
+  full_name: string;
+  phone: string;
+  email: string | null;
+  city: string | null;
+  designation: string | null;
+  current_company: string | null;
+  experience_years: number;
+  /** ₹ per month, converted from Naukri's yearly figure. */
+  salary: number | null;
+  outcome: NaukriRowOutcome;
+  warnings: string[];
+}
+
+export interface NaukriPreview {
+  rows: NaukriPreviewRow[];
+  skipped: { row_number: number; reason: string }[];
+  new: number;
+  matched_existing: number;
+  already_ingested: number;
+  duplicate_in_sheet: number;
+}
+
+export interface NaukriImportResult {
+  rows_read: number;
+  created: number;
+  assigned: number;
+  unassigned: number;
+  matched_existing: number;
+  already_ingested: number;
+  repeated_in_file: number;
+  unusable: number;
+  errors: string[];
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/**
+ * Multipart, so not through apiFetch: it sets a JSON content type, and an
+ * upload needs the browser to write the multipart boundary itself. Errors are
+ * thrown as the raw body, like apiFetch, so apiErrorMessage reads them the same.
+ */
+async function postNaukriFile<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append("file", file);
+  const res = await fetch(`${API_URL}/api/v1/intake${path}`, {
+    method: "POST",
+    body,
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error((await res.text()) || `API error: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+/** What importing this export would do, row by row. Writes nothing. */
+export function previewNaukriImport(file: File): Promise<NaukriPreview> {
+  return postNaukriFile<NaukriPreview>("/imports/naukri/preview", file);
+}
+
+/** Import the export: each new person becomes a lead in the telecaller queue. */
+export function importNaukri(file: File): Promise<NaukriImportResult> {
+  return postNaukriFile<NaukriImportResult>("/imports/naukri", file);
+}
+
+/** Leads the signed-in staff member put in themselves, newest first. */
+export function listSubmittedLeads(apiFetch: ApiFetch): Promise<IntakeLead[]> {
+  return apiFetch<IntakeLead[]>("/api/v1/intake/leads/submitted");
 }

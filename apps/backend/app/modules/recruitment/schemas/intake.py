@@ -222,6 +222,58 @@ class IntakeSyncResponse(BaseModel):
     unusable: int = 0
 
 
+# ── Naukri import ──────────────────────────────────────────────────────────────
+
+
+class NaukriPreviewRow(BaseModel):
+    """One spreadsheet row as it would be imported."""
+
+    row_number: int
+    full_name: str
+    phone: str
+    email: str | None = None
+    city: str | None = None
+    designation: str | None = None
+    current_company: str | None = None
+    experience_years: float = 0
+    salary: float | None = None  # ₹ per month, converted from Naukri's yearly figure
+    # new: becomes a lead for the telecallers · matched_existing: already in the
+    # pool, filed as a duplicate · already_ingested: imported before ·
+    # duplicate_in_sheet: this person is on an earlier row of the same file.
+    outcome: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class NaukriSkippedRow(BaseModel):
+    row_number: int
+    reason: str
+
+
+class NaukriPreviewResponse(BaseModel):
+    """What importing this file would do. Nothing has been written."""
+
+    rows: list[NaukriPreviewRow]
+    skipped: list[NaukriSkippedRow]
+    new: int
+    matched_existing: int
+    already_ingested: int
+    duplicate_in_sheet: int
+
+
+class NaukriImportResponse(BaseModel):
+    """What importing the file did. Every row lands in exactly one count."""
+
+    rows_read: int
+    created: int
+    assigned: int  # of those created, handed to a telecaller
+    unassigned: int  # created, but no telecaller was active
+    matched_existing: int
+    already_ingested: int
+    repeated_in_file: int
+    unusable: int
+    errors: list[str] = Field(default_factory=list)
+
+
 # ── Admin observability ────────────────────────────────────────────────────────
 
 

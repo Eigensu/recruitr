@@ -17,6 +17,7 @@ import { resolveCvRef } from "@/lib/api/candidates";
 import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import { useApiFetch } from "@/lib/api";
 import { listReferees } from "@/lib/api/referees";
+import { formatMonthlySalary } from "@/lib/utils";
 
 interface CandidateCardProps {
   candidate: ApiCandidate;
@@ -271,10 +272,14 @@ function CandidateInfo({
 }>) {
   let salaryStr: string | null = null;
   if (candidate.salary != null) {
-    salaryStr = `₹${candidate.salary.toLocaleString("en-IN")}`;
+    salaryStr = formatMonthlySalary(candidate.salary);
   } else if (candidate.expected_salary != null) {
-    salaryStr = `₹${candidate.expected_salary.toLocaleString("en-IN")} Expected`;
+    salaryStr = `${formatMonthlySalary(candidate.expected_salary)} expected`;
   }
+  const location = [candidate.city, candidate.area].filter(Boolean).join(" • ");
+  const details = [salaryStr, candidate.age ? `${candidate.age} yrs` : null]
+    .filter(Boolean)
+    .join(" • ");
 
   return (
     <div className="flex-1 min-w-0 pt-0.5">
@@ -291,14 +296,13 @@ function CandidateInfo({
               : `Independent · ${candidate.experience_years}y`}
         </span>
       </p>
-      {(candidate.city || candidate.area || salaryStr || candidate.age) && (
-        <p className="text-[10px] text-text-muted mt-0.5 capitalize truncate">
-          {[
-            [candidate.city, candidate.area].filter(Boolean).join(" • "),
-            [salaryStr, candidate.age ? `${candidate.age} yrs` : null].filter(Boolean).join(" • "),
-          ]
-            .filter(Boolean)
-            .join(" | ")}
+      {(location || details) && (
+        <p className="text-[10px] text-text-muted mt-0.5 truncate">
+          {/* Capitalise the place names only: on the whole line it also turned
+              "/mo" into "/Mo" and "expected" into "Expected". */}
+          {location && <span className="capitalize">{location}</span>}
+          {location && details && " | "}
+          {details}
         </p>
       )}
       {candidate.created_by_name && (

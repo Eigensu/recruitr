@@ -34,7 +34,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
@@ -46,7 +46,7 @@ from app.core.dependencies import (
     require_maintainer,
 )
 from app.modules.auth.models import UserRole
-from app.modules.recruitment.enums import IntakeLeadStatus
+from app.modules.recruitment.enums import IntakeLeadStatus, IntakeSource
 from app.modules.recruitment.models import (
     Candidate,
     Employee,
@@ -72,6 +72,10 @@ from app.modules.recruitment.schemas import (
     IntakeRejectRequest,
     IntakeSyncResponse,
     IntakeTeamOption,
+    NaukriImportResponse,
+    NaukriPreviewResponse,
+    NaukriPreviewRow,
+    NaukriSkippedRow,
     TenantScope,
 )
 from app.modules.recruitment.service import intake_analytics
@@ -82,6 +86,8 @@ from app.modules.recruitment.service.intake_service import (
     as_utc,
     assign_to_team,
     assignment_roster,
+    ingest_leads,
+    plan_ingest,
     poll_google_sheet,
     reassign_lead,
     reject_lead,
@@ -89,6 +95,12 @@ from app.modules.recruitment.service.intake_service import (
     waiting_on_recruiter,
 )
 from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
+from app.modules.recruitment.utils.naukri_sheet import (
+    NaukriFileError,
+    NaukriRows,
+    parse_naukri_xlsx,
+    warnings_for,
+)
 
 router = APIRouter()
 
@@ -540,6 +552,124 @@ async def analytics_campaigns(
         end=end,
     )
     return IntakeCampaignResponse(group_by=group_by, rows=rows)
+
+
+# ── Naukri import ──────────────────────────────────────────────────────────────
+# Any staff member may import (recruiters included); telecallers and clients are
+# refused by get_tenant like everywhere else. Imported people go through the
+# same ingest as the Meta sheet, so they land in the telecaller queue.
+
+_NAUKRI_MAX_BYTES = 5 * 1024 * 1024
+_NaukriFile = Annotated[UploadFile, File(description="Naukri candidate export (.xlsx)")]
+
+
+async def _read_naukri(upload: UploadFile) -> NaukriRows:
+    if not (upload.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Upload the .xlsx file Naukri exported.")
+    data = await upload.read(_NAUKRI_MAX_BYTES + 1)
+    if len(data) > _NAUKRI_MAX_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "That file is over 5 MB. Export fewer candidates at a time.",
+        )
+    try:
+        return parse_naukri_xlsx(data)
+    except NaukriFileError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+
+
+@router.post("/imports/naukri/preview", response_model=NaukriPreviewResponse)
+async def preview_naukri_import(tenant: _Staff, file: _NaukriFile) -> NaukriPreviewResponse:
+    """What importing this export would do, row by row. Writes nothing.
+
+    Classified by plan_ingest — the same checks, in the same order, as the
+    import itself — so the preview can't promise something the import won't do.
+    """
+    parsed = await _read_naukri(file)
+    plan = await plan_ingest(parsed.leads, brand_id=tenant.brand_id)
+    return NaukriPreviewResponse(
+        rows=[
+            NaukriPreviewRow(
+                row_number=row_number,
+                full_name=lead.full_name,
+                phone=lead.phone,
+                email=lead.email,
+                city=lead.city,
+                designation=lead.current_role,
+                current_company=lead.previous_company,
+                experience_years=lead.experience_years,
+                salary=lead.salary,
+                outcome=outcome,
+                warnings=warnings_for(lead),
+            )
+            for row_number, lead, outcome in zip(
+                parsed.lead_rows, parsed.leads, plan.outcomes, strict=True
+            )
+        ],
+        skipped=[
+            NaukriSkippedRow(row_number=s.row_number, reason=s.reason) for s in parsed.skipped
+        ],
+        new=plan.new,
+        matched_existing=plan.matched_existing,
+        already_ingested=plan.already_ingested,
+        duplicate_in_sheet=plan.duplicate_in_sheet,
+    )
+
+
+@router.post("/imports/naukri", response_model=NaukriImportResponse)
+async def import_naukri(tenant: _Staff, file: _NaukriFile) -> NaukriImportResponse:
+    """Import the export: each new person becomes a lead in the telecaller queue.
+
+    Idempotent: a row's lead id is its phone number, so uploading the same
+    export twice, or a later one that repeats people, creates nothing new.
+    Telecaller SLA clocks start now, for every lead created.
+    """
+    parsed = await _read_naukri(file)
+    result = await ingest_leads(
+        parsed.leads,
+        brand_id=tenant.brand_id,
+        source=IntakeSource.naukri_import,
+        submitted_by_id=tenant.employee_id,
+    )
+    return NaukriImportResponse(
+        rows_read=result.rows_read + len(parsed.skipped),
+        created=result.created,
+        assigned=result.assigned,
+        unassigned=result.unassigned,
+        matched_existing=result.matched_existing,
+        already_ingested=result.already_ingested,
+        repeated_in_file=result.repeated_in_batch,
+        unusable=len(parsed.skipped),
+        errors=result.errors,
+    )
+
+
+# Declared before /leads/{lead_id}, which would otherwise swallow "submitted".
+@router.get("/leads/submitted", response_model=list[IntakeLeadResponse])
+async def my_submitted_leads(
+    tenant: _Staff, limit: Annotated[int, Query(ge=1, le=500)] = 200
+) -> list[IntakeLeadResponse]:
+    """Leads the caller put in themselves, newest first, and where each one is now."""
+    leads = (
+        await IntakeLead.find({"brand_id": tenant.brand_id, "submitted_by_id": tenant.employee_id})
+        .sort("-ingested_at")
+        .limit(limit)
+        .to_list()
+    )
+    candidates, employees = await intake_analytics.people_for(leads)
+    teams = await _team_names(tenant.brand_id)
+    now = datetime.now(UTC)
+    return [
+        _to_response(
+            lead,
+            candidates.get(lead.candidate_id),
+            telecaller=employees.get(lead.telecaller_id),
+            recruiter=employees.get(lead.recruiter_id),
+            team_name=teams.get(lead.team_id),
+            now=now,
+        )
+        for lead in leads
+    ]
 
 
 @router.get("/leads", response_model=IntakeLeadPage, dependencies=[_RequireMaintainer])

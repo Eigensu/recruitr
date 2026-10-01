@@ -24,6 +24,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
 
 from beanie import PydanticObjectId
 from pydantic import BaseModel, Field
@@ -73,6 +74,10 @@ class IngestResult:
     unusable: int = 0  # no lead id, no name, or no usable phone
     before_cutoff: int = 0  # older than the integration's activation
     already_ingested: int = 0
+    # The same lead id twice in one batch: the second can't become a lead. Never
+    # happens on the Meta sheet (one id per submission); a Naukri row's id is
+    # its phone, so it does when an export lists someone twice.
+    repeated_in_batch: int = 0
     matched_existing: int = 0  # the person is already in the candidate pool
     created: int = 0
     assigned: int = 0  # of those created, handed to a telecaller
@@ -85,6 +90,7 @@ class IngestResult:
             self.unusable
             + self.before_cutoff
             + self.already_ingested
+            + self.repeated_in_batch
             + self.matched_existing
             + self.created
         )
@@ -223,6 +229,12 @@ def _candidate_from(lead: ParsedLead, brand_id: PydanticObjectId) -> Candidate:
         email=lead.email,
         city=lead.city,
         current_role=lead.current_role,
+        previous_company=lead.previous_company,
+        # Per month; Candidate's Insert hook marks salary_period accordingly.
+        salary=lead.salary,
+        expected_salary=lead.expected_salary,
+        age=lead.age,
+        notes=lead.notes,
         experience_years=lead.experience_years,
         education=lead.education,
         education_level=lead.education_level,
@@ -247,11 +259,14 @@ def _lead_from(
     status: IntakeLeadStatus,
     telecaller: Employee | None,
     assigned_at: datetime | None,
+    source: IntakeSource = IntakeSource.google_sheet,
+    submitted_by_id: PydanticObjectId | None = None,
 ) -> IntakeLead:
     return IntakeLead(
         brand_id=brand_id,
         candidate_id=candidate_id,
-        source=IntakeSource.google_sheet,
+        source=source,
+        submitted_by_id=submitted_by_id,
         source_channel=lead.source_channel,
         external_id=lead.external_id,
         external_created_at=lead.external_created_at,
@@ -330,15 +345,21 @@ async def ingest_leads(
     brand_id: PydanticObjectId,
     assign: bool = True,
     now: datetime | None = None,
+    source: IntakeSource = IntakeSource.google_sheet,
+    submitted_by_id: PydanticObjectId | None = None,
 ) -> IngestResult:
     """Create candidates and leads for rows not already known.
 
     `assign=False` files everything as `unassigned`, which is what the historical
     backfill uses: assigning leads that are months old would breach their SLA the
     moment the next sweep ran, on every one of them at once.
+
+    `source` and `submitted_by_id` record where the rows came from and who
+    uploaded them, for an import a person ran rather than the scheduled poll.
     """
     result = IngestResult(rows_read=len(leads))
     seen = await _already_ingested_ids(brand_id, leads)
+    batch: set[str] = set()  # see IngestResult.repeated_in_batch
     index = await _ContactIndex.build(brand_id)
     scope = TenantScope(brand_id=brand_id)
     stamp = now or datetime.now(UTC)
@@ -347,7 +368,10 @@ async def ingest_leads(
         if lead.external_id in seen:
             result.already_ingested += 1
             continue
-        seen.add(lead.external_id)
+        if lead.external_id in batch:
+            result.repeated_in_batch += 1
+            continue
+        batch.add(lead.external_id)
 
         existing_id = index.match(lead)
         candidate_id = existing_id
@@ -376,6 +400,8 @@ async def ingest_leads(
             status=status,
             telecaller=telecaller,
             assigned_at=stamp,
+            source=source,
+            submitted_by_id=submitted_by_id,
             created_candidate=created_candidate,
         ):
             result.already_ingested += 1
@@ -608,6 +634,9 @@ async def poll_google_sheet() -> IngestResult | None:
 # ── Preview (read-only) ────────────────────────────────────────────────────────
 
 
+PlanOutcome = Literal["new", "already_ingested", "matched_existing", "duplicate_in_sheet"]
+
+
 @dataclass
 class IngestPlan:
     """What an ingest would do, worked out without writing anything.
@@ -625,6 +654,9 @@ class IngestPlan:
     matched_existing: int = 0
     duplicate_in_sheet: int = 0
     new: int = 0
+    # Which of the counts above each row landed in, in input order, for a
+    # preview that lists rows. Same checks, same order — the totals are these.
+    outcomes: list[PlanOutcome] = field(default_factory=list)
 
 
 async def contact_coverage(brand_id: PydanticObjectId) -> tuple[int, int]:
@@ -646,28 +678,39 @@ async def contact_coverage(brand_id: PydanticObjectId) -> tuple[int, int]:
 async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId) -> IngestPlan:
     """Classify rows against the database without touching it."""
     plan = IngestPlan(rows_read=len(leads))
-    seen = await _already_ingested_ids(brand_id, leads)
+    stored = await _already_ingested_ids(brand_id, leads)
+    # Ids earlier in this same batch. Kept apart from `stored` so a repeat
+    # inside the file reads as a repeat, not as "already imported". Meta lead
+    # ids never repeat within a sheet; a Naukri row's id is its phone, which can.
+    batch: set[str] = set()
     index = await _ContactIndex.build(brand_id)
     # Candidates this plan would create, so the second row for one person counts
     # as a duplicate within the sheet rather than as another new candidate.
     pending: set[PydanticObjectId] = set()
 
+    def record(outcome: PlanOutcome) -> None:
+        setattr(plan, outcome, getattr(plan, outcome) + 1)
+        plan.outcomes.append(outcome)
+
     for lead in leads:
-        if lead.external_id in seen:
-            plan.already_ingested += 1
+        if lead.external_id in stored:
+            record("already_ingested")
             continue
-        seen.add(lead.external_id)
+        if lead.external_id in batch:
+            record("duplicate_in_sheet")
+            continue
+        batch.add(lead.external_id)
 
         match = index.match(lead)
         if match is None:
             placeholder = PydanticObjectId()
             pending.add(placeholder)
             index.add(placeholder, lead.phone, lead.email)
-            plan.new += 1
+            record("new")
         elif match in pending:
-            plan.duplicate_in_sheet += 1
+            record("duplicate_in_sheet")
         else:
-            plan.matched_existing += 1
+            record("matched_existing")
 
     return plan
 
@@ -769,6 +812,10 @@ async def accept_lead(
         # a link the applicant sent.
         if not fields.get("cv_link"):
             fields.pop("cv_link")
+        # The form requires both salaries, entered per month. An update, so
+        # Candidate's Insert hook doesn't see it; stamp it here like the
+        # candidate PATCH does.
+        fields["salary_period"] = "monthly"
         try:
             await candidate.set(fields)
         except DuplicateKeyError:
