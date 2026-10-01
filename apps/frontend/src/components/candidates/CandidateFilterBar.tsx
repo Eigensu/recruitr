@@ -42,6 +42,9 @@ const inputStyle = {
   color: "var(--color-text-primary)",
   border: "1px solid var(--color-border-val)",
 };
+// Replaces the shorthand rather than layering borderColor over it: React warns
+// that toggling a longhand against a shorthand between renders can mis-style.
+const invalidInputStyle = { ...inputStyle, border: "1px solid #ef4444" };
 
 export default function CandidateFilterBar({
   availableTags,
@@ -63,7 +66,12 @@ export default function CandidateFilterBar({
   const [city, setCity] = useState("");
   const [gender, setGender] = useState("");
   const [role, setRole] = useState("");
-  const [salary, setSalary] = useState("");
+  // The boxes' text, and the bounds last sent. Typing only edits the text;
+  // blur or Enter commits it, so a half-typed "2" never fetches and a range
+  // is never sent with min briefly above max.
+  const [salaryMinText, setSalaryMinText] = useState("");
+  const [salaryMaxText, setSalaryMaxText] = useState("");
+  const [salaryRange, setSalaryRange] = useState<{ min?: number; max?: number }>({});
   const [department, setDepartment] = useState("");
   const [establishmentTag, setEstablishmentTag] = useState("");
   const [communication, setCommunication] = useState("");
@@ -82,7 +90,7 @@ export default function CandidateFilterBar({
       city: string;
       gender: string;
       role: string;
-      salary: string;
+      salaryRange: { min?: number; max?: number };
       department: string;
       establishmentTag: string;
       communication: string;
@@ -99,7 +107,7 @@ export default function CandidateFilterBar({
     const c = over.city ?? city;
     const g = over.gender ?? gender;
     const r = over.role ?? role;
-    const sal = over.salary ?? salary;
+    const sal = over.salaryRange ?? salaryRange;
     const dept = over.department ?? department;
     const est = over.establishmentTag ?? establishmentTag;
     const comm = over.communication ?? communication;
@@ -115,7 +123,8 @@ export default function CandidateFilterBar({
       city: c || undefined,
       gender: g || undefined,
       role: r || undefined,
-      salary: sal || undefined,
+      salary_min: sal.min,
+      salary_max: sal.max,
       department: dept || undefined,
       establishment_tag: est || undefined,
       communication: comm || undefined,
@@ -133,6 +142,25 @@ export default function CandidateFilterBar({
     emit({ selectedTags: next });
   }
 
+  function parseBound(text: string): number | undefined {
+    const n = Number(text);
+    return text.trim() === "" || !Number.isFinite(n) || n < 0 ? undefined : n;
+  }
+
+  const salaryRangeInvalid = (() => {
+    const min = parseBound(salaryMinText);
+    const max = parseBound(salaryMaxText);
+    return min !== undefined && max !== undefined && min > max;
+  })();
+
+  function commitSalaryRange() {
+    if (salaryRangeInvalid) return;
+    const next = { min: parseBound(salaryMinText), max: parseBound(salaryMaxText) };
+    if (next.min === salaryRange.min && next.max === salaryRange.max) return;
+    setSalaryRange(next);
+    emit({ salaryRange: next });
+  }
+
   function clearAll() {
     setSearch("");
     setSource("");
@@ -144,7 +172,9 @@ export default function CandidateFilterBar({
     setCity("");
     setGender("");
     setRole("");
-    setSalary("");
+    setSalaryMinText("");
+    setSalaryMaxText("");
+    setSalaryRange({});
     setDepartment("");
     setEstablishmentTag("");
     setCommunication("");
@@ -168,7 +198,8 @@ export default function CandidateFilterBar({
     !!city ||
     !!gender ||
     !!role ||
-    !!salary ||
+    salaryRange.min !== undefined ||
+    salaryRange.max !== undefined ||
     !!department ||
     !!establishmentTag ||
     !!communication ||
@@ -319,23 +350,37 @@ export default function CandidateFilterBar({
         ))}
       </select>
 
-      <select
-        value={salary}
-        onChange={(e) => {
-          const v = e.target.value;
-          setSalary(v);
-          emit({ salary: v });
-        }}
-        className="rounded-lg px-3 py-1.5 text-sm outline-none"
-        style={inputStyle}
-      >
-        <option value="">All Salaries</option>
-        <option value="lt3">Below ₹3L</option>
-        <option value="3to5">₹3L – &lt;₹5L</option>
-        <option value="5to8">₹5L – &lt;₹8L</option>
-        <option value="8to12">₹8L – &lt;₹12L</option>
-        <option value="gt12">₹12L+</option>
-      </select>
+      <div className="flex items-center gap-1.5" title="Current salary, ₹ per month">
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          aria-label="Minimum current salary per month"
+          placeholder="Min ₹/mo"
+          value={salaryMinText}
+          onChange={(e) => setSalaryMinText(e.target.value)}
+          onBlur={commitSalaryRange}
+          onKeyDown={(e) => e.key === "Enter" && commitSalaryRange()}
+          aria-invalid={salaryRangeInvalid}
+          className="w-28 rounded-lg px-3 py-1.5 text-sm outline-none"
+          style={salaryRangeInvalid ? invalidInputStyle : inputStyle}
+        />
+        <span className="text-xs text-text-muted">–</span>
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          aria-label="Maximum current salary per month"
+          placeholder="Max ₹/mo"
+          value={salaryMaxText}
+          onChange={(e) => setSalaryMaxText(e.target.value)}
+          onBlur={commitSalaryRange}
+          onKeyDown={(e) => e.key === "Enter" && commitSalaryRange()}
+          aria-invalid={salaryRangeInvalid}
+          className="w-28 rounded-lg px-3 py-1.5 text-sm outline-none"
+          style={salaryRangeInvalid ? invalidInputStyle : inputStyle}
+        />
+      </div>
 
       <select
         value={department}

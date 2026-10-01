@@ -249,7 +249,7 @@ export default function AddCandidateModal({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="cand-salary" className={LABEL_CLS}>
-                      Expected Salary
+                      Expected Salary (₹/month)
                     </label>
                     <input
                       id="cand-salary"

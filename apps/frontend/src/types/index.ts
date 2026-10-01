@@ -188,7 +188,9 @@ export interface CandidateFilters {
   city?: string;
   gender?: string;
   role?: string;
-  salary?: string;
+  /** Current salary bounds, ₹ per month, inclusive. */
+  salary_min?: number;
+  salary_max?: number;
   department?: string;
   establishment_tag?: string;
   communication?: string;
