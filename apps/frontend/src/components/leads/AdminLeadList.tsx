@@ -82,27 +82,26 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
   const [reassigning, setReassigning] = useState<IntakeLead | null>(null);
   const [viewing, setViewing] = useState<ApiCandidate | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
-  const openingRef = useRef<string | null>(null);
+  const openingRef = useRef(0);
 
   // Every lead is backed by a candidate record from the moment it is ingested,
   // so the full profile is one fetch away — the same drawer the directory uses,
-  // rather than a second, thinner copy of it here. The ref drops a slow
-  // response that lands after the user has already clicked another lead.
+  // rather than a second, thinner copy of it here. Each call takes a fresh
+  // token so only the newest request may write: keyed on the candidate id, a
+  // second click on the same lead would let the first response clear the
+  // spinner, or an earlier failure win over a later success.
   async function openCandidate(lead: IntakeLead) {
     const id = lead.candidate_id;
-    openingRef.current = id;
+    const token = ++openingRef.current;
     setOpening(id);
     try {
       const candidate = await getCandidate(apiFetch, id);
-      if (openingRef.current === id) setViewing(candidate);
+      if (openingRef.current === token) setViewing(candidate);
     } catch (err) {
-      if (openingRef.current === id)
+      if (openingRef.current === token)
         toast(apiErrorMessage(err, "Could not load this candidate."), "error");
     } finally {
-      if (openingRef.current === id) {
-        openingRef.current = null;
-        setOpening(null);
-      }
+      if (openingRef.current === token) setOpening(null);
     }
   }
 
@@ -312,7 +311,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
                       return (
                         <tr
                           key={lead.id}
-                          onClick={() => openCandidate(lead)}
+                          onClick={() => void openCandidate(lead)}
                           className="cursor-pointer transition-colors hover:bg-canvas"
                         >
                           <td className="p-3">
@@ -322,7 +321,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openCandidate(lead);
+                                void openCandidate(lead);
                               }}
                               className="inline-flex items-center gap-1.5 text-left font-medium text-text-primary hover:underline focus:outline-none focus-visible:underline"
                             >

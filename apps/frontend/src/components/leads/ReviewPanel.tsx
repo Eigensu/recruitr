@@ -136,6 +136,9 @@ export default function ReviewPanel({
     );
   }
 
+  const showLoadError = loadFailed && leads.length === 0;
+  const showEmpty = !showLoadError && leads.length === 0;
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3">
@@ -196,20 +199,24 @@ export default function ReviewPanel({
         </p>
       )}
 
-      {loadFailed && leads.length === 0 ? (
+      {showLoadError && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-red-500/30 py-16 text-center">
           <p className="text-sm text-red-400">
             Could not load the review list. Use Refresh to try again.
           </p>
         </div>
-      ) : leads.length === 0 ? (
+      )}
+
+      {showEmpty && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
           <IconUsersGroup className="size-8 text-text-secondary" />
           <p className="text-sm text-text-secondary">
             Nothing waiting for review. Leads appear here once a telecaller accepts them.
           </p>
         </div>
-      ) : (
+      )}
+
+      {leads.length > 0 && (
         <ul className="flex flex-col gap-2">
           {leads.map((lead) => {
             const waited = elapsedHours(lead.telecaller_actioned_at);
