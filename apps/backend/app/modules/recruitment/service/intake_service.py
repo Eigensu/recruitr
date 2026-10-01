@@ -451,18 +451,18 @@ _SCREENING_STATUSES = (
 async def open_lead_for(brand_id: PydanticObjectId, candidate_id: PydanticObjectId) -> bool:
     """Whether this candidate is still being screened or reviewed by intake.
 
-    `unassigned` counts only before a telecaller decided: an accepted lead
-    filed unassigned by the old flow has already been screened.
+    `unassigned` counts only before a telecaller decided (an accepted lead
+    filed unassigned by the old flow has already been screened), and only while
+    the brand has a telecaller to give it to. With none, nobody could ever
+    decide it on the Leads page, so the External tab has to be able to.
     """
+    open_statuses: list[dict[str, object]] = [{"status": {"$in": list(_SCREENING_STATUSES)}}]
+    if await _roster(brand_id, telecallers=True):
+        open_statuses.append(
+            {"status": IntakeLeadStatus.unassigned.value, "telecaller_decision": None}
+        )
     lead = await IntakeLead.find_one(
-        {
-            "brand_id": brand_id,
-            "candidate_id": candidate_id,
-            "$or": [
-                {"status": {"$in": list(_SCREENING_STATUSES)}},
-                {"status": IntakeLeadStatus.unassigned.value, "telecaller_decision": None},
-            ],
-        }
+        {"brand_id": brand_id, "candidate_id": candidate_id, "$or": open_statuses}
     )
     return lead is not None
 
@@ -764,19 +764,30 @@ async def accept_lead(
 
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is not None:
-        fields = details.model_dump()
+        # Only what the telecaller filled in: an omitted optional field must
+        # not wipe what the applicant already gave us.
+        fields = details.model_dump(exclude_none=True)
         # The form only ever fills a CV link in; clearing it would throw away
         # a link the applicant sent.
         if not fields.get("cv_link"):
-            fields.pop("cv_link")
+            fields.pop("cv_link", None)
         try:
-            await candidate.set(fields)
-        except DuplicateKeyError:
-            # The email the telecaller typed belongs to another candidate. The
-            # decision already stands, so keep everything else they entered.
-            fields.pop("email", None)
-            await candidate.set(fields)
-            logger.warning("Intake accept: email for lead %s collides; kept the old one", lead.id)
+            try:
+                await candidate.set(fields)
+            except DuplicateKeyError:
+                # The email the telecaller typed belongs to another candidate.
+                # The decision already stands, so keep everything else they entered.
+                fields.pop("email", None)
+                await candidate.set(fields)
+                logger.warning(
+                    "Intake accept: email for lead %s collides; kept the old one", lead.id
+                )
+        except Exception:
+            # The decision was committed first so two accepts cannot both win;
+            # if the details then fail to save, hand the lead back so the
+            # telecaller can retry instead of leaving it accepted and empty.
+            await _undo_accept(lead)
+            raise
         await record_candidate_event(
             scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
             candidate_id=lead.candidate_id,
@@ -785,6 +796,25 @@ async def accept_lead(
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead
+
+
+async def _undo_accept(lead: IntakeLead) -> None:
+    """Put a lead whose accept failed back in the telecaller's queue."""
+    updates: dict[str, object] = {
+        "status": IntakeLeadStatus.pending_telecaller,
+        "telecaller_decision": None,
+        "telecaller_actioned_at": None,
+        "telecaller_notes": None,
+        "telecaller_response_seconds": None,
+    }
+    try:
+        await IntakeLead.find_one(
+            {"_id": lead.id, "status": IntakeLeadStatus.pending_review.value}
+        ).update({"$set": updates})
+        for attr, value in updates.items():
+            setattr(lead, attr, value)
+    except Exception:
+        logger.exception("Intake accept: could not roll lead %s back to the queue", lead.id)
 
 
 class TeamHasNoRecruiters(Exception):
@@ -818,6 +848,12 @@ async def assign_to_team(
         if lead.status != IntakeLeadStatus.pending_review:
             skipped.append(lead)
             continue
+        # A lead whose candidate is gone cannot be approved into the directory;
+        # leave it for someone to look at rather than assign it to nobody.
+        candidate = await Candidate.get(lead.candidate_id)
+        if candidate is None:
+            skipped.append(lead)
+            continue
         seq = await next_seq(team.brand_id, _team_cursor(team.id))
         recruiter = roster[seq % len(roster)]
         updates: dict[str, object] = {
@@ -839,8 +875,7 @@ async def assign_to_team(
         for attr, value in updates.items():
             setattr(lead, attr, value)
 
-        candidate = await Candidate.get(lead.candidate_id)
-        if candidate is not None:
+        try:
             await candidate.set(
                 {
                     # Into the recruiter directory, which filters to APPROVED.
@@ -848,17 +883,47 @@ async def assign_to_team(
                     "assigned_recruiter_id": recruiter.id,
                 }
             )
-            await record_candidate_event(
-                scope=TenantScope(brand_id=lead.brand_id, employee_id=reviewer_id),
-                candidate_id=lead.candidate_id,
-                event_type=CandidateEventType.approved,
-                note=f"Assigned to {team.name} ({recruiter.name})",
-            )
+        except Exception:
+            # The lead was claimed first so two reviewers cannot both assign
+            # it; without the candidate approved, the recruiter would be
+            # blocked and the reviewer unable to retry. Hand it back.
+            await _undo_assignment(lead, recruiter.id)
+            raise
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=reviewer_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.approved,
+            note=f"Assigned to {team.name} ({recruiter.name})",
+        )
         assigned.append(lead)
 
     if assigned:
         await _drop_analytics_cache(team.brand_id)
     return assigned, skipped
+
+
+async def _undo_assignment(lead: IntakeLead, recruiter_id: PydanticObjectId) -> None:
+    """Return a lead whose candidate could not be approved to the review queue."""
+    updates: dict[str, object] = {
+        "status": IntakeLeadStatus.pending_review,
+        "team_id": None,
+        "reviewed_by_id": None,
+        "reviewed_at": None,
+        "recruiter_id": None,
+        "recruiter_assigned_at": None,
+    }
+    try:
+        await IntakeLead.find_one(
+            {
+                "_id": lead.id,
+                "status": IntakeLeadStatus.pending_recruiter.value,
+                "recruiter_id": recruiter_id,
+            }
+        ).update({"$set": updates})
+        for attr, value in updates.items():
+            setattr(lead, attr, value)
+    except Exception:
+        logger.exception("Intake assign: could not roll lead %s back to review", lead.id)
 
 
 async def reject_lead(

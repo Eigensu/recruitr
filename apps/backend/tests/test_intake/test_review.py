@@ -409,3 +409,84 @@ async def test_candidates_still_in_intake_are_not_suggested_or_mappable(http):
     assert names == {"Ready"}
     assert [res.status_code for res in blocked] == [409, 409]
     assert allowed.status_code == 200, allowed.text
+
+
+# ── Review fixes ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_an_applicant_nobody_can_screen_can_be_decided_from_the_external_tab(
+    http, brand, boss
+):
+    # No telecaller exists, so the lead can never be worked on the Leads page.
+    applied = await http.post("/api/v1/public/apply", data=_application())
+    cid = applied.json()["id"]
+
+    res = await http.post(f"/api/v1/candidates/{cid}/reject", headers=await _headers("boss"))
+
+    assert res.status_code == 200, res.text
+    assert (await Candidate.get(PydanticObjectId(cid))).status == CandidateStatus.rejected
+
+
+@pytest.mark.asyncio
+async def test_a_patch_cannot_change_a_candidates_status(http, boss):
+    lead = await _reviewed_lead()
+
+    res = await http.patch(
+        f"/api/v1/candidates/{lead.candidate_id}",
+        json={"status": "APPROVED", "city": "Pune"},
+        headers=await _headers("boss"),
+    )
+
+    assert res.status_code == 200, res.text
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.status == CandidateStatus.pending
+    assert stored.city == "Pune"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_candidate_write_hands_the_lead_back_to_review(http, boss, monkeypatch):
+    team = await _team("North")
+    await _staff("recruiter", UserRole.employee, team=team)
+    lead = await _reviewed_lead()
+
+    async def broken(self, *args, **kwargs):
+        raise RuntimeError("write failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Candidate, "set", broken)
+        with pytest.raises(RuntimeError):
+            await _assign(http, [lead], team)
+
+    stored = await IntakeLead.get(lead.id)
+    assert stored.status == IntakeLeadStatus.pending_review
+    assert stored.recruiter_id is None
+    assert stored.team_id is None
+    # ...so the reviewer can simply try again.
+    retry = await _assign(http, [lead], team)
+    assert retry.status_code == 200
+    assert len(retry.json()["assigned"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_telecaller_cannot_read_the_candidate_after_deciding(http):
+    caller = await _staff("caller", UserRole.telecaller)
+    candidate = Candidate(
+        brand_id=_BRAND, full_name="Asha Rao", phone="9876543210", status=CandidateStatus.pending
+    )
+    await candidate.insert()
+    lead = IntakeLead(
+        brand_id=_BRAND,
+        candidate_id=candidate.id,
+        external_id="l_done",
+        telecaller_id=caller.id,
+        status=IntakeLeadStatus.pending_review,
+        telecaller_decision=IntakeDecision.accept,
+    )
+    await lead.insert()
+
+    res = await http.get(
+        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await _headers("caller")
+    )
+
+    assert res.status_code == 409

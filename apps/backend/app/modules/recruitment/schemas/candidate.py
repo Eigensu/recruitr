@@ -124,7 +124,6 @@ class CandidateUpdate(CandidateStructuredTags):
     connect_code: str | None = None
     salary: float | None = Field(default=None, ge=0)
     notes: str | None = None
-    status: CandidateStatus | None = None
 
 
 class CandidateResponse(CandidateStructuredTags):

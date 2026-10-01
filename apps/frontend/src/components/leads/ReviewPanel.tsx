@@ -47,6 +47,7 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
   const [total, setTotal] = useState(0);
   const [teams, setTeams] = useState<IntakeTeamOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [teamId, setTeamId] = useState("");
   const [assigning, setAssigning] = useState(false);
@@ -58,6 +59,7 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
         fetchReviewTeams(apiFetch),
       ])
         .then(([page, options]) => {
+          setLoadFailed(false);
           setLeads(page.items);
           setTotal(page.meta.total);
           setTeams(options);
@@ -65,6 +67,7 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
           setSelected((prev) => new Set(page.items.map((l) => l.id).filter((id) => prev.has(id))));
         })
         .catch((err: unknown) => {
+          setLoadFailed(true);
           toast(apiErrorMessage(err, "Could not load the review list."), "error");
         }),
     [apiFetch, toast],
@@ -177,13 +180,19 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
         </div>
       </div>
 
-      {teams.length === 0 && (
+      {teams.length === 0 && !loadFailed && !loading && (
         <p className="rounded-lg border border-orange-500/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-400">
           There are no active teams yet. Create one and add recruiters to it under Settings → Team.
         </p>
       )}
 
-      {leads.length === 0 ? (
+      {loadFailed && leads.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-red-500/30 py-16 text-center">
+          <p className="text-sm text-red-400">
+            Could not load the review list. Use Refresh to try again.
+          </p>
+        </div>
+      ) : leads.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
           <IconUsersGroup className="size-8 text-text-secondary" />
           <p className="text-sm text-text-secondary">

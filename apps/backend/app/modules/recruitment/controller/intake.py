@@ -254,6 +254,9 @@ async def lead_candidate(tenant: _Telecaller, lead_id: str):
     """
     lead = await _lead_or_404(tenant, lead_id)
     _own_lead_or_403(tenant, lead)
+    # Only while the call is still theirs to make: once decided, the lead is no
+    # reason for a telecaller to keep reading the person's details.
+    _pending_or_409(lead)
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
