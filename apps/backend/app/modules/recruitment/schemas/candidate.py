@@ -17,13 +17,17 @@ from app.modules.recruitment.enums import (
 )
 
 
-class CandidateStructuredTags(BaseModel):
+class CandidateTagFields(BaseModel):
     communication: str | None = None
     education: str | None = None
     brand_experience: str | None = None
     department: Department | None = None
     specialization: str | None = None
     establishment_tag: EstablishmentTag | None = None
+
+
+class CandidateStructuredTags(CandidateTagFields):
+    """The tag fields as a person submits them, with the form's rule on top."""
 
     @model_validator(mode="after")
     def validate_department_specialization(self) -> "CandidateStructuredTags":
@@ -127,7 +131,14 @@ class CandidateUpdate(CandidateStructuredTags):
     status: CandidateStatus | None = None
 
 
-class CandidateResponse(CandidateStructuredTags):
+class CandidateResponse(CandidateTagFields):
+    """A stored candidate as read back.
+
+    Tag *fields* without the form's rule: a read model that re-checks input
+    rules turns one row that breaks them — a department inferred by an import,
+    with no specialization yet — into a 500 for the whole candidate list.
+    """
+
     id: str
     full_name: str
     email: str | None = None

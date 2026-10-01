@@ -331,6 +331,21 @@ async def test_a_maintainer_can_import_too(http, people):
     assert lead.submitted_by_id == people["maintainer"].id
 
 
+async def test_imported_candidates_are_tagged_and_list(http, people):
+    """The department inferred from a designation comes with that designation
+    as its specialization, and the candidate list reads the imported people."""
+    headers = await _headers("mona")
+    await http.post(f"{_URL}/imports/naukri", files=_file(_export()), headers=headers)
+
+    shawn = await Candidate.find_one({"brand_id": _BRAND, "phone": "9819844180"})
+    assert (shawn.department, shawn.specialization) == ("Service", "Floor Supervisor")
+
+    res = await http.get("/api/v1/candidates", params={"status": "PENDING"}, headers=headers)
+    assert res.status_code == 200, res.text
+    # Every named row but the repeated phone: nobody was in the pool before.
+    assert res.json()["meta"]["total"] == 4
+
+
 async def test_a_telecaller_cannot_import_preview_or_list(http, people):
     headers = await _headers("tara")
     for method, path in (
