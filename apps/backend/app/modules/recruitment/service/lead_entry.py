@@ -126,6 +126,9 @@ def _lead_from(draft: ManualLeadDraft, phone_normalized: str, email: str | None)
         email=email,
         city=draft.city,
         current_role=draft.current_role,
+        # Becomes the candidate's specialization, as the Naukri designation
+        # does, so a department picked here comes with one when a role is given.
+        role_interest=draft.current_role,
         department=draft.department,
         experience_years=draft.experience_years,
         previous_company=draft.current_company,

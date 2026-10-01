@@ -260,6 +260,8 @@ async def test_a_submitted_draft_becomes_a_lead_with_its_resume(http, people, cl
         "monthly",
     )
     assert candidate.previous_company == "Paul Cafe"
+    # The role given is the specialization that goes with the department.
+    assert (candidate.department, candidate.specialization) == ("Service", "Floor Supervisor")
     assert candidate.resume_url == "https://cdn.test/shawn.pdf"
     assert cloudinary == ["shawn.pdf"]
 

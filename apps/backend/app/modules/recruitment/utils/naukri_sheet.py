@@ -210,6 +210,10 @@ def _lead(fields: dict[str, str], phone_normalized: str, raw: dict[str, str]) ->
         experience_years=parse_work_exp(fields.get("work_exp")),
         education=education,
         education_level=education_level,
+        # The designation is the role they're after, as the Meta form's
+        # "interested in" is: it becomes the candidate's specialization, so a
+        # department inferred from it never lands without one.
+        role_interest=designation,
         department=infer_department(designation),
         source_channel=SOURCE_CHANNEL,
         previous_company=fields.get("current_company") or None,
