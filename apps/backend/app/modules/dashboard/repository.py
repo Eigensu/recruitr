@@ -126,7 +126,55 @@ def _base_mapping_match(
         elif filters.pipeline_stage.value in inactive_values:
             match["stage"] = {"$in": []}
 
+    scope = _mapping_scope(filters)
+    if scope is not None:
+        match["$or"] = scope
+
     return match
+
+
+def _oids(ids: list[str] | None) -> list[Any]:
+    return [oid for value in ids or [] if (oid := to_object_id(value, "scope")) is not None]
+
+
+def _mapping_scope(filters: DashboardFilters) -> list[dict[str, Any]] | None:
+    """The mappings a recruiter is part of, as a `$or`; None for everyone else.
+
+    On a position assigned to them, or they are the recruiter who last acted on
+    it, or they moved it at any point — so a candidate someone else moved on
+    later still counts for the recruiter who worked them.
+    """
+    me = to_object_id(filters.scope_employee_id, "scope_employee_id")
+    if me is None:
+        return None
+    scope: list[dict[str, Any]] = [{"employee_id": me}, {"history.by_employee_id": me}]
+    assigned = _oids(filters.scope_assigned_position_ids)
+    if assigned:
+        scope.append({"position_id": {"$in": assigned}})
+    return scope
+
+
+def _scope_positions(pos_match: dict[str, Any], filters: DashboardFilters) -> None:
+    """Narrow a Position match to a recruiter's positions, when there is a scope."""
+    if filters.scope_employee_id is not None:
+        pos_match["_id"] = {"$in": _oids(filters.scope_position_ids)}
+
+
+async def fetch_recruiter_scope(brand_id: Any, employee_id: Any) -> tuple[list[str], list[str]]:
+    """(positions assigned to them, those plus any holding a mapping they worked on)."""
+    assigned = await Position.get_motor_collection().distinct(
+        "_id", {"brand_id": brand_id, "assigned_employee_id": employee_id}
+    )
+    worked = await Mapping.get_motor_collection().distinct(
+        "position_id",
+        {
+            "brand_id": brand_id,
+            "$or": [{"employee_id": employee_id}, {"history.by_employee_id": employee_id}],
+        },
+    )
+    assigned_ids = sorted(str(oid) for oid in assigned)
+    # Sorted, so the same scope always produces the same cache key.
+    return assigned_ids, sorted({*assigned_ids, *(str(oid) for oid in worked)})
 
 
 def _activity_match(filters: DashboardFilters) -> dict[str, Any]:
@@ -136,6 +184,10 @@ def _activity_match(filters: DashboardFilters) -> dict[str, Any]:
     employee_oid = to_object_id(filters.employee_id, "employee_id")
     if employee_oid is not None:
         match["employee_id"] = employee_oid
+    # A recruiter sees their own activity, whatever was asked for.
+    scope_oid = to_object_id(filters.scope_employee_id, "scope_employee_id")
+    if scope_oid is not None:
+        match["employee_id"] = scope_oid
 
     if filters.pipeline_stage is not None:
         activity_type = _ACTIVITY_STAGE_MAP.get(filters.pipeline_stage)
@@ -189,6 +241,7 @@ async def fetch_overview(filters: DashboardFilters) -> dict[str, Any]:
     brand_oid = _require_brand(filters)
 
     pos_match: dict[str, Any] = {"brand_id": brand_oid, "is_active": True}
+    _scope_positions(pos_match, filters)
     client_oid = to_object_id(filters.client_id, "client_id")
     if client_oid is not None:
         pos_match["client_id"] = client_oid
@@ -747,6 +800,7 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
 async def fetch_clients(filters: DashboardFilters, page: int, limit: int) -> dict[str, Any]:
     brand_oid = _require_brand(filters)
     pos_match: dict[str, Any] = {"brand_id": brand_oid, "is_active": True}
+    _scope_positions(pos_match, filters)
     client_oid = to_object_id(filters.client_id, "client_id")
     if client_oid is not None:
         pos_match["client_id"] = client_oid

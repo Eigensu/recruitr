@@ -333,7 +333,13 @@ function buildActivity(
   }));
 }
 
-async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
+/**
+ * `personal` is a recruiter's own dashboard: the API scopes every figure to
+ * them, and the employee roster and client table — only used for the
+ * per-recruiter line graph they don't get — are skipped rather than fetched
+ * and refused.
+ */
+async function fetchDashboardDemoDataOnce(personal = false): Promise<DashboardDemoData> {
   const [
     overviewResult,
     pipelineResult,
@@ -345,8 +351,8 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   ] = await Promise.allSettled([
     getApiDashboardOverview(),
     getDashboardPipeline(),
-    getDashboardClients({ page: 1, limit: 100 }),
-    getEmployeesForDashboard(100),
+    personal ? Promise.resolve(null) : getDashboardClients({ page: 1, limit: 100 }),
+    personal ? Promise.resolve([]) : getEmployeesForDashboard(100),
     getAllDashboardMappings(),
     getAllDashboardActivities(60),
     getDashboardStageTiming(),
@@ -438,8 +444,8 @@ async function fetchDashboardDemoDataOnce(): Promise<DashboardDemoData> {
   };
 }
 
-async function loadDashboardDemoData(): Promise<DashboardDemoData> {
-  const data = await fetchDashboardDemoDataOnce();
+async function loadDashboardDemoData(personal = false): Promise<DashboardDemoData> {
+  const data = await fetchDashboardDemoDataOnce(personal);
   return cloneDashboardDemoData(data);
 }
 
@@ -447,8 +453,8 @@ export async function getDashboardDemoData() {
   return loadDashboardDemoData();
 }
 
-export async function getDashboardOverview() {
-  const data = await loadDashboardDemoData();
+export async function getDashboardOverview(personal = false) {
+  const data = await loadDashboardDemoData(personal);
   return {
     kpis: data.kpis,
     activity: data.activity,
@@ -457,8 +463,8 @@ export async function getDashboardOverview() {
   };
 }
 
-export async function getPipelineDashboardData() {
-  const data = await loadDashboardDemoData();
+export async function getPipelineDashboardData(personal = false) {
+  const data = await loadDashboardDemoData(personal);
   return data.pipelineStages;
 }
 
@@ -485,8 +491,8 @@ export async function getClientActivityData() {
   return data.clients;
 }
 
-export async function getDashboardAnalyticsData() {
-  const data = await loadDashboardDemoData();
+export async function getDashboardAnalyticsData(personal = false) {
+  const data = await loadDashboardDemoData(personal);
   return {
     totals: data.totals,
     analytics: data.analytics,

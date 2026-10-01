@@ -19,6 +19,7 @@ from app.modules.dashboard.repository import (
     fetch_mappings,
     fetch_overview,
     fetch_pipeline,
+    fetch_recruiter_scope,
     fetch_stage_timing,
 )
 from app.modules.dashboard.schemas import (
@@ -42,6 +43,15 @@ from app.modules.dashboard.schemas import (
     PipelineStageMetric,
     SourcingAnalyticsItem,
 )
+
+
+async def recruiter_scope(brand_id: Any, employee_id: Any) -> tuple[list[str], list[str]]:
+    """What a recruiter is part of: (assigned positions, those plus ones they worked on).
+
+    Not cached: it's two indexed distinct() calls, and it is what the cached
+    results are keyed on — a stale scope would serve stale numbers under it.
+    """
+    return await fetch_recruiter_scope(brand_id, employee_id)
 
 
 def _cache_key(

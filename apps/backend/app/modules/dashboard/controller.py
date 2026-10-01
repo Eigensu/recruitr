@@ -3,9 +3,10 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.dependencies import get_tenant, get_viewer
+from app.modules.auth.models import UserRole
 from app.modules.dashboard.schemas import (
     DashboardActivityPage,
     DashboardCandidatePage,
@@ -43,7 +44,7 @@ _Page = Annotated[int, Query(ge=1)]
 _Limit = Annotated[int, Query(ge=1, le=100)]
 
 
-def _filters(
+async def _filters(
     tenant: TenantScope,
     employee_id: str | None,
     start_date: datetime | None,
@@ -57,7 +58,7 @@ def _filters(
     # another employer's numbers gets their own.
     if tenant.client_id is not None:
         client_id = str(tenant.client_id)
-    return DashboardFilters(
+    filters = DashboardFilters(
         brand_id=str(tenant.brand_id),
         employee_id=employee_id,
         start_date=start_date,
@@ -65,6 +66,26 @@ def _filters(
         client_id=client_id,
         pipeline_stage=pipeline_stage,
     )
+    # A recruiter sees only what they are part of — the same override-not-merge
+    # rule as client_id above: an employee_id in the query is ignored, so asking
+    # for a colleague's numbers returns their own.
+    if _is_recruiter(tenant):
+        assigned, positions = await service.recruiter_scope(tenant.brand_id, tenant.employee_id)
+        filters.employee_id = None
+        filters.scope_employee_id = str(tenant.employee_id)
+        filters.scope_assigned_position_ids = assigned
+        filters.scope_position_ids = positions
+    return filters
+
+
+def _is_recruiter(tenant: TenantScope) -> bool:
+    return tenant.role == UserRole.employee and tenant.employee_id is not None
+
+
+def _not_for_recruiters(tenant: TenantScope) -> None:
+    """Brand-wide reports — everyone's numbers — are closed to recruiters."""
+    if _is_recruiter(tenant):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not available to recruiters")
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -80,7 +101,7 @@ async def get_overview(
     pipeline_stage: _Stage = None,
 ) -> DashboardOverviewResponse:
     return await service.get_overview(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
     )
 
 
@@ -94,7 +115,7 @@ async def get_pipeline(
     pipeline_stage: _Stage = None,
 ) -> DashboardPipelineResponse:
     return await service.get_pipeline(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
     )
 
 
@@ -108,7 +129,7 @@ async def get_stage_timing(
     pipeline_stage: _Stage = None,
 ) -> DashboardStageTimingResponse:
     return await service.get_stage_timing(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
     )
 
 
@@ -121,8 +142,9 @@ async def get_sourcing(
     client_id: _ClientId = None,
     pipeline_stage: _Stage = None,
 ) -> DashboardSourcingResponse:
+    _not_for_recruiters(tenant)
     return await service.get_sourcing(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage)
     )
 
 
@@ -137,8 +159,9 @@ async def get_employees(
     page: _Page = 1,
     limit: _Limit = 50,
 ) -> DashboardEmployeePage:
+    _not_for_recruiters(tenant)
     return await service.get_employees(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
         page,
         limit,
     )
@@ -156,7 +179,7 @@ async def get_clients(
     limit: _Limit = 50,
 ) -> DashboardClientPage:
     return await service.get_clients(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
         page,
         limit,
     )
@@ -173,8 +196,9 @@ async def get_candidates(
     page: _Page = 1,
     limit: _Limit = 50,
 ) -> DashboardCandidatePage:
+    _not_for_recruiters(tenant)
     return await service.get_candidates(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
         page,
         limit,
     )
@@ -192,7 +216,7 @@ async def get_mappings(
     limit: _Limit = 50,
 ) -> DashboardMappingPage:
     return await service.get_mappings(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
         page,
         limit,
     )
@@ -205,6 +229,7 @@ async def get_client_profiles(
     limit: _Limit = 20,
 ) -> DashboardClientProfilePage:
     """One row per client, aggregated across all their job openings."""
+    _not_for_recruiters(tenant)
     return await service.get_client_profiles(str(tenant.brand_id), page, limit)
 
 
@@ -220,7 +245,7 @@ async def get_activity(
     limit: _Limit = 50,
 ) -> DashboardActivityPage:
     return await service.get_activities(
-        _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
+        await _filters(tenant, employee_id, start_date, end_date, client_id, pipeline_stage),
         page,
         limit,
     )

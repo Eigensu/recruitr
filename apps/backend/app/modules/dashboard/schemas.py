@@ -28,6 +28,15 @@ class DashboardFilters(BaseModel):
     end_date: datetime | None = None
     client_id: str | None = None  # Position.client_id (was job_opening_id)
     pipeline_stage: PipelineStage | None = None
+    # A recruiter's view: set by the controller, never from the query string.
+    # Living on this model makes them part of the cache key, so one recruiter's
+    # cached numbers can never be served to another.
+    scope_employee_id: str | None = None
+    # Positions assigned to them — every mapping on these counts as theirs.
+    scope_assigned_position_ids: list[str] | None = None
+    # Assigned positions plus any holding a mapping they worked on — for the
+    # position counts (open positions, seats).
+    scope_position_ids: list[str] | None = None
 
 
 # ── Overview ───────────────────────────────────────────────────────────────────
