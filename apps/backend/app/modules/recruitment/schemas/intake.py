@@ -274,6 +274,75 @@ class NaukriImportResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+# ── Leads added by hand or from resumes ───────────────────────────────────────
+
+
+class ResumeLeadDraft(BaseModel):
+    """One uploaded resume, read into the lead form's fields. Nothing is saved.
+
+    Every field is a best guess for a person to check; `error` means the file
+    couldn't be used at all, `notice` that it was taken but not read.
+    """
+
+    filename: str
+    full_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    city: str | None = None
+    current_role: str | None = None
+    department: Department | None = None
+    current_company: str | None = None
+    experience_years: float | None = None
+    error: str | None = None
+    notice: str | None = None
+
+
+class ManualLeadDraft(BaseModel):
+    """One lead as a staff member submits it, after checking any resume prefill."""
+
+    full_name: str = Field(min_length=1)
+    phone: str = Field(min_length=1)
+    email: str | None = None
+    city: str | None = None
+    current_role: str | None = None
+    department: Department | None = None
+    current_company: str | None = None
+    experience_years: float = Field(default=0, ge=0)
+    salary: float = Field(ge=0)  # current, ₹ per month — required
+    expected_salary: float | None = Field(default=None, ge=0)  # ₹ per month
+    # Which of the uploaded files is this lead's resume, if any.
+    resume_index: int | None = Field(default=None, ge=0)
+
+    @field_validator(
+        "full_name", "phone", "email", "city", "current_role", "current_company", mode="before"
+    )
+    @classmethod
+    def _strip(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
+class ManualLeadResult(BaseModel):
+    """What happened to one submitted draft, in submission order."""
+
+    index: int
+    full_name: str | None = None
+    # queued: with a telecaller · waiting: created, no telecaller active ·
+    # duplicate: already in the pool, filed as a duplicate · error: not added.
+    status: str
+    detail: str
+
+
+class ManualLeadsResponse(BaseModel):
+    results: list[ManualLeadResult]
+    queued: int
+    waiting: int
+    duplicate: int
+    error: int
+
+
 # ── Admin observability ────────────────────────────────────────────────────────
 
 

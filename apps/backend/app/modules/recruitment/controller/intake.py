@@ -31,10 +31,11 @@ keeps a telecaller out of the reports about their own response times.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 
 from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
@@ -46,6 +47,7 @@ from app.core.dependencies import (
     require_maintainer,
 )
 from app.modules.auth.models import UserRole
+from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import IntakeLeadStatus, IntakeSource
 from app.modules.recruitment.models import (
     Candidate,
@@ -72,10 +74,12 @@ from app.modules.recruitment.schemas import (
     IntakeRejectRequest,
     IntakeSyncResponse,
     IntakeTeamOption,
+    ManualLeadsResponse,
     NaukriImportResponse,
     NaukriPreviewResponse,
     NaukriPreviewRow,
     NaukriSkippedRow,
+    ResumeLeadDraft,
     TenantScope,
 )
 from app.modules.recruitment.service import intake_analytics
@@ -94,7 +98,17 @@ from app.modules.recruitment.service.intake_service import (
     team_roster,
     waiting_on_recruiter,
 )
-from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
+from app.modules.recruitment.service.lead_entry import (
+    ResumeFile,
+    add_manual_leads,
+    check_resume,
+    drafts_from_resumes,
+)
+from app.modules.recruitment.utils.constants import (
+    RESUME_BATCH_MAX_FILES,
+    RESUME_MAX_BYTES,
+    ROLES_BY_CATEGORY,
+)
 from app.modules.recruitment.utils.naukri_sheet import (
     NaukriFileError,
     NaukriRows,
@@ -641,6 +655,65 @@ async def import_naukri(tenant: _Staff, file: _NaukriFile) -> NaukriImportRespon
         repeated_in_file=result.repeated_in_batch,
         unusable=len(parsed.skipped),
         errors=result.errors,
+    )
+
+
+# ── Leads added by hand or from resumes ───────────────────────────────────────
+# Same access as the Naukri import. Parsing stores nothing; submitting goes
+# through the same ingest, so these leads also start in the telecaller queue.
+
+_ResumeFiles = Annotated[list[UploadFile], File(description="PDF or Word resumes")]
+
+
+def _too_many(count: int, what: str) -> None:
+    if count > RESUME_BATCH_MAX_FILES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"At most {RESUME_BATCH_MAX_FILES} {what} at a time — you sent {count}.",
+        )
+
+
+async def _read_resumes(uploads: list[UploadFile]) -> list[ResumeFile]:
+    """Each file read to one byte past the cap, so an oversize file fails alone."""
+    _too_many(len(uploads), "resumes")
+    return [
+        check_resume(upload.filename or "resume", await upload.read(RESUME_MAX_BYTES + 1))
+        for upload in uploads
+    ]
+
+
+@router.post("/leads/parse-resumes", response_model=list[ResumeLeadDraft])
+async def parse_resumes(tenant: _Staff, files: _ResumeFiles) -> list[ResumeLeadDraft]:
+    """Read resumes into lead drafts for a person to check. Saves and uploads nothing."""
+    resumes = await _read_resumes(files)
+    return await drafts_from_resumes(resumes, await get_automation_settings(tenant.brand_id))
+
+
+@router.post("/leads/manual", response_model=ManualLeadsResponse)
+async def add_leads(
+    tenant: _Staff,
+    drafts: Annotated[str, Form(description="JSON list of ManualLeadDraft")],
+    files: Annotated[list[UploadFile] | None, File(description="Resumes, by resume_index")] = None,
+) -> ManualLeadsResponse:
+    """Add checked drafts as leads. Each draft succeeds or fails on its own.
+
+    Multipart rather than JSON so the resumes travel with the drafts that name
+    them; a draft's `resume_index` points into `files`.
+    """
+    try:
+        raw = json.loads(drafts)
+    except json.JSONDecodeError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "drafts must be a JSON list.") from None
+    if not isinstance(raw, list) or not raw:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "drafts must be a non-empty JSON list.")
+    _too_many(len(raw), "leads")
+    resumes = await _read_resumes(files or [])
+    return await add_manual_leads(
+        raw,
+        resumes,
+        brand_id=tenant.brand_id,
+        submitted_by_id=tenant.employee_id,
+        automation=await get_automation_settings(tenant.brand_id),
     )
 
 

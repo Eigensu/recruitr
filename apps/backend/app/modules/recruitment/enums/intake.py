@@ -12,6 +12,8 @@ class IntakeSource(StrEnum):
     public_form = "public_form"
     # A Naukri candidate export (.xlsx) uploaded by a staff member.
     naukri_import = "naukri_import"
+    # Added by a staff member from the Leads page, typed in or from a resume.
+    recruiter_manual = "recruiter_manual"
 
 
 class IntakeLeadStatus(StrEnum):

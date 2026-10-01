@@ -2,6 +2,11 @@
 
 import { useRef, useState } from "react";
 import { clientBulkUpload } from "@/lib/api/candidates.client";
+import {
+  RESUME_BATCH_MAX_FILES,
+  RESUME_LIMITS_LABEL,
+  RESUME_MAX_BYTES,
+} from "@/lib/constants/uploads";
 import type { BulkUploadResult } from "@/types";
 
 interface Props {
@@ -41,13 +46,19 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         lower.endsWith(".docx")
       );
     });
-    if (pdfs.length + entries.length > 50) {
-      alert("Maximum 50 files per upload.");
+    if (pdfs.length + entries.length > RESUME_BATCH_MAX_FILES) {
+      alert(`Maximum ${RESUME_BATCH_MAX_FILES} files per upload.`);
       return;
     }
+    // Oversize files are listed as failed straight away and never sent; the
+    // server would refuse them anyway, one by one.
     setEntries((prev) => [
       ...prev,
-      ...pdfs.map((f) => ({ file: f, status: "pending" as FileStatus })),
+      ...pdfs.map((f) =>
+        f.size > RESUME_MAX_BYTES
+          ? { file: f, status: "failed" as FileStatus, error: "Over 5 MB — use a smaller file." }
+          : { file: f, status: "pending" as FileStatus },
+      ),
     ]);
   }
 
@@ -56,25 +67,34 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
   }
 
   async function handleUpload() {
-    if (entries.length === 0 || uploading) return;
+    const toSend = entries.filter((e) => e.status === "pending");
+    if (toSend.length === 0 || uploading) return;
     setUploading(true);
-    setEntries((prev) => prev.map((e) => ({ ...e, status: "uploading" as FileStatus })));
+    setEntries((prev) =>
+      prev.map((e) => (e.status === "pending" ? { ...e, status: "uploading" as FileStatus } : e)),
+    );
 
     try {
-      const res = await clientBulkUpload(entries.map((e) => e.file));
+      const res = await clientBulkUpload(toSend.map((e) => e.file));
       const failedMap = new Map(res.failed.map((f) => [f.filename, f.reason]));
       setEntries((prev) =>
-        prev.map((e) => ({
-          ...e,
-          status: failedMap.has(e.file.name) ? "failed" : "done",
-          error: failedMap.get(e.file.name),
-        })),
+        prev.map((e) =>
+          e.status === "uploading"
+            ? {
+                ...e,
+                status: failedMap.has(e.file.name) ? "failed" : "done",
+                error: failedMap.get(e.file.name),
+              }
+            : e,
+        ),
       );
       setResult(res);
       onComplete(res);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Upload failed";
-      setEntries((prev) => prev.map((e) => ({ ...e, status: "failed", error: errMsg })));
+      setEntries((prev) =>
+        prev.map((e) => (e.status === "uploading" ? { ...e, status: "failed", error: errMsg } : e)),
+      );
     } finally {
       setUploading(false);
     }
@@ -107,7 +127,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         }}
       >
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Drop PDF or DOCX files here or click to browse (max 50)
+          Drop PDF or DOCX files here or click to browse ({RESUME_LIMITS_LABEL})
         </p>
         <input
           ref={inputRef}

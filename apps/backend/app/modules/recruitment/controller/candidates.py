@@ -60,6 +60,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.service.intake_service import open_lead_for
+from app.modules.recruitment.utils.constants import RESUME_BATCH_MAX_FILES, RESUME_MAX_BYTES
 from app.modules.recruitment.utils.cv_access import can_view_cv, mask_cv_rows
 from app.modules.storage.service import extract_text_from_file
 
@@ -586,13 +587,13 @@ async def create_candidate(tenant: _Tenant, data: CandidateCreateStrict) -> Cand
 # Route must appear before /{candidate_id} so FastAPI doesn't treat "bulk-upload"
 # as a path parameter.
 
-_BULK_MAX = 50
-
 
 @router.post("/bulk-upload")
 async def bulk_upload_resumes(
     tenant: _Tenant,
-    files: list[UploadFile] = File(..., description="PDF or DOCX resume files (max 50)"),
+    files: list[UploadFile] = File(
+        ..., description=f"PDF or DOCX resume files (max {RESUME_BATCH_MAX_FILES}, 5 MB each)"
+    ),
 ) -> BulkUploadResult:
     """Upload multiple resume files and create or update candidate records.
 
@@ -607,11 +608,16 @@ async def bulk_upload_resumes(
     its email address — that is how a candidate is identified here — but no
     skills, tags or other fields are inferred from it.
     """
-    if len(files) > _BULK_MAX:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Maximum {_BULK_MAX} files per upload")
+    # The shared resume limits (see utils/constants.py): 20 files a batch, 5 MB
+    # each. This took 50 with no size cap, which could run for minutes in one
+    # request and let a single huge scan through.
+    if len(files) > RESUME_BATCH_MAX_FILES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"Maximum {RESUME_BATCH_MAX_FILES} files per upload"
+        )
 
-    # Resolved once for the whole batch rather than per file: 50 identical
-    # brand lookups, and a mid-batch toggle would split one upload's behaviour.
+    # Resolved once for the whole batch rather than per file: identical brand
+    # lookups, and a mid-batch toggle would split one upload's behaviour.
     automation = await get_automation_settings(tenant.brand_id)
 
     created = 0
@@ -621,7 +627,14 @@ async def bulk_upload_resumes(
     for idx, upload in enumerate(files, 1):
         filename = upload.filename or "unknown"
         try:
-            file_bytes = await upload.read()
+            # One byte past the cap is enough to know it's over; an oversize
+            # file fails on its own and the rest of the batch carries on.
+            file_bytes = await upload.read(RESUME_MAX_BYTES + 1)
+            if len(file_bytes) > RESUME_MAX_BYTES:
+                failed.append(
+                    BulkUploadFailure(filename=filename, reason="Over 5 MB — use a smaller file.")
+                )
+                continue
 
             from app.modules.recruitment.service.resume_service import process_resume_bytes
 
