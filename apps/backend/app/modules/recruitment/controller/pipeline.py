@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -57,6 +57,7 @@ from app.modules.recruitment.schemas import (
     StageMoveResponse,
     TenantScope,
 )
+from app.modules.recruitment.utils.constants import JOINED_ARCHIVE_DAYS
 from app.modules.recruitment.utils.cv_access import mask_cv_rows
 from app.modules.recruitment.utils.scoping import scope_mapping_match
 from app.modules.storage import service as storage_service
@@ -218,18 +219,38 @@ def _activity_type_for_stage(stage: PipelineStage) -> str:
 
 
 @router.get("/board")
-async def get_pipeline_board(viewer: _Viewer) -> PipelineBoard:
+async def get_pipeline_board(
+    viewer: _Viewer,
+    archived: Annotated[bool, Query()] = False,
+) -> PipelineBoard:
     """
     Fetch the Kanban board state for this brand.
     Uses a single aggregation with $lookup to avoid N+1 queries.
 
     A client sees only their own employer's cards.
+
+    On the staff board a joined card moves to the Archived view
+    JOINED_ARCHIVE_DAYS after it was moved to Joined: the default board leaves
+    those out and `archived=true` returns only them. The cut-off is applied
+    here, on read, so no job has to run for it. A client's board is never cut
+    — their Joined column keeps every placement — and they cannot ask for the
+    archive.
     """
+    if archived and viewer.is_client:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The archived view is on the staff board only"
+        )
     kanban_stage_values = [s.value for s in KANBAN_STAGES]
 
     board_match = await scope_mapping_match(
         viewer, {"brand_id": viewer.brand_id, "stage": {"$in": kanban_stage_values}}
     )
+    if not viewer.is_client:
+        # A joined card with no joined_at (not yet backfilled) stays on the
+        # board: $lt never matches null.
+        cutoff = datetime.now(UTC) - timedelta(days=JOINED_ARCHIVE_DAYS)
+        is_archived = {"stage": PipelineStage.joined.value, "joined_at": {"$lt": cutoff}}
+        board_match = {"$and": [board_match, is_archived if archived else {"$nor": [is_archived]}]}
 
     agg = [
         {_MATCH: board_match},

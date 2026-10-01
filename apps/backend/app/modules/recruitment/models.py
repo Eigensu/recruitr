@@ -400,6 +400,11 @@ class Mapping(Document):
     history: list[StageEvent] = Field(default_factory=list)
     mapped_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
+    # When the card last moved into Joined; null in any other stage. The staff
+    # board archives joined cards JOINED_ARCHIVE_DAYS after this (the clock is
+    # the move, not joining_date). Set and cleared by move_stage; rows that
+    # joined before the field existed get it from scripts/backfill_joined_at.py.
+    joined_at: datetime | None = None
 
     @before_event(Update, Replace)
     def update_timestamp(self) -> None:
@@ -414,6 +419,7 @@ class Mapping(Document):
             IndexModel("client_id"),
             IndexModel("employee_id"),
             IndexModel([("brand_id", 1), ("stage", 1)]),
+            IndexModel([("brand_id", 1), ("stage", 1), ("joined_at", 1)]),
             IndexModel("mapped_at"),
             IndexModel("updated_at"),
         ]

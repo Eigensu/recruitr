@@ -266,6 +266,14 @@ async def move_stage(
     }
     if actor == "employee":
         set_fields["employee_id"] = scope.employee_id
+    # The staff board's archive clock: entering Joined starts it, leaving clears
+    # it, so a card that comes back to Joined starts its 100 days again.
+    if new_stage == PipelineStage.joined:
+        set_fields["joined_at"] = now
+    elif mapping.joined_at is not None or from_stage == PipelineStage.joined:
+        set_fields["joined_at"] = None
+    if "joined_at" in set_fields:
+        mapping.joined_at = set_fields["joined_at"]
 
     # Allow extra fields (like dropped_notes, joining_date, etc)
     for k, v in kwargs.items():

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -16,6 +16,7 @@ import CandidateDrawer from "@/components/candidates/CandidateDrawer";
 import { useToast } from "@/components/ui/Toast";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { getCandidate } from "@/lib/api/candidates";
+import { JOINED_ARCHIVE_DAYS } from "@/lib/constants/pipeline";
 import KanbanColumn from "./Column";
 import KanbanCard from "./CandidateCard";
 import ClientActionModal from "./ClientActionModal";
@@ -24,17 +25,51 @@ import OfferLetterDialog from "./OfferLetterDialog";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function fetchBoard(): Promise<PipelineBoardData> {
+/** The live board, or the joined cards it has archived (see JOINED_ARCHIVE_DAYS). */
+type BoardView = "active" | "archived";
+
+async function fetchBoard(view: BoardView): Promise<PipelineBoardData> {
   // no-store: the board is re-read after every action and whenever the user
   // navigates back to it, so a cached response shows the state from before
   // the action they just took — an uploaded offer letter looking like it was
   // never saved. The page's server-side fetches already pass this.
-  const res = await fetch(`${API_URL}/api/v1/pipeline/board`, {
+  const query = view === "archived" ? "?archived=true" : "";
+  const res = await fetch(`${API_URL}/api/v1/pipeline/board${query}`, {
     credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`Board fetch failed: ${res.status}`);
   return res.json();
+}
+
+/** Archived joined cards: read-only, but each still opens the candidate drawer. */
+function ArchivedJoined({
+  cards,
+  filtered,
+  onOpen,
+}: Readonly<{ cards: PipelineCard[]; filtered: boolean; onOpen: (card: PipelineCard) => void }>) {
+  return (
+    <section aria-label="Archived joined candidates" className="flex flex-1 flex-col gap-3">
+      <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>
+        Joined candidates move here {JOINED_ARCHIVE_DAYS} days after they were moved to Joined.
+        Nothing is deleted, and clients still see them on their own board.
+      </p>
+      {cards.length === 0 ? (
+        <p className="py-10 text-center text-sm" style={{ color: "var(--color-text-secondary)" }}>
+          {filtered ? "Nothing archived matches these filters." : "Nothing archived yet."}
+        </p>
+      ) : (
+        // A context so the cards' (disabled) draggable hooks have one to sit in.
+        <DndContext>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+            {cards.map((card) => (
+              <KanbanCard key={card.mapping_id} card={card} readOnly onCardClick={onOpen} />
+            ))}
+          </div>
+        </DndContext>
+      )}
+    </section>
+  );
 }
 
 async function moveMapping(
@@ -114,6 +149,10 @@ export default function GlobalPipelineBoard({
 }: Props) {
   const [board, setBoard] = useState<PipelineBoardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<BoardView>("active");
+  // Only the newest request may set the board: switching views while a read
+  // is in flight would otherwise show one view's cards under the other's tab.
+  const requestRef = useRef(0);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [selectedMappingId, setSelectedMappingId] = useState<string | null>(null);
   const [offerLetterMappingId, setOfferLetterMappingId] = useState<string | null>(null);
@@ -135,16 +174,30 @@ export default function GlobalPipelineBoard({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  function load() {
-    fetchBoard()
-      .then((data) => setBoard(data))
+  const load = useCallback(() => {
+    const request = ++requestRef.current;
+    fetchBoard(view)
+      .then((data) => {
+        if (request === requestRef.current) setBoard(data);
+      })
       .catch((err) => console.error("Failed to load pipeline board:", err))
-      .finally(() => setLoading(false));
-  }
+      .finally(() => {
+        if (request === requestRef.current) setLoading(false);
+      });
+  }, [view]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
+
+  function switchView(next: BoardView) {
+    if (next === view) return;
+    setLoading(true);
+    setBoard(null);
+    setSelectedMappingId(null);
+    setOfferLetterMappingId(null);
+    setView(next);
+  }
 
   // Derive unique clients from position options (or board data)
   const clientOptions = useMemo(() => {
@@ -267,8 +320,7 @@ export default function GlobalPipelineBoard({
       });
       if (!res.ok) throw new Error(await res.text());
       // Refresh board
-      const data = await fetchBoard();
-      setBoard(data);
+      load();
     } catch (err) {
       console.error(err);
       alert("Failed to change stage: " + err);
@@ -350,6 +402,30 @@ export default function GlobalPipelineBoard({
     <div className="flex h-full flex-col gap-3">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 pb-1">
+        <div
+          role="group"
+          aria-label="Board view"
+          className="flex rounded-lg p-0.5"
+          style={selectStyle}
+        >
+          {(["active", "archived"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={view === option}
+              onClick={() => switchView(option)}
+              className="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors"
+              style={
+                view === option
+                  ? { background: "var(--color-yellow)", color: "#002348" }
+                  : { color: "var(--color-text-secondary)" }
+              }
+            >
+              {option === "active" ? "Active" : "Archived"}
+            </button>
+          ))}
+        </div>
+
         <select
           value={filters.recruiter_id}
           onChange={(e) => updateFilter("recruiter_id", e.target.value)}
@@ -448,6 +524,12 @@ export default function GlobalPipelineBoard({
             </div>
           ))}
         </div>
+      ) : view === "archived" ? (
+        <ArchivedJoined
+          cards={filteredStages.find((col) => col.stage === "joined")?.mappings ?? []}
+          filtered={!!hasFilters}
+          onOpen={handleCardClick}
+        />
       ) : (
         <DndContext
           sensors={sensors}
@@ -512,7 +594,12 @@ export default function GlobalPipelineBoard({
         onUpdate={(candidate) => setViewing((prev) => (prev ? { ...prev, candidate } : prev))}
         topSection={
           viewingCard ? (
-            <JoiningDetailsPanel key={viewingCard.mapping_id} card={viewingCard} onSaved={load} />
+            <JoiningDetailsPanel
+              key={viewingCard.mapping_id}
+              card={viewingCard}
+              onSaved={load}
+              readOnly={view === "archived"}
+            />
           ) : null
         }
       />
