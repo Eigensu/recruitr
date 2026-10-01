@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { IconFileSpreadsheet, IconLoader2 } from "@tabler/icons-react";
+import { IconFileSpreadsheet, IconLoader2, IconUserPlus } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -11,6 +11,7 @@ import {
   STATUS_STYLES,
   type IntakeLead,
 } from "@/lib/api/intake";
+import AddLeadDialog from "@/components/leads/AddLeadDialog";
 import NaukriImportDialog from "@/components/leads/NaukriImportDialog";
 
 /**
@@ -25,6 +26,7 @@ export default function RecruiterLeads() {
   const toast = useToast();
   const [leads, setLeads] = useState<IntakeLead[] | null>(null);
   const [importing, setImporting] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(
     () =>
@@ -52,14 +54,24 @@ export default function RecruiterLeads() {
             People you&apos;ve put in. Telecallers call each one before a recruiter is assigned.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setImporting(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-yellow px-3 py-2 text-sm font-semibold text-navy"
-        >
-          <IconFileSpreadsheet className="size-4" />
-          Import Naukri file
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
+            <IconFileSpreadsheet className="size-4" />
+            Import Naukri file
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-yellow px-3 py-2 text-sm font-semibold text-navy"
+          >
+            <IconUserPlus className="size-4" />
+            Add lead
+          </button>
+        </div>
       </header>
 
       <section aria-labelledby="my-leads-heading">
@@ -76,7 +88,7 @@ export default function RecruiterLeads() {
           </div>
         ) : leads.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border px-6 py-10 text-center text-sm text-text-muted">
-            Nothing yet. Import a Naukri export to add people as leads.
+            Nothing yet. Add someone — from a resume or by hand — or import a Naukri export.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-border">
@@ -130,6 +142,7 @@ export default function RecruiterLeads() {
       {importing && (
         <NaukriImportDialog onClose={() => setImporting(false)} onImported={() => load()} />
       )}
+      {adding && <AddLeadDialog onClose={() => setAdding(false)} onAdded={() => load()} />}
     </div>
   );
 }

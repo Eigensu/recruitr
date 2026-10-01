@@ -10,11 +10,13 @@ import {
   IconFileSpreadsheet,
   IconLoader2,
   IconRefresh,
+  IconUserPlus,
   IconUserShare,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
+import AddLeadDialog from "@/components/leads/AddLeadDialog";
 import NaukriImportDialog from "@/components/leads/NaukriImportDialog";
 import ReassignDialog from "@/components/leads/ReassignDialog";
 import ReviewPanel from "@/components/leads/ReviewPanel";
@@ -80,6 +82,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
   }>({ telecallers: [], recruiters: [] });
   const [reassigning, setReassigning] = useState<IntakeLead | null>(null);
   const [importing, setImporting] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   // Every filter change goes through this, which sets `loading` in the event
   // handler rather than in the effect below — setting it synchronously inside
@@ -155,6 +158,14 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
+            <IconUserPlus className="size-4" />
+            Add lead
+          </button>
           <button
             type="button"
             onClick={() => setImporting(true)}
@@ -387,6 +398,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
       {importing && (
         <NaukriImportDialog onClose={() => setImporting(false)} onImported={() => load()} />
       )}
+      {adding && <AddLeadDialog onClose={() => setAdding(false)} onAdded={() => load()} />}
       {reassigning && (
         <ReassignDialog
           lead={reassigning}
