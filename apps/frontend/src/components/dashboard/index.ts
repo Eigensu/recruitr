@@ -21,6 +21,7 @@ export { default as PipelineBreakdown } from "./organisms/PipelineBreakdown";
 export { default as RecruiterLineGraph } from "./organisms/RecruiterLineGraph";
 export { default as ClientActivityTable } from "./organisms/ClientActivityTable";
 export { default as PipelinePieChart } from "./organisms/PipelinePieChart";
+export { default as QuickActions } from "./organisms/QuickActions";
 export { DashboardSkeleton } from "./organisms/DashboardSkeleton";
 export { default as ClientPositionsSnapshot } from "./organisms/ClientPositionsSnapshot";
 export { default as ClientPipelineSnapshot } from "./organisms/ClientPipelineSnapshot";

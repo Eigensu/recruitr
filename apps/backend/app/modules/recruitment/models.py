@@ -442,6 +442,8 @@ class Mapping(Document):
             IndexModel([("brand_id", 1), ("stage", 1)]),
             IndexModel("mapped_at"),
             IndexModel("updated_at"),
+            # A recruiter's dashboard counts mappings they moved at any point.
+            IndexModel([("brand_id", 1), ("history.by_employee_id", 1)]),
         ]
 
 
