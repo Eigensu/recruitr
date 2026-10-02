@@ -11,6 +11,7 @@ import {
   IconBuilding,
   IconMessage,
   IconUserPlus,
+  IconPhoneCall,
 } from "@tabler/icons-react";
 
 export interface NavItemConfig {
@@ -29,12 +30,26 @@ export const REFEREE_NAV_CONFIG: NavItemConfig[] = [
   { href: "/referee/settings", label: "Settings", icon: IconSettings },
 ];
 
+export const TELECALLER_NAV_CONFIG: NavItemConfig[] = [
+  { href: "/leads", label: "Leads", icon: IconPhoneCall },
+  { href: "/settings", label: "Settings", icon: IconSettings },
+];
+
 export const NAV_CONFIG: NavItemConfig[] = [
   { href: "/", label: "Dashboard", icon: IconLayoutDashboard, exact: true },
   { href: "/positions", label: "Positions", icon: IconBriefcase },
   { href: "/company", label: "Company Profile", icon: IconBuilding, clientOnly: true },
   { href: "/candidates", label: "Candidates", icon: IconUsers, hideForClient: true },
   { href: "/pipeline", label: "Pipeline", icon: IconLayoutKanban },
+  {
+    // Maintainer-gated: the lead queue and its reports are closed to recruiters
+    // on the server, so showing them the item would only produce a 403.
+    href: "/leads",
+    label: "Leads",
+    icon: IconPhoneCall,
+    maintainerOnly: true,
+    hideForClient: true,
+  },
   { href: "/leaderboard", label: "Leaderboard", icon: IconTrophy, hideForClient: true },
   {
     href: "/clients",

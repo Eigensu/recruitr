@@ -1,0 +1,823 @@
+"""Turning parsed sheet rows into candidates, leads, and telecaller assignments.
+
+The sheet read itself lives in `utils/google_sheets.py` and the parsing in
+`utils/lead_sheet.py`; everything here is database work, so it is testable
+against a local Mongo with no credentials and no network.
+
+Two rules shape the whole module:
+
+  - **Ingest is idempotent.** `(brand_id, external_id)` is unique on IntakeLead,
+    so re-reading a row is a no-op. That is what lets the poll read the entire
+    range every few minutes instead of tracking a cursor into someone else's
+    spreadsheet.
+  - **Nothing is ever dropped silently.** A row that cannot become a candidate
+    is counted and reported; a lead that arrives with no telecaller to take it
+    is stored `unassigned` and shows up for an admin, rather than vanishing.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from beanie import PydanticObjectId
+from pydantic import BaseModel, Field
+from pymongo.errors import DuplicateKeyError
+
+from app.core.config import settings
+from app.modules.auth.models import NON_RECRUITER_ROLES, UserRole
+from app.modules.recruitment.enums import (
+    CandidateEventType,
+    CandidateStatus,
+    IntakeDecision,
+    IntakeLeadStatus,
+    IntakeRejectReason,
+    IntakeSource,
+)
+from app.modules.recruitment.models import (
+    Candidate,
+    Employee,
+    IntakeAttribution,
+    IntakeLead,
+    IntakeSourceConfig,
+)
+from app.modules.recruitment.repository import next_seq, record_candidate_event
+from app.modules.recruitment.schemas import TenantScope
+from app.modules.recruitment.utils.lead_sheet import ParsedLead, parse_rows
+from app.modules.recruitment.utils.phone import normalize_phone
+
+logger = logging.getLogger(__name__)
+
+# Counter keys for the two round-robin cursors. next_seq() is an atomic $inc,
+# so two workers assigning at the same moment get different numbers.
+_TELECALLER_CURSOR = "intake_telecaller_rr"
+_RECRUITER_CURSOR = "intake_recruiter_rr"
+
+
+@dataclass
+class IngestResult:
+    """What one ingest run did. Every input row lands in exactly one count."""
+
+    rows_read: int = 0  # data rows in the sheet, excluding the header
+    unusable: int = 0  # no lead id, no name, or no usable phone
+    before_cutoff: int = 0  # older than the integration's activation
+    already_ingested: int = 0
+    matched_existing: int = 0  # the person is already in the candidate pool
+    created: int = 0
+    assigned: int = 0  # of those created, handed to a telecaller
+    unassigned: int = 0  # created, but no telecaller was available
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def accounted_for(self) -> int:
+        return (
+            self.unusable
+            + self.before_cutoff
+            + self.already_ingested
+            + self.matched_existing
+            + self.created
+        )
+
+
+class _ContactRow(BaseModel):
+    """Projection: the two fields a lead can be matched against.
+
+    Projected rather than loaded whole — Candidate carries `resume_raw_text`,
+    and pulling every document in the brand to read two fields would drag the
+    full text of every CV through the poll.
+    """
+
+    id: PydanticObjectId = Field(alias="_id")
+    phone: str | None = None
+    email: str | None = None
+
+
+class _ContactIndex:
+    """Phone and email of every live candidate, for matching leads against.
+
+    Built per run and updated as rows are ingested, because the same person can
+    appear twice in one sheet: Meta issues a new lead id each time someone
+    submits the form again, so both rows are new to the `external_id` check and
+    only this stops the second one creating a duplicate candidate.
+    """
+
+    def __init__(self) -> None:
+        self._by_phone: dict[str, PydanticObjectId] = {}
+        self._by_email: dict[str, PydanticObjectId] = {}
+
+    @classmethod
+    async def build(cls, brand_id: PydanticObjectId) -> _ContactIndex:
+        index = cls()
+        rows = (
+            await Candidate.find({"brand_id": brand_id, "is_active": True})
+            .project(_ContactRow)
+            .to_list()
+        )
+        for row in rows:
+            index.add(row.id, row.phone, row.email)
+        return index
+
+    def add(self, candidate_id: PydanticObjectId, phone: str | None, email: str | None) -> None:
+        normalized = normalize_phone(phone)
+        if normalized:
+            self._by_phone.setdefault(normalized, candidate_id)
+        if email:
+            self._by_email.setdefault(email.strip().lower(), candidate_id)
+
+    def match(self, lead: ParsedLead) -> PydanticObjectId | None:
+        """The candidate this lead is already in the pool as, if any."""
+        found = self._by_phone.get(lead.phone_normalized)
+        if found is None and lead.email:
+            found = self._by_email.get(lead.email)
+        return found
+
+
+# ── Assignment ─────────────────────────────────────────────────────────────────
+
+
+async def _roster(brand_id: PydanticObjectId, *, telecallers: bool) -> list[Employee]:
+    """Active telecallers, or active recruiters, in a stable order.
+
+    Recruiters are selected by excluding NON_RECRUITER_ROLES rather than by
+    matching "employee": Employee rows written before the role field existed
+    carry no role at all, and those are recruiters.
+    """
+    role_filter = (
+        {"role": UserRole.telecaller.value}
+        if telecallers
+        else {"role": {"$nin": list(NON_RECRUITER_ROLES)}}
+    )
+    return (
+        await Employee.find({"brand_id": brand_id, "is_active": True, **role_filter})
+        .sort("_id")
+        .to_list()
+    )
+
+
+async def assignment_roster(brand_id: PydanticObjectId, *, telecallers: bool) -> list[Employee]:
+    """The people a lead may be handed to on this leg.
+
+    Public because the reassign picker has to offer exactly the list the
+    round-robin draws from: a picker showing someone the assigner cannot
+    actually be given a lead — or hiding someone who already holds one — would
+    be lying about who is available.
+    """
+    return await _roster(brand_id, telecallers=telecallers)
+
+
+async def next_assignee(brand_id: PydanticObjectId, *, telecallers: bool) -> Employee | None:
+    """The next person in the round-robin, or None if nobody is available.
+
+    The cursor is a Counter document incremented with findOneAndUpdate, the same
+    primitive behind client and position codes: atomic without a transaction, so
+    two concurrent assignments cannot land on the same person. Gaps are harmless
+    — the cursor only has to keep moving.
+    """
+    roster = await _roster(brand_id, telecallers=telecallers)
+    if not roster:
+        return None
+    cursor = _TELECALLER_CURSOR if telecallers else _RECRUITER_CURSOR
+    seq = await next_seq(brand_id, cursor)
+    return roster[seq % len(roster)]
+
+
+# ── Ingest ─────────────────────────────────────────────────────────────────────
+
+
+def _candidate_from(lead: ParsedLead, brand_id: PydanticObjectId) -> Candidate:
+    return Candidate(
+        brand_id=brand_id,
+        full_name=lead.full_name,
+        phone=lead.phone,
+        email=lead.email,
+        city=lead.city,
+        current_role=lead.current_role,
+        experience_years=lead.experience_years,
+        education=lead.education,
+        education_level=lead.education_level,
+        specialization=lead.role_interest,
+        department=lead.department,
+        source="external",
+        source_channel=lead.source_channel,
+        # PENDING keeps them out of the recruiter directory, which filters to
+        # APPROVED, until a telecaller has actually spoken to them.
+        status=CandidateStatus.pending,
+        # Nobody sourced this person; an ad did. Leaving the owner unset keeps
+        # the record shared rather than locking its CV to one recruiter.
+        created_by_id=None,
+    )
+
+
+def _lead_from(
+    lead: ParsedLead,
+    *,
+    brand_id: PydanticObjectId,
+    candidate_id: PydanticObjectId,
+    status: IntakeLeadStatus,
+    telecaller: Employee | None,
+    assigned_at: datetime | None,
+) -> IntakeLead:
+    return IntakeLead(
+        brand_id=brand_id,
+        candidate_id=candidate_id,
+        source=IntakeSource.google_sheet,
+        source_channel=lead.source_channel,
+        external_id=lead.external_id,
+        external_created_at=lead.external_created_at,
+        external_status=lead.external_status,
+        is_organic=lead.is_organic,
+        attribution=IntakeAttribution(**lead.attribution),
+        raw=lead.raw,
+        status=status,
+        telecaller_id=telecaller.id if telecaller else None,
+        telecaller_assigned_at=assigned_at if telecaller else None,
+    )
+
+
+async def _already_ingested_ids(
+    brand_id: PydanticObjectId, leads: Sequence[ParsedLead]
+) -> set[str]:
+    """Which of these external ids this brand already holds — one query, not N."""
+    if not leads:
+        return set()
+    existing = await IntakeLead.find(
+        {"brand_id": brand_id, "external_id": {"$in": [lead.external_id for lead in leads]}}
+    ).to_list()
+    return {row.external_id for row in existing}
+
+
+async def _insert_candidate(
+    lead: ParsedLead, brand_id: PydanticObjectId, result: IngestResult
+) -> Candidate | None:
+    """Create the candidate for a new lead, or None when the email collides."""
+    candidate = _candidate_from(lead, brand_id)
+    try:
+        await candidate.insert()
+    except DuplicateKeyError:
+        # Candidate.email is uniquely indexed per brand. The contact index is
+        # built from live candidates only, so an archived record with the same
+        # address still collides here.
+        result.errors.append(f"{lead.external_id}: duplicate email {lead.email}")
+        return None
+    return candidate
+
+
+async def _initial_assignment(
+    brand_id: PydanticObjectId, *, duplicate: bool, assign: bool
+) -> tuple[Employee | None, IntakeLeadStatus]:
+    """Who screens a new lead, and the status that puts it in their queue."""
+    if duplicate or not assign:
+        return None, (IntakeLeadStatus.duplicate if duplicate else IntakeLeadStatus.unassigned)
+    telecaller = await next_assignee(brand_id, telecallers=True)
+    if telecaller is None:
+        return None, IntakeLeadStatus.unassigned
+    return telecaller, IntakeLeadStatus.pending_telecaller
+
+
+async def _insert_lead(
+    lead: ParsedLead,
+    *,
+    created_candidate: Candidate | None,
+    **fields,
+) -> bool:
+    """Insert the lead row. False when another run got there first."""
+    try:
+        await _lead_from(lead, **fields).insert()
+    except DuplicateKeyError:
+        # Another run ingested this lead between the pre-check and here. The
+        # candidate just created belongs to that run's lead, so retire this
+        # copy rather than leaving an orphan in the directory.
+        if created_candidate is not None:
+            await created_candidate.set({"is_active": False})
+        return False
+    return True
+
+
+async def ingest_leads(
+    leads: Sequence[ParsedLead],
+    *,
+    brand_id: PydanticObjectId,
+    assign: bool = True,
+    now: datetime | None = None,
+) -> IngestResult:
+    """Create candidates and leads for rows not already known.
+
+    `assign=False` files everything as `unassigned`, which is what the historical
+    backfill uses: assigning leads that are months old would breach their SLA the
+    moment the next sweep ran, on every one of them at once.
+    """
+    result = IngestResult(rows_read=len(leads))
+    seen = await _already_ingested_ids(brand_id, leads)
+    index = await _ContactIndex.build(brand_id)
+    scope = TenantScope(brand_id=brand_id)
+    stamp = now or datetime.now(UTC)
+
+    for lead in leads:
+        if lead.external_id in seen:
+            result.already_ingested += 1
+            continue
+        seen.add(lead.external_id)
+
+        existing_id = index.match(lead)
+        candidate_id = existing_id
+        created_candidate: Candidate | None = None
+
+        if existing_id is None:
+            created_candidate = await _insert_candidate(lead, brand_id, result)
+            if created_candidate is None:
+                # The email belongs to an archived candidate (the contact index
+                # only holds live ones): the same person, so file the lead as a
+                # duplicate of them rather than skipping it on every poll.
+                archived = await Candidate.find_one({"brand_id": brand_id, "email": lead.email})
+                if archived is None:
+                    continue
+                existing_id = candidate_id = archived.id
+            else:
+                candidate_id = created_candidate.id
+
+        telecaller, status = await _initial_assignment(
+            brand_id, duplicate=existing_id is not None, assign=assign
+        )
+        if not await _insert_lead(
+            lead,
+            brand_id=brand_id,
+            candidate_id=candidate_id,  # type: ignore[arg-type]
+            status=status,
+            telecaller=telecaller,
+            assigned_at=stamp,
+            created_candidate=created_candidate,
+        ):
+            result.already_ingested += 1
+            continue
+
+        if existing_id is not None:
+            result.matched_existing += 1
+            continue
+
+        index.add(candidate_id, lead.phone, lead.email)  # type: ignore[arg-type]
+        result.created += 1
+        if telecaller is not None:
+            result.assigned += 1
+        else:
+            result.unassigned += 1
+
+        await record_candidate_event(
+            scope=scope,
+            candidate_id=candidate_id,  # type: ignore[arg-type]
+            event_type=CandidateEventType.applied,
+            note=f"Inbound lead from {lead.source_channel}",
+        )
+
+    if result.created or result.matched_existing:
+        await _drop_analytics_cache(brand_id)
+    return result
+
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+
+
+async def _sole_brand_id() -> PydanticObjectId | None:
+    """The brand, when there is exactly one.
+
+    Fetches two and acts only on one, the same way ensure_employee_for_user
+    does: with several brands there is nothing to choose on, and guessing would
+    file another tenant's leads into this one. The id is never hardcoded.
+    """
+    from app.modules.brands.models import Brand
+
+    brands = await Brand.find({}).limit(2).to_list()
+    return brands[0].id if len(brands) == 1 else None
+
+
+async def resolve_source_config() -> IntakeSourceConfig | None:
+    """The sheet configuration, seeded from the environment on first use.
+
+    The row is the source of truth once it exists, so an admin editing the tab
+    name in the UI is not overwritten by a stale environment variable on the
+    next deploy.
+    """
+    config = await IntakeSourceConfig.find_one({})
+    if config is not None:
+        return config
+
+    brand_id = await _sole_brand_id()
+    if brand_id is None or not settings.INTAKE_SPREADSHEET_ID:
+        return None
+
+    config = IntakeSourceConfig(
+        brand_id=brand_id,
+        spreadsheet_id=settings.INTAKE_SPREADSHEET_ID,
+        sheet_range=settings.INTAKE_SHEET_RANGE,
+        enabled=settings.GOOGLE_SHEETS_ENABLED,
+        # Stamped now, so the first poll ingests what arrives from here on and
+        # leaves the sheet's history to scripts/backfill_intake_leads.py.
+        activated_at=datetime.now(UTC) if settings.GOOGLE_SHEETS_ENABLED else None,
+    )
+    await config.insert()
+    return config
+
+
+def before_cutoff(lead: ParsedLead, cutoff: datetime | None) -> bool:
+    """Whether this lead predates the integration being switched on.
+
+    A lead with no readable timestamp is treated as current rather than
+    historical. Meta always sends `created_time`, so a missing one means the
+    column was renamed or the value was unparseable — and dropping live leads
+    because of a formatting change is far worse than importing an old one.
+    """
+    cutoff = as_utc(cutoff)
+    created = as_utc(lead.external_created_at)
+    if cutoff is None or created is None:
+        return False
+    return created < cutoff
+
+
+# ── Poll ───────────────────────────────────────────────────────────────────────
+
+
+async def poll_google_sheet() -> IngestResult | None:
+    """Read the configured sheet and ingest anything new. None if not configured.
+
+    Failures are recorded on the configuration row rather than raised: this runs
+    on a schedule with no user attached, and the admin screen needs to be able
+    to say why the last read did not work.
+    """
+    from app.modules.recruitment.utils.google_sheets import (
+        SheetConfigurationError,
+        SheetReadError,
+        fetch_values,
+    )
+
+    if not settings.GOOGLE_SHEETS_ENABLED:
+        return None
+
+    config = await resolve_source_config()
+    if config is None or not config.enabled:
+        return None
+
+    now = datetime.now(UTC)
+    try:
+        values = await fetch_values(config.spreadsheet_id, config.sheet_range)
+    except (SheetConfigurationError, SheetReadError) as exc:
+        logger.exception("Intake poll failed to read the sheet")
+        await config.set(
+            {
+                "last_synced_at": now,
+                "last_error": str(exc),
+                "consecutive_failures": config.consecutive_failures + 1,
+            }
+        )
+        return None
+
+    leads, skipped = parse_rows(
+        values,
+        default_source_channel=config.default_source_channel,
+        overrides=settings.intake_column_overrides,
+    )
+    current = [lead for lead in leads if not before_cutoff(lead, config.activated_at)]
+
+    result = await ingest_leads(current, brand_id=config.brand_id, assign=True, now=now)
+    result.rows_read = max(len(values) - 1, 0)
+    result.unusable = len(skipped)
+    result.before_cutoff = len(leads) - len(current)
+    if result.errors:
+        # Rows that could not be ingested are retried next poll; say so rather
+        # than letting them fail quietly forever.
+        logger.warning(
+            "Intake poll could not ingest %d row(s): %s",
+            len(result.errors),
+            "; ".join(result.errors[:20]),
+        )
+
+    await config.set(
+        {
+            "last_synced_at": now,
+            "last_success_at": now,
+            "last_row_count": result.rows_read,
+            "last_ingested_count": result.created,
+            "last_skipped_count": result.unusable + result.already_ingested,
+            "last_error": None,
+            "consecutive_failures": 0,
+        }
+    )
+    logger.info(
+        "Intake poll: %d rows, %d created, %d matched existing, %d already ingested, %d unusable",
+        result.rows_read,
+        result.created,
+        result.matched_existing,
+        result.already_ingested,
+        result.unusable,
+    )
+    return result
+
+
+# ── Preview (read-only) ────────────────────────────────────────────────────────
+
+
+@dataclass
+class IngestPlan:
+    """What an ingest would do, worked out without writing anything.
+
+    The backfill's report mode. It reuses the same _ContactIndex and the same
+    order of checks as ingest_leads, so the numbers it prints are the numbers
+    you get — a separate reimplementation of "is this a duplicate" would drift
+    from the real one exactly when it mattered.
+    """
+
+    rows_read: int = 0
+    unusable: int = 0
+    before_cutoff: int = 0
+    already_ingested: int = 0
+    matched_existing: int = 0
+    duplicate_in_sheet: int = 0
+    new: int = 0
+
+
+async def contact_coverage(brand_id: PydanticObjectId) -> tuple[int, int]:
+    """(live candidates, how many of them a lead could actually be matched to).
+
+    The second number is the honest ceiling on deduplication: a candidate with
+    no usable phone and no email cannot be recognised however many times the
+    same person fills in the form.
+    """
+    rows = (
+        await Candidate.find({"brand_id": brand_id, "is_active": True})
+        .project(_ContactRow)
+        .to_list()
+    )
+    reachable = sum(1 for row in rows if normalize_phone(row.phone) or row.email)
+    return len(rows), reachable
+
+
+async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId) -> IngestPlan:
+    """Classify rows against the database without touching it."""
+    plan = IngestPlan(rows_read=len(leads))
+    seen = await _already_ingested_ids(brand_id, leads)
+    index = await _ContactIndex.build(brand_id)
+    # Candidates this plan would create, so the second row for one person counts
+    # as a duplicate within the sheet rather than as another new candidate.
+    pending: set[PydanticObjectId] = set()
+
+    for lead in leads:
+        if lead.external_id in seen:
+            plan.already_ingested += 1
+            continue
+        seen.add(lead.external_id)
+
+        match = index.match(lead)
+        if match is None:
+            placeholder = PydanticObjectId()
+            pending.add(placeholder)
+            index.add(placeholder, lead.phone, lead.email)
+            plan.new += 1
+        elif match in pending:
+            plan.duplicate_in_sheet += 1
+        else:
+            plan.matched_existing += 1
+
+    return plan
+
+
+# ── Decisions ──────────────────────────────────────────────────────────────────
+
+
+async def _drop_analytics_cache(brand_id: PydanticObjectId) -> None:
+    """Clear the cached admin funnel after a lead write.
+
+    Imported inside the function rather than at module scope: intake_analytics
+    reads `as_utc` from here, and letting the read model depend on the write
+    model — never the other way round — is what keeps both importable.
+    """
+    from app.modules.recruitment.service.intake_analytics import invalidate
+
+    await invalidate(brand_id)
+
+
+def as_utc(value: datetime | None) -> datetime | None:
+    """A timezone-aware copy of a datetime that may have come back from Mongo.
+
+    The driver stores UTC and returns it **naive**, so any timestamp read from a
+    document compares as naive while anything built in Python here is aware —
+    and Python raises TypeError on that comparison rather than guessing. Every
+    comparison between a stored timestamp and "now" goes through this.
+    """
+    if value is None:
+        return None
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def _elapsed_seconds(since: datetime | None, until: datetime) -> int | None:
+    """Whole seconds between assignment and action, or None if never assigned.
+
+    None rather than 0: a lead actioned by an admin before anyone was assigned
+    has no response time, and recording zero would report it as instantaneous
+    work and drag every average down.
+    """
+    since = as_utc(since)
+    if since is None:
+        return None
+    return max(0, int((until - since).total_seconds()))
+
+
+class LeadAlreadyDecided(Exception):
+    """The lead left `pending_telecaller` before this decision could be written."""
+
+
+async def _decide_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
+    """Write a telecaller's decision only if the lead is still waiting on one.
+
+    The controller's status check reads a copy, so two requests (the telecaller
+    and a maintainer, say) can both pass it. Filtering the write on the status
+    makes the loser match nothing, and it must not go on to record a second
+    candidate event.
+    """
+    result = await IntakeLead.find_one(
+        {"_id": lead.id, "status": IntakeLeadStatus.pending_telecaller.value}
+    ).update({"$set": updates})
+    if result is None or result.matched_count == 0:
+        raise LeadAlreadyDecided(str(lead.id))
+    for attr, value in updates.items():
+        setattr(lead, attr, value)
+
+
+async def accept_lead(
+    lead: IntakeLead, *, notes: str | None = None, now: datetime | None = None
+) -> IntakeLead:
+    """Telecaller accepted: approve the candidate and hand them to a recruiter.
+
+    The recruiter is chosen by the same round-robin that picked the telecaller.
+    If there is none, the lead waits as `unassigned` with the candidate already
+    approved — the screening call happened either way, and hiding that work
+    because the desk is empty would be a lie about what the telecaller did.
+    """
+    stamp = now or datetime.now(UTC)
+    recruiter = await next_assignee(lead.brand_id, telecallers=False)
+
+    await _decide_pending(
+        lead,
+        {
+            "status": (
+                IntakeLeadStatus.pending_recruiter if recruiter else IntakeLeadStatus.unassigned
+            ),
+            "telecaller_decision": IntakeDecision.accept,
+            "telecaller_actioned_at": stamp,
+            "telecaller_notes": notes,
+            "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
+            "recruiter_id": recruiter.id if recruiter else None,
+            "recruiter_assigned_at": stamp if recruiter else None,
+            "updated_at": stamp,
+        },
+    )
+
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is not None:
+        await candidate.set(
+            {
+                # Into the recruiter directory, which filters to APPROVED.
+                "status": CandidateStatus.approved,
+                "assigned_recruiter_id": recruiter.id if recruiter else None,
+            }
+        )
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.approved,
+            note="Accepted by telecaller",
+        )
+    await _drop_analytics_cache(lead.brand_id)
+    return lead
+
+
+async def reject_lead(
+    lead: IntakeLead,
+    *,
+    reason: IntakeRejectReason | None = None,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> IntakeLead:
+    """Telecaller rejected: mark the candidate REJECTED but keep the record.
+
+    is_active is deliberately untouched. The directory hides them because it
+    filters to APPROVED, while the row stays searchable and countable — which is
+    what makes "what are we rejecting, and why" answerable later.
+    """
+    stamp = now or datetime.now(UTC)
+
+    await _decide_pending(
+        lead,
+        {
+            "status": IntakeLeadStatus.rejected,
+            "telecaller_decision": IntakeDecision.reject,
+            "telecaller_actioned_at": stamp,
+            "telecaller_reject_reason": reason,
+            "telecaller_notes": notes,
+            "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
+            "updated_at": stamp,
+        },
+    )
+
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is not None:
+        await candidate.set({"status": CandidateStatus.rejected})
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.declined,
+            note=f"Rejected by telecaller ({reason.value})" if reason else "Rejected by telecaller",
+        )
+    await _drop_analytics_cache(lead.brand_id)
+    return lead
+
+
+def waiting_on_recruiter(lead: IntakeLead) -> bool:
+    """Whether a reassigned lead goes to the recruiter leg rather than a telecaller.
+
+    Decided from the telecaller's decision, not the status alone: accept_lead
+    files an accepted lead as `unassigned` when no recruiter is free, and that
+    lead's screening is done. Sending it back to a telecaller would let them
+    reject a candidate who is already approved.
+    """
+    return lead.status == IntakeLeadStatus.pending_recruiter or (
+        lead.status == IntakeLeadStatus.unassigned
+        and lead.telecaller_decision == IntakeDecision.accept
+    )
+
+
+async def reassign_lead(
+    lead: IntakeLead, *, assignee: Employee, now: datetime | None = None
+) -> IntakeLead:
+    """Move a lead to someone else on whichever leg it is waiting.
+
+    The clock restarts for the new owner and the breach stamp is cleared: they
+    have not had the lead for a day, and inheriting someone else's overdue clock
+    would report them as late on arrival. reassignment_count is what stops that
+    being a way to keep a lead permanently fresh unnoticed.
+    """
+    stamp = now or datetime.now(UTC)
+    recruiter_leg = waiting_on_recruiter(lead)
+    updates: dict[str, object] = {
+        "reassignment_count": lead.reassignment_count + 1,
+        "updated_at": stamp,
+    }
+    if recruiter_leg:
+        updates |= {
+            "status": IntakeLeadStatus.pending_recruiter,
+            "recruiter_id": assignee.id,
+            "recruiter_assigned_at": stamp,
+            "recruiter_sla_breached_at": None,
+        }
+    else:
+        updates |= {
+            "status": IntakeLeadStatus.pending_telecaller,
+            "telecaller_id": assignee.id,
+            "telecaller_assigned_at": stamp,
+            "telecaller_sla_breached_at": None,
+        }
+    # Conditional on the status that was read, like accept and reject: a
+    # telecaller deciding the lead while the reassign dialog was open must not
+    # have that decision overwritten and the lead dropped back into a queue.
+    written = await IntakeLead.find_one({"_id": lead.id, "status": lead.status.value}).update(
+        {"$set": updates}
+    )
+    if written is None or written.matched_count == 0:
+        raise LeadAlreadyDecided(str(lead.id))
+    for attr, value in updates.items():
+        setattr(lead, attr, value)
+
+    if recruiter_leg:
+        candidate = await Candidate.get(lead.candidate_id)
+        if candidate is not None:
+            await candidate.set({"assigned_recruiter_id": assignee.id})
+    await _drop_analytics_cache(lead.brand_id)
+    return lead
+
+
+async def close_lead_for_mapping(mapping) -> None:
+    """Stop the recruiter's clock when they first put this candidate forward.
+
+    Called from map_candidate, fire-and-forget like the gamification and
+    referral writes beside it: this records that a mapping happened, so failing
+    to record it must never undo the mapping itself.
+    """
+    lead = await IntakeLead.find_one(
+        {
+            "brand_id": mapping.brand_id,
+            "candidate_id": mapping.candidate_id,
+            "status": IntakeLeadStatus.pending_recruiter.value,
+        }
+    )
+    if lead is None:
+        return
+
+    stamp = datetime.now(UTC)
+    await lead.set(
+        {
+            "status": IntakeLeadStatus.actioned,
+            "recruiter_actioned_at": stamp,
+            "recruiter_action_mapping_id": mapping.id,
+            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
+            "updated_at": stamp,
+        }
+    )

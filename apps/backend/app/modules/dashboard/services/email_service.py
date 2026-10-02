@@ -173,3 +173,54 @@ class EmailService:
             f"Best,\nThe Binge Connect Team"
         )
         cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_intake_sla_digest(
+        cls,
+        email: str,
+        *,
+        total: int,
+        unassigned: int,
+        groups: list[dict],
+        portal_url: str,
+    ) -> None:
+        """Daily summary of inbound leads nobody has actioned in time.
+
+        Only ever sent when something is actually overdue — the caller does not
+        send an "all clear", because a daily email that is usually empty is the
+        fastest way to train people to ignore the one that is not.
+        """
+        subject = f"{total} inbound lead{'s are' if total != 1 else ' is'} overdue"
+        lines = [
+            "Hello,",
+            "",
+            f"{total} inbound lead{'s have' if total != 1 else ' has'} passed the "
+            f"time-to-action limit and {'are' if total != 1 else 'is'} still waiting.",
+            "",
+        ]
+        for group in groups:
+            name = html.escape(str(group.get("name", "")))
+            leg = html.escape(str(group.get("leg", "")))
+            leads = group.get("leads", [])
+            lines.append(f"{name} ({leg}) — {len(leads)} overdue")
+            for lead in leads:
+                lines.append(
+                    f"  - {html.escape(str(lead.get('name', '')))}: "
+                    f"waiting {int(lead.get('hours', 0))}h"
+                )
+            lines.append("")
+
+        if unassigned:
+            # Not an SLA breach — nobody was ever given these, so no clock is
+            # running on them. That is exactly why they would otherwise pile up
+            # unseen, so they are reported here rather than nowhere.
+            lines.append(
+                f"Separately, {unassigned} lead{'s are' if unassigned != 1 else ' is'} "
+                f"in nobody's queue and needs assigning."
+            )
+            lines.append("")
+
+        lines.append(f"Review them here: {html.escape(portal_url)}")
+        lines.append("")
+        lines.append("Best,\nThe Binge Consulting Team")
+        cls._send_email(to=email, subject=subject, body="\n".join(lines))

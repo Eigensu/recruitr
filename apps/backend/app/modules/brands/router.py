@@ -18,7 +18,12 @@ from typing import Annotated
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.dependencies import get_current_user, get_tenant, require_maintainer
+from app.core.dependencies import (
+    deny_outsiders,
+    get_current_user,
+    get_tenant,
+    require_maintainer,
+)
 from app.modules.auth.access import NOT_AUTHORIZED, may_hold_staff_account
 from app.modules.auth.models import User
 from app.modules.auth.schemas import TokenPayload
@@ -38,7 +43,7 @@ router = APIRouter()
 _Tenant = Annotated[TenantScope, Depends(get_tenant)]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(deny_outsiders)])
 async def create_brand(
     data: BrandCreate,
     current_user: Annotated[TokenPayload, Depends(get_current_user)],
@@ -48,6 +53,11 @@ async def create_brand(
     Restricted to agency addresses. An unauthorized caller could otherwise mint
     a tenant of their own — which is both a junk row and an outage: the public
     application form can only infer the agency when exactly one brand exists.
+
+    An agency address is not sufficient for a telecaller, who is on the agency
+    domain but screens leads inside a workspace and never creates one. This runs
+    before any brand exists, so get_tenant cannot refuse the role here;
+    deny_outsiders does.
     """
     user = await User.get(PydanticObjectId(current_user.sub))
     if not user or not await may_hold_staff_account(user.email):

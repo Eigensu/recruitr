@@ -4,6 +4,7 @@ from app.modules.recruitment.controller.activity import router as activity_route
 from app.modules.recruitment.controller.candidates import router as candidates_router
 from app.modules.recruitment.controller.client_messaging import router as client_messaging_router
 from app.modules.recruitment.controller.clients import router as clients_router
+from app.modules.recruitment.controller.intake import router as intake_router
 from app.modules.recruitment.controller.pipeline import router as pipeline_router
 from app.modules.recruitment.controller.positions import router as positions_router
 from app.modules.recruitment.controller.public_controller import router as public_router
@@ -17,6 +18,7 @@ __all__ = [
     "candidates_router",
     "client_messaging_router",
     "clients_router",
+    "intake_router",
     "pipeline_router",
     "positions_router",
     "public_router",

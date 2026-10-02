@@ -10,7 +10,7 @@ from app.common.extras.redis_cache import dashboard_cache, leaderboard_cache
 from app.core import database
 from app.core.config import settings
 from app.core.database import init_db
-from app.core.dependencies import deny_clients
+from app.core.dependencies import deny_outsiders
 from app.modules.auth.access import warn_if_unconfigured
 from app.modules.auth.router import router as auth_router
 from app.modules.brands.router import router as brands_router
@@ -23,6 +23,7 @@ from app.modules.recruitment.controller import (
     candidates_router,
     client_messaging_router,
     clients_router,
+    intake_router,
     pipeline_router,
     positions_router,
     public_router,
@@ -82,6 +83,7 @@ app.include_router(
 )
 app.include_router(positions_router, prefix="/api/v1/positions", tags=["Positions"])
 app.include_router(pipeline_router, prefix="/api/v1/pipeline", tags=["Pipeline"])
+app.include_router(intake_router, prefix="/api/v1/intake", tags=["Lead Intake"])
 app.include_router(tags_router, prefix="/api/v1/tags", tags=["Tags"])
 app.include_router(teams_router, prefix="/api/v1/teams", tags=["Teams"])
 app.include_router(tasks_router, prefix="/api/v1/tasks", tags=["Tasks"])
@@ -91,13 +93,14 @@ app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboar
 app.include_router(referee_router)
 app.include_router(notifications_router)
 # The leaderboard authenticates with get_current_user alone — it never resolves
-# a tenant, so nothing else would stop a client account reading our recruiters'
-# names and scores. Guarded at the router so endpoints added later inherit it.
+# a tenant, so nothing else would stop a client, referee or telecaller account
+# reading our recruiters' names and scores. Guarded at the router so endpoints
+# added later inherit it.
 app.include_router(
     leaderboard_router,
     prefix="/api/v1/leaderboard",
     tags=["Leaderboard"],
-    dependencies=[Depends(deny_clients)],
+    dependencies=[Depends(deny_outsiders)],
 )
 app.include_router(activity_router, prefix="/api/v1/activity", tags=["Activity"])
 

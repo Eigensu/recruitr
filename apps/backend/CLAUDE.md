@@ -7,8 +7,8 @@ cross-cutting notes.
 
 - `core/main.py` — FastAPI app assembly: middleware, router mounts, `/health`. Read this first to see
   which routers exist and what dependency guards are attached at the router level (e.g. the
-  leaderboard router blanket-denies the `client` role via `dependencies=[Depends(deny_clients)]`
-  so no endpoint added later can forget it).
+  leaderboard router blanket-denies the `client`, `referee` and `telecaller` roles via
+  `dependencies=[Depends(deny_outsiders)]` so no endpoint added later can forget it).
 - `core/config.py` — `Settings` (pydantic-settings), loaded once as the `settings` singleton. It
   locates the root `.env` by walking up for `pnpm-workspace.yaml` rather than a fixed number of
   parent hops — a hardcoded hop count silently resolves to a path with no `.env` if this file ever
@@ -29,14 +29,19 @@ cross-cutting notes.
   - `get_current_user_doc` → loads the full `User`.
   - `get_current_employee` → resolves to an `Employee` record (auto-provisions one if missing).
   - `get_tenant` → the main guard. Returns a `TenantScope(brand_id, employee_id, role)` and
-    **rejects the `client` role outright**. Most staff endpoints depend on this, so a client is
-    denied by default everywhere and access must be deliberately opened per-endpoint — the
-    containment strategy is "forgetting a guard locks a client out; it never leaks."
+    **rejects the `client` and `telecaller` roles outright**. Most staff endpoints depend on this,
+    so both are denied by default everywhere and access must be deliberately opened per-endpoint —
+    the containment strategy is "forgetting a guard locks them out; it never leaks."
+    `tests/test_auth/test_telecaller_access.py` sweeps every route in the OpenAPI schema as a real
+    signed-in telecaller, so a new endpoint that forgets its guard fails there.
   - `get_client_scope` / `get_viewer` → the opposite path, for endpoints both staff and clients
     may hit. `get_viewer` returns a `TenantScope` with `client_id` set for clients; handlers using
     it **must** call `scope.scoped(match)` to narrow their Mongo query, since nothing else stops a
     client reading another company's data.
-  - `require_admin`, `require_maintainer`, `deny_clients` — narrower role guards.
+  - `get_inbox_viewer` → `get_viewer` plus telecallers, for the notification inbox only. Not a
+    widening of `get_viewer`, which would open every pipeline/positions/dashboard endpoint built on
+    it.
+  - `require_admin`, `require_maintainer`, `deny_outsiders` — narrower role guards.
 - `app/modules/<name>/` — one package per bounded context: `auth`, `brands`, `recruitment`,
   `dashboard`, `gamification`, `leaderboard`, `storage`. `recruitment` is the core domain
   (candidates, positions, pipeline, clients, client-messaging, teams, tags, activity — all unified
@@ -57,16 +62,83 @@ cross-cutting notes.
 - Gamification/leaderboard credit is fire-and-forget from the recruitment service layer — a
   duplicate award or Redis failure must never roll back the domain write that triggered it.
 
+## Inbound lead intake
+
+Meta lead-ad candidates land in a Google Sheet, are ingested on a schedule, screened by a
+telecaller, then handed to a recruiter. Design doc and decisions log:
+`specs/telecaller_intake_spec.md`.
+
+| Piece | Where |
+|---|---|
+| Sheet read — service account, `spreadsheets.readonly` | `recruitment/utils/google_sheets.py` |
+| Column mapping, row parsing, phone normalisation | `recruitment/utils/{lead_sheet,phone}.py` |
+| Ingest, round-robin, accept / reject / reassign | `recruitment/service/intake_service.py` |
+| Funnel, per-leg timings, campaign report | `recruitment/service/intake_analytics.py` |
+| Hourly breach sweep, daily digest | `recruitment/service/intake_sla.py` |
+| HTTP | `recruitment/controller/intake.py` |
+| Scheduled jobs | `recruitment/tasks.py` + the beat schedule in `core/celery_app.py` |
+| Historical import | `scripts/backfill_intake_leads.py` (report-only unless `--confirm`) |
+
+These sit *beside* `service/_impl.py` rather than inside it — the direction `resume_service.py`
+started. Import them by module path; only `_impl` is off-limits.
+
+**Timestamps read back from Mongo are naive, and Python raises on comparing them to an aware
+`datetime` rather than guessing.** `intake_service.as_utc()` is the single place that fixes it, and
+every comparison between a stored timestamp and "now" must go through it. This is not theoretical:
+it was found by a test after it had already shipped in code that would have crashed every poll the
+moment the integration was switched on. `intake_analytics` and `intake_sla` both import `as_utc`
+from `intake_service`; the read and alert models depend on the write model and never the reverse,
+which is what keeps all three importable.
+
+**Ingest is idempotent.** `(brand_id, external_id)` is unique on `IntakeLead`, so re-reading a row
+is a no-op — which is what lets the poll read the whole range every run instead of tracking a
+cursor into someone else's spreadsheet. Dedupe against *people* already in the pool is separate,
+and is an in-memory index built per run (`_ContactIndex`), not a stored field: a stored
+`phone_normalized` would have missed every candidate created before it existed.
+
+**Two doors into this module, on purpose.** The queue routes take `get_telecaller_tenant`, the only
+dependency that admits the role. Everything under `/intake/analytics`, `/intake/leads` (the admin
+list), `/intake/assignees` and `/intake/config` takes plain `get_tenant`, so the refusal that
+protects the rest of the app also keeps a telecaller out of the reports about their own response
+times. `/leads/mine` must stay declared *before* `/leads/{lead_id}` or the path parameter swallows
+it — there is a test for exactly that.
+
+**Assignment rosters** come from `intake_service.assignment_roster()`, which is what the round-robin
+itself draws from. Do not build a picker out of `GET /teams/employees`: that endpoint deliberately
+hides `NON_RECRUITER_ROLES`, telecallers included, so it would offer names the assignment then
+refuses. `GET /intake/assignees` is the one for this.
+
+**Analytics are cached** in the `dashboard_cache` Redis namespace under `<brand>:intake:*` and
+dropped by `intake_analytics.invalidate()` after every lead write. `map_candidate` already clears
+`<brand>:*`, so the recruiter leg rides along with it. The admin lead list is deliberately *not*
+cached — a five-minute-old answer to "what is overdue right now" is worse than the query.
+
+**SLA alerts fire once per lead**, guarded by the `*_sla_breached_at` stamp, which is set whether or
+not there was anyone to notify: the breach is a fact about the lead, not about the delivery. A
+reassignment clears it so the new owner starts clean. Recipients are admins *and* maintainers —
+reassigning is maintainer-gated, so that is exactly the set who can act on the alert.
+
+
 ## Auth model
 
 Custom JWT (not Clerk, not a third-party auth provider), issued on `/api/v1/auth/login` or
 `/signup` and set as an HttpOnly `access_token` cookie; `COOKIE_DOMAIN` is set to a shared parent
 domain in prod so the frontend and backend subdomains both receive it. Google OAuth
 (`/api/v1/auth/google/*`) is a secondary login path onto the same `User`/JWT model, not a
-replacement for it. Roles (`app/modules/auth/models.py: UserRole`) form a staff hierarchy plus one
-outsider role: `admin ⊇ maintainer ⊇ employee` (all recruiters/agency staff, with `employee` being
-the leaderboard-earning recruiter), and `client` — an employer contact with no `Employee` record,
+replacement for it. Roles (`app/modules/auth/models.py: UserRole`) form a staff hierarchy plus
+roles outside it: `admin ⊇ maintainer ⊇ employee` (all recruiters/agency staff, with `employee` being
+the leaderboard-earning recruiter); `client` — an employer contact with no `Employee` record,
 scoped to exactly one company via `ClientUser`, and excluded from every staff endpoint unless a
-route explicitly opts in via `get_viewer`/`get_client_scope`. New staff signups are gated by
-`AGENCY_EMAIL_DOMAINS` (comma-separated allowed email domains); an empty value blocks *new*
-signups but doesn't revoke existing accounts.
+route explicitly opts in via `get_viewer`/`get_client_scope`; `referee`, likewise grant-based via
+`RefereeUser`; and `telecaller` — agency staff who screen inbound leads by phone. A telecaller
+*does* have an `Employee` record and a brand, which is exactly why `get_tenant` must refuse it: to
+every endpoint written before the role existed, it would look like a recruiter.
+
+Recruiter rosters (leaderboard, task progress, dashboard employee table, employee listings) exclude
+`NON_RECRUITER_ROLES` with `$nin`, never `role == "employee"` — `Employee` rows predating the role
+field have none, and an equality match would silently drop those recruiters. A new staff role that
+does not recruit goes into that tuple and nowhere else. Roles are assigned manually with
+`scripts/migrate_user_roles.py promote`; there is no role-changing endpoint.
+
+New staff signups are gated by `AGENCY_EMAIL_DOMAINS` (comma-separated allowed email domains); an
+empty value blocks *new* signups but doesn't revoke existing accounts.
