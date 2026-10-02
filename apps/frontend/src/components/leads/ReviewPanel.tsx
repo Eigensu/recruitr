@@ -39,7 +39,17 @@ function teamLabel(team: IntakeTeamOption): string {
  * the candidate, and the rotation keeps work even inside it without anyone
  * having to track who had the last one.
  */
-export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => void }) {
+export default function ReviewPanel({
+  onChanged,
+  onOpen,
+  opening,
+}: {
+  readonly onChanged?: () => void;
+  /** Show the lead's full candidate profile. The parent owns the drawer. */
+  readonly onOpen?: (lead: IntakeLead) => void;
+  /** candidate_id of the profile being fetched, for a spinner on that row. */
+  readonly opening?: string | null;
+}) {
   const apiFetch = useApiFetch();
   const toast = useToast();
 
@@ -126,6 +136,9 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
     );
   }
 
+  const showLoadError = loadFailed && leads.length === 0;
+  const showEmpty = !showLoadError && leads.length === 0;
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3">
@@ -186,20 +199,24 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
         </p>
       )}
 
-      {loadFailed && leads.length === 0 ? (
+      {showLoadError && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-red-500/30 py-16 text-center">
           <p className="text-sm text-red-400">
             Could not load the review list. Use Refresh to try again.
           </p>
         </div>
-      ) : leads.length === 0 ? (
+      )}
+
+      {showEmpty && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
           <IconUsersGroup className="size-8 text-text-secondary" />
           <p className="text-sm text-text-secondary">
             Nothing waiting for review. Leads appear here once a telecaller accepts them.
           </p>
         </div>
-      ) : (
+      )}
+
+      {leads.length > 0 && (
         <ul className="flex flex-col gap-2">
           {leads.map((lead) => {
             const waited = elapsedHours(lead.telecaller_actioned_at);
@@ -220,7 +237,25 @@ export default function ReviewPanel({ onChanged }: { readonly onChanged?: () => 
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                      <span className="font-medium text-text-primary">{lead.full_name}</span>
+                      {onOpen ? (
+                        // The row is a <label> for the checkbox; preventDefault
+                        // keeps opening the profile from also selecting the lead.
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onOpen(lead);
+                          }}
+                          className="inline-flex items-center gap-1.5 text-left font-medium text-text-primary underline-offset-2 hover:underline focus:outline-none focus-visible:underline"
+                        >
+                          {lead.full_name}
+                          {opening === lead.candidate_id && (
+                            <IconLoader2 className="size-3.5 animate-spin text-text-muted" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="font-medium text-text-primary">{lead.full_name}</span>
+                      )}
                       <span className="text-xs text-text-muted">
                         {lead.telecaller_name ? `Screened by ${lead.telecaller_name}` : "Screened"}
                         {waited !== null && ` · ${formatHours(waited)} ago`}
