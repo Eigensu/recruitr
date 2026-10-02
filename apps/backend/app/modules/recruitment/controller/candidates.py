@@ -411,7 +411,12 @@ async def list_candidates(
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
 
-    if source:
+    if source == "internal":
+        # Candidates created before `source` existed have none; the pipeline
+        # already reads those as internal ($ifNull), so the Internal tab must too
+        # or it and the External tab would not add up to the full directory.
+        and_clauses.append({"$or": [{"source": "internal"}, {"source": None}]})
+    elif source:
         match["source"] = source
 
     if source_channel:

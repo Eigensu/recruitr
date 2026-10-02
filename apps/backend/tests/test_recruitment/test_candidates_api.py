@@ -104,6 +104,39 @@ async def test_list_returns_brand_candidates(client_a: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_filter_by_source_treats_missing_source_as_internal(
+    client_a: AsyncClient,
+) -> None:
+    await _create_via_api(client_a, {"email": "int@test.com", "full_name": "Internal Ian"})
+    await _create_via_api(
+        client_a,
+        {
+            "email": "ext@test.com",
+            "full_name": "External Eve",
+            "source": "external",
+            "source_channel": "LinkedIn",
+            "cv_link": "https://example.com/cv",
+        },
+    )
+    # A legacy row written before `source` existed.
+    await Candidate(
+        brand_id=_BRAND_A, full_name="Legacy Lee", email="legacy@test.com", source=None
+    ).insert()
+
+    async def names(**params: str) -> set[str]:
+        res = await client_a.get("/api/v1/candidates", params=params)
+        assert res.status_code == 200, res.text
+        return {c["full_name"] for c in res.json()["items"]}
+
+    assert await names(source="internal") == {"Internal Ian", "Legacy Lee"}
+    assert await names(source="external") == {"External Eve"}
+    assert await names() == {"Internal Ian", "External Eve", "Legacy Lee"}
+    # Search and source each contribute an $or; neither may overwrite the other.
+    assert await names(source="internal", search="Lee") == {"Legacy Lee"}
+    assert await names(source="internal", search="Eve") == set()
+
+
+@pytest.mark.asyncio
 async def test_list_search_by_name(client_a: AsyncClient) -> None:
     await _create_via_api(client_a)
     await _create_via_api(client_a, {"email": "other@test.com", "full_name": "Rohan Joshi"})
