@@ -27,6 +27,7 @@ from app.modules.recruitment.models import (
     Employee,
     IntakeLead,
 )
+from app.modules.recruitment.schemas import IntakeCandidateDetails
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
     as_utc,
@@ -34,6 +35,24 @@ from app.modules.recruitment.service.intake_service import (
 )
 
 _BRAND = PydanticObjectId()
+
+# A complete accept form: everything a telecaller must fill in on the call.
+DETAILS = {
+    "full_name": "Asha Rao",
+    "phone": "9876543210",
+    "communication": "Good",
+    "education": "Graduate",
+    "department": "Service",
+    "specialization": "Steward",
+    "current_role": "Steward",
+    "experience_years": 2,
+    "city": "Mumbai",
+    "gender": "female",
+    "expected_salary": 450000,
+    "salary": 360000,
+    "notice_period": "30 days",
+}
+ACCEPT = {"details": DETAILS}
 
 
 @pytest_asyncio.fixture
@@ -89,41 +108,96 @@ async def caller() -> Employee:
 
 
 @pytest.mark.asyncio
-async def test_accepting_approves_the_candidate_and_finds_a_recruiter(http, caller):
-    recruiter = await _staff("recruiter", UserRole.employee)
+async def test_accepting_saves_the_form_and_waits_for_review(http, caller):
+    await _staff("recruiter", UserRole.employee)
     lead = await _lead(telecaller=caller, assigned_at=datetime.now(UTC) - timedelta(hours=3))
 
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
-        json={"notes": "Keen, free from Monday"},
+        json={"details": DETAILS, "notes": "Keen, free from Monday"},
         headers=await _headers("caller"),
     )
 
     assert res.status_code == 200
     body = res.json()
-    assert body["status"] == IntakeLeadStatus.pending_recruiter
-    assert body["recruiter_id"] == str(recruiter.id)
+    # Nobody is picked yet: a reviewer chooses the team first.
+    assert body["status"] == IntakeLeadStatus.pending_review
+    assert body["recruiter_id"] is None
     assert body["telecaller_decision"] == IntakeDecision.accept
     # Roughly three hours, in seconds — the number the SLA report is built on.
     assert 10700 < body["telecaller_response_seconds"] < 10900
 
     candidate = await Candidate.get(lead.candidate_id)
-    assert candidate.status == CandidateStatus.approved
-    assert candidate.assigned_recruiter_id == recruiter.id
+    # Out of the directory until a team owns them, so nobody maps them first.
+    assert candidate.status == CandidateStatus.pending
+    assert candidate.assigned_recruiter_id is None
+    assert candidate.city == "Mumbai"
+    assert candidate.notice_period == "30 days"
+    assert candidate.expected_salary == 450000
+    assert candidate.brand_experience is None
 
 
 @pytest.mark.asyncio
-async def test_acceptance_survives_having_no_recruiter_to_hand_it_to(http, caller):
+async def test_accept_requires_the_form(http, caller):
+    lead = await _lead(telecaller=caller)
+    incomplete = {key: value for key, value in DETAILS.items() if key != "notice_period"}
+
+    missing = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+    )
+    partial = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": incomplete},
+        headers=await _headers("caller"),
+    )
+
+    assert missing.status_code == 422
+    assert partial.status_code == 422
+    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.pending_telecaller
+
+
+@pytest.mark.asyncio
+async def test_an_email_the_public_form_accepted_does_not_block_accept(http, caller):
+    """EmailStr rejects reserved domains the public form happily stored, which
+    left a telecaller unable to accept an applicant without retyping their
+    address. Found by running the flow in a browser."""
+    lead = await _lead(telecaller=caller)
+
+    ok = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": {**DETAILS, "email": "Rhea@Example.TEST"}},
+        headers=await _headers("caller"),
+    )
+
+    assert ok.status_code == 200, ok.text
+    assert (await Candidate.get(lead.candidate_id)).email == "rhea@example.test"
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_email_is_refused_in_plain_words(http, caller):
     lead = await _lead(telecaller=caller)
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": {**DETAILS, "email": "not an email"}},
+        headers=await _headers("caller"),
     )
 
-    # The call happened; the desk being empty is not the telecaller's problem,
-    # and hiding their work would misreport it.
-    assert res.json()["status"] == IntakeLeadStatus.unassigned
-    assert (await Candidate.get(lead.candidate_id)).status == CandidateStatus.approved
+    assert res.status_code == 422
+    assert "doesn't look like an email" in res.text
+
+
+@pytest.mark.asyncio
+async def test_brand_experience_is_not_the_telecallers_to_fill(http, caller):
+    lead = await _lead(telecaller=caller)
+
+    await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": {**DETAILS, "brand_experience": "Taj"}},
+        headers=await _headers("caller"),
+    )
+
+    assert (await Candidate.get(lead.candidate_id)).brand_experience is None
 
 
 @pytest.mark.asyncio
@@ -132,7 +206,7 @@ async def test_acceptance_is_recorded_on_the_candidate_history(http, caller):
     lead = await _lead(telecaller=caller)
 
     await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
     )
 
     events = await CandidateEvent.find({"candidate_id": lead.candidate_id}).to_list()
@@ -185,7 +259,7 @@ async def test_a_telecaller_cannot_action_someone_elses_lead(http, caller):
     lead = await _lead(telecaller=other)
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
     )
 
     assert res.status_code == 403
@@ -209,7 +283,7 @@ async def test_a_lead_cannot_be_actioned_twice(http, caller):
     lead = await _lead(telecaller=caller)
     headers = await _headers("caller")
 
-    first = await http.post(f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=headers)
+    first = await http.post(f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=headers)
     second = await http.post(f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=headers)
 
     assert first.status_code == 200
@@ -222,7 +296,7 @@ async def test_a_lead_from_another_brand_is_not_found(http, caller):
     await lead.set({"brand_id": PydanticObjectId()})
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
     )
 
     assert res.status_code == 404
@@ -387,7 +461,7 @@ async def test_a_stale_copy_cannot_decide_a_lead_twice(caller):
 
     lead = await _lead(telecaller=caller)
     stale = await IntakeLead.get(lead.id)
-    await accept_lead(lead)
+    await accept_lead(lead, details=IntakeCandidateDetails(**DETAILS))
 
     with pytest.raises(LeadAlreadyDecided):
         await reject_lead(stale)

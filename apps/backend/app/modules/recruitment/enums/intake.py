@@ -4,14 +4,16 @@ from enum import StrEnum
 
 
 class IntakeSource(StrEnum):
-    """Where a lead was read from. One member today; the field exists so a
-    second intake channel does not require a migration to tell them apart."""
+    """Where a lead came from."""
 
-    google_sheet = "google_sheet"
+    google_sheet = "google_sheet"  # Meta lead ads, polled from the sheet
+    # The public application form — including referee referrals, which arrive
+    # through the same form carrying a connect code.
+    public_form = "public_form"
 
 
 class IntakeLeadStatus(StrEnum):
-    """Where a lead sits in the two-leg review journey.
+    """Where a lead sits in the review journey: telecaller → reviewer → recruiter.
 
     unassigned is not a failure state to be ignored: leads that arrive when no
     telecaller is active must still be ingested and must still be visible to an
@@ -21,6 +23,9 @@ class IntakeLeadStatus(StrEnum):
     pending_telecaller = "pending_telecaller"  # assigned, awaiting their decision
     unassigned = "unassigned"  # ingested, nobody to assign it to
     rejected = "rejected"  # telecaller rejected — terminal
+    # Telecaller accepted and filled the details in; waiting for an admin or
+    # maintainer to hand it to a team. No SLA clock: nobody specific owes it.
+    pending_review = "pending_review"
     pending_recruiter = "pending_recruiter"  # accepted, awaiting the first mapping
     actioned = "actioned"  # recruiter mapped them — terminal
     duplicate = "duplicate"  # matched a candidate already in the pool — terminal

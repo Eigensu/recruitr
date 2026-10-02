@@ -30,6 +30,7 @@ from app.modules.recruitment.enums import (
     KANBAN_STAGES,
     TERMINAL_STAGES,
     CandidateEventType,
+    CandidateStatus,
     Decision,
     PipelineStage,
 )
@@ -612,6 +613,14 @@ async def match_candidate(tenant: _Tenant, req: MatchRequest) -> MatchResponse:
     mapping = await Mapping.find_one(
         {"candidate_id": cand_oid, "position_id": pos_oid, "brand_id": tenant.brand_id}
     )
+    # Same rule as map-candidate: a candidate still in screening or review must
+    # not be put forward just because this endpoint upserts the mapping.
+    if mapping is None and candidate.status != CandidateStatus.approved:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Only approved candidates can be put forward. This one is "
+            f"{candidate.status.value.lower()} — approve them first.",
+        )
     prev_stage = mapping.stage if mapping else None
 
     if mapping is None:

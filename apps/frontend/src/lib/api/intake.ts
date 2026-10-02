@@ -14,9 +14,12 @@ export type IntakeLeadStatus =
   | "pending_telecaller"
   | "unassigned"
   | "rejected"
+  | "pending_review"
   | "pending_recruiter"
   | "actioned"
   | "duplicate";
+
+export type IntakeSource = "google_sheet" | "public_form";
 
 export type IntakeDecision = "accept" | "reject";
 
@@ -31,6 +34,7 @@ export type IntakeRejectReason =
 export interface IntakeLead {
   id: string;
   status: IntakeLeadStatus;
+  source: IntakeSource;
   candidate_id: string;
   full_name: string;
   phone: string | null;
@@ -51,6 +55,9 @@ export interface IntakeLead {
   telecaller_reject_reason: IntakeRejectReason | null;
   telecaller_notes: string | null;
   telecaller_response_seconds: number | null;
+  team_id: string | null;
+  team_name: string | null;
+  reviewed_at: string | null;
   recruiter_id: string | null;
   recruiter_assigned_at: string | null;
   recruiter_actioned_at: string | null;
@@ -89,6 +96,7 @@ export interface IntakeFunnel {
   pending_telecaller: number;
   unassigned: number;
   rejected: number;
+  pending_review: number;
   pending_recruiter: number;
   actioned: number;
   duplicate: number;
@@ -195,10 +203,55 @@ export function fetchMyLeads(apiFetch: ApiFetch, includeActioned = false): Promi
   );
 }
 
-export function acceptLead(apiFetch: ApiFetch, id: string, notes?: string): Promise<IntakeLead> {
+/**
+ * What a telecaller fills in before accepting. Mirrors `IntakeCandidateDetails`:
+ * the manual add-candidate form's required fields, minus brand experience
+ * (the recruiter's to fill) and with the CV link optional.
+ */
+export interface IntakeCandidateDetails {
+  full_name: string;
+  email?: string;
+  phone: string;
+  communication: string;
+  education: string;
+  department: string;
+  specialization: string;
+  establishment_tag?: string;
+  current_role: string;
+  experience_years: number;
+  city: string;
+  area?: string;
+  gender: "male" | "female" | "other";
+  age?: number;
+  expected_salary: number;
+  salary: number;
+  notice_period: string;
+  cv_link?: string;
+}
+
+/** What the system already holds on the person, to prefill the form. */
+export type IntakeCandidateDraft = {
+  [K in keyof IntakeCandidateDetails]-?: IntakeCandidateDetails[K] | null;
+} & { has_resume: boolean };
+
+export function fetchLeadCandidate(apiFetch: ApiFetch, id: string): Promise<IntakeCandidateDraft> {
+  return apiFetch<IntakeCandidateDraft>(`/api/v1/intake/leads/${id}/candidate`);
+}
+
+/** Department → roles. The telecaller's copy of /positions/role-catalog. */
+export function fetchIntakeRoleCatalog(apiFetch: ApiFetch): Promise<Record<string, string[]>> {
+  return apiFetch("/api/v1/intake/role-catalog");
+}
+
+export function acceptLead(
+  apiFetch: ApiFetch,
+  id: string,
+  details: IntakeCandidateDetails,
+  notes?: string,
+): Promise<IntakeLead> {
   return apiFetch<IntakeLead>(`/api/v1/intake/leads/${id}/accept`, {
     method: "POST",
-    body: JSON.stringify({ notes: notes || null }),
+    body: JSON.stringify({ details, notes: notes || null }),
   });
 }
 
@@ -249,6 +302,32 @@ export function fetchAssignees(
   apiFetch: ApiFetch,
 ): Promise<{ telecallers: IntakeAssignee[]; recruiters: IntakeAssignee[] }> {
   return apiFetch("/api/v1/intake/assignees");
+}
+
+// ── Review ────────────────────────────────────────────────────────────────────
+
+export interface IntakeTeamOption {
+  id: string;
+  name: string;
+  /** Active recruiters the team's round-robin can pick from. */
+  recruiters: number;
+  /** Leads its recruiters hold and have not yet mapped. */
+  open_leads: number;
+}
+
+export function fetchReviewTeams(apiFetch: ApiFetch): Promise<IntakeTeamOption[]> {
+  return apiFetch<IntakeTeamOption[]>("/api/v1/intake/teams");
+}
+
+export function assignLeadsToTeam(
+  apiFetch: ApiFetch,
+  leadIds: string[],
+  teamId: string,
+): Promise<{ assigned: IntakeLead[]; skipped: string[] }> {
+  return apiFetch("/api/v1/intake/leads/assign-team", {
+    method: "POST",
+    body: JSON.stringify({ lead_ids: leadIds, team_id: teamId }),
+  });
 }
 
 export function syncNow(apiFetch: ApiFetch): Promise<IntakeSyncResult> {
@@ -321,6 +400,7 @@ export const STATUS_LABELS: Record<IntakeLeadStatus, string> = {
   pending_telecaller: "Awaiting call",
   unassigned: "Unassigned",
   rejected: "Rejected",
+  pending_review: "Awaiting review",
   pending_recruiter: "With recruiter",
   actioned: "Actioned",
   duplicate: "Duplicate",
@@ -330,6 +410,7 @@ export const STATUS_STYLES: Record<IntakeLeadStatus, string> = {
   pending_telecaller: "bg-yellow/10 text-yellow border-yellow/20",
   unassigned: "bg-orange-500/10 text-orange-400 border-orange-500/20",
   rejected: "bg-red-500/10 text-red-400 border-red-500/20",
+  pending_review: "bg-violet-500/10 text-violet-400 border-violet-500/20",
   pending_recruiter: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   actioned: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   duplicate: "bg-surface-panel text-text-muted border-border",

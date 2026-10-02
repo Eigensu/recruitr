@@ -1,10 +1,14 @@
 """The inbound lead queue.
 
-    GET  /intake/leads/mine          the signed-in telecaller's queue
-    POST /intake/leads/{id}/accept   approve the candidate, hand them to a recruiter
-    POST /intake/leads/{id}/reject   turn the lead away, with a reason
-    POST /intake/leads/{id}/reassign move a lead to someone else  (maintainer+)
-    POST /intake/sync                read the sheet now            (admin)
+    GET  /intake/leads/mine            the signed-in telecaller's queue
+    GET  /intake/leads/{id}/candidate  what we hold on them, to prefill the form
+    GET  /intake/role-catalog          department → roles, for the form's dropdowns
+    POST /intake/leads/{id}/accept     save the form, send the lead to review
+    POST /intake/leads/{id}/reject     turn the lead away, with a reason
+    POST /intake/leads/assign-team     reviewed leads → a team's round-robin (maintainer+)
+    GET  /intake/teams                 teams a reviewer can assign to     (maintainer+)
+    POST /intake/leads/{id}/reassign   move a lead to someone else        (maintainer+)
+    POST /intake/sync                  read the sheet now                 (admin)
 
     GET  /intake/analytics/overview     funnel + both SLA clocks   (maintainer+)
     GET  /intake/analytics/telecallers  per-telecaller table       (maintainer+)
@@ -43,12 +47,21 @@ from app.core.dependencies import (
 )
 from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import IntakeLeadStatus
-from app.modules.recruitment.models import Candidate, Employee, IntakeLead, IntakeSourceConfig
+from app.modules.recruitment.models import (
+    Candidate,
+    Employee,
+    IntakeLead,
+    IntakeSourceConfig,
+    Team,
+)
 from app.modules.recruitment.schemas import (
     IntakeAcceptRequest,
     IntakeAssignee,
     IntakeAssigneesResponse,
+    IntakeAssignTeamRequest,
+    IntakeAssignTeamResponse,
     IntakeCampaignResponse,
+    IntakeCandidateDraft,
     IntakeConfigResponse,
     IntakeConfigUpdate,
     IntakeLeadPage,
@@ -58,19 +71,24 @@ from app.modules.recruitment.schemas import (
     IntakeReassignRequest,
     IntakeRejectRequest,
     IntakeSyncResponse,
+    IntakeTeamOption,
     TenantScope,
 )
 from app.modules.recruitment.service import intake_analytics
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
+    TeamHasNoRecruiters,
     accept_lead,
     as_utc,
+    assign_to_team,
     assignment_roster,
     poll_google_sheet,
     reassign_lead,
     reject_lead,
+    team_roster,
     waiting_on_recruiter,
 )
+from app.modules.recruitment.utils.constants import ROLES_BY_CATEGORY
 
 router = APIRouter()
 
@@ -149,11 +167,13 @@ def _to_response(
     *,
     telecaller: Employee | None = None,
     recruiter: Employee | None = None,
+    team_name: str | None = None,
     now: datetime | None = None,
 ) -> IntakeLeadResponse:
     return IntakeLeadResponse(
         id=str(lead.id),
         status=lead.status,
+        source=lead.source,
         candidate_id=str(lead.candidate_id),
         full_name=candidate.full_name if candidate else "(candidate removed)",
         phone=candidate.phone if candidate else None,
@@ -174,6 +194,9 @@ def _to_response(
         telecaller_reject_reason=lead.telecaller_reject_reason,
         telecaller_notes=lead.telecaller_notes,
         telecaller_response_seconds=lead.telecaller_response_seconds,
+        team_id=str(lead.team_id) if lead.team_id else None,
+        team_name=team_name,
+        reviewed_at=lead.reviewed_at,
         recruiter_id=str(lead.recruiter_id) if lead.recruiter_id else None,
         recruiter_assigned_at=lead.recruiter_assigned_at,
         recruiter_actioned_at=lead.recruiter_actioned_at,
@@ -189,6 +212,12 @@ async def _fetch_response(lead: IntakeLead) -> IntakeLeadResponse:
     """One lead with its candidate fetched. Fine for a single row; the list
     endpoints batch instead, rather than doing this once per row."""
     return _to_response(lead, await Candidate.get(lead.candidate_id))
+
+
+async def _team_names(brand_id) -> dict:
+    """Every team in the brand by id. A brand has a handful, so one query for
+    all of them beats a lookup per row."""
+    return {team.id: team.name for team in await Team.find({"brand_id": brand_id}).to_list()}
 
 
 # ── Queue ──────────────────────────────────────────────────────────────────────
@@ -215,18 +244,51 @@ async def my_leads(
     return [_to_response(lead, candidates.get(lead.candidate_id), now=now) for lead in leads]
 
 
+@router.get("/leads/{lead_id}/candidate", response_model=IntakeCandidateDraft)
+async def lead_candidate(tenant: _Telecaller, lead_id: str):
+    """What we already hold on this person, to prefill the accept form.
+
+    Through the telecaller door, not /candidates/{id}: that endpoint is refused
+    to the role, and opening it would expose the whole directory. This returns
+    one candidate, and only the one on a lead the caller owns.
+    """
+    lead = await _lead_or_404(tenant, lead_id)
+    _own_lead_or_403(tenant, lead)
+    # Only while the call is still theirs to make: once decided, the lead is no
+    # reason for a telecaller to keep reading the person's details.
+    _pending_or_409(lead)
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
+    fields = IntakeCandidateDraft.model_fields.keys() - {"has_resume"}
+    return IntakeCandidateDraft(
+        **candidate.model_dump(include=set(fields), mode="json"),
+        has_resume=bool(candidate.resume_url),
+    )
+
+
+@router.get("/role-catalog")
+async def role_catalog(_: _Telecaller) -> dict[str, list[str]]:
+    """Department → roles, for the accept form's role dropdown.
+
+    The same data as GET /positions/role-catalog, which telecallers are refused
+    along with the rest of the positions module.
+    """
+    return {dept.value: roles for dept, roles in ROLES_BY_CATEGORY.items()}
+
+
 # ── Decisions ──────────────────────────────────────────────────────────────────
 
 
 @router.post("/leads/{lead_id}/accept", response_model=IntakeLeadResponse)
 async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest):
-    """Accept a lead: the candidate is approved and passed to a recruiter."""
+    """Accept a lead with the details from the call; it then waits for review."""
     lead = await _lead_or_404(tenant, lead_id)
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)
 
     try:
-        await accept_lead(lead, notes=payload.notes)
+        await accept_lead(lead, details=payload.details, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
     return await _fetch_response(lead)
@@ -244,6 +306,83 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
     except LeadAlreadyDecided:
         raise _already_decided() from None
     return await _fetch_response(lead)
+
+
+# ── Review ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/teams", response_model=list[IntakeTeamOption], dependencies=[_RequireMaintainer])
+async def review_teams(tenant: _Staff):
+    """Active teams a reviewer can assign to, with who is on them and how busy.
+
+    A team with no recruiters is still listed, with zero, so the reviewer sees
+    why it cannot take a lead rather than wondering where it went.
+    """
+    teams = await Team.find({"brand_id": tenant.brand_id, "is_active": True}).sort("name").to_list()
+    load = await intake_analytics.open_leads_by_team(tenant.brand_id)
+    return [
+        IntakeTeamOption(
+            id=str(team.id),
+            name=team.name,
+            recruiters=len(await team_roster(tenant.brand_id, team.id)),
+            open_leads=load.get(team.id, 0),
+        )
+        for team in teams
+    ]
+
+
+@router.post(
+    "/leads/assign-team",
+    response_model=IntakeAssignTeamResponse,
+    dependencies=[_RequireMaintainer],
+)
+async def assign_team(tenant: _Staff, payload: IntakeAssignTeamRequest):
+    """Hand reviewed leads to a team; the team's round-robin picks each recruiter.
+
+    Leads that are no longer awaiting review are reported back as skipped rather
+    than failing the batch: with two reviewers on the same list, part of a
+    selection being taken a moment earlier is normal.
+    """
+    team = await Team.find_one(
+        {
+            "_id": to_object_id(payload.team_id, "team_id"),
+            "brand_id": tenant.brand_id,
+            "is_active": True,
+        }
+    )
+    if team is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Team not found")
+
+    ids = list(dict.fromkeys(to_object_id(lead_id, "lead_id") for lead_id in payload.lead_ids))
+    leads = await IntakeLead.find({"_id": {"$in": ids}, "brand_id": tenant.brand_id}).to_list()
+    by_id = {lead.id: lead for lead in leads}
+    ordered = [by_id[lead_id] for lead_id in ids if lead_id in by_id]
+
+    try:
+        assigned, skipped = await assign_to_team(ordered, team=team, reviewer_id=tenant.employee_id)
+    except TeamHasNoRecruiters:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"{team.name} has no active recruiters. Add someone to the team first.",
+        ) from None
+
+    candidates, employees = await intake_analytics.people_for(assigned)
+    now = datetime.now(UTC)
+    missing = [str(lead_id) for lead_id in ids if lead_id not in by_id]
+    return IntakeAssignTeamResponse(
+        assigned=[
+            _to_response(
+                lead,
+                candidates.get(lead.candidate_id),
+                telecaller=employees.get(lead.telecaller_id),
+                recruiter=employees.get(lead.recruiter_id),
+                team_name=team.name,
+                now=now,
+            )
+            for lead in assigned
+        ],
+        skipped=[str(lead.id) for lead in skipped] + missing,
+    )
 
 
 # ── Management ─────────────────────────────────────────────────────────────────
@@ -438,6 +577,7 @@ async def all_leads(
         limit=limit,
     )
     candidates, employees = await intake_analytics.people_for(leads)
+    teams = await _team_names(tenant.brand_id)
     now = datetime.now(UTC)
     pages = 0 if total == 0 else (total + limit - 1) // limit
     return IntakeLeadPage(
@@ -447,6 +587,7 @@ async def all_leads(
                 candidates.get(lead.candidate_id),
                 telecaller=employees.get(lead.telecaller_id),
                 recruiter=employees.get(lead.recruiter_id),
+                team_name=teams.get(lead.team_id),
                 now=now,
             )
             for lead in leads
@@ -470,11 +611,13 @@ async def one_lead(tenant: _Staff, lead_id: str):
     would otherwise be swallowed by this path parameter."""
     lead = await _lead_or_404(tenant, lead_id)
     candidates, employees = await intake_analytics.people_for([lead])
+    teams = await _team_names(tenant.brand_id)
     return _to_response(
         lead,
         candidates.get(lead.candidate_id),
         telecaller=employees.get(lead.telecaller_id),
         recruiter=employees.get(lead.recruiter_id),
+        team_name=teams.get(lead.team_id),
     )
 
 
