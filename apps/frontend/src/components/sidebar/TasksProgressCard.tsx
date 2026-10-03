@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useApiFetch } from "@/lib/api";
 import { listTasks, type TaskResponse } from "@/lib/api/tasks";
+import { parseApiDate } from "@/lib/utils";
 
 export function TasksProgressCard() {
   const { open } = useSidebar();
@@ -17,7 +18,11 @@ export function TasksProgressCard() {
     async function load() {
       try {
         const data = await listTasks(apiFetch);
-        setTasks(data);
+        // A task scheduled to start later has nothing to count yet; folding its
+        // 0% into the total would pull the recruiter's progress down before
+        // the window has even opened.
+        const now = new Date();
+        setTasks(data.filter((t) => parseApiDate(t.start_date) <= now));
       } catch (err) {
         console.error(err);
       } finally {
