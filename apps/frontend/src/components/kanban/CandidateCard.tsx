@@ -3,7 +3,7 @@
 import { useRef, type KeyboardEvent, type MouseEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { IconFileText, IconGripVertical, IconSparkles } from "@tabler/icons-react";
+import { IconFileText, IconGripVertical, IconSparkles, IconUpload } from "@tabler/icons-react";
 import { isAbsoluteUrl } from "@/lib/api/candidates";
 import { cn } from "@/lib/utils";
 import type { PipelineCard } from "@/types";
@@ -15,6 +15,8 @@ interface Props {
   isClientBoard?: boolean;
   onCardClick?: (card: PipelineCard) => void;
   onStageChange?: (card: PipelineCard, newStage: string) => void;
+  /** Staff board only: the Offer letter button on a joined card. */
+  onOfferLetterClick?: (card: PipelineCard) => void;
 }
 
 function scoreColor(score: number | null): string {
@@ -90,6 +92,7 @@ export default function KanbanCard({
   isClientBoard = false,
   onCardClick,
   onStageChange,
+  onOfferLetterClick,
 }: Readonly<Props>) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: card.mapping_id,
@@ -111,6 +114,10 @@ export default function KanbanCard({
   // rather than stopped by a click handler on the grip, which made a bare
   // <div> interactive for the pointer only.
   const clickable = !!onCardClick && !isDragOverlay && !readOnly;
+  // A joined card on the staff board carries its own Offer letter button, so
+  // the plain link below would only repeat it.
+  const offerLetterButton =
+    card.stage === "joined" && !readOnly && !isClientBoard && !!onOfferLetterClick;
   const clickProps = clickable
     ? {
         onClick: (e: MouseEvent) => {
@@ -205,7 +212,7 @@ export default function KanbanCard({
             (it would 403), and the match score is agency-internal. */}
         {!readOnly && !isClientBoard && (
           <div className="flex items-center justify-between gap-2">
-            <div className="flex-1">
+            <div className="flex flex-1 flex-wrap items-center gap-1.5">
               {card.stage === "joined" && onStageChange && (
                 <button
                   type="button"
@@ -215,7 +222,37 @@ export default function KanbanCard({
                   }}
                   className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-[11px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 w-fit"
                 >
-                  Mark as Rejected
+                  Rejected
+                </button>
+              )}
+              {offerLetterButton && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOfferLetterClick?.(card);
+                  }}
+                  // One short label so it fits beside "Rejected" in a column;
+                  // the icon and colour say whether there is a letter yet.
+                  aria-label={card.offer_letter_url ? "Offer letter" : "Upload offer letter"}
+                  title={
+                    card.offer_letter_url
+                      ? "View or replace the offer letter"
+                      : "Upload offer letter"
+                  }
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-all flex items-center justify-center gap-1 w-fit",
+                    card.offer_letter_url
+                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                      : "bg-yellow/10 border-yellow/20 text-yellow hover:bg-yellow/20",
+                  )}
+                >
+                  {card.offer_letter_url ? (
+                    <IconFileText className="size-3 shrink-0" />
+                  ) : (
+                    <IconUpload className="size-3 shrink-0" />
+                  )}
+                  Offer letter
                 </button>
               )}
             </div>
@@ -234,7 +271,7 @@ export default function KanbanCard({
         )}
 
         <JoiningDetails card={card} />
-        <OfferLetterLink url={card.offer_letter_url} />
+        {!offerLetterButton && <OfferLetterLink url={card.offer_letter_url} />}
 
         {card.stage === "candidate_dropped" && card.dropped_notes && (
           <div className="flex flex-col gap-1">

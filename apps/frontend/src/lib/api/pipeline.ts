@@ -36,10 +36,11 @@ export async function uploadMappingOffer(mappingId: string, file: File): Promise
   }
 }
 
+/** `salaryOffered: null` leaves the stored salary as it is. */
 export async function setMappingJoiningDate(
   mappingId: string,
   joiningDate: string,
-  salaryOffered: number,
+  salaryOffered: number | null,
 ): Promise<void> {
   const res = await fetch(`${API_URL}/api/v1/pipeline/mappings/${mappingId}/joining-date`, {
     method: "PUT",
