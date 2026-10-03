@@ -17,7 +17,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from app.common.dtos.pagination import PaginationMeta
@@ -30,6 +32,7 @@ from app.modules.recruitment.schemas import (
     ClientOption,
     MapCandidateRequest,
     MapCandidateResponse,
+    MappedPreview,
     PositionApprovalRequest,
     PositionCreate,
     PositionFiltersResponse,
@@ -248,6 +251,63 @@ async def _get_or_404(scope: TenantScope, position_id: str) -> Position:
     return doc
 
 
+def _to_item(
+    doc: Position, *, mapped_count: int = 0, mapped_preview: list[MappedPreview] | None = None
+) -> PositionListItem:
+    """A single-position response, built from the stored document.
+
+    Create, detail, update and reopen used to each spell the response out by
+    hand, and each had drifted: salary, mumbai_area and approval_status were
+    missing from three of them and the assignee was always null. The page
+    merges a response over the row it already holds, so every gap blanked that
+    field on the card after an edit. Built from the document, a field added to
+    both Position and PositionListItem needs no change here.
+    """
+    data = doc.model_dump()
+    data.update(
+        id=str(doc.id),
+        client_id=str(doc.client_id),
+        assigned_employee_id=str(doc.assigned_employee_id) if doc.assigned_employee_id else None,
+        mapped_count=mapped_count,
+        mapped_preview=mapped_preview or [],
+    )
+    return PositionListItem.model_validate(data)
+
+
+class _MappedCandidateRef(BaseModel):
+    candidate_id: PydanticObjectId
+
+
+class _CandidateName(BaseModel):
+    id: PydanticObjectId = Field(alias="_id")
+    full_name: str | None = None
+
+
+async def _mapped_summary(
+    brand_id: PydanticObjectId, position_id: PydanticObjectId
+) -> tuple[int, list[MappedPreview]]:
+    """How many candidates are mapped, and the first three, as the list shows them.
+
+    Sending an empty preview from a single-position endpoint wiped the card's
+    avatars for the same reason as above.
+
+    Projected to the two fields it needs, like the list's own lookup. Loading
+    whole Candidate documents here meant one legacy row that no longer
+    validates against the model turned every edit of that position into a 500
+    — after the write had already landed.
+    """
+    query = {"brand_id": brand_id, "position_id": position_id}
+    count = await Mapping.find(query).count()
+    first = await Mapping.find(query).limit(3).project(_MappedCandidateRef).to_list()
+    ids = [m.candidate_id for m in first]
+    names = {
+        c.id: c.full_name
+        for c in await Candidate.find({"_id": {"$in": ids}}).project(_CandidateName).to_list()
+    }
+    preview = [MappedPreview(id=str(cid), full_name=names.get(cid) or "") for cid in ids]
+    return count, preview
+
+
 # ── Filters (static — must be registered before /{position_id}) ───────────────
 
 
@@ -436,31 +496,7 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
             position_id=str(doc.id), brand_id=str(viewer.brand_id), created_by_name=client_doc.name
         )
 
-    return PositionListItem(
-        id=str(doc.id),
-        code=doc.code,
-        client_id=str(doc.client_id),
-        client_name=doc.client_name,
-        role=doc.role,
-        department=doc.department,
-        salary=doc.salary,
-        mumbai_area=doc.mumbai_area,
-        city=doc.city,
-        train_line=doc.train_line,
-        seniority=doc.seniority,
-        status=doc.status,
-        total_seats=doc.total_seats,
-        filled_seats=doc.filled_seats,
-        remaining_seats=doc.remaining_seats,
-        mapped_count=0,
-        mapped_preview=[],
-        assigned_employee_id=None,
-        assigned_employee_name=None,
-        requirements=doc.requirements or [],
-        date_opened=doc.date_opened,
-        target_close=doc.target_close,
-        notes=doc.notes,
-    )
+    return _to_item(doc)
 
 
 # ── Detail ─────────────────────────────────────────────────────────────────────
@@ -469,32 +505,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
 @router.get("/{position_id}")
 async def get_position(viewer: _Viewer, position_id: str) -> PositionListItem:
     doc = await _get_or_404(viewer, position_id)
-    pos_oid = to_object_id(position_id, "position_id")
-    count = await Mapping.find({"position_id": pos_oid, "brand_id": viewer.brand_id}).count()
-
-    return PositionListItem(
-        id=str(doc.id),
-        code=doc.code,
-        client_id=str(doc.client_id),
-        client_name=doc.client_name,
-        role=doc.role,
-        department=doc.department,
-        city=doc.city,
-        train_line=doc.train_line,
-        seniority=doc.seniority,
-        status=doc.status,
-        total_seats=doc.total_seats,
-        filled_seats=doc.filled_seats,
-        remaining_seats=doc.remaining_seats,
-        mapped_count=count,
-        mapped_preview=[],
-        assigned_employee_id=None,
-        assigned_employee_name=None,
-        requirements=doc.requirements or [],
-        date_opened=doc.date_opened,
-        target_close=doc.target_close,
-        notes=doc.notes,
-    )
+    count, preview = await _mapped_summary(viewer.brand_id, doc.id)
+    return _to_item(doc, mapped_count=count, mapped_preview=preview)
 
 
 # ── Update ─────────────────────────────────────────────────────────────────────
@@ -505,64 +517,25 @@ async def update_position(
     tenant: _Tenant, position_id: str, data: PositionUpdate
 ) -> PositionListItem:
     doc = await _get_or_404(tenant, position_id)
-    update: dict = {}
 
-    if data.role is not None:
-        update["role"] = data.role
-    if data.department is not None:
-        update["department"] = data.department
-    if data.city is not None:
-        update["city"] = data.city
-    if data.train_line is not None:
-        update["train_line"] = data.train_line
-    if data.seniority is not None:
-        update["seniority"] = data.seniority
-    if data.requirements is not None:
-        update["requirements"] = data.requirements
-    if data.total_seats is not None:
-        update["total_seats"] = data.total_seats
-        # Recalculate remaining_seats
-        filled = doc.filled_seats or 0
-        update["remaining_seats"] = max(data.total_seats - filled, 0)
-    if data.status is not None:
-        update["status"] = data.status
-    if data.assigned_employee_id is not None:
-        emp_oid = to_object_id(data.assigned_employee_id, "assigned_employee_id")
-        update["assigned_employee_id"] = emp_oid if emp_oid else None
-    if data.target_close is not None:
-        update["target_close"] = data.target_close
-    if data.notes is not None:
-        update["notes"] = data.notes
+    # Exactly the fields the caller sent. This used to copy fields across one
+    # `if data.x is not None` at a time, which is how salary and mumbai_area
+    # came to be accepted and then silently dropped — nobody added them to the
+    # list — and why no optional field could ever be cleared.
+    update = data.model_dump(exclude_unset=True)
+
+    if "assigned_employee_id" in update:
+        update["assigned_employee_id"] = to_object_id(
+            update["assigned_employee_id"] or None, "assigned_employee_id"
+        )
+    if "total_seats" in update:
+        update["remaining_seats"] = max(update["total_seats"] - (doc.filled_seats or 0), 0)
 
     if update:
         await doc.set(update)
 
-    pos_oid = to_object_id(position_id, "position_id")
-    count = await Mapping.find({"position_id": pos_oid, "brand_id": tenant.brand_id}).count()
-
-    return PositionListItem(
-        id=str(doc.id),
-        code=doc.code,
-        client_id=str(doc.client_id),
-        client_name=doc.client_name,
-        role=doc.role,
-        department=doc.department,
-        city=doc.city,
-        train_line=doc.train_line,
-        seniority=doc.seniority,
-        status=doc.status,
-        total_seats=doc.total_seats,
-        filled_seats=doc.filled_seats,
-        remaining_seats=doc.remaining_seats,
-        mapped_count=count,
-        mapped_preview=[],
-        assigned_employee_id=None,
-        assigned_employee_name=None,
-        requirements=doc.requirements or [],
-        date_opened=doc.date_opened,
-        target_close=doc.target_close,
-        notes=doc.notes,
-    )
+    count, preview = await _mapped_summary(tenant.brand_id, doc.id)
+    return _to_item(doc, mapped_count=count, mapped_preview=preview)
 
 
 # ── Delete (soft) ──────────────────────────────────────────────────────────────
@@ -595,31 +568,8 @@ async def reopen_position(
     if doc.status == PositionStatus.open:
         raise HTTPException(status.HTTP_409_CONFLICT, "Position is already open")
     await doc.set({"status": PositionStatus.open})
-    pos_oid = to_object_id(position_id, "position_id")
-    count = await Mapping.find({"position_id": pos_oid, "brand_id": tenant.brand_id}).count()
-    return PositionListItem(
-        id=str(doc.id),
-        code=doc.code,
-        client_id=str(doc.client_id),
-        client_name=doc.client_name,
-        role=doc.role,
-        department=doc.department,
-        city=doc.city,
-        train_line=doc.train_line,
-        seniority=doc.seniority,
-        status=PositionStatus.open,
-        total_seats=doc.total_seats,
-        filled_seats=doc.filled_seats,
-        remaining_seats=doc.remaining_seats,
-        mapped_count=count,
-        mapped_preview=[],
-        assigned_employee_id=None,
-        assigned_employee_name=None,
-        requirements=doc.requirements or [],
-        date_opened=doc.date_opened,
-        target_close=doc.target_close,
-        notes=doc.notes,
-    )
+    count, preview = await _mapped_summary(tenant.brand_id, doc.id)
+    return _to_item(doc, mapped_count=count, mapped_preview=preview)
 
 
 # ── Top candidates (with match scoring) ────────────────────────────────────────
