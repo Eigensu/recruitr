@@ -55,7 +55,6 @@ const STRING_FILTER_KEYS = [
   "city",
   "gender",
   "role",
-  "salary",
   "department",
   "establishment_tag",
   "communication",
@@ -72,6 +71,9 @@ export function buildCandidateQuery(filters: Partial<CandidateFilters>): string 
   if (filters.tags) filters.tags.forEach((t) => params.append("tags", t));
   if (filters.has_resume !== undefined) params.set("has_resume", String(filters.has_resume));
   if (filters.has_cv_link !== undefined) params.set("has_cv_link", String(filters.has_cv_link));
+  // Checked against undefined, not truthiness: 0 is a real lower bound.
+  if (filters.salary_min !== undefined) params.set("salary_min", String(filters.salary_min));
+  if (filters.salary_max !== undefined) params.set("salary_max", String(filters.salary_max));
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));
   const qs = params.toString();
