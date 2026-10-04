@@ -114,6 +114,11 @@ async def map_candidate(
     # Referral ledger — fire-and-forget, same rule as gamification
     await _open_referral_record(mapping)
 
+    # Intake SLA — the recruiter's clock stops at their first mapping of an
+    # inbound lead. Same rule again: a metrics stamp must never roll back the
+    # mapping that prompted it.
+    await _close_intake_lead(mapping)
+
     if scope.is_recruiter:
         await log_activity(
             scope=scope,
@@ -270,6 +275,24 @@ async def _credit_gamification(scope: TenantScope, mapping: Mapping, stage: Pipe
             scope.employee_id,
             mapping.id,
             stage.value,
+        )
+
+
+async def _close_intake_lead(mapping: Mapping) -> None:
+    """Stop the intake SLA clock if this candidate arrived as an inbound lead.
+
+    Best-effort, like the two writes beside it: the mapping is the real work,
+    and losing the timestamp that measures it must not lose the work.
+    """
+    try:
+        from app.modules.recruitment.service.intake_service import close_lead_for_mapping
+
+        await close_lead_for_mapping(mapping)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Intake lead close failed for mapping=%s candidate=%s",
+            mapping.id,
+            mapping.candidate_id,
         )
 
 

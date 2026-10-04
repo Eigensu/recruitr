@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -7,6 +7,21 @@ from app.modules.recruitment.enums.activity_type import ActivityType
 from app.modules.recruitment.models import TaskAssignmentType
 
 DATE_ERROR_MSG = "due_date must be greater than or equal to start_date"
+START_IN_PAST_MSG = "start_date can't be earlier than today"
+
+
+def starts_in_the_past(start_date: datetime) -> bool:
+    """True if a checklist would start before the creator's today.
+
+    The browser sends the start as local midnight, and nothing here knows the
+    creator's timezone — so "before today" can't be a calendar comparison: IST
+    midnight is 18:30Z the *previous* UTC day, and comparing against UTC
+    midnight would refuse every task created in India for its own today. The
+    creator's today began less than 24 hours ago in any zone, and yesterday
+    began at least 24 hours ago, which is the whole test.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    return normalize_datetime(start_date) <= now - timedelta(hours=24)
 
 
 class TaskCreate(BaseModel):
@@ -21,6 +36,8 @@ class TaskCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_dates(self) -> "TaskCreate":
+        if starts_in_the_past(self.start_date):
+            raise ValueError(START_IN_PAST_MSG)
         if self.start_date and self.due_date:
             s_dt = normalize_datetime(self.start_date)
             d_dt = normalize_datetime(self.due_date)

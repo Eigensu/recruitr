@@ -15,6 +15,7 @@ actually exposes.
 """
 
 from app.core.main import app
+from app.modules.dashboard.routers.referee_router import router as referee_router
 
 PREFIX = "/api/v1/referee-dashboard"
 
@@ -41,6 +42,19 @@ def test_the_portal_exposes_no_write_endpoint():
     assert operations, "No referee routes found — route discovery is broken, not the portal"
     for path, methods in operations.items():
         assert methods <= {"GET"}, f"{path} accepts {sorted(methods)}"
+
+
+def test_no_route_on_the_router_hides_from_the_schema_to_write():
+    """The OpenAPI view above omits `include_in_schema=False` routes.
+
+    Reading the router itself covers those, so a hidden write endpoint cannot
+    slip past the schema-based check.
+    """
+    routes = [route for route in referee_router.routes if hasattr(route, "methods")]
+
+    assert routes, "No routes on the referee router — discovery is broken, not the portal"
+    for route in routes:
+        assert route.methods <= {"GET", "HEAD"}, f"{route.path} accepts {sorted(route.methods)}"
 
 
 def test_the_referee_stage_move_is_gone():

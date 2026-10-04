@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from app.common.utils.object_id import to_object_id
+from app.modules.auth.models import NON_RECRUITER_ROLES
 from app.modules.dashboard.models import CandidateMapping, DashboardEmployee, JobOpening
 from app.modules.leaderboard.enums import ActivityTypeEnum, BadgeTypeEnum
 from app.modules.leaderboard.models import (
@@ -144,7 +145,7 @@ async def fetch_rankings(
             {
                 "$match": {
                     "employee.is_active": True,
-                    "employee.role": {"$nin": ["admin", "maintainer"]},
+                    "employee.role": {"$nin": list(NON_RECRUITER_ROLES)},
                 }
             },
         ]
@@ -254,7 +255,7 @@ async def fetch_rankings(
         {
             "$match": {
                 "employee.is_active": True,
-                "employee.role": {"$nin": ["admin", "maintainer"]},
+                "employee.role": {"$nin": list(NON_RECRUITER_ROLES)},
             }
         },
     ]
@@ -338,7 +339,7 @@ async def fetch_recruiter(employee_id: str) -> dict[str, Any] | None:
     return {"recruiter": items[0], "rank_percentile": round((1 - ((rank - 1) / total)) * 100, 2)}
 
 
-_RECRUITER_ONLY = {"role": {"$nin": ["admin", "maintainer"]}}
+_RECRUITER_ONLY = {"role": {"$nin": list(NON_RECRUITER_ROLES)}}
 
 
 async def fetch_monthly_growth() -> dict[str, Any]:
