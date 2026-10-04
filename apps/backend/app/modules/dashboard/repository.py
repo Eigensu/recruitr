@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from app.common.utils.object_id import to_object_id
+from app.modules.auth.models import NON_RECRUITER_ROLES
 from app.modules.dashboard.schemas import DashboardFilters
 from app.modules.recruitment.enums import (
     INACTIVE_STAGES,
@@ -691,7 +692,7 @@ async def fetch_employees(filters: DashboardFilters, page: int, limit: int) -> d
     employee_match: dict[str, Any] = {
         "brand_id": brand_oid,
         "is_active": True,
-        "role": {"$nin": ["admin", "maintainer"]},
+        "role": {"$nin": list(NON_RECRUITER_ROLES)},
     }
     employee_oid = to_object_id(filters.employee_id, "employee_id")
     if employee_oid is not None:

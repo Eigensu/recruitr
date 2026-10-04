@@ -290,7 +290,7 @@ export default function GlobalPipelineBoard({
   }
 
   function handleCardClick(card: PipelineCard) {
-    if (card.stage === "joined") openJoinedCard(card);
+    if (card.stage === "joined") void openJoinedCard(card);
     else setSelectedMappingId(card.mapping_id);
   }
 

@@ -5,7 +5,7 @@
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-export type UserRole = "employee" | "maintainer" | "admin" | "client" | "referee";
+export type UserRole = "employee" | "maintainer" | "admin" | "client" | "referee" | "telecaller";
 
 export interface UserInfo {
   user_id: string;
@@ -106,7 +106,8 @@ export interface ApiPosition {
   client_id: string;
   client_name: string;
   role: string;
-  salary: number | null;
+  /** Free text, e.g. "30k - 40k" — the API has always sent a string. */
+  salary: string | null;
   department: string | null;
   mumbai_area: string | null;
   city: string | null;
@@ -122,6 +123,9 @@ export interface ApiPosition {
   assigned_employee_id: string | null;
   assigned_employee_name: string | null;
   requirements: string[];
+  /** Minimum on the candidate scales; null means no minimum. */
+  communication: string | null;
+  brand_experience: string | null;
   date_opened: string;
   target_close: string | null;
   notes: string | null;
@@ -188,7 +192,9 @@ export interface CandidateFilters {
   city?: string;
   gender?: string;
   role?: string;
-  salary?: string;
+  /** Current salary bounds, ₹ per month, inclusive. */
+  salary_min?: number;
+  salary_max?: number;
   department?: string;
   establishment_tag?: string;
   communication?: string;
@@ -303,6 +309,7 @@ export interface RecruiterOption {
 export type CandidateEventType =
   | "created"
   | "applied"
+  | "screened"
   | "approved"
   | "declined"
   | "mapped"

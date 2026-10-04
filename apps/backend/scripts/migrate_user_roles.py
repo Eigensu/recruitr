@@ -14,7 +14,10 @@ Background: the User model replaced the boolean `is_admin` flag with a
 
   3. (promote) Manually sets a user's role by email. Role assignment is
      intentionally manual — there is no self-serve UI — so use this to make
-     yourself an admin or to appoint a maintainer (CEO) account.
+     yourself an admin, to appoint a maintainer (CEO) account, or to make a
+     staff member a telecaller. The new role reaches their Employee record on
+     their next sign-in (ensure_employee_for_user syncs it), or immediately
+     via sync-employee-roles.
 
 Usage:
     cd apps/backend
@@ -28,6 +31,7 @@ Usage:
     # 3. Promote a specific account
     python -m scripts.migrate_user_roles promote --email you@example.com --role admin
     python -m scripts.migrate_user_roles promote --email ceo@example.com --role maintainer
+    python -m scripts.migrate_user_roles promote --email caller@example.com --role telecaller
 
     # List users and their roles
     python -m scripts.migrate_user_roles list
@@ -42,8 +46,11 @@ from datetime import UTC, datetime
 from pymongo import AsyncMongoClient
 
 from app.core.config import settings
+from app.modules.auth.models import NON_RECRUITER_ROLES
 
-_VALID_ROLES = {"employee", "maintainer", "admin"}
+# client and referee are deliberately absent: those roles come from an
+# authorization grant (ClientUser / RefereeUser), not from promotion.
+_VALID_ROLES = {"employee", "maintainer", "admin", "telecaller"}
 
 
 async def _migrate(db) -> None:
@@ -86,7 +93,9 @@ async def _promote(db, email: str, role: str) -> None:
 
 async def _sync_employee_roles(db) -> None:
     """Copy User.role → Employee.role for every employee, joined by email."""
-    users = await db["users"].find({"role": {"$in": ["admin", "maintainer"]}}).to_list(length=None)
+    users = (
+        await db["users"].find({"role": {"$in": list(NON_RECRUITER_ROLES)}}).to_list(length=None)
+    )
 
     updated = 0
     for user in users:

@@ -313,10 +313,10 @@ export function ExpectedSalaryField(
 ) {
   return (
     <TextField
-      label="Expected Salary *"
+      label="Expected Salary (₹/month) *"
       type="number"
       min="0"
-      placeholder="e.g. 85000"
+      placeholder="e.g. 35000"
       {...props}
     />
   );
@@ -326,7 +326,13 @@ export function CurrentSalaryField(
   props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
 ) {
   return (
-    <TextField label="Current Salary *" type="number" min="0" placeholder="e.g. 60000" {...props} />
+    <TextField
+      label="Current Salary (₹/month) *"
+      type="number"
+      min="0"
+      placeholder="e.g. 30000"
+      {...props}
+    />
   );
 }
 
@@ -627,6 +633,7 @@ export function StructuredCandidateTags({
   form,
   errors,
   onChange,
+  hideBrandExperience = false,
 }: Readonly<{
   form: {
     communication?: string;
@@ -638,6 +645,8 @@ export function StructuredCandidateTags({
   };
   errors?: Record<string, string>;
   onChange: (updates: Partial<typeof form>) => void;
+  /** The telecaller's accept form leaves brand experience to the recruiter. */
+  hideBrandExperience?: boolean;
 }>) {
   return (
     <>
@@ -651,11 +660,13 @@ export function StructuredCandidateTags({
         onChange={(v) => onChange({ education: v })}
         error={errors?.education}
       />
-      <BrandExperienceField
-        value={form.brand_experience || ""}
-        onChange={(v) => onChange({ brand_experience: v })}
-        error={errors?.brand_experience}
-      />
+      {!hideBrandExperience && (
+        <BrandExperienceField
+          value={form.brand_experience || ""}
+          onChange={(v) => onChange({ brand_experience: v })}
+          error={errors?.brand_experience}
+        />
+      )}
       <DepartmentField
         value={form.department || ""}
         onChange={(dept) => onChange({ department: dept, specialization: "" })}

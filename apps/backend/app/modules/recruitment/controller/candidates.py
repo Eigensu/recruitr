@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated
 
 import httpx
 from fastapi import (
@@ -59,6 +59,7 @@ from app.modules.recruitment.schemas import (
     ResumeConfirm,
     TenantScope,
 )
+from app.modules.recruitment.service.intake_service import open_lead_for
 from app.modules.recruitment.utils.cv_access import can_view_cv, mask_cv_rows
 from app.modules.storage.service import extract_text_from_file
 
@@ -364,7 +365,12 @@ async def list_candidates(
     city: Annotated[str | None, Query()] = None,
     gender: Annotated[str | None, Query()] = None,
     role: Annotated[str | None, Query()] = None,
-    salary: Annotated[Literal["lt3", "3to5", "5to8", "8to12", "gt12"] | None, Query()] = None,
+    salary_min: Annotated[
+        float | None, Query(ge=0, description="Current salary, ₹ per month, inclusive")
+    ] = None,
+    salary_max: Annotated[
+        float | None, Query(ge=0, description="Current salary, ₹ per month, inclusive")
+    ] = None,
     department: Annotated[str | None, Query()] = None,
     establishment_tag: Annotated[str | None, Query()] = None,
     communication: Annotated[str | None, Query()] = None,
@@ -411,7 +417,12 @@ async def list_candidates(
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
 
-    if source:
+    if source == "internal":
+        # Candidates created before `source` existed have none; the pipeline
+        # already reads those as internal ($ifNull), so the Internal tab must too
+        # or it and the External tab would not add up to the full directory.
+        and_clauses.append({"$or": [{"source": "internal"}, {"source": None}]})
+    elif source:
         match["source"] = source
 
     if source_channel:
@@ -450,24 +461,21 @@ async def list_candidates(
     if education:
         match["education"] = education
 
-    if salary:
+    if salary_min is not None and salary_max is not None and salary_min > salary_max:
+        # A literal, not status.HTTP_422_…: inside this function `status` is the
+        # candidate-status query parameter, which shadows the fastapi module.
+        raise HTTPException(422, "salary_min can't be above salary_max")
+    if salary_min is not None or salary_max is not None:
         # Convert salary field to double safely. If missing/invalid, resolves to null.
         num_salary = {
             "$convert": {"input": "$salary", "to": "double", "onError": None, "onNull": None}
         }
-
-        if salary == "lt3":
-            cond = {"$lt": [num_salary, 300000]}
-        elif salary == "3to5":
-            cond = {"$and": [{"$gte": [num_salary, 300000]}, {"$lt": [num_salary, 500000]}]}
-        elif salary == "5to8":
-            cond = {"$and": [{"$gte": [num_salary, 500000]}, {"$lt": [num_salary, 800000]}]}
-        elif salary == "8to12":
-            cond = {"$and": [{"$gte": [num_salary, 800000]}, {"$lt": [num_salary, 1200000]}]}
-        elif salary == "gt12":
-            cond = {"$gte": [num_salary, 1200000]}
-
-        and_clauses.append({"$expr": {"$and": [{"$ne": [num_salary, None]}, cond]}})
+        conds: list[dict] = [{"$ne": [num_salary, None]}]
+        if salary_min is not None:
+            conds.append({"$gte": [num_salary, salary_min]})
+        if salary_max is not None:
+            conds.append({"$lte": [num_salary, salary_max]})
+        and_clauses.append({"$expr": {"$and": conds}})
 
     if tags:
         match["tags"] = {"$in": tags}
@@ -761,6 +769,10 @@ async def update_candidate(
     update: dict = data.model_dump(exclude_unset=True, exclude_none=True)
     if "skills" in update:
         update["skills_normalized"] = [s.lower() for s in update["skills"]]
+    # Inserts are stamped by Candidate.stamp_salary_period; an edit that writes
+    # a salary is entered under the same per-month convention.
+    if "salary" in update or "expected_salary" in update:
+        update["salary_period"] = "monthly"
     # A viewer who cannot see the CV was served nulls for these, so accepting
     # them back would let an edit of any other field quietly clear another
     # recruiter's CV off the record.
@@ -788,11 +800,27 @@ async def delete_candidate(
 # ── Status Update ─────────────────────────────────────────────────────────────
 
 
+async def _refuse_if_in_intake(tenant: TenantScope, doc: Candidate) -> None:
+    """Keep the External tab from deciding a candidate the lead flow owns.
+
+    Approving here would put them in the directory with no telecaller details
+    and no team, and leave their lead waiting in someone's queue for a call
+    that no longer matters. Candidates with no open lead — applications from
+    before the flow existed — can still be decided here.
+    """
+    if await open_lead_for(tenant.brand_id, doc.id):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This candidate is being screened on the Leads page. Decide them there.",
+        )
+
+
 @router.post("/{candidate_id}/approve")
 async def approve_candidate(
     tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    await _refuse_if_in_intake(tenant, doc)
     await doc.set({"status": CandidateStatus.approved})
     await record_candidate_event(
         scope=tenant,
@@ -808,6 +836,7 @@ async def reject_candidate(
     tenant: _Tenant, candidate_id: str, _: Annotated[object, Depends(require_maintainer)]
 ) -> CandidateResponse:
     doc = await _get_or_404(tenant, candidate_id)
+    await _refuse_if_in_intake(tenant, doc)
     await doc.set({"status": CandidateStatus.rejected})
     await record_candidate_event(
         scope=tenant,

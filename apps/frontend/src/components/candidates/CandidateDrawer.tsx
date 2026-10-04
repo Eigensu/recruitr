@@ -32,6 +32,7 @@ import { getCandidateHistory, getCandidateMappings, resolveCvRef } from "@/lib/a
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { getRoleCatalog } from "@/lib/api/positions";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
+import { formatMonthlySalary } from "@/lib/utils";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 import {
   AgeField,
@@ -468,13 +469,13 @@ function ViewBody({
             {candidate.salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>Current: {candidate.salary.toLocaleString()}</span>
+                <span>Current: {formatMonthlySalary(candidate.salary)}</span>
               </div>
             )}
             {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>Expected: {candidate.expected_salary.toLocaleString()}</span>
+                <span>Expected: {formatMonthlySalary(candidate.expected_salary)}</span>
               </div>
             )}
           </section>
@@ -723,6 +724,8 @@ function eventSummary(event: ApiCandidateHistoryEvent): string {
       return "Applied through the public form";
     case "created":
       return "Added to the talent pool";
+    case "screened":
+      return "Screened by a telecaller";
     case "approved":
       return "Application approved";
     case "declined":
