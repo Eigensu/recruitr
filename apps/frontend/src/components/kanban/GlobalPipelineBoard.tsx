@@ -196,6 +196,10 @@ export default function GlobalPipelineBoard({
     setBoard(null);
     setSelectedMappingId(null);
     setOfferLetterMappingId(null);
+    // Close the candidate drawer, and drop a joined card still loading into it,
+    // so neither outlives the board it was opened from.
+    openingRef.current = null;
+    setViewing(null);
     setView(next);
   }
 

@@ -32,6 +32,7 @@ from datetime import datetime
 # Resolve the backend package regardless of where this is invoked from.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from bson import ObjectId  # noqa: E402
 from pymongo import MongoClient  # noqa: E402
 
 from app.core.config import settings  # noqa: E402
@@ -41,15 +42,22 @@ JOINED = "joined"
 _MISSING = {"stage": JOINED, "$or": [{"joined_at": None}, {"joined_at": {"$exists": False}}]}
 
 
+def history_joined_at(mapping: dict) -> datetime | None:
+    """The newest dated Joined event in the mapping's own history, if any."""
+    for event in reversed(mapping.get("history") or []):
+        if event.get("stage") == JOINED and event.get("at"):
+            return event["at"]
+    return None
+
+
 def joined_at_for(mapping: dict, logged_at: datetime | None) -> tuple[datetime | None, str]:
     """When `mapping` was moved to Joined, and which source said so.
 
     `logged_at` is the newest candidate_events entry for this candidate and
     position moving to joined, if any. Pure, so it is tested without a database.
     """
-    for event in reversed(mapping.get("history") or []):
-        if event.get("stage") == JOINED and event.get("at"):
-            return event["at"], "history"
+    if when := history_joined_at(mapping):
+        return when, "history"
     if logged_at:
         return logged_at, "candidate_events"
     if mapping.get("updated_at"):
@@ -57,23 +65,27 @@ def joined_at_for(mapping: dict, logged_at: datetime | None) -> tuple[datetime |
     return None, "none"
 
 
-def plan(db) -> tuple[list[tuple], list[dict]]:
-    """(planned, unexplained): what would be written, and rows with no date at all. Reads only."""
+def plan(db) -> tuple[list[tuple], list[ObjectId]]:
+    """(planned, unexplained): what would be written, and ids of rows with no date. Reads only."""
     planned: list[tuple] = []
-    unexplained: list[dict] = []
+    unexplained: list[ObjectId] = []
     fields = {"history": 1, "updated_at": 1, "candidate_id": 1, "position_id": 1}
     for m in db.candidate_mappings.find(_MISSING, fields):
-        event = db.candidate_events.find_one(
-            {
-                "candidate_id": m.get("candidate_id"),
-                "position_id": m.get("position_id"),
-                "to_stage": JOINED,
-            },
-            sort=[("at", -1)],
-        )
+        # The event log is only a fallback, so a mapping whose own history has
+        # the date costs no second query.
+        event = None
+        if history_joined_at(m) is None:
+            event = db.candidate_events.find_one(
+                {
+                    "candidate_id": m.get("candidate_id"),
+                    "position_id": m.get("position_id"),
+                    "to_stage": JOINED,
+                },
+                sort=[("at", -1)],
+            )
         when, source = joined_at_for(m, event.get("at") if event else None)
         if when is None:
-            unexplained.append(m)
+            unexplained.append(m["_id"])
         else:
             planned.append((m["_id"], when, source))
     return planned, unexplained
@@ -116,8 +128,8 @@ def main() -> int:
         print(f"      from {source:20s}: {n}")
     if unexplained:
         print(f"  no date anywhere, left alone : {len(unexplained)}")
-        for m in unexplained:
-            print(f"      {m['_id']}")
+        for oid in unexplained:
+            print(f"      {oid}")
 
     if not planned:
         print("\nNothing to write.")
