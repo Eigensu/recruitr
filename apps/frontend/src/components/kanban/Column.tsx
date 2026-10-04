@@ -40,6 +40,7 @@ interface Props {
   isClientBoard?: boolean;
   onCardClick?: (card: PipelineCard) => void;
   onStageChange?: (card: PipelineCard, newStage: string) => void;
+  onOfferLetterClick?: (card: PipelineCard) => void;
 }
 
 export default function KanbanColumn({
@@ -51,6 +52,7 @@ export default function KanbanColumn({
   isClientBoard,
   onCardClick,
   onStageChange,
+  onOfferLetterClick,
 }: Readonly<Props>) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage,
@@ -101,6 +103,7 @@ export default function KanbanColumn({
             isClientBoard={isClientBoard}
             onCardClick={onCardClick}
             onStageChange={onStageChange}
+            onOfferLetterClick={onOfferLetterClick}
           />
         ))}
         {cards.length === 0 && (
