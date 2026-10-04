@@ -32,6 +32,7 @@ import { getCandidateHistory, getCandidateMappings, resolveCvRef } from "@/lib/a
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { getRoleCatalog } from "@/lib/api/positions";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
+import { formatMonthlySalary } from "@/lib/utils";
 import { getAvatarPalette, getInitials } from "./CandidateCard";
 import {
   AgeField,
@@ -65,6 +66,9 @@ interface CandidateDrawerProps {
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
+  /** Shown above the candidate's details (view mode only): what the drawer
+   *  was opened from, e.g. the joining details of a placement on the board. */
+  topSection?: React.ReactNode;
 }
 
 export default function CandidateDrawer({
@@ -74,6 +78,7 @@ export default function CandidateDrawer({
   isMaintainer,
   onApprove,
   onReject,
+  topSection,
 }: Readonly<CandidateDrawerProps>) {
   const apiFetch = useApiFetch();
   const [mappings, setMappings] = useState<ApiCandidateMappingItem[]>([]);
@@ -163,6 +168,7 @@ export default function CandidateDrawer({
               isMaintainer={isMaintainer}
               onApprove={onApprove}
               onReject={onReject}
+              topSection={topSection}
             />
           </motion.div>
         </>
@@ -182,6 +188,7 @@ function DrawerInner({
   isMaintainer,
   onApprove,
   onReject,
+  topSection,
 }: Readonly<{
   candidate: ApiCandidate;
   onClose: () => void;
@@ -193,6 +200,7 @@ function DrawerInner({
   isMaintainer?: boolean;
   onApprove?: (id: string) => Promise<void>;
   onReject?: (id: string) => Promise<void>;
+  topSection?: React.ReactNode;
 }>) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -341,6 +349,7 @@ function DrawerInner({
           loadingHistory={loadingHistory}
           showReviewHint={canDecide}
           onEdit={() => setIsEditing(true)}
+          topSection={topSection}
         />
       )}
 
@@ -414,6 +423,7 @@ function ViewBody({
   loadingHistory,
   showReviewHint,
   onEdit,
+  topSection,
 }: Readonly<{
   candidate: ApiCandidate;
   loadingMappings: boolean;
@@ -422,9 +432,11 @@ function ViewBody({
   loadingHistory: boolean;
   showReviewHint?: boolean;
   onEdit: () => void;
+  topSection?: React.ReactNode;
 }>) {
   return (
     <div className="flex-1 overflow-y-auto dashboard-scrollbar p-6 space-y-6 bg-(--color-canvas)">
+      {topSection}
       {showReviewHint && (
         <section className="rounded-xl border border-yellow/20 bg-yellow/5 p-4">
           <p className="text-xs leading-relaxed text-text-secondary">
@@ -457,13 +469,13 @@ function ViewBody({
             {candidate.salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>Current: {candidate.salary.toLocaleString()}</span>
+                <span>Current: {formatMonthlySalary(candidate.salary)}</span>
               </div>
             )}
             {candidate.expected_salary != null && (
               <div className="flex items-center gap-2 text-sm text-text-muted">
                 <IconCurrencyDollar className="size-3.5 shrink-0 opacity-60" />
-                <span>Expected: {candidate.expected_salary.toLocaleString()}</span>
+                <span>Expected: {formatMonthlySalary(candidate.expected_salary)}</span>
               </div>
             )}
           </section>
@@ -712,6 +724,8 @@ function eventSummary(event: ApiCandidateHistoryEvent): string {
       return "Applied through the public form";
     case "created":
       return "Added to the talent pool";
+    case "screened":
+      return "Screened by a telecaller";
     case "approved":
       return "Application approved";
     case "declined":

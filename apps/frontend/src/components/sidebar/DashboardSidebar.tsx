@@ -15,6 +15,7 @@ import {
 import {
   NAV_CONFIG,
   REFEREE_NAV_CONFIG,
+  TELECALLER_NAV_CONFIG,
   isNavItemActive,
   type NavItemConfig,
 } from "@/components/sidebar/nav-config";
@@ -216,17 +217,23 @@ export default function DashboardSidebar({ user }: { readonly user: UserInfo | n
   const [open, setOpen] = useState(false);
 
   const isReferee = user?.role === "referee";
+  const isTelecaller = user?.role === "telecaller";
   const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
   const isClient = user?.role === "client";
 
-  const visibleConfigs: NavItemConfig[] = isReferee
-    ? REFEREE_NAV_CONFIG
-    : NAV_CONFIG.filter((item) => {
-        if (item.maintainerOnly && !isMaintainer) return false;
-        if (isClient && item.hideForClient) return false;
-        if (!isClient && item.clientOnly) return false;
-        return true;
-      });
+  let visibleConfigs: NavItemConfig[];
+  if (isReferee) {
+    visibleConfigs = REFEREE_NAV_CONFIG;
+  } else if (isTelecaller) {
+    visibleConfigs = TELECALLER_NAV_CONFIG;
+  } else {
+    visibleConfigs = NAV_CONFIG.filter((item) => {
+      if (item.maintainerOnly && !isMaintainer) return false;
+      if (isClient && item.hideForClient) return false;
+      if (!isClient && item.clientOnly) return false;
+      return true;
+    });
+  }
 
   return (
     <>
@@ -252,7 +259,8 @@ export default function DashboardSidebar({ user }: { readonly user: UserInfo | n
 
           {/* Bottom: onboarding + theme toggle + user */}
           <div className="flex flex-col">
-            {!isReferee && <TasksProgressCard />}
+            {/* Reads /api/v1/tasks, which refuses both roles. */}
+            {!isReferee && !isTelecaller && <TasksProgressCard />}
 
             <div className="mt-4 flex flex-col pt-2">
               <ThemeToggleRow />

@@ -1,4 +1,4 @@
-# Test-only dependencies. Not installed into the Docker image — see requirements.txt
+# Test and lint dependencies. Not installed into the Docker image — see requirements.txt
 # for what ships.
 #
 # These exist so `uv run pytest` resolves pytest from the project venv. Without
@@ -9,6 +9,11 @@
 # between them.
 #
 #   uv pip install -r requirements.txt -r requirements-dev.txt
+#
+# CI installs requirements-dev.lock instead: the same set resolved to exact,
+# hash-pinned versions for the Linux runner. After changing this file or
+# requirements.txt, regenerate it with the command at the top of the lock (add
+# `--upgrade` to pick up new releases) and commit both.
 
 -r requirements.txt
 
@@ -16,3 +21,6 @@ pytest>=8.3.4
 # <0.25: 0.25 changed the default fixture loop scope, which conftest.py's autouse
 # per-test database fixture depends on.
 pytest-asyncio>=0.24.0,<0.25
+# Pinned to a minor: `ruff format` output can change between minors, which would
+# fail CI's format check on code nobody touched.
+ruff>=0.12.11,<0.13
