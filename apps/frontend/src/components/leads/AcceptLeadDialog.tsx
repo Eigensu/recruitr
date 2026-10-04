@@ -38,11 +38,14 @@ import {
  * (`IntakeCandidateDetails`); this copy exists so a missing field is caught
  * before the round trip, on a handset, next to the field itself.
  */
+// Number("  ") is 0, so a whitespace-only field would pass as a real zero.
+const blankToUndefined = (v: unknown) => {
+  const s = typeof v === "string" ? v.trim() : v;
+  return s === "" || s === undefined ? undefined : Number(s);
+};
+
 const numberFrom = (message: string) =>
-  z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
-    z.number({ message }).min(0, "Must be 0 or more"),
-  );
+  z.preprocess(blankToUndefined, z.number({ message }).min(0, "Must be 0 or more"));
 
 const schema = z.object({
   full_name: z.string().min(1, "Name is required"),
@@ -59,13 +62,15 @@ const schema = z.object({
   area: z.string().optional(),
   gender: z.enum(["male", "female", "other"], { message: "Gender is required" }),
   age: z.preprocess(
-    (v) => (v === "" || v === undefined ? undefined : Number(v)),
+    blankToUndefined,
     z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
   ),
   expected_salary: numberFrom("Expected Salary is required"),
   salary: numberFrom("Current Salary is required"),
   notice_period: z.string().min(1, "Notice Period is required"),
-  cv_link: z.union([z.literal(""), z.string().url("Must be a valid URL")]).optional(),
+  cv_link: z
+    .union([z.literal(""), z.string().regex(/^https?:\/\//i, "Must be an http(s) link")])
+    .optional(),
 });
 
 type FormState = {
@@ -113,19 +118,29 @@ export default function AcceptLeadDialog({
   const apiFetch = useApiFetch();
   const [form, setForm] = useState<FormState | null>(null);
   const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
+  const [catalogFailed, setCatalogFailed] = useState(false);
   const [hasResume, setHasResume] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
     let cancelled = false;
     Promise.all([
       fetchLeadCandidate(apiFetch, lead.id),
-      fetchIntakeRoleCatalog(apiFetch).catch(() => ({})),
+      fetchIntakeRoleCatalog(apiFetch).catch(() => null),
     ])
       .then(([draft, catalog]) => {
         if (cancelled) return;
-        setRoleCatalog(catalog);
+        setRoleCatalog(catalog ?? {});
+        setCatalogFailed(catalog === null);
         setHasResume(draft.has_resume);
         setForm({
           full_name: str(draft.full_name),
@@ -313,6 +328,11 @@ export default function AcceptLeadDialog({
                 onOther={(current_role_other) => update({ current_role_other })}
                 error={errors.current_role}
               />
+              {catalogFailed && (
+                <p className="text-xs text-orange-400 sm:col-span-2">
+                  Could not load the role list. Close and reopen this form to retry, or pick Other.
+                </p>
+              )}
               <ExperienceYearsField
                 value={form.experience_years}
                 onChange={(experience_years) => update({ experience_years })}
