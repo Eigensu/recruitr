@@ -466,6 +466,8 @@ async def create_position(viewer: _Viewer, data: PositionCreate) -> PositionList
         train_line=data.train_line,
         seniority=Seniority(data.seniority),
         requirements=reqs,
+        communication=data.communication,
+        brand_experience=data.brand_experience,
         total_seats=data.total_seats,
         filled_seats=0,
         remaining_seats=data.total_seats,

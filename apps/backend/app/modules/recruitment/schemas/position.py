@@ -1,6 +1,7 @@
 """Position resource DTOs."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -9,6 +10,13 @@ from app.modules.recruitment.enums.department import Department
 from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 from app.modules.recruitment.enums.position_status import PositionStatus
 from app.modules.recruitment.enums.seniority import Seniority
+
+# The candidate scales, in ascending order. A position stores the minimum it will
+# accept on each; they must stay in step with COMMUNICATION_OPTIONS and
+# BRAND_EXPERIENCE_OPTIONS in the frontend's lib/constants/candidate.ts, which is
+# where every candidate value comes from.
+CommunicationLevel = Literal["Basic", "Good", "Excellent"]
+BrandExperienceLevel = Literal["Low", "Mid", "Premium"]
 
 
 class MappedPreview(BaseModel):
@@ -42,6 +50,8 @@ class PositionListItem(BaseModel):
     assigned_employee_id: str | None = None
     assigned_employee_name: str | None = None
     requirements: list[str] = Field(default_factory=list)
+    communication: str | None = None
+    brand_experience: str | None = None
     date_opened: datetime
     target_close: datetime | None = None
     notes: str | None = None
@@ -59,6 +69,8 @@ class PositionCreate(BaseModel):
     train_line: str | None = None
     seniority: str = "Mid"
     requirements: list[str] = Field(default_factory=list)
+    communication: CommunicationLevel | None = None
+    brand_experience: BrandExperienceLevel | None = None
     total_seats: int = Field(default=1, ge=1)
     date_opened: datetime | None = None
     target_close: datetime | None = None
@@ -114,6 +126,9 @@ class PositionUpdate(BaseModel):
     train_line: str | None = None
     seniority: Seniority | None = None
     requirements: list[str] | None = None
+    # Sent as null to clear the minimum; omitted to leave it as it is.
+    communication: CommunicationLevel | None = None
+    brand_experience: BrandExperienceLevel | None = None
     total_seats: int | None = Field(default=None, ge=0)
     status: PositionStatus | None = None
     assigned_employee_id: str | None = None
