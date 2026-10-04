@@ -370,6 +370,22 @@ function PositionCard({
             {position.city}
           </span>
         )}
+        {position.communication && (
+          <span
+            title="Minimum communication"
+            className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium"
+          >
+            Comm ≥ {position.communication}
+          </span>
+        )}
+        {position.brand_experience && (
+          <span
+            title="Minimum brand experience"
+            className="text-[10px] px-2 py-0.5 rounded-full bg-surface-2 border border-border text-text-secondary font-medium"
+          >
+            Brand ≥ {position.brand_experience}
+          </span>
+        )}
       </div>
 
       {/* Pipeline fill progress */}

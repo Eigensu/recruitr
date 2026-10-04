@@ -91,6 +91,18 @@ class IntakeLeadResponse(_UtcTimestamps):
     overdue: bool = False
 
 
+_REQUIRED_TEXT = (
+    "full_name",
+    "phone",
+    "communication",
+    "education",
+    "specialization",
+    "current_role",
+    "city",
+    "notice_period",
+)
+
+
 class IntakeCandidateDetails(BaseModel):
     """What a telecaller fills in on the call before accepting a lead.
 
@@ -102,30 +114,36 @@ class IntakeCandidateDetails(BaseModel):
     Source is not asked for at all: every lead here is external by definition.
     """
 
-    full_name: str = Field(..., min_length=1)
+    full_name: str = Field(..., min_length=1, max_length=200)
     # Not EmailStr: that rejects addresses the public form and the sheet ingest
     # already stored (reserved domains, for one), and a telecaller cannot
     # accept a lead over an email they never typed. Same shape check as ingest.
-    email: str | None = None
-    phone: str = Field(..., min_length=1)
-    communication: str = Field(..., min_length=1)
-    education: str = Field(..., min_length=1)
+    email: str | None = Field(default=None, max_length=254)
+    phone: str = Field(..., min_length=1, max_length=30)
+    communication: str = Field(..., min_length=1, max_length=100)
+    education: str = Field(..., min_length=1, max_length=200)
     department: Department
-    specialization: str = Field(..., min_length=1)
+    specialization: str = Field(..., min_length=1, max_length=200)
     establishment_tag: EstablishmentTag | None = None
-    current_role: str = Field(..., min_length=1)
+    current_role: str = Field(..., min_length=1, max_length=200)
     experience_years: float = Field(..., ge=0)
-    city: str = Field(..., min_length=1)
-    area: str | None = None
+    city: str = Field(..., min_length=1, max_length=100)
+    area: str | None = Field(default=None, max_length=100)
     gender: Gender
     age: int | None = Field(default=None, gt=0)
     expected_salary: float = Field(..., ge=0)
     salary: float = Field(..., ge=0)
-    notice_period: str = Field(..., min_length=1)
-    cv_link: str | None = None
+    notice_period: str = Field(..., min_length=1, max_length=100)
+    cv_link: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
     def _clean(self) -> IntakeCandidateDetails:
+        # Whitespace-only passes min_length, so trim before checking it is there.
+        for name in _REQUIRED_TEXT:
+            value = getattr(self, name).strip()
+            if not value:
+                raise ValueError(f"{name} is required")
+            setattr(self, name, value)
         if self.cv_link is not None:
             self.cv_link = self.cv_link.strip() or None
         if self.cv_link and not re.match(r"^https?://", self.cv_link, re.IGNORECASE):
