@@ -266,6 +266,7 @@ def _application(email: str = "rhea@applicant.test") -> dict[str, str]:
         "email": email,
         "phone": "+91 90000 11111",
         "source_channel": "LinkedIn",
+        "current_salary": "28000",  # ₹ per month; required on every external form
     }
 
 
