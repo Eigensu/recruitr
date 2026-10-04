@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.common.utils.object_id import to_object_id
-from app.core.dependencies import get_viewer
+from app.core.dependencies import get_inbox_viewer
 from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import NotificationKind
 from app.modules.recruitment.models import Notification
@@ -22,7 +22,7 @@ from app.modules.recruitment.schemas import TenantScope
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notifications"])
 
-_Viewer = Annotated[TenantScope, Depends(get_viewer)]
+_Viewer = Annotated[TenantScope, Depends(get_inbox_viewer)]
 _ERR_NOT_FOUND = "Notification not found"
 
 
@@ -58,6 +58,11 @@ def _scope_match(scope: TenantScope) -> dict[str, Any]:
     raised for them (client_id=None) — see Notification's own docstring for why
     the reminder job writes one row of each per stuck mapping.
 
+    A staff row may also be addressed to one person by employee_id. Recruiters
+    and management see brand-wide rows plus their own, never someone else's; a
+    telecaller sees only their own, since the brand-wide rows are pipeline
+    reminders about clients and positions the role cannot open.
+
     Never returns an _id key: mark_notification_read adds its own, and a
     restriction expressed on _id would be silently replaced by it.
     """
@@ -67,8 +72,14 @@ def _scope_match(scope: TenantScope) -> dict[str, Any]:
     elif scope.role == UserRole.referee:
         # Referees have no notifications currently.
         match["client_id"] = _REFEREE_NO_NOTIFICATIONS
+    elif scope.role == UserRole.telecaller:
+        match["client_id"] = None
+        match["employee_id"] = scope.employee_id
     else:
         match["client_id"] = None
+        # A null in $in also matches rows with no employee_id field at all, so
+        # every notification written before the field existed stays visible.
+        match["employee_id"] = {"$in": [None, scope.employee_id]}
     return match
 
 

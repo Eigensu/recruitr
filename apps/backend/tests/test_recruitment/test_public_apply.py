@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from app.core.dependencies import get_tenant, require_maintainer
 from app.core.main import app
 from app.modules.brands.models import Brand
-from app.modules.recruitment.models import Candidate
+from app.modules.recruitment.models import Candidate, IntakeLead
 from app.modules.recruitment.schemas import TenantScope
 
 _BRAND = PydanticObjectId()
@@ -96,6 +96,11 @@ async def test_pending_application_can_be_filled_in_then_approved(
     assert patched["salary"] == 60000
     # Reviewing must not approve by itself.
     assert patched["status"] == "PENDING"
+
+    # New applicants are screened on the Leads page (tests/test_intake/
+    # test_review.py). This is the path left for one who applied before that
+    # flow existed, and so has no lead: remove the one the form just opened.
+    await IntakeLead.find({"candidate_id": PydanticObjectId(cid)}).delete()
 
     res = await client.post(f"/api/v1/candidates/{cid}/approve")
     assert res.status_code == 200, res.text

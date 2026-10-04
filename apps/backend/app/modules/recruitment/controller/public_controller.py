@@ -33,6 +33,7 @@ from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
 from app.modules.recruitment.models import Candidate, RefereeUser
 from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import CandidateResponse, TenantScope
+from app.modules.recruitment.service.intake_service import open_lead_for_application
 from app.modules.recruitment.service.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
@@ -249,5 +250,14 @@ async def public_apply(
             else "Applied through the public form"
         ),
     )
+
+    # Every external applicant — referrals included — is screened by a
+    # telecaller before a recruiter sees them. Best-effort: the application is
+    # already saved, and if the lead cannot be opened the candidate is still
+    # PENDING in the External tab, where a maintainer can approve them by hand.
+    try:
+        await open_lead_for_application(doc)
+    except Exception:
+        _log.exception("Could not open an intake lead for applicant %s", doc.id)
 
     return CandidateResponse.from_document(doc)

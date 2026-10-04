@@ -14,6 +14,7 @@ class CandidateEventType(StrEnum):
 
     created = "created"  # added to the talent pool by a recruiter
     applied = "applied"  # arrived through the public application form
+    screened = "screened"  # a telecaller called them and filled their details in
     approved = "approved"  # application accepted into the directory
     declined = "declined"  # application turned away at review
     mapped = "mapped"  # put forward for a position
