@@ -139,6 +139,57 @@ class EmailService:
         )
         cls._send_email(to=email, subject=subject, body=body)
 
+    # Admin copies of the three client reminders above, so the team can chase
+    # a client who has gone quiet rather than waiting on them indefinitely.
+
+    @classmethod
+    def send_admin_client_action_reminder(
+        cls, email: str, candidate_name: str, position_code: str, client_name: str, portal_url: str
+    ) -> None:
+        """Tell an admin that a client has not reviewed a candidate for over 2 days."""
+        subject = f"Client follow-up needed: {client_name} has not reviewed {candidate_name}"
+        body = (
+            f"Hello,\n\n"
+            f"{html.escape(client_name)} has not reviewed {html.escape(candidate_name)} on position {html.escape(position_code)} "
+            f"in over 2 days.\n\n"
+            f"Please follow up with the client, or update the candidate's status on the pipeline:\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_admin_interview_followup(
+        cls, email: str, candidate_name: str, position_code: str, client_name: str, portal_url: str
+    ) -> None:
+        """Tell an admin that a client has not decided on an interviewed candidate for over 2 days."""
+        subject = f"Client follow-up needed: interview decision for {candidate_name}"
+        body = (
+            f"Hello,\n\n"
+            f"{html.escape(candidate_name)} was interviewed by {html.escape(client_name)} for position {html.escape(position_code)} "
+            f"over 2 days ago, and the client has not yet marked them Selected or Rejected.\n\n"
+            f"Please follow up with the client for their feedback:\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
+    @classmethod
+    def send_admin_offer_upload_reminder(
+        cls, email: str, candidate_name: str, position_code: str, client_name: str, portal_url: str
+    ) -> None:
+        """Tell an admin that a selected candidate has had no offer letter for over 2 days."""
+        subject = f"Client follow-up needed: offer letter pending for {candidate_name}"
+        body = (
+            f"Hello,\n\n"
+            f"{html.escape(candidate_name)} was selected by {html.escape(client_name)} for position {html.escape(position_code)} "
+            f"over 2 days ago, but no offer letter has been uploaded yet.\n\n"
+            f"Please follow up with the client to get the offer letter uploaded:\n"
+            f"{html.escape(portal_url)}\n\n"
+            f"Best,\nThe Binge Connect Team"
+        )
+        cls._send_email(to=email, subject=subject, body=body)
+
     @classmethod
     def send_new_position_notification(
         cls,

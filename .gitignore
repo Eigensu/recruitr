@@ -13,6 +13,11 @@ node_modules/
 .pnpm-store/
 .turbo/
 
+# ── Vercel ───────────────────────────────────────────────────────────────────
+# Written by `vercel pull` / `vercel build`, including a plaintext .env of the
+# project's environment variables.
+.vercel/
+
 # ── Next.js ──────────────────────────────────────────────────────────────────
 apps/frontend/.next/
 apps/frontend/tsconfig.tsbuildinfo

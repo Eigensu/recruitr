@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   IconAlertTriangle,
@@ -16,6 +16,9 @@ import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import ReassignDialog from "@/components/leads/ReassignDialog";
 import ReviewPanel from "@/components/leads/ReviewPanel";
+import CandidateDrawer from "@/components/candidates/CandidateDrawer";
+import { getCandidate } from "@/lib/api/candidates";
+import type { ApiCandidate } from "@/types";
 import {
   STATUS_LABELS,
   STATUS_STYLES,
@@ -77,6 +80,30 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
     recruiters: IntakeAssignee[];
   }>({ telecallers: [], recruiters: [] });
   const [reassigning, setReassigning] = useState<IntakeLead | null>(null);
+  const [viewing, setViewing] = useState<ApiCandidate | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const openingRef = useRef(0);
+
+  // Every lead is backed by a candidate record from the moment it is ingested,
+  // so the full profile is one fetch away — the same drawer the directory uses,
+  // rather than a second, thinner copy of it here. Each call takes a fresh
+  // token so only the newest request may write: keyed on the candidate id, a
+  // second click on the same lead would let the first response clear the
+  // spinner, or an earlier failure win over a later success.
+  async function openCandidate(lead: IntakeLead) {
+    const id = lead.candidate_id;
+    const token = ++openingRef.current;
+    setOpening(id);
+    try {
+      const candidate = await getCandidate(apiFetch, id);
+      if (openingRef.current === token) setViewing(candidate);
+    } catch (err) {
+      if (openingRef.current === token)
+        toast(apiErrorMessage(err, "Could not load this candidate."), "error");
+    } finally {
+      if (openingRef.current === token) setOpening(null);
+    }
+  }
 
   // Every filter change goes through this, which sets `loading` in the event
   // handler rather than in the effect below — setting it synchronously inside
@@ -199,7 +226,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
       </div>
 
       {tab === "review" ? (
-        <ReviewPanel onChanged={() => load()} />
+        <ReviewPanel onChanged={() => load()} onOpen={openCandidate} opening={opening} />
       ) : (
         <>
           {/* Filters */}
@@ -282,9 +309,27 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
                         lead.status === "pending_recruiter" ||
                         lead.status === "unassigned";
                       return (
-                        <tr key={lead.id} className="transition-colors hover:bg-canvas">
+                        <tr
+                          key={lead.id}
+                          onClick={() => void openCandidate(lead)}
+                          className="cursor-pointer transition-colors hover:bg-canvas"
+                        >
                           <td className="p-3">
-                            <div className="font-medium text-text-primary">{lead.full_name}</div>
+                            {/* The row is the click target; this button is what a
+                                keyboard reaches, so the drawer is not mouse-only. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void openCandidate(lead);
+                              }}
+                              className="inline-flex items-center gap-1.5 text-left font-medium text-text-primary hover:underline focus:outline-none focus-visible:underline"
+                            >
+                              {lead.full_name}
+                              {opening === lead.candidate_id && (
+                                <IconLoader2 className="size-3.5 animate-spin text-text-muted" />
+                              )}
+                            </button>
                             <div className="text-xs text-text-muted">
                               {lead.phone ?? "no number"}
                               {lead.city && ` · ${lead.city}`}
@@ -323,7 +368,10 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
                             {open && (
                               <button
                                 type="button"
-                                onClick={() => setReassigning(lead)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReassigning(lead);
+                                }}
                                 aria-label={`Reassign ${lead.full_name}`}
                                 className="rounded-lg border border-border p-1.5 text-text-muted transition-colors hover:text-text-primary"
                               >
@@ -372,6 +420,8 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           )}
         </>
       )}
+
+      <CandidateDrawer candidate={viewing} onClose={() => setViewing(null)} onUpdate={setViewing} />
 
       {reassigning && (
         <ReassignDialog
