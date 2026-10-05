@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.modules.recruitment.enums import (
     ActivityType,
     Decision,
+    Department,
     EducationLevel,
     PipelineStage,
     PositionStatus,
@@ -34,7 +35,9 @@ from app.modules.recruitment.enums import (
 
 # ── Repeated string constants ──────────────────────────────────────────────────
 
-_DEPT_FNB_SERVICE = "F&B - Service"
+# Enum members, not free text: Position.department is a BOH/Service/Corporate
+# enum, and the old "F&B - Service" strings left every seeded position unloadable.
+_DEPT_SERVICE = Department.service
 _EMAIL_PRIYA = "priya.nair@example.com"
 _EMAIL_KARAN = "karan.m@example.com"
 _EMAIL_SNEHA = "sneha.g@example.com"
@@ -117,7 +120,7 @@ _POSITIONS = [
     (
         "CLI-031",
         "Cafe Steward",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.junior,
         7,
         PositionStatus.open,
@@ -125,11 +128,11 @@ _POSITIONS = [
         None,
         1,
     ),
-    ("CLI-031", "Captain", _DEPT_FNB_SERVICE, Seniority.junior, 7, PositionStatus.open, 0, None, 2),
+    ("CLI-031", "Captain", _DEPT_SERVICE, Seniority.junior, 7, PositionStatus.open, 0, None, 2),
     (
         "CLI-026",
         "Captain",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.junior,
         0,
         PositionStatus.closed,
@@ -137,11 +140,11 @@ _POSITIONS = [
         None,
         1,
     ),
-    ("CLI-026", "Steward", _DEPT_FNB_SERVICE, Seniority.junior, 8, PositionStatus.open, 0, None, 2),
+    ("CLI-026", "Steward", _DEPT_SERVICE, Seniority.junior, 8, PositionStatus.open, 0, None, 2),
     (
         "CLI-026",
         "Bartender",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.junior,
         0,
         PositionStatus.closed,
@@ -149,12 +152,12 @@ _POSITIONS = [
         None,
         3,
     ),
-    ("CLI-001", "Steward", _DEPT_FNB_SERVICE, Seniority.junior, 5, PositionStatus.open, 1, None, 1),
-    ("CLI-001", "GRE", _DEPT_FNB_SERVICE, Seniority.junior, 3, PositionStatus.open, 1, None, 2),
+    ("CLI-001", "Steward", _DEPT_SERVICE, Seniority.junior, 5, PositionStatus.open, 1, None, 1),
+    ("CLI-001", "GRE", _DEPT_SERVICE, Seniority.junior, 3, PositionStatus.open, 1, None, 2),
     (
         "CLI-001",
         "Bartender",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.junior,
         3,
         PositionStatus.open,
@@ -162,12 +165,12 @@ _POSITIONS = [
         None,
         3,
     ),
-    ("CLI-014", "ARM", _DEPT_FNB_SERVICE, Seniority.mid, 3, PositionStatus.open, 2, None, 1),
-    ("CLI-014", "RM", _DEPT_FNB_SERVICE, Seniority.mid, 3, PositionStatus.open, 2, None, 2),
+    ("CLI-014", "ARM", _DEPT_SERVICE, Seniority.mid, 3, PositionStatus.open, 2, None, 1),
+    ("CLI-014", "RM", _DEPT_SERVICE, Seniority.mid, 3, PositionStatus.open, 2, None, 2),
     (
         "CLI-014",
         "Operations Head",
-        "Operations",
+        Department.corporate,
         Seniority.senior,
         1,
         PositionStatus.closed,
@@ -178,7 +181,7 @@ _POSITIONS = [
     (
         "CLI-014",
         "Social Media Manager",
-        "Marketing & PR",
+        Department.corporate,
         Seniority.junior,
         2,
         PositionStatus.open,
@@ -189,7 +192,7 @@ _POSITIONS = [
     (
         "CLI-016",
         "F&B Associate",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.junior,
         35,
         PositionStatus.open,
@@ -200,7 +203,7 @@ _POSITIONS = [
     (
         "CLI-071",
         "Sous Chef",
-        "F&B - Kitchen",
+        Department.boh,
         Seniority.senior,
         1,
         PositionStatus.open,
@@ -211,7 +214,7 @@ _POSITIONS = [
     (
         "CLI-071",
         "Outlet Supervisor",
-        _DEPT_FNB_SERVICE,
+        _DEPT_SERVICE,
         Seniority.mid,
         3,
         PositionStatus.open,
@@ -219,7 +222,7 @@ _POSITIONS = [
         None,
         2,
     ),
-    ("CLI-071", "Steward", _DEPT_FNB_SERVICE, Seniority.junior, 8, PositionStatus.open, 3, None, 3),
+    ("CLI-071", "Steward", _DEPT_SERVICE, Seniority.junior, 8, PositionStatus.open, 3, None, 3),
 ]
 
 # (name, email, phone, company, exp_years, city, area, gender, age, skills[], tags[])
@@ -538,7 +541,7 @@ async def _seed_positions(
                 "client_id": client_map[c_code],
                 "client_name": client_name_map[c_code],
                 "role": role,
-                "department": dept,
+                "department": dept.value,
                 "city": "Mumbai",
                 "train_line": train_line,
                 "seniority": seniority.value,
