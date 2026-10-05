@@ -89,6 +89,17 @@ jobs:
         working-directory: apps/backend
         run: pytest -q
 
+      # The container is started by hand above, so unlike a `services:` one the
+      # runner never prints its log. Without this, a Mongo that dies mid-suite
+      # shows up only as AutoReconnect in whichever test happened to be next.
+      - name: MongoDB diagnostics
+        if: failure()
+        run: |
+          docker inspect mongo --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}'
+          docker exec mongo sh -c 'ulimit -n; ulimit -u' || true
+          sudo dmesg | grep -iE 'out of memory|killed process' | tail -n 20 || true
+          docker logs --tail 200 mongo 2>&1
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
