@@ -184,7 +184,9 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         </div>
       )}
 
-      {!result && (
+      {/* Files picked during or after an upload are a new batch, so the button
+          comes back for them rather than leaving them pending with no action. */}
+      {(!result || pendingCount > 0) && (
         <button
           type="button"
           disabled={pendingCount === 0 || uploading}
