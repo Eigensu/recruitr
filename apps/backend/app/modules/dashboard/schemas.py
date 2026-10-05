@@ -140,7 +140,10 @@ class ClientAnalyticsItem(BaseModel):
 class CandidateAnalyticsItem(BaseModel):
     id: str
     full_name: str
-    email: str
+    # Optional because Candidate.email is: phone is the mandatory contact
+    # channel for a manually-added candidate, email is not. A required str
+    # here 500s the whole page on the first emailless candidate.
+    email: str | None = None
     phone: str | None = None
     previous_company: str | None = None
     experience_years: float = 0

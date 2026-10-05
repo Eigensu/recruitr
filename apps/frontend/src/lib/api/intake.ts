@@ -508,21 +508,13 @@ export interface NaukriImportResult {
   errors: string[];
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 /**
- * Multipart, so not through apiFetch: it sets a JSON content type, and an
- * upload needs the browser to write the multipart boundary itself. Errors are
- * thrown as the raw body, like apiFetch, so apiErrorMessage reads them the same.
+ * Uploads go through apiFetch like everything else, so an expired session
+ * redirects to sign-in and a 403 is a ForbiddenError; apiFetch leaves a
+ * FormData body's multipart Content-Type to the browser.
  */
-async function postMultipart<T>(path: string, body: FormData): Promise<T> {
-  const res = await fetch(`${API_URL}/api/v1/intake${path}`, {
-    method: "POST",
-    body,
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error((await res.text()) || `API error: ${res.status}`);
-  return res.json() as Promise<T>;
+function postMultipart<T>(apiFetch: ApiFetch, path: string, body: FormData): Promise<T> {
+  return apiFetch<T>(`/api/v1/intake${path}`, { method: "POST", body });
 }
 
 function oneFile(file: File): FormData {
@@ -532,13 +524,13 @@ function oneFile(file: File): FormData {
 }
 
 /** What importing this export would do, row by row. Writes nothing. */
-export function previewNaukriImport(file: File): Promise<NaukriPreview> {
-  return postMultipart<NaukriPreview>("/imports/naukri/preview", oneFile(file));
+export function previewNaukriImport(apiFetch: ApiFetch, file: File): Promise<NaukriPreview> {
+  return postMultipart<NaukriPreview>(apiFetch, "/imports/naukri/preview", oneFile(file));
 }
 
 /** Import the export: each new person becomes a lead in the telecaller queue. */
-export function importNaukri(file: File): Promise<NaukriImportResult> {
-  return postMultipart<NaukriImportResult>("/imports/naukri", oneFile(file));
+export function importNaukri(apiFetch: ApiFetch, file: File): Promise<NaukriImportResult> {
+  return postMultipart<NaukriImportResult>(apiFetch, "/imports/naukri", oneFile(file));
 }
 
 // ── Leads added by hand or from resumes ──────────────────────────────────────
@@ -591,18 +583,22 @@ export interface ManualLeadsResponse {
 }
 
 /** Read resumes into drafts for a person to check. Saves and uploads nothing. */
-export function parseResumes(files: File[]): Promise<ResumeLeadDraft[]> {
+export function parseResumes(apiFetch: ApiFetch, files: File[]): Promise<ResumeLeadDraft[]> {
   const body = new FormData();
   files.forEach((file) => body.append("files", file));
-  return postMultipart<ResumeLeadDraft[]>("/leads/parse-resumes", body);
+  return postMultipart<ResumeLeadDraft[]>(apiFetch, "/leads/parse-resumes", body);
 }
 
 /** Add checked drafts as leads; each succeeds or fails on its own. */
-export function addLeads(drafts: ManualLeadInput[], files: File[]): Promise<ManualLeadsResponse> {
+export function addLeads(
+  apiFetch: ApiFetch,
+  drafts: ManualLeadInput[],
+  files: File[],
+): Promise<ManualLeadsResponse> {
   const body = new FormData();
   body.append("drafts", JSON.stringify(drafts));
   files.forEach((file) => body.append("files", file));
-  return postMultipart<ManualLeadsResponse>("/leads/manual", body);
+  return postMultipart<ManualLeadsResponse>(apiFetch, "/leads/manual", body);
 }
 
 /** Leads the signed-in staff member put in themselves, newest first. */

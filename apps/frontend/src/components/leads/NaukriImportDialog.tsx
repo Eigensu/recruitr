@@ -10,7 +10,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { cn, formatMonthlySalary } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/api";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import {
   importNaukri,
   NAUKRI_OUTCOME_LABELS,
@@ -46,6 +46,7 @@ export default function NaukriImportDialog({
   readonly onClose: () => void;
   readonly onImported: () => void;
 }) {
+  const apiFetch = useApiFetch();
   const inputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>({ name: "pick" });
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export default function NaukriImportDialog({
     setBusy(true);
     setError(null);
     try {
-      setStep({ name: "preview", file, preview: await previewNaukriImport(file) });
+      setStep({ name: "preview", file, preview: await previewNaukriImport(apiFetch, file) });
     } catch (err) {
       setError(apiErrorMessage(err, "Could not read that file."));
     } finally {
@@ -70,7 +71,7 @@ export default function NaukriImportDialog({
     setBusy(true);
     setError(null);
     try {
-      const result = await importNaukri(step.file);
+      const result = await importNaukri(apiFetch, step.file);
       setStep({ name: "done", result });
       onImported();
     } catch (err) {

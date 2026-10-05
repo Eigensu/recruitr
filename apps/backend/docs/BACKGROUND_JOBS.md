@@ -18,8 +18,10 @@ server does not execute tasks — it only enqueues them.
 
 The three reminders each write **two** in-app notifications — one for the
 client and one brand-wide for staff (`client_id=None`) — so the team can act
-when the client is unavailable. That staff fallback is in
-`recruitment/tasks.py::_send_client_reminders`.
+when the client is unavailable. Each reminder is also emailed twice over: to
+the client's active users, and an admin-worded copy to every active `admin`
+employee in the brand (sent even when the mapping has no client). That staff
+fallback is in `recruitment/tasks.py::_send_client_reminders`.
 
 ## Failure mode when they are not running
 
@@ -54,11 +56,10 @@ for the scheduler, both at `--loglevel=info`.
 
 ## Provisioning them in production
 
-Production needs **two additional services** in the `Eigensu Recruitment`
-project, alongside `backend` and `redis`. Neither serves HTTP, so neither
-needs a domain or a `PORT`.
-
-For each of `worker` and `beat`:
+Production runs `worker` and `beat` as their own services in the `Recruitr`
+Railway project, alongside `backend` and `redis` (live since 2026-09-24).
+Neither serves HTTP, so neither needs a domain or a `PORT`. To recreate them,
+for each of `worker` and `beat`:
 
 1. **New Service → GitHub Repo → `Eigensu/recruitr`.**
 2. **Settings → Source:** set *Root Directory* to `/apps/backend`, and the
@@ -88,12 +89,12 @@ For each of `worker` and `beat`:
    RESEND_FROM_EMAIL=<an address on a domain verified in Resend>
    ```
 
-   **These two are not currently set on any Railway service.** Email is the
-   one part of the notification path that is not merely undeployed but
-   unconfigured: `EmailService._send_email` reads them with `os.getenv`, and
-   with no API key it logs a warning and returns. No mail is sent and nothing
-   raises, so a worker will happily run every reminder task to completion and
-   deliver nothing.
+   `worker` has these set: its logs show `Sending email via Resend: …`, the
+   line `EmailService._send_email` only reaches with an API key. Without one it
+   logs a warning and returns instead — no mail is sent and nothing raises, so
+   a worker will happily run every reminder task to completion and deliver
+   nothing. That warning in the `worker` logs is the thing to look for if mail
+   stops arriving.
 
    `RESEND_FROM_EMAIL` defaults to `onboarding@resend.dev`, Resend's sandbox
    sender, which only delivers to the Resend account owner's own address. It

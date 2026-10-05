@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from beanie import PydanticObjectId
 from beanie.operators import In
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,10 +21,12 @@ from app.modules.recruitment.models import (
 )
 from app.modules.recruitment.schemas.shared import TenantScope
 from app.modules.recruitment.schemas.tasks import (
+    START_IN_PAST_MSG,
     RecruiterProgress,
     TaskCreate,
     TaskResponse,
     TaskUpdatePayload,
+    starts_in_the_past,
 )
 
 router = APIRouter()
@@ -296,6 +300,18 @@ async def _apply_assignment_updates(
 def _apply_date_updates(update_data: dict, task: RecruitmentTask) -> None:
     if "start_date" in update_data:
         update_data["start_date"] = normalize_datetime(update_data["start_date"])
+        current_start = normalize_datetime(task.start_date)
+        if update_data["start_date"] != current_start:
+            # Once a task has started, recruiters have been working against its
+            # window; moving the start would silently add or drop activity they
+            # already counted on.
+            if current_start <= datetime.now(UTC).replace(tzinfo=None):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "start_date can't be changed once the task has started",
+                )
+            if starts_in_the_past(update_data["start_date"]):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, START_IN_PAST_MSG)
     if "due_date" in update_data:
         update_data["due_date"] = normalize_datetime(update_data["due_date"])
 
