@@ -16,11 +16,14 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.dependencies import get_tenant
 from app.core.main import app
+from app.modules.auth.models import UserRole
 from app.modules.recruitment.models import Candidate
 from app.modules.recruitment.schemas import TenantScope
 
 _BRAND = PydanticObjectId()
-TENANT = TenantScope(brand_id=_BRAND, employee_id=PydanticObjectId())
+# A maintainer: the brand-wide candidate list is closed to recruiters, which
+# is what TenantScope's default employee role with an employee_id means.
+TENANT = TenantScope(brand_id=_BRAND, employee_id=PydanticObjectId(), role=UserRole.maintainer)
 
 
 @pytest_asyncio.fixture
