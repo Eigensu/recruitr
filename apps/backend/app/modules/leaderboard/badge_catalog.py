@@ -128,8 +128,9 @@ async def upsert_badges(db: AsyncDatabase) -> int:
                     "xp_reward": xp_reward,
                     "condition_type": condition_type,
                     "condition_value": condition_value,
-                    "created_at": datetime.now(UTC),
-                }
+                },
+                # Only on insert: a re-run updates the definition, not when it was made.
+                "$setOnInsert": {"created_at": datetime.now(UTC)},
             },
             upsert=True,
         )
