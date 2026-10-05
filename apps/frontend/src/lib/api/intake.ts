@@ -508,33 +508,25 @@ export interface NaukriImportResult {
   errors: string[];
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
 /**
- * Multipart, so not through apiFetch: it sets a JSON content type, and an
- * upload needs the browser to write the multipart boundary itself. Errors are
- * thrown as the raw body, like apiFetch, so apiErrorMessage reads them the same.
+ * Uploads go through apiFetch like everything else, so an expired session
+ * redirects to sign-in and a 403 is a ForbiddenError; apiFetch leaves a
+ * FormData body's multipart Content-Type to the browser.
  */
-async function postNaukriFile<T>(path: string, file: File): Promise<T> {
+function postNaukriFile<T>(apiFetch: ApiFetch, path: string, file: File): Promise<T> {
   const body = new FormData();
   body.append("file", file);
-  const res = await fetch(`${API_URL}/api/v1/intake${path}`, {
-    method: "POST",
-    body,
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error((await res.text()) || `API error: ${res.status}`);
-  return res.json() as Promise<T>;
+  return apiFetch<T>(`/api/v1/intake${path}`, { method: "POST", body });
 }
 
 /** What importing this export would do, row by row. Writes nothing. */
-export function previewNaukriImport(file: File): Promise<NaukriPreview> {
-  return postNaukriFile<NaukriPreview>("/imports/naukri/preview", file);
+export function previewNaukriImport(apiFetch: ApiFetch, file: File): Promise<NaukriPreview> {
+  return postNaukriFile<NaukriPreview>(apiFetch, "/imports/naukri/preview", file);
 }
 
 /** Import the export: each new person becomes a lead in the telecaller queue. */
-export function importNaukri(file: File): Promise<NaukriImportResult> {
-  return postNaukriFile<NaukriImportResult>("/imports/naukri", file);
+export function importNaukri(apiFetch: ApiFetch, file: File): Promise<NaukriImportResult> {
+  return postNaukriFile<NaukriImportResult>(apiFetch, "/imports/naukri", file);
 }
 
 /** Leads the signed-in staff member put in themselves, newest first. */
