@@ -243,3 +243,14 @@ async def test_approving_a_position_saves_the_decision(api, position):
 
     assert res.status_code == 200, res.text
     assert (await Position.get(position.id)).approval_status == PositionApprovalStatus.rejected
+
+
+async def test_a_recruiter_cannot_approve_a_position(api, position):
+    # Only maintainers see the buttons; the endpoint has to hold the same line.
+    recruiter = SimpleNamespace(id=PydanticObjectId(), role=UserRole.employee, email="r@x.com")
+    app.dependency_overrides[get_current_user_doc] = lambda: recruiter
+
+    res = await api.put(f"{_URL}/{position.id}/approval", json={"approval_status": "rejected"})
+
+    assert res.status_code == 403
+    assert (await Position.get(position.id)).approval_status == PositionApprovalStatus.approved
