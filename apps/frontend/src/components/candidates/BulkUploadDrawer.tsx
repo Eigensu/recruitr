@@ -192,9 +192,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
           className="rounded-lg py-2 text-sm font-semibold disabled:opacity-50"
           style={{ background: "var(--color-yellow)", color: "#002348" }}
         >
-          {uploading
-            ? "Uploading…"
-            : `Upload ${pendingCount} file${pendingCount !== 1 ? "s" : ""}`}
+          {uploading ? "Uploading…" : `Upload ${pendingCount} file${pendingCount !== 1 ? "s" : ""}`}
         </button>
       )}
     </div>
