@@ -25,3 +25,4 @@ requests>=2.34.0 # not directly required, pinned by Snyk to avoid a vulnerabilit
 resend
 google-auth>=2.35.0  # service-account signing for the Google Sheets lead intake
 pyasn1>=0.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
+openpyxl>=3.1.0  # reads Naukri .xlsx exports for the lead import

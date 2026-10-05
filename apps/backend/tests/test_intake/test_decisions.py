@@ -134,6 +134,9 @@ async def test_accepting_saves_the_form_and_waits_for_review(http, caller):
     assert candidate.city == "Mumbai"
     assert candidate.notice_period == "30 days"
     assert candidate.expected_salary == 450000
+    # The form's salaries are per month; accept is an update, so it stamps the
+    # marker itself rather than relying on Candidate's Insert hook.
+    assert candidate.salary_period == "monthly"
     assert candidate.brand_experience is None
 
 

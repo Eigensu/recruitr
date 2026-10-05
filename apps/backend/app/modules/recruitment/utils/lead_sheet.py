@@ -291,6 +291,12 @@ class ParsedLead:
     is_organic: bool | None = None
     attribution: dict[str, str | None] = field(default_factory=dict)
     raw: dict[str, str] = field(default_factory=dict)
+    # Not in the Meta form; filled by richer sources such as a Naukri export.
+    previous_company: str | None = None
+    salary: float | None = None  # current, ₹ per month
+    expected_salary: float | None = None  # ₹ per month
+    age: int | None = None
+    notes: str | None = None
 
 
 @dataclass(frozen=True)

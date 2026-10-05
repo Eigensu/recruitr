@@ -47,6 +47,10 @@ from app.modules.recruitment.schemas.intake import (
     IntakeSourceStatus,
     IntakeSyncResponse,
     IntakeTeamOption,
+    NaukriImportResponse,
+    NaukriPreviewResponse,
+    NaukriPreviewRow,
+    NaukriSkippedRow,
 )
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
@@ -112,6 +116,10 @@ __all__ = [
     "IntakeSourceStatus",
     "IntakeSyncResponse",
     "IntakeTeamOption",
+    "NaukriImportResponse",
+    "NaukriPreviewResponse",
+    "NaukriPreviewRow",
+    "NaukriSkippedRow",
     "CandidateCreateStrict",
     "CandidateUpdate",
     "CandidateResponse",

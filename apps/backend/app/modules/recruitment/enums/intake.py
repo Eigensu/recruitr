@@ -10,6 +10,8 @@ class IntakeSource(StrEnum):
     # The public application form — including referee referrals, which arrive
     # through the same form carrying a connect code.
     public_form = "public_form"
+    # A Naukri candidate export (.xlsx) uploaded by a staff member.
+    naukri_import = "naukri_import"
 
 
 class IntakeLeadStatus(StrEnum):

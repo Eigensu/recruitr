@@ -104,6 +104,41 @@ async def test_list_returns_brand_candidates(client_a: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_stored_department_without_specialization_still_reads(
+    client_a: AsyncClient,
+) -> None:
+    """The specialization rule guards the forms, not the rows already stored.
+
+    An import infers a department from a job title and may have no
+    specialization to go with it. Re-checking the form's rule on the way out
+    500'd the whole candidate list over one such row.
+    """
+    doc = Candidate(
+        brand_id=_BRAND_A,
+        full_name="Imported Lead",
+        phone="9000000099",
+        department="Service",
+        status=CandidateStatus.pending,
+    )
+    await doc.insert()
+
+    listed = await client_a.get("/api/v1/candidates", params={"status": "PENDING"})
+    assert listed.status_code == 200, listed.text
+    [item] = listed.json()["items"]
+    assert (item["department"], item["specialization"]) == ("Service", None)
+    detail = await client_a.get(f"/api/v1/candidates/{doc.id}")
+    assert detail.status_code == 200, detail.text
+
+    # A person filling the form in is still held to it.
+    created = await client_a.post(
+        "/api/v1/candidates", json={**BASE_PAYLOAD, "specialization": None}
+    )
+    assert created.status_code == 422
+    edited = await client_a.patch(f"/api/v1/candidates/{doc.id}", json={"department": "BOH"})
+    assert edited.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_list_filter_by_source_treats_missing_source_as_internal(
     client_a: AsyncClient,
 ) -> None:
