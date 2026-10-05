@@ -10,7 +10,11 @@ import {
   getDashboardStageTiming,
 } from "@/lib/api/dashboard";
 import { getEmployeesForDashboard } from "@/lib/api/employees";
-import { buildPipelineStages, type RecruiterOption } from "@/lib/pipeline-funnel";
+import {
+  buildPipelineStages,
+  type ApiPipelineStage,
+  type RecruiterOption,
+} from "@/lib/pipeline-funnel";
 import type {
   ClientActivityRow,
   ClientProfileRow,
@@ -21,7 +25,6 @@ import type {
   DashboardTone,
   DashboardTotals,
   PipelineStage,
-  PipelineStageMetric,
   RecruiterDashboardStat,
   StageTimingSummary,
 } from "@/types/dashboard";
@@ -119,10 +122,16 @@ function toneFromActivity(activityType: string): DashboardTone {
   }
 }
 
-function buildKpis(totals: DashboardTotals, pipelineStages: PipelineStageMetric[]): DashboardKpi[] {
-  const sentToClient = pipelineStages.find((stage) => stage.stage === "sent_to_client")?.count ?? 0;
-  const offersAccepted = pipelineStages.find((stage) => stage.stage === "selected")?.count ?? 0;
-  const dropped = pipelineStages.find((stage) => stage.stage === "candidate_dropped")?.count ?? 0;
+/**
+ * Build dashboard KPIs from totals and all API stages, including "selected",
+ * which is omitted from the funnel rows but supplies the Offers Accepted count.
+ */
+function buildKpis(totals: DashboardTotals, apiStages: ApiPipelineStage[]): DashboardKpi[] {
+  /** Return the count for an API stage, defaulting to zero when it is absent. */
+  const countOf = (stage: string) => apiStages.find((s) => s.stage === stage)?.count ?? 0;
+  const sentToClient = countOf("sent_to_client");
+  const offersAccepted = countOf("selected");
+  const dropped = countOf("candidate_dropped");
 
   return [
     {
@@ -434,7 +443,7 @@ async function fetchDashboardDemoDataOnce(personal = false): Promise<DashboardDe
 
   return {
     ...EMPTY_DATA,
-    kpis: buildKpis(totals, pipelineStages),
+    kpis: buildKpis(totals, pipeline?.stages ?? []),
     pipelineStages,
     recruiters,
     clients,

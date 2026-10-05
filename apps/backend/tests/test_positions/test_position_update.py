@@ -234,3 +234,25 @@ async def test_a_legacy_candidate_row_does_not_break_the_response(api, position)
     for res in (detail, updated):
         assert res.status_code == 200, res.text
         assert [p["full_name"] for p in res.json()["mapped_preview"]] == ["Old Row"]
+
+
+async def test_approving_a_position_saves_the_decision(api, position):
+    """Verify a maintainer's rejection decision is saved successfully."""
+    # The endpoint called to_object_id without its field name, so every
+    # approve or reject 500'd before reading the position.
+    res = await api.put(f"{_URL}/{position.id}/approval", json={"approval_status": "rejected"})
+
+    assert res.status_code == 200, res.text
+    assert (await Position.get(position.id)).approval_status == PositionApprovalStatus.rejected
+
+
+async def test_a_recruiter_cannot_approve_a_position(api, position):
+    """Verify a recruiter's approval request is forbidden and leaves the position unchanged."""
+    # Only maintainers see the buttons; the endpoint has to hold the same line.
+    recruiter = SimpleNamespace(id=PydanticObjectId(), role=UserRole.employee, email="r@x.com")
+    app.dependency_overrides[get_current_user_doc] = lambda: recruiter
+
+    res = await api.put(f"{_URL}/{position.id}/approval", json={"approval_status": "rejected"})
+
+    assert res.status_code == 403
+    assert (await Position.get(position.id)).approval_status == PositionApprovalStatus.approved

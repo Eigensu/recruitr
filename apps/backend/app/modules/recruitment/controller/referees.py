@@ -135,7 +135,7 @@ async def remove_referee(tenant: _Tenant, user_id: str):
     and any foreign keys (e.g., if they referred a candidate).
     Sets is_active=False which prevents them signing in.
     """
-    oid = to_object_id(user_id)
+    oid = to_object_id(user_id, "user_id")
     if not oid:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_USER_NOT_FOUND)
 

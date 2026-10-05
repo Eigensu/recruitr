@@ -855,10 +855,12 @@ async def update_position_approval(
     id: str,
     req: PositionApprovalRequest,
     tenant: _Tenant,
+    _: Annotated[object, Depends(require_maintainer)],
 ):
+    """Approve or reject a position (maintainer/admin only, as the card's buttons are)."""
     from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 
-    pos_oid = to_object_id(id)
+    pos_oid = to_object_id(id, "position_id")
     doc = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
