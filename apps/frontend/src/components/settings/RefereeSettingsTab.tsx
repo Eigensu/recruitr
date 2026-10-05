@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useApiFetch, apiErrorMessage } from "@/lib/api";
+import { FormActions, RosterTable } from "@/components/settings/RosterTable";
 import { listReferees, inviteReferee, removeReferee, type RefereeUser } from "@/lib/api/referees";
 
 const USER_STATUS_STYLES: Record<string, string> = {
@@ -162,91 +163,67 @@ export default function RefereeSettingsTab() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsInviting(false)}
-                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-navy dark:bg-yellow dark:text-navy text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? "Provisioning..." : "Provision Referee"}
-                </button>
-              </div>
+              <FormActions
+                onCancel={() => setIsInviting(false)}
+                submitting={isSubmitting}
+                label="Provision Referee"
+                pendingLabel="Provisioning..."
+              />
             </form>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-surface-2 border-b border-border text-xs uppercase text-text-secondary font-semibold">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Last Login</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+        <RosterTable columns={["Name", "Email", "Status", "Last Login"]} withActions>
+          {users.map((u) => {
+            const status = refereeStatus(u);
+            return (
+              <tr key={u.id} className="hover:bg-surface-2/50 transition-colors">
+                <td className="px-4 py-3 font-medium text-text-primary">
+                  {u.name || <span className="text-text-muted italic">Unknown</span>}
+                </td>
+                <td className="px-4 py-3 text-text-secondary">{u.email}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${USER_STATUS_STYLES[status] ?? USER_STATUS_STYLES.Pending}`}
+                  >
+                    {status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-text-muted text-xs">
+                  {u.last_login
+                    ? new Date(u.last_login).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      })
+                    : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {u.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemove(u.id)}
+                      className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                      title="Revoke Access"
+                    >
+                      <IconTrash className="size-4" />
+                    </button>
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {users.map((u) => {
-                const status = refereeStatus(u);
-                return (
-                  <tr key={u.id} className="hover:bg-surface-2/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-text-primary">
-                      {u.name || <span className="text-text-muted italic">Unknown</span>}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${USER_STATUS_STYLES[status] ?? USER_STATUS_STYLES.Pending}`}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-text-muted text-xs">
-                      {u.last_login
-                        ? new Date(u.last_login).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: false,
-                          })
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {u.is_active && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemove(u.id)}
-                          className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
-                          title="Revoke Access"
-                        >
-                          <IconTrash className="size-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {users.length === 0 && !isInviting && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-text-muted">
-                    No referees provisioned yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            );
+          })}
+          {users.length === 0 && !isInviting && (
+            <tr>
+              <td colSpan={5} className="px-4 py-12 text-center text-text-muted">
+                No referees provisioned yet.
+              </td>
+            </tr>
+          )}
+        </RosterTable>
       </div>
     </div>
   );

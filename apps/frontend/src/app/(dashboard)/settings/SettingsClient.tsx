@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { IconUser, IconUsers } from "@tabler/icons-react";
 import TeamSettingsTab from "@/components/settings/TeamSettingsTab";
 import RefereeSettingsTab from "@/components/settings/RefereeSettingsTab";
+import TelecallerSettingsTab from "@/components/settings/TelecallerSettingsTab";
 import AutomationSettingsPanel from "@/components/settings/AutomationSettings";
 import NotificationPreferences from "@/components/settings/NotificationPreferences";
 import SettingsShell from "@/components/settings/SettingsShell";
@@ -20,7 +21,8 @@ export default function SettingsClient({ initialUser }: { initialUser: UserInfo 
 
   const user = initialUser;
   const userLoading = false;
-  const isMaintainer = user?.role === "maintainer" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
+  const isMaintainer = user?.role === "maintainer" || isAdmin;
 
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [teammates, setTeammates] = useState<EmployeeTeamInfo[]>([]);
@@ -60,7 +62,7 @@ export default function SettingsClient({ initialUser }: { initialUser: UserInfo 
 
   const TABS = [
     "Preferences",
-    ...(isMaintainer ? ["Team", "Referees", "Automation"] : []),
+    ...(isMaintainer ? ["Team", "Referees", "Telecallers", "Automation"] : []),
     "Checklist",
     "Account",
   ];
@@ -125,6 +127,7 @@ export default function SettingsClient({ initialUser }: { initialUser: UserInfo 
       )}
       {activeTab === "Team" && isMaintainer && <TeamSettingsTab />}
       {activeTab === "Referees" && isMaintainer && <RefereeSettingsTab />}
+      {activeTab === "Telecallers" && isMaintainer && <TelecallerSettingsTab isAdmin={isAdmin} />}
       {activeTab === "Automation" && isMaintainer && <AutomationSettingsPanel />}
       {activeTab === "Checklist" && <ChecklistSettingsTab user={user} />}
     </SettingsShell>

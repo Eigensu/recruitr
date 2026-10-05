@@ -304,6 +304,44 @@ export function fetchAssignees(
   return apiFetch("/api/v1/intake/assignees");
 }
 
+// ── Telecaller roster ─────────────────────────────────────────────────────────
+
+export interface IntakeTelecaller {
+  id: string;
+  name: string;
+  email: string;
+  /** False when paused: no new leads, and out of the reassign picker. */
+  is_active: boolean;
+  /** False until they sign up — provisioned ahead of their first sign-in. */
+  has_account: boolean;
+  open_leads: number;
+}
+
+export function fetchTelecallers(apiFetch: ApiFetch): Promise<IntakeTelecaller[]> {
+  return apiFetch("/api/v1/intake/telecallers");
+}
+
+export function addTelecaller(
+  apiFetch: ApiFetch,
+  payload: { email: string; name?: string | null },
+): Promise<IntakeTelecaller> {
+  return apiFetch("/api/v1/intake/telecallers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setTelecallerActive(
+  apiFetch: ApiFetch,
+  id: string,
+  isActive: boolean,
+): Promise<IntakeTelecaller> {
+  return apiFetch(`/api/v1/intake/telecallers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
 // ── Review ────────────────────────────────────────────────────────────────────
 
 export interface IntakeTeamOption {

@@ -153,7 +153,11 @@ Recruiter rosters (leaderboard, task progress, dashboard employee table, employe
 `NON_RECRUITER_ROLES` with `$nin`, never `role == "employee"` — `Employee` rows predating the role
 field have none, and an equality match would silently drop those recruiters. A new staff role that
 does not recruit goes into that tuple and nowhere else. Roles are assigned manually with
-`scripts/migrate_user_roles.py promote`; there is no role-changing endpoint.
+`scripts/migrate_user_roles.py promote`, except telecaller: admins add those from Settings →
+Telecallers (`POST /intake/telecallers`, `intake_service.provision_telecaller`), which writes both
+`User.role` and `Employee.role`. `promote` sets only the User, and the rosters read the Employee, so
+a telecaller promoted that way is invisible to lead assignment until their next sign-in. An address
+provisioned before it has an account signs up as a telecaller (`auth.access.provisioned_role`).
 
 New staff signups are gated by `AGENCY_EMAIL_DOMAINS` (comma-separated allowed email domains); an
 empty value blocks *new* signups but doesn't revoke existing accounts.

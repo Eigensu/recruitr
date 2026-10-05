@@ -14,10 +14,12 @@ Background: the User model replaced the boolean `is_admin` flag with a
 
   3. (promote) Manually sets a user's role by email. Role assignment is
      intentionally manual — there is no self-serve UI — so use this to make
-     yourself an admin, to appoint a maintainer (CEO) account, or to make a
-     staff member a telecaller. The new role reaches their Employee record on
-     their next sign-in (ensure_employee_for_user syncs it), or immediately
-     via sync-employee-roles.
+     yourself an admin, or to appoint a maintainer (CEO) account. The new role
+     reaches their Employee record on their next sign-in
+     (ensure_employee_for_user syncs it), or immediately via
+     sync-employee-roles. For telecallers prefer Settings → Telecallers, which
+     updates both records at once; until the Employee catches up, a telecaller
+     promoted here gets no leads and is missing from every telecaller picker.
 
 Usage:
     cd apps/backend
