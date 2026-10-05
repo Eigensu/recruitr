@@ -24,6 +24,7 @@ from app.modules.recruitment.enums import (
     IntakeSource,
 )
 from app.modules.recruitment.models import Candidate, Employee, IntakeLead
+from app.modules.recruitment.utils import naukri_sheet
 from app.modules.recruitment.utils.naukri_sheet import (
     NaukriFileError,
     parse_age,
@@ -190,6 +191,18 @@ def test_unusable_rows_are_reported_and_blank_rows_ignored():
 def test_a_file_without_the_required_columns_is_refused():
     with pytest.raises(NaukriFileError, match="Contact No."):
         parse_naukri_xlsx(_xlsx([["Candidate Name", "Email"], ["A", "a@x.com"]]))
+
+
+@pytest.mark.no_db
+def test_an_export_over_the_row_cap_is_refused(monkeypatch):
+    monkeypatch.setattr(naukri_sheet, "_MAX_ROWS", 3)
+    # The cap allows the header search window on top of _MAX_ROWS, so 13 rows
+    # in all fit (the header and 12 people) and a 14th is refused.
+    fits = [HEADER] + [_row(n, f"Person {n}", f"98198{n:05d}") for n in range(1, 13)]
+    assert len(parse_naukri_xlsx(_xlsx(fits)).leads) == 12
+
+    with pytest.raises(NaukriFileError, match="more than 3 rows"):
+        parse_naukri_xlsx(_xlsx([*fits, _row(13, "One Too Many", "9819800013")]))
 
 
 @pytest.mark.no_db

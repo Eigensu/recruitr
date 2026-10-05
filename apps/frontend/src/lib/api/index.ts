@@ -56,8 +56,10 @@ export function useApiFetch() {
 
   const apiFetch = useCallback(
     async <T>(path: string, options?: RequestInit): Promise<T> => {
+      // A FormData body needs the browser to write its own multipart
+      // Content-Type, boundary included, so only other bodies are sent as JSON.
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+        ...(options?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...(options?.headers as Record<string, string>),
       };
 

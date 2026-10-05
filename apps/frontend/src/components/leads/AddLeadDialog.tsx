@@ -12,7 +12,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/api";
+import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { addLeads, parseResumes, type ManualLeadInput } from "@/lib/api/intake";
 import { CITIES, DEPARTMENT_OPTIONS } from "@/lib/constants/candidate";
 import {
@@ -103,6 +103,7 @@ export default function AddLeadDialog({
   readonly onAdded: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const apiFetch = useApiFetch();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [rejected, setRejected] = useState<{ name: string; reason: string }[]>([]);
   const [reading, setReading] = useState(false);
@@ -132,7 +133,7 @@ export default function AddLeadDialog({
 
     setReading(true);
     try {
-      const parsed = await parseResumes(usable);
+      const parsed = await parseResumes(apiFetch, usable);
       const next: Draft[] = [];
       const unreadable: { name: string; reason: string }[] = [];
       parsed.forEach((draft, i) => {
@@ -212,7 +213,7 @@ export default function AddLeadDialog({
 
     setSubmitting(true);
     try {
-      const res = await addLeads(inputs, files);
+      const res = await addLeads(apiFetch, inputs, files);
       const byIndex = new Map(res.results.map((r) => [r.index, r]));
       setDrafts(
         checked

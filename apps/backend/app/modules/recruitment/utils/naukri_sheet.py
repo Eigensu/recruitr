@@ -46,6 +46,10 @@ SOURCE_CHANNEL = "Naukri"
 LOW_SALARY_WARNING = 5000
 
 _HEADER_SEARCH_ROWS = 10
+# Well above any export a recruiter downloads in one go. The upload cap counts
+# compressed bytes, not rows, and a few MB of xlsx can expand to far more rows
+# than that; every row is held in memory and then imported one lead at a time.
+_MAX_ROWS = 5000
 _LAKH = 100_000
 _CRORE = 10_000_000
 
@@ -236,7 +240,15 @@ def parse_naukri_xlsx(data: bytes) -> NaukriRows:
     except Exception as exc:  # openpyxl raises a zoo of types for a bad file
         raise NaukriFileError("Couldn't read this file. Upload the .xlsx Naukri exported.") from exc
     try:
-        rows = list(workbook.worksheets[0].iter_rows(values_only=True))
+        rows = []
+        # read_only streams rows, so stopping here never loads the rest.
+        for row in workbook.worksheets[0].iter_rows(values_only=True):
+            if len(rows) == _MAX_ROWS + _HEADER_SEARCH_ROWS:
+                raise NaukriFileError(
+                    f"This export has more than {_MAX_ROWS:,} rows. "
+                    "Export fewer candidates at a time."
+                )
+            rows.append(row)
     finally:
         workbook.close()
 
