@@ -23,6 +23,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from app.common.utils.seed_guard import assert_local_database
 from app.core.config import settings
+from app.modules.leaderboard.badge_catalog import upsert_badges
 from app.modules.recruitment.enums import (
     ActivityType,
     Decision,
@@ -760,6 +761,7 @@ async def seed(*, reset: bool = True) -> None:
     )
     await _seed_activities(db, brand_id, mapping_docs, position_docs, candidate_docs)
     await _seed_counters(db, brand_id, max_client_seq)
+    print(f"Badges: {await upsert_badges(db)}")
 
     await mongo.close()
     print("\n✓ Seed complete — run the app and log in with a seeded employee email to start.")

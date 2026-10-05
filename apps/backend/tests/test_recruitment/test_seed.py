@@ -8,6 +8,7 @@ collection back through its model catches the next field that drifts the same wa
 
 from app.core.config import settings
 from app.modules.brands.models import Brand
+from app.modules.leaderboard.models import Badge
 from app.modules.recruitment import seed as recruitment_seed
 from app.modules.recruitment.models import (
     ActivityLog,
@@ -32,6 +33,7 @@ _SEEDED = (
     Mapping,
     ActivityLog,
     Counter,
+    Badge,
 )
 
 
