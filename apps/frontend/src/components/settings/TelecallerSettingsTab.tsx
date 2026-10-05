@@ -5,6 +5,7 @@ import { IconLoader2, IconPlayerPause, IconPlayerPlay, IconPlus } from "@tabler/
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
+import { FormActions, RosterTable } from "@/components/settings/RosterTable";
 import {
   addTelecaller,
   fetchTelecallers,
@@ -199,96 +200,70 @@ export default function TelecallerSettingsTab({ isAdmin }: Readonly<{ isAdmin: b
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setAddError(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-navy dark:bg-yellow dark:text-navy text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? "Adding..." : "Add Telecaller"}
-                </button>
-              </div>
+              <FormActions
+                onCancel={() => {
+                  setIsAdding(false);
+                  setAddError(null);
+                }}
+                submitting={isSubmitting}
+                label="Add Telecaller"
+                pendingLabel="Adding..."
+              />
             </form>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-surface-2 border-b border-border text-xs uppercase text-text-secondary font-semibold">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Open leads</th>
-                {isAdmin && <th className="px-4 py-3 text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {people.map((person) => {
-                const status = telecallerStatus(person);
-                return (
-                  <tr key={person.id} className="hover:bg-surface-2/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-text-primary">{person.name}</td>
-                    <td className="px-4 py-3 text-text-secondary">{person.email}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${STATUS_STYLES[status]}`}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">{person.open_leads}</td>
-                    {isAdmin && (
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleToggle(person)}
-                          disabled={toggling === person.id}
-                          title={person.is_active ? "Pause — no new leads" : "Resume"}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50",
-                            person.is_active
-                              ? "text-text-muted hover:text-red-500 hover:bg-red-50"
-                              : "text-text-muted hover:text-green-600 hover:bg-green-50",
-                          )}
-                        >
-                          {toggling === person.id && (
-                            <IconLoader2 className="size-4 animate-spin" />
-                          )}
-                          {toggling !== person.id &&
-                            (person.is_active ? (
-                              <IconPlayerPause className="size-4" />
-                            ) : (
-                              <IconPlayerPlay className="size-4" />
-                            ))}
-                          {person.is_active ? "Pause" : "Resume"}
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-              {people.length === 0 && !isAdding && (
-                <tr>
-                  <td colSpan={columns} className="px-4 py-12 text-center text-text-muted">
-                    No telecallers yet.
+        <RosterTable columns={["Name", "Email", "Status", "Open leads"]} withActions={isAdmin}>
+          {people.map((person) => {
+            const status = telecallerStatus(person);
+            return (
+              <tr key={person.id} className="hover:bg-surface-2/50 transition-colors">
+                <td className="px-4 py-3 font-medium text-text-primary">{person.name}</td>
+                <td className="px-4 py-3 text-text-secondary">{person.email}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${STATUS_STYLES[status]}`}
+                  >
+                    {status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-text-secondary">{person.open_leads}</td>
+                {isAdmin && (
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleToggle(person)}
+                      disabled={toggling === person.id}
+                      title={person.is_active ? "Pause — no new leads" : "Resume"}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50",
+                        person.is_active
+                          ? "text-text-muted hover:text-red-500 hover:bg-red-50"
+                          : "text-text-muted hover:text-green-600 hover:bg-green-50",
+                      )}
+                    >
+                      {toggling === person.id && <IconLoader2 className="size-4 animate-spin" />}
+                      {toggling !== person.id &&
+                        (person.is_active ? (
+                          <IconPlayerPause className="size-4" />
+                        ) : (
+                          <IconPlayerPlay className="size-4" />
+                        ))}
+                      {person.is_active ? "Pause" : "Resume"}
+                    </button>
                   </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tr>
+            );
+          })}
+          {people.length === 0 && !isAdding && (
+            <tr>
+              <td colSpan={columns} className="px-4 py-12 text-center text-text-muted">
+                No telecallers yet.
+              </td>
+            </tr>
+          )}
+        </RosterTable>
       </div>
     </div>
   );
