@@ -11,6 +11,7 @@ import {
   NotificationBell,
   PanelSkeleton,
   PipelinePieChart,
+  QuickActions,
   RecruiterLineGraph,
 } from "@/components/dashboard";
 import ClientProfilesTable from "@/components/dashboard/organisms/ClientProfilesTable";
@@ -41,8 +42,11 @@ const QUICK_LINKS = [
   { href: "/company", label: "Company Profile", icon: IconBuilding },
 ] as const;
 
-async function LiveOverviewSection() {
-  const { kpis } = await getDashboardOverview();
+// `personal`: a recruiter's own dashboard. The API scopes every figure to what
+// they're part of; these sections only skip the team-wide extras.
+
+async function LiveOverviewSection({ personal }: Readonly<{ personal: boolean }>) {
+  const { kpis } = await getDashboardOverview(personal);
 
   return (
     <section
@@ -56,19 +60,21 @@ async function LiveOverviewSection() {
   );
 }
 
-async function AnalyticsSection() {
-  const { analytics } = await getDashboardAnalyticsData();
+async function AnalyticsSection({ personal }: Readonly<{ personal: boolean }>) {
+  const { analytics } = await getDashboardAnalyticsData(personal);
 
   return <AnalyticsWidgets widgets={analytics} />;
 }
 
-async function PipelinePieSection() {
+async function PipelinePieSection({ personal }: Readonly<{ personal: boolean }>) {
+  // No per-recruiter filter on a recruiter's own funnel: it's already theirs,
+  // and the roster it would list is everyone else.
   const [stages, recruiters] = await Promise.all([
-    getPipelineDashboardData(),
-    getRecruiterFilterOptions(),
+    getPipelineDashboardData(personal),
+    personal ? Promise.resolve([]) : getRecruiterFilterOptions(),
   ]);
 
-  return <PipelinePieChart stages={stages} recruiters={recruiters} />;
+  return <PipelinePieChart stages={stages} recruiters={recruiters} personal={personal} />;
 }
 
 async function RecruiterLineSection() {
@@ -225,6 +231,8 @@ async function ClientOverviewSection() {
 export default async function DashboardPage() {
   const user = await getUserServer();
   const isClient = user?.role === "client";
+  // Exactly "employee": maintainers and admins keep the team-wide dashboard.
+  const isRecruiter = user?.role === "employee";
 
   return (
     <div
@@ -239,7 +247,11 @@ export default async function DashboardPage() {
                 className="text-xs font-bold uppercase tracking-normal"
                 style={{ color: "var(--color-text-secondary)" }}
               >
-                {isClient ? "Client Portal" : "Recruitment command center"}
+                {isClient
+                  ? "Client Portal"
+                  : isRecruiter
+                    ? "Your work"
+                    : "Recruitment command center"}
               </p>
               <h1
                 className="mt-2 font-heading text-4xl leading-tight sm:text-5xl"
@@ -262,29 +274,40 @@ export default async function DashboardPage() {
           <>
             <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.9fr)]">
               <Suspense fallback={<PanelSkeleton rows={7} />}>
-                <PipelinePieSection />
+                <PipelinePieSection personal={isRecruiter} />
               </Suspense>
               <Suspense fallback={<KpiGridSkeleton />}>
-                <LiveOverviewSection />
+                <LiveOverviewSection personal={isRecruiter} />
               </Suspense>
             </div>
 
             <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
               <Suspense fallback={<PanelSkeleton rows={2} />}>
-                <AnalyticsSection />
+                <AnalyticsSection personal={isRecruiter} />
               </Suspense>
-              <Suspense fallback={<PanelSkeleton rows={5} />}>
-                <RecruiterLineSection />
-              </Suspense>
+              {/* A recruiter gets shortcuts where managers get the team line
+                  graph — that graph, the client profiles and the sourcing
+                  table are everyone's numbers, which a recruiter doesn't see. */}
+              {isRecruiter ? (
+                <QuickActions />
+              ) : (
+                <Suspense fallback={<PanelSkeleton rows={5} />}>
+                  <RecruiterLineSection />
+                </Suspense>
+              )}
             </div>
 
-            <Suspense fallback={<PanelSkeleton rows={8} />}>
-              <ClientProfilesSection />
-            </Suspense>
+            {!isRecruiter && (
+              <>
+                <Suspense fallback={<PanelSkeleton rows={8} />}>
+                  <ClientProfilesSection />
+                </Suspense>
 
-            <Suspense fallback={<PanelSkeleton rows={6} />}>
-              <SourcingAnalyticsSection />
-            </Suspense>
+                <Suspense fallback={<PanelSkeleton rows={6} />}>
+                  <SourcingAnalyticsSection />
+                </Suspense>
+              </>
+            )}
           </>
         )}
       </div>

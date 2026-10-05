@@ -10,11 +10,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import (
     CandidateStatus,
     IntakeDecision,
@@ -33,6 +30,7 @@ from app.modules.recruitment.service.intake_service import (
     as_utc,
     reassign_lead,
 )
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 
@@ -55,23 +53,8 @@ DETAILS = {
 ACCEPT = {"details": DETAILS}
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name, email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role)
 
 
 async def _lead(
@@ -115,7 +98,7 @@ async def test_accepting_saves_the_form_and_waits_for_review(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
         json={"details": DETAILS, "notes": "Keen, free from Monday"},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert res.status_code == 200
@@ -146,12 +129,12 @@ async def test_accept_requires_the_form(http, caller):
     incomplete = {key: value for key, value in DETAILS.items() if key != "notice_period"}
 
     missing = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json={}, headers=await auth_headers("caller")
     )
     partial = await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
         json={"details": incomplete},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert missing.status_code == 422
@@ -169,7 +152,7 @@ async def test_an_email_the_public_form_accepted_does_not_block_accept(http, cal
     ok = await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
         json={"details": {**DETAILS, "email": "Rhea@Example.TEST"}},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert ok.status_code == 200, ok.text
@@ -183,7 +166,7 @@ async def test_a_malformed_email_is_refused_in_plain_words(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
         json={"details": {**DETAILS, "email": "not an email"}},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert res.status_code == 422
@@ -197,7 +180,7 @@ async def test_brand_experience_is_not_the_telecallers_to_fill(http, caller):
     await http.post(
         f"/api/v1/intake/leads/{lead.id}/accept",
         json={"details": {**DETAILS, "brand_experience": "Taj"}},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert (await Candidate.get(lead.candidate_id)).brand_experience is None
@@ -209,7 +192,7 @@ async def test_acceptance_is_recorded_on_the_candidate_history(http, caller):
     lead = await _lead(telecaller=caller)
 
     await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await auth_headers("caller")
     )
 
     events = await CandidateEvent.find({"candidate_id": lead.candidate_id}).to_list()
@@ -226,7 +209,7 @@ async def test_rejecting_marks_the_candidate_but_keeps_the_record(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reject",
         json={"reason": IntakeRejectReason.not_interested.value, "notes": "Took another job"},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert res.status_code == 200
@@ -246,7 +229,7 @@ async def test_a_reason_is_optional(http, caller):
     lead = await _lead(telecaller=caller)
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=await auth_headers("caller")
     )
 
     assert res.status_code == 200
@@ -262,7 +245,7 @@ async def test_a_telecaller_cannot_action_someone_elses_lead(http, caller):
     lead = await _lead(telecaller=other)
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await auth_headers("caller")
     )
 
     assert res.status_code == 403
@@ -275,7 +258,7 @@ async def test_a_maintainer_may_action_any_lead(http, caller):
     lead = await _lead(telecaller=caller)
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=await _headers("boss")
+        f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=await auth_headers("boss")
     )
 
     assert res.status_code == 200
@@ -284,7 +267,7 @@ async def test_a_maintainer_may_action_any_lead(http, caller):
 @pytest.mark.asyncio
 async def test_a_lead_cannot_be_actioned_twice(http, caller):
     lead = await _lead(telecaller=caller)
-    headers = await _headers("caller")
+    headers = await auth_headers("caller")
 
     first = await http.post(f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=headers)
     second = await http.post(f"/api/v1/intake/leads/{lead.id}/reject", json={}, headers=headers)
@@ -299,7 +282,7 @@ async def test_a_lead_from_another_brand_is_not_found(http, caller):
     await lead.set({"brand_id": PydanticObjectId()})
 
     res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/accept", json=ACCEPT, headers=await auth_headers("caller")
     )
 
     assert res.status_code == 404
@@ -315,7 +298,7 @@ async def test_the_queue_shows_only_your_own_waiting_leads(http, caller):
     await _lead(telecaller=other)
     actioned = await _lead(telecaller=caller, status=IntakeLeadStatus.rejected)
 
-    res = await http.get("/api/v1/intake/leads/mine", headers=await _headers("caller"))
+    res = await http.get("/api/v1/intake/leads/mine", headers=await auth_headers("caller"))
 
     assert [row["id"] for row in res.json()] == [str(mine.id)]
     assert str(actioned.id) not in {row["id"] for row in res.json()}
@@ -327,7 +310,7 @@ async def test_the_queue_is_oldest_first(http, caller):
     newer = await _lead(telecaller=caller, assigned_at=now)
     older = await _lead(telecaller=caller, assigned_at=now - timedelta(days=1))
 
-    res = await http.get("/api/v1/intake/leads/mine", headers=await _headers("caller"))
+    res = await http.get("/api/v1/intake/leads/mine", headers=await auth_headers("caller"))
 
     # The oldest is the closest to breaching, so it is the one to call next.
     assert [row["id"] for row in res.json()] == [str(older.id), str(newer.id)]
@@ -337,7 +320,7 @@ async def test_the_queue_is_oldest_first(http, caller):
 async def test_the_queue_carries_the_phone_number(http, caller):
     await _lead(telecaller=caller)
 
-    res = await http.get("/api/v1/intake/leads/mine", headers=await _headers("caller"))
+    res = await http.get("/api/v1/intake/leads/mine", headers=await auth_headers("caller"))
 
     # The number is the point of the screen; a second fetch per row would be
     # a round-trip for every person in the list.
@@ -359,7 +342,7 @@ async def test_reassignment_restarts_the_clock_for_the_new_owner(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reassign",
         json={"employee_id": str(other.id)},
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     assert res.status_code == 200
@@ -397,7 +380,7 @@ async def test_a_telecaller_cannot_reassign(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reassign",
         json={"employee_id": str(other.id)},
-        headers=await _headers("caller"),
+        headers=await auth_headers("caller"),
     )
 
     assert res.status_code == 403
@@ -412,7 +395,7 @@ async def test_an_actioned_lead_cannot_be_reassigned(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reassign",
         json={"employee_id": str(other.id)},
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     assert res.status_code == 409
@@ -427,7 +410,7 @@ async def test_a_telecaller_lead_cannot_be_given_to_a_recruiter(http, caller):
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reassign",
         json={"employee_id": str(recruiter.id)},
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     assert res.status_code == 422
@@ -444,7 +427,7 @@ async def test_an_accepted_lead_with_no_recruiter_goes_to_a_recruiter_when_reass
     res = await http.post(
         f"/api/v1/intake/leads/{lead.id}/reassign",
         json={"employee_id": str(recruiter.id)},
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     assert res.status_code == 200
@@ -488,7 +471,9 @@ async def test_timestamps_leave_with_their_timezone(http, caller):
     """
     await _lead(telecaller=caller, assigned_at=datetime.now(UTC) - timedelta(hours=2))
 
-    row = (await http.get("/api/v1/intake/leads/mine", headers=await _headers("caller"))).json()[0]
+    row = (
+        await http.get("/api/v1/intake/leads/mine", headers=await auth_headers("caller"))
+    ).json()[0]
 
     for field in ("ingested_at", "telecaller_assigned_at"):
         parsed = datetime.fromisoformat(row[field])

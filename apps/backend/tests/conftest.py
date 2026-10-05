@@ -4,10 +4,12 @@ from collections.abc import AsyncGenerator
 
 import pytest_asyncio
 from beanie import init_beanie
+from httpx import ASGITransport, AsyncClient
 from pymongo import AsyncMongoClient
 
 from app.common.utils.seed_guard import assert_local_database
 from app.core.config import settings
+from app.core.main import app
 from app.modules.auth.models import User
 from app.modules.brands.models import Brand
 from app.modules.gamification.models import RecruiterProfile
@@ -106,3 +108,11 @@ async def init_test_db(request) -> AsyncGenerator[None, None]:
     yield
     await client.drop_database(test_db_name)
     await client.close()
+
+
+@pytest_asyncio.fixture
+async def http() -> AsyncGenerator[AsyncClient, None]:
+    """A client on the app with no dependency overrides, for tests that sign in
+    with real tokens (see tests/staff.py). A module's own `http` overrides it."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client

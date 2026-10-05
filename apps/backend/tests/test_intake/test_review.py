@@ -14,11 +14,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.brands.models import Brand
 from app.modules.recruitment.enums import (
     CandidateStatus,
@@ -36,33 +33,13 @@ from app.modules.recruitment.models import (
     Team,
 )
 from app.modules.recruitment.service.intake_service import close_lead_for_mapping
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole, *, team: Team | None = None) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(
-        brand_id=_BRAND,
-        name=name,
-        email=email,
-        role=role.value,
-        team_id=team.id if team else None,
-    )
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role, team_id=team.id if team else None)
 
 
 async def _team(name: str) -> Team:
@@ -98,7 +75,7 @@ async def _assign(http, leads, team, who="boss"):
     return await http.post(
         "/api/v1/intake/leads/assign-team",
         json={"lead_ids": [str(lead.id) for lead in leads], "team_id": str(team.id)},
-        headers=await _headers(who),
+        headers=await auth_headers(who),
     )
 
 
@@ -230,7 +207,7 @@ async def test_team_options_show_size_and_load(http, boss):
     await _staff("recruiter", UserRole.employee, team=team)
     await _assign(http, [await _reviewed_lead()], team)
 
-    res = await http.get("/api/v1/intake/teams", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/teams", headers=await auth_headers("boss"))
 
     rows = {row["name"]: row for row in res.json()}
     assert rows["North"]["recruiters"] == 1
@@ -243,7 +220,7 @@ async def test_the_review_list_is_the_lead_list_filtered(http, boss):
     waiting = await _reviewed_lead()
 
     res = await http.get(
-        "/api/v1/intake/leads?status=pending_review", headers=await _headers("boss")
+        "/api/v1/intake/leads?status=pending_review", headers=await auth_headers("boss")
     )
 
     assert [row["id"] for row in res.json()["items"]] == [str(waiting.id)]
@@ -298,8 +275,10 @@ async def test_the_external_tab_cannot_decide_a_candidate_in_screening(http, bra
     applied = await http.post("/api/v1/public/apply", data=_application())
     cid = applied.json()["id"]
 
-    approve = await http.post(f"/api/v1/candidates/{cid}/approve", headers=await _headers("boss"))
-    reject = await http.post(f"/api/v1/candidates/{cid}/reject", headers=await _headers("boss"))
+    approve = await http.post(
+        f"/api/v1/candidates/{cid}/approve", headers=await auth_headers("boss")
+    )
+    reject = await http.post(f"/api/v1/candidates/{cid}/reject", headers=await auth_headers("boss"))
 
     assert approve.status_code == 409
     assert reject.status_code == 409
@@ -332,10 +311,10 @@ async def test_a_telecaller_can_read_the_candidate_on_their_own_lead(http):
     await lead.insert()
 
     mine = await http.get(
-        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await auth_headers("caller")
     )
     theirs = await http.get(
-        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await _headers("other")
+        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await auth_headers("other")
     )
 
     assert mine.status_code == 200
@@ -350,7 +329,7 @@ async def test_a_telecaller_can_read_the_candidate_on_their_own_lead(http):
 async def test_a_telecaller_can_load_the_role_catalog(http):
     await _staff("caller", UserRole.telecaller)
 
-    res = await http.get("/api/v1/intake/role-catalog", headers=await _headers("caller"))
+    res = await http.get("/api/v1/intake/role-catalog", headers=await auth_headers("caller"))
 
     assert res.status_code == 200
     assert "Steward" in res.json()["Service"]
@@ -389,7 +368,7 @@ async def test_candidates_still_in_intake_are_not_suggested_or_mappable(http):
     await rejected.insert()
     approved = Candidate(brand_id=_BRAND, full_name="Ready", phone="2")
     await approved.insert()
-    headers = await _headers("recruiter")
+    headers = await auth_headers("recruiter")
 
     top = await http.get(f"/api/v1/positions/{position.id}/top-candidates", headers=headers)
     names = {row["full_name"] for row in top.json()}
@@ -423,7 +402,7 @@ async def test_an_applicant_nobody_can_screen_can_be_decided_from_the_external_t
     applied = await http.post("/api/v1/public/apply", data=_application())
     cid = applied.json()["id"]
 
-    res = await http.post(f"/api/v1/candidates/{cid}/reject", headers=await _headers("boss"))
+    res = await http.post(f"/api/v1/candidates/{cid}/reject", headers=await auth_headers("boss"))
 
     assert res.status_code == 200, res.text
     assert (await Candidate.get(PydanticObjectId(cid))).status == CandidateStatus.rejected
@@ -436,7 +415,7 @@ async def test_a_patch_cannot_change_a_candidates_status(http, boss):
     res = await http.patch(
         f"/api/v1/candidates/{lead.candidate_id}",
         json={"status": "APPROVED", "city": "Pune"},
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     assert res.status_code == 200, res.text
@@ -487,7 +466,7 @@ async def test_a_telecaller_cannot_read_the_candidate_after_deciding(http):
     await lead.insert()
 
     res = await http.get(
-        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await _headers("caller")
+        f"/api/v1/intake/leads/{lead.id}/candidate", headers=await auth_headers("caller")
     )
 
     assert res.status_code == 409
