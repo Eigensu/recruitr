@@ -12,11 +12,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import IntakeDecision, IntakeLeadStatus, IntakeRejectReason
 from app.modules.recruitment.models import (
     Candidate,
@@ -25,28 +22,14 @@ from app.modules.recruitment.models import (
     IntakeLead,
 )
 from app.modules.recruitment.service import intake_analytics
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 _HOUR = 3600
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name.title(), email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role, display_name=name.title())
 
 
 @pytest_asyncio.fixture
@@ -139,7 +122,7 @@ async def test_the_funnel_counts_every_lead_exactly_once(http, boss):
     await _lead(status=IntakeLeadStatus.duplicate)
     await _lead(status=IntakeLeadStatus.unassigned)
 
-    res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
 
     funnel = res.json()["funnel"]
     assert funnel["ingested"] == 5
@@ -157,7 +140,7 @@ async def test_another_brands_leads_are_not_counted(http, boss):
     await _lead(telecaller=boss)
     await _lead(brand_id=PydanticObjectId())
 
-    res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
 
     assert res.json()["funnel"]["ingested"] == 1
 
@@ -177,7 +160,7 @@ async def test_the_average_median_and_p90_describe_the_same_sample(http, boss):
             decision=IntakeDecision.reject,
         )
 
-    res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
 
     leg = res.json()["telecaller"]
     assert leg["actioned"] == 3
@@ -196,7 +179,7 @@ async def test_a_lead_sitting_past_a_day_is_counted_overdue(http, boss):
     await _lead(telecaller=caller, telecaller_hours_ago=30)
     await _lead(telecaller=caller, telecaller_hours_ago=2)
 
-    res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
 
     leg = res.json()["telecaller"]
     assert leg["pending"] == 2
@@ -217,7 +200,7 @@ async def test_an_actioned_lead_is_never_overdue_however_long_it_took(http, boss
     )
 
     leg = (
-        await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
     ).json()["telecaller"]
     assert leg["overdue"] == 0
     assert leg["oldest_pending_hours"] is None
@@ -246,7 +229,7 @@ async def test_accept_rate_is_of_decisions_made_not_of_leads_held(http, boss):
     await _lead(telecaller=caller, telecaller_hours_ago=1)
 
     leg = (
-        await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
     ).json()["telecaller"]
     assert leg["accepted"] == 2
     assert leg["rejected"] == 1
@@ -259,7 +242,7 @@ async def test_a_team_with_no_decisions_has_no_rate_rather_than_zero(http, boss)
     await _lead(telecaller=caller, telecaller_hours_ago=1)
 
     leg = (
-        await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
     ).json()["telecaller"]
     # 0% would read as "they reject everyone", which is a different claim.
     assert leg["accept_rate"] is None
@@ -284,7 +267,7 @@ async def test_the_recruiter_leg_is_measured_from_its_own_handover(http, boss):
     )
 
     leg = (
-        await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
     ).json()["recruiter"]
     assert leg["assigned"] == 2
     assert leg["actioned"] == 1
@@ -307,7 +290,7 @@ async def test_the_telecaller_table_names_people_and_leads_with_the_busiest(http
     await _lead(telecaller=quiet, telecaller_hours_ago=2)
 
     rows = (
-        await http.get("/api/v1/intake/analytics/telecallers", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/telecallers", headers=await auth_headers("boss"))
     ).json()
 
     assert [row["name"] for row in rows] == ["Busy", "Quiet"]
@@ -323,7 +306,7 @@ async def test_leads_held_by_a_deleted_employee_still_appear(http, boss):
     await ghost.delete()
 
     rows = (
-        await http.get("/api/v1/intake/analytics/telecallers", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/telecallers", headers=await auth_headers("boss"))
     ).json()
 
     # The work does not stop existing because the person left, and an overdue
@@ -339,7 +322,7 @@ async def test_team_totals_and_the_per_person_rows_agree(http, boss):
     await _lead(telecaller=one, telecaller_hours_ago=30)
     await _lead(telecaller=two, telecaller_hours_ago=30)
     await _lead(telecaller=two, telecaller_hours_ago=1)
-    headers = await _headers("boss")
+    headers = await auth_headers("boss")
 
     totals = (await http.get("/api/v1/intake/analytics/overview", headers=headers)).json()[
         "telecaller"
@@ -366,7 +349,7 @@ async def test_reject_reasons_are_ranked_and_the_unspecified_ones_are_named(http
     await _lead(status=IntakeLeadStatus.rejected, telecaller=caller, decision=IntakeDecision.reject)
 
     reasons = (
-        await http.get("/api/v1/intake/analytics/overview", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
     ).json()["reject_reasons"]
 
     assert reasons[0] == {"reason": "wrong_number", "count": 2}
@@ -393,7 +376,7 @@ async def test_campaigns_report_what_the_spend_produced(http, boss):
     )
 
     rows = (
-        await http.get("/api/v1/intake/analytics/campaigns", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/campaigns", headers=await auth_headers("boss"))
     ).json()["rows"]
 
     diwali = next(row for row in rows if row["label"] == "Diwali Hiring")
@@ -408,7 +391,7 @@ async def test_leads_with_no_campaign_are_labelled_not_dropped(http, boss):
     await _lead(campaign=None)
 
     rows = (
-        await http.get("/api/v1/intake/analytics/campaigns", headers=await _headers("boss"))
+        await http.get("/api/v1/intake/analytics/campaigns", headers=await auth_headers("boss"))
     ).json()["rows"]
 
     assert rows == [
@@ -429,7 +412,7 @@ async def test_leads_with_no_campaign_are_labelled_not_dropped(http, boss):
 async def test_the_same_leads_can_be_grouped_by_ad_or_channel(http, boss):
     await _lead(campaign="Diwali Hiring", ad="Reel A", channel="Instagram")
     await _lead(campaign="Diwali Hiring", ad="Reel B", channel="Facebook")
-    headers = await _headers("boss")
+    headers = await auth_headers("boss")
 
     by_ad = (
         await http.get("/api/v1/intake/analytics/campaigns?group_by=ad", headers=headers)
@@ -446,7 +429,7 @@ async def test_the_same_leads_can_be_grouped_by_ad_or_channel(http, boss):
 @pytest.mark.asyncio
 async def test_an_unknown_grouping_is_refused(http, boss):
     res = await http.get(
-        "/api/v1/intake/analytics/campaigns?group_by=whatever", headers=await _headers("boss")
+        "/api/v1/intake/analytics/campaigns?group_by=whatever", headers=await auth_headers("boss")
     )
 
     assert res.status_code == 422
@@ -473,7 +456,7 @@ async def test_a_window_selects_the_leads_that_arrived_in_it(http, boss):
     res = await http.get(
         "/api/v1/intake/analytics/overview",
         params={"start_date": since},  # via params: the "+00:00" offset needs encoding
-        headers=await _headers("boss"),
+        headers=await auth_headers("boss"),
     )
 
     body = res.json()
@@ -513,9 +496,9 @@ async def test_the_admin_list_names_both_owners_and_flags_the_late_ones(http, bo
         recruiter_hours_ago=2,
     )
 
-    row = (await http.get("/api/v1/intake/leads", headers=await _headers("boss"))).json()["items"][
-        0
-    ]
+    row = (await http.get("/api/v1/intake/leads", headers=await auth_headers("boss"))).json()[
+        "items"
+    ][0]
 
     assert row["telecaller_name"] == "Caller"
     assert row["recruiter_name"] == "Rec"
@@ -536,7 +519,7 @@ async def test_the_overdue_filter_reads_the_leg_the_lead_is_waiting_on(http, bos
     # Finished long ago, so not anybody's problem now.
     await _lead(status=IntakeLeadStatus.actioned, recruiter=recruiter, recruiter_hours_ago=100)
 
-    res = await http.get("/api/v1/intake/leads?overdue=true", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/leads?overdue=true", headers=await auth_headers("boss"))
 
     assert {row["id"] for row in res.json()["items"]} == {str(late_call.id), str(late_recruit.id)}
     assert all(row["overdue"] for row in res.json()["items"])
@@ -549,7 +532,7 @@ async def test_the_list_filters_by_status_and_by_person(http, boss):
     kept = await _lead(telecaller=mine, telecaller_hours_ago=1)
     await _lead(telecaller=theirs, telecaller_hours_ago=1)
     await _lead(telecaller=mine, status=IntakeLeadStatus.rejected)
-    headers = await _headers("boss")
+    headers = await auth_headers("boss")
 
     res = await http.get(
         f"/api/v1/intake/leads?status=pending_telecaller&telecaller_id={mine.id}", headers=headers
@@ -563,7 +546,7 @@ async def test_the_list_paginates_newest_first(http, boss):
     for hours in range(1, 6):
         await _lead(ingested_hours_ago=hours)
 
-    res = await http.get("/api/v1/intake/leads?limit=2&page=2", headers=await _headers("boss"))
+    res = await http.get("/api/v1/intake/leads?limit=2&page=2", headers=await auth_headers("boss"))
 
     body = res.json()
     assert body["meta"] == {
@@ -590,7 +573,9 @@ async def test_one_lead_carries_its_whole_timing_trail(http, boss):
         decision=IntakeDecision.accept,
     )
 
-    row = (await http.get(f"/api/v1/intake/leads/{lead.id}", headers=await _headers("boss"))).json()
+    row = (
+        await http.get(f"/api/v1/intake/leads/{lead.id}", headers=await auth_headers("boss"))
+    ).json()
 
     assert row["telecaller_response_seconds"] == 2 * _HOUR
     assert row["recruiter_response_seconds"] == _HOUR
@@ -600,7 +585,7 @@ async def test_one_lead_carries_its_whole_timing_trail(http, boss):
 @pytest.mark.asyncio
 async def test_the_queue_route_is_not_swallowed_by_the_lead_id_route(http, admin):
     """`/leads/mine` and `/leads/{id}` both match "mine"; order decides."""
-    res = await http.get("/api/v1/intake/leads/mine", headers=await _headers("chief"))
+    res = await http.get("/api/v1/intake/leads/mine", headers=await auth_headers("chief"))
 
     assert res.status_code == 200
     assert res.json() == []  # an admin's own queue, empty — not a 404 lead
@@ -623,7 +608,7 @@ async def test_the_queue_route_is_not_swallowed_by_the_lead_id_route(http, admin
 async def test_a_telecaller_cannot_read_the_reports_about_themselves(http, path):
     await _staff("caller", UserRole.telecaller)
 
-    res = await http.get(path, headers=await _headers("caller"))
+    res = await http.get(path, headers=await auth_headers("caller"))
 
     assert res.status_code == 403
 
@@ -632,7 +617,7 @@ async def test_a_telecaller_cannot_read_the_reports_about_themselves(http, path)
 async def test_a_recruiter_cannot_read_the_reports(http):
     await _staff("rec", UserRole.employee)
 
-    res = await http.get("/api/v1/intake/analytics/overview", headers=await _headers("rec"))
+    res = await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("rec"))
 
     assert res.status_code == 403
 
@@ -652,7 +637,7 @@ async def test_the_picker_offers_both_rosters_with_their_current_load(http, boss
     # Finished, so it is not part of anybody's current load.
     await _lead(status=IntakeLeadStatus.rejected, telecaller=caller)
 
-    body = (await http.get("/api/v1/intake/assignees", headers=await _headers("boss"))).json()
+    body = (await http.get("/api/v1/intake/assignees", headers=await auth_headers("boss"))).json()
 
     assert [(row["name"], row["open_leads"]) for row in body["telecallers"]] == [("Caller", 2)]
     assert [(row["name"], row["open_leads"]) for row in body["recruiters"]] == [("Rec", 1)]
@@ -662,7 +647,7 @@ async def test_the_picker_offers_both_rosters_with_their_current_load(http, boss
 async def test_someone_with_an_empty_queue_is_still_offered(http, boss):
     await _staff("idle", UserRole.telecaller)
 
-    body = (await http.get("/api/v1/intake/assignees", headers=await _headers("boss"))).json()
+    body = (await http.get("/api/v1/intake/assignees", headers=await auth_headers("boss"))).json()
 
     # The whole point of reassigning is to find somebody who is free.
     assert body["telecallers"] == [
@@ -679,6 +664,6 @@ async def test_someone_with_an_empty_queue_is_still_offered(http, boss):
 async def test_a_telecaller_cannot_list_the_roster(http):
     await _staff("caller", UserRole.telecaller)
 
-    res = await http.get("/api/v1/intake/assignees", headers=await _headers("caller"))
+    res = await http.get("/api/v1/intake/assignees", headers=await auth_headers("caller"))
 
     assert res.status_code == 403

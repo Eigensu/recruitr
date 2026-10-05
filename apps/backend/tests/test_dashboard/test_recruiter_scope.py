@@ -9,11 +9,8 @@ tokens, like the intake tests, so the role checks run as they do in the app.
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.dashboard.schemas import DashboardFilters
 from app.modules.dashboard.services.service import _cache_key
 from app.modules.recruitment.enums import ActivityType, PipelineStage
@@ -26,28 +23,14 @@ from app.modules.recruitment.models import (
     Position,
     StageEvent,
 )
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 _URL = "/api/v1/dashboard"
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name, email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role)
 
 
 async def _position(code: str, assigned: Employee | None, client: Client) -> Position:
@@ -117,7 +100,7 @@ async def world(init_test_db):
 
 
 async def _get(http, path: str, who: str, **params):
-    res = await http.get(f"{_URL}{path}", params=params, headers=await _headers(who))
+    res = await http.get(f"{_URL}{path}", params=params, headers=await auth_headers(who))
     assert res.status_code == 200, (path, res.text)
     return res.json()
 
@@ -157,9 +140,9 @@ async def test_a_recruiter_with_nothing_sees_zeros_not_everything(http, world):
 
 @pytest.mark.parametrize("path", ["/employees", "/client-profiles", "/sourcing", "/candidates"])
 async def test_brand_wide_reports_are_closed_to_recruiters(http, world, path):
-    res = await http.get(f"{_URL}{path}", headers=await _headers("rae"))
+    res = await http.get(f"{_URL}{path}", headers=await auth_headers("rae"))
     assert res.status_code == 403, res.text
-    res = await http.get(f"{_URL}{path}", headers=await _headers("mona"))
+    res = await http.get(f"{_URL}{path}", headers=await auth_headers("mona"))
     assert res.status_code == 200, res.text
 
 

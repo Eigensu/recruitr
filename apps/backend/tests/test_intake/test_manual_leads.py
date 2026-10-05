@@ -11,11 +11,8 @@ import pymupdf
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.brands.models import Brand
 from app.modules.recruitment.enums import (
     CandidateStatus,
@@ -29,6 +26,7 @@ from app.modules.recruitment.service.lead_entry import check_resume
 from app.modules.recruitment.utils.constants import RESUME_BATCH_MAX_FILES, RESUME_MAX_BYTES
 from app.modules.recruitment.utils.phone import normalize_phone
 from app.modules.recruitment.utils.resume_parser import parse_resume
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 _URL = "/api/v1/intake/leads"
@@ -144,23 +142,8 @@ def cloudinary(monkeypatch):
     return calls
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name, email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role)
 
 
 @pytest_asyncio.fixture
@@ -197,7 +180,7 @@ async def _submit(http, drafts: list[dict], files: list | None = None, who: str 
         f"{_URL}/manual",
         data={"drafts": json.dumps(drafts)},
         files=files or None,
-        headers=await _headers(who),
+        headers=await auth_headers(who),
     )
 
 
@@ -209,7 +192,7 @@ async def test_parsing_returns_one_draft_per_file_and_stores_nothing(http, peopl
             ("notes.pdf", b"not really a pdf"),
             ("big.pdf", b"%PDF-" + b"x" * RESUME_MAX_BYTES),
         ),
-        headers=await _headers("rae"),
+        headers=await auth_headers("rae"),
     )
 
     assert res.status_code == 200, res.text
@@ -231,7 +214,7 @@ async def test_parsing_returns_one_draft_per_file_and_stores_nothing(http, peopl
 
 async def test_too_many_resumes_are_refused(http, people):
     files = _files(*[(f"cv{i}.pdf", _pdf("A B")) for i in range(RESUME_BATCH_MAX_FILES + 1)])
-    res = await http.post(f"{_URL}/parse-resumes", files=files, headers=await _headers("rae"))
+    res = await http.post(f"{_URL}/parse-resumes", files=files, headers=await auth_headers("rae"))
     assert res.status_code == 400
     assert str(RESUME_BATCH_MAX_FILES) in res.text
 
@@ -328,7 +311,7 @@ async def test_a_failed_resume_upload_keeps_the_lead(http, people, monkeypatch):
 
 
 async def test_a_telecaller_cannot_add_or_parse(http, people):
-    headers = await _headers("tara")
+    headers = await auth_headers("tara")
     res = await http.post(
         f"{_URL}/parse-resumes", files=_files(("a.pdf", _pdf("A B"))), headers=headers
     )
@@ -339,7 +322,7 @@ async def test_a_telecaller_cannot_add_or_parse(http, people):
 
 
 async def test_bad_draft_payloads_are_refused(http, people):
-    headers = await _headers("rae")
+    headers = await auth_headers("rae")
     for data in ({"drafts": "not json"}, {"drafts": "[]"}, {"drafts": '{"a": 1}'}):
         res = await http.post(f"{_URL}/manual", data=data, headers=headers)
         assert res.status_code == 400, (data, res.text)
@@ -351,7 +334,7 @@ async def test_bad_draft_payloads_are_refused(http, people):
 async def test_bulk_upload_takes_the_same_limits(http, people):
     files = _files(*[(f"cv{i}.pdf", _pdf("A B")) for i in range(RESUME_BATCH_MAX_FILES + 1)])
     res = await http.post(
-        "/api/v1/candidates/bulk-upload", files=files, headers=await _headers("rae")
+        "/api/v1/candidates/bulk-upload", files=files, headers=await auth_headers("rae")
     )
     assert res.status_code == 400
     assert str(RESUME_BATCH_MAX_FILES) in res.text
