@@ -206,7 +206,10 @@ async def add_manual_leads(
     pending: list[tuple[int, ManualLeadDraft, ParsedLead]] = []
 
     for index, raw in enumerate(raw_drafts):
-        name = raw.get("full_name") if isinstance(raw, dict) else None
+        # Echoed back on a validation error, so it must be a string even when
+        # the draft's own full_name is the thing that failed validation.
+        raw_name = raw.get("full_name") if isinstance(raw, dict) else None
+        name = raw_name if isinstance(raw_name, str) else None
         try:
             draft = ManualLeadDraft.model_validate(raw)
         except ValidationError as exc:

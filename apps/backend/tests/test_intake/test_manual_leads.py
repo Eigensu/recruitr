@@ -310,6 +310,18 @@ async def test_each_draft_succeeds_or_fails_on_its_own(http, people, cloudinary)
     )
 
 
+async def test_a_draft_whose_name_is_not_text_fails_on_its_own(http, people, cloudinary):
+    # The result echoes the draft's name, so a non-string one used to fail
+    # building the error result and 500 the whole request.
+    res = await _submit(http, [_draft(full_name=123), _draft(phone="9444444444", email=None)])
+
+    assert res.status_code == 200, res.text
+    assert [(r["full_name"], r["status"]) for r in res.json()["results"]] == [
+        (None, "error"),
+        ("Shawn Dsouza", "queued"),
+    ]
+
+
 async def test_a_failed_resume_upload_keeps_the_lead(http, people, monkeypatch):
     def broken(*_args, **_kwargs):
         raise RuntimeError("cloudinary down")
