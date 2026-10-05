@@ -122,9 +122,12 @@ function toneFromActivity(activityType: string): DashboardTone {
   }
 }
 
-// Counts come from every stage the API sent, not the funnel's rows: the funnel
-// leaves "selected" out, so Offers Accepted read 0 whatever the pipeline held.
+/**
+ * Build dashboard KPIs from totals and all API stages, including "selected",
+ * which is omitted from the funnel rows but supplies the Offers Accepted count.
+ */
 function buildKpis(totals: DashboardTotals, apiStages: ApiPipelineStage[]): DashboardKpi[] {
+  /** Return the count for an API stage, defaulting to zero when it is absent. */
   const countOf = (stage: string) => apiStages.find((s) => s.stage === stage)?.count ?? 0;
   const sentToClient = countOf("sent_to_client");
   const offersAccepted = countOf("selected");

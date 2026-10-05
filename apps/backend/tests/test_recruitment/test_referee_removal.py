@@ -17,10 +17,12 @@ _URL = "/api/v1/referees"
 
 @pytest_asyncio.fixture(autouse=True)
 async def staff(init_test_db):
+    """Create an admin in the test workspace for authenticated removal requests."""
     await make_staff(_BRAND, "chief", UserRole.admin)
 
 
 async def test_removing_a_referee_revokes_their_access(http):
+    """Verify removing a referee succeeds and deactivates their account."""
     referee = RefereeUser(brand_id=_BRAND, email="ref@gmail.com")
     await referee.insert()
 
@@ -31,6 +33,7 @@ async def test_removing_a_referee_revokes_their_access(http):
 
 
 async def test_another_workspace_s_referee_is_not_found(http):
+    """Verify removal returns 404 for another workspace's referee and preserves access."""
     theirs = RefereeUser(brand_id=PydanticObjectId(), email="ref@gmail.com")
     await theirs.insert()
 
