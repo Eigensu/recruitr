@@ -64,9 +64,16 @@ jobs:
       # same single-node rs0 as docker-compose.yml. The member host has to be
       # localhost:27017 so the driver on the runner can reach whatever address
       # replica-set discovery hands back.
+      #
+      # Every test creates and drops a whole database, and WiredTiger defers
+      # removing the dropped files, so open files grow with the suite. At the
+      # container's default limit mongod aborted ("Too many open files", WT
+      # error 24) at test 579, killing every later test. Raise the limit.
       - name: Start MongoDB replica set
         run: |
-          docker run -d --name mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          docker run -d --name mongo --publish 27017:27017 \
+            --ulimit nofile=1048576:1048576 \
+            mongo:7 --replSet rs0 --bind_ip_all
           for _ in $(seq 1 30); do
             if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
               break
@@ -88,6 +95,17 @@ jobs:
       - name: Test (pytest)
         working-directory: apps/backend
         run: pytest -q
+
+      # The container is started by hand above, so unlike a `services:` one the
+      # runner never prints its log. Without this, a Mongo that dies mid-suite
+      # shows up only as AutoReconnect in whichever test happened to be next.
+      - name: MongoDB diagnostics
+        if: failure()
+        run: |
+          docker inspect mongo --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' || true
+          docker exec mongo sh -c 'ulimit -n; ulimit -u' || true
+          sudo dmesg | grep -iE 'out of memory|killed process' | tail -n 20 || true
+          docker logs --tail 200 mongo 2>&1 || true
 
   frontend:
     name: Frontend

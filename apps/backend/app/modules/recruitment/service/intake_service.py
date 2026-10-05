@@ -66,6 +66,20 @@ def _team_cursor(team_id: PydanticObjectId) -> str:
     return f"intake_team_rr:{team_id}"
 
 
+IngestOutcome = Literal[
+    "created", "matched_existing", "already_ingested", "repeated_in_batch", "error"
+]
+
+
+@dataclass(frozen=True)
+class LeadOutcome:
+    """What happened to one lead, for callers that report per row."""
+
+    outcome: IngestOutcome
+    candidate_id: PydanticObjectId | None = None  # the person the lead is about, if any
+    assigned: bool = False  # created and handed to a telecaller
+
+
 @dataclass
 class IngestResult:
     """What one ingest run did. Every input row lands in exactly one count."""
@@ -83,6 +97,8 @@ class IngestResult:
     assigned: int = 0  # of those created, handed to a telecaller
     unassigned: int = 0  # created, but no telecaller was available
     errors: list[str] = field(default_factory=list)
+    # external_id → what happened to it; the first occurrence wins for a repeat.
+    outcomes: dict[str, LeadOutcome] = field(default_factory=dict)
 
     @property
     def accounted_for(self) -> int:
@@ -367,6 +383,7 @@ async def ingest_leads(
     for lead in leads:
         if lead.external_id in seen:
             result.already_ingested += 1
+            result.outcomes.setdefault(lead.external_id, LeadOutcome("already_ingested"))
             continue
         if lead.external_id in batch:
             result.repeated_in_batch += 1
@@ -385,6 +402,7 @@ async def ingest_leads(
                 # duplicate of them rather than skipping it on every poll.
                 archived = await Candidate.find_one({"brand_id": brand_id, "email": lead.email})
                 if archived is None:
+                    result.outcomes[lead.external_id] = LeadOutcome("error")
                     continue
                 existing_id = candidate_id = archived.id
             else:
@@ -405,10 +423,12 @@ async def ingest_leads(
             created_candidate=created_candidate,
         ):
             result.already_ingested += 1
+            result.outcomes[lead.external_id] = LeadOutcome("already_ingested")
             continue
 
         if existing_id is not None:
             result.matched_existing += 1
+            result.outcomes[lead.external_id] = LeadOutcome("matched_existing", existing_id)
             continue
 
         index.add(candidate_id, lead.phone, lead.email)  # type: ignore[arg-type]
@@ -417,6 +437,11 @@ async def ingest_leads(
             result.assigned += 1
         else:
             result.unassigned += 1
+        result.outcomes[lead.external_id] = LeadOutcome(
+            "created",
+            candidate_id,  # type: ignore[arg-type]
+            assigned=telecaller is not None,
+        )
 
         await record_candidate_event(
             scope=scope,

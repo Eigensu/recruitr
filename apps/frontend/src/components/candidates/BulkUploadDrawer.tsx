@@ -2,6 +2,11 @@
 
 import { useRef, useState } from "react";
 import { clientBulkUpload } from "@/lib/api/candidates.client";
+import {
+  RESUME_BATCH_MAX_FILES,
+  RESUME_LIMITS_LABEL,
+  RESUME_MAX_BYTES,
+} from "@/lib/constants/uploads";
 import type { BulkUploadResult } from "@/types";
 
 interface Props {
@@ -29,6 +34,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<BulkUploadResult | null>(null);
+  const pendingCount = entries.filter((e) => e.status === "pending").length;
 
   function handleFileSelect(files: FileList | null) {
     if (!files) return;
@@ -41,13 +47,22 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         lower.endsWith(".docx")
       );
     });
-    if (pdfs.length + entries.length > 50) {
-      alert("Maximum 50 files per upload.");
+    // Only files that will be sent count toward the limit: an oversize file is
+    // failed on the spot and never uploaded, so it mustn't use up a slot.
+    const sendable = pdfs.filter((f) => f.size <= RESUME_MAX_BYTES).length;
+    if (sendable + pendingCount > RESUME_BATCH_MAX_FILES) {
+      alert(`Maximum ${RESUME_BATCH_MAX_FILES} files per upload.`);
       return;
     }
+    // Oversize files are listed as failed straight away and never sent; the
+    // server would refuse them anyway, one by one.
     setEntries((prev) => [
       ...prev,
-      ...pdfs.map((f) => ({ file: f, status: "pending" as FileStatus })),
+      ...pdfs.map((f) =>
+        f.size > RESUME_MAX_BYTES
+          ? { file: f, status: "failed" as FileStatus, error: "Over 5 MB — use a smaller file." }
+          : { file: f, status: "pending" as FileStatus },
+      ),
     ]);
   }
 
@@ -56,25 +71,34 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
   }
 
   async function handleUpload() {
-    if (entries.length === 0 || uploading) return;
+    const toSend = entries.filter((e) => e.status === "pending");
+    if (toSend.length === 0 || uploading) return;
     setUploading(true);
-    setEntries((prev) => prev.map((e) => ({ ...e, status: "uploading" as FileStatus })));
+    setEntries((prev) =>
+      prev.map((e) => (e.status === "pending" ? { ...e, status: "uploading" as FileStatus } : e)),
+    );
 
     try {
-      const res = await clientBulkUpload(entries.map((e) => e.file));
+      const res = await clientBulkUpload(toSend.map((e) => e.file));
       const failedMap = new Map(res.failed.map((f) => [f.filename, f.reason]));
       setEntries((prev) =>
-        prev.map((e) => ({
-          ...e,
-          status: failedMap.has(e.file.name) ? "failed" : "done",
-          error: failedMap.get(e.file.name),
-        })),
+        prev.map((e) =>
+          e.status === "uploading"
+            ? {
+                ...e,
+                status: failedMap.has(e.file.name) ? "failed" : "done",
+                error: failedMap.get(e.file.name),
+              }
+            : e,
+        ),
       );
       setResult(res);
       onComplete(res);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Upload failed";
-      setEntries((prev) => prev.map((e) => ({ ...e, status: "failed", error: errMsg })));
+      setEntries((prev) =>
+        prev.map((e) => (e.status === "uploading" ? { ...e, status: "failed", error: errMsg } : e)),
+      );
     } finally {
       setUploading(false);
     }
@@ -107,7 +131,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         }}
       >
         <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          Drop PDF or DOCX files here or click to browse (max 50)
+          Drop PDF or DOCX files here or click to browse ({RESUME_LIMITS_LABEL})
         </p>
         <input
           ref={inputRef}
@@ -136,7 +160,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
               >
                 {entry.status === "failed" ? `✗ ${entry.error ?? "failed"}` : entry.status}
               </span>
-              {entry.status === "pending" && (
+              {(entry.status === "pending" || entry.status === "failed") && (
                 <button
                   type="button"
                   onClick={() => removeFile(idx)}
@@ -160,17 +184,17 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         </div>
       )}
 
-      {!result && (
+      {/* Files picked during or after an upload are a new batch, so the button
+          comes back for them rather than leaving them pending with no action. */}
+      {(!result || pendingCount > 0) && (
         <button
           type="button"
-          disabled={entries.length === 0 || uploading}
+          disabled={pendingCount === 0 || uploading}
           onClick={handleUpload}
           className="rounded-lg py-2 text-sm font-semibold disabled:opacity-50"
           style={{ background: "var(--color-yellow)", color: "#002348" }}
         >
-          {uploading
-            ? "Uploading…"
-            : `Upload ${entries.length} file${entries.length !== 1 ? "s" : ""}`}
+          {uploading ? "Uploading…" : `Upload ${pendingCount} file${pendingCount !== 1 ? "s" : ""}`}
         </button>
       )}
     </div>
