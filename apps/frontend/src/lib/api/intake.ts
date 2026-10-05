@@ -551,20 +551,92 @@ export interface NaukriImportResult {
  * redirects to sign-in and a 403 is a ForbiddenError; apiFetch leaves a
  * FormData body's multipart Content-Type to the browser.
  */
-function postNaukriFile<T>(apiFetch: ApiFetch, path: string, file: File): Promise<T> {
+function postMultipart<T>(apiFetch: ApiFetch, path: string, body: FormData): Promise<T> {
+  return apiFetch<T>(`/api/v1/intake${path}`, { method: "POST", body });
+}
+
+function oneFile(file: File): FormData {
   const body = new FormData();
   body.append("file", file);
-  return apiFetch<T>(`/api/v1/intake${path}`, { method: "POST", body });
+  return body;
 }
 
 /** What importing this export would do, row by row. Writes nothing. */
 export function previewNaukriImport(apiFetch: ApiFetch, file: File): Promise<NaukriPreview> {
-  return postNaukriFile<NaukriPreview>(apiFetch, "/imports/naukri/preview", file);
+  return postMultipart<NaukriPreview>(apiFetch, "/imports/naukri/preview", oneFile(file));
 }
 
 /** Import the export: each new person becomes a lead in the telecaller queue. */
 export function importNaukri(apiFetch: ApiFetch, file: File): Promise<NaukriImportResult> {
-  return postNaukriFile<NaukriImportResult>(apiFetch, "/imports/naukri", file);
+  return postMultipart<NaukriImportResult>(apiFetch, "/imports/naukri", oneFile(file));
+}
+
+// ── Leads added by hand or from resumes ──────────────────────────────────────
+
+/** One resume read into the lead form's fields — best guesses, nothing saved. */
+export interface ResumeLeadDraft {
+  filename: string;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  current_role: string | null;
+  department: string | null;
+  current_company: string | null;
+  experience_years: number | null;
+  /** The file couldn't be used at all. */
+  error: string | null;
+  /** The file was taken but not read (resume parsing is off). */
+  notice: string | null;
+}
+
+/** A lead as submitted. Salaries are ₹ per month; `resume_index` points into the files sent. */
+export interface ManualLeadInput {
+  full_name: string;
+  phone: string;
+  email?: string;
+  city?: string;
+  current_role?: string;
+  department?: string;
+  current_company?: string;
+  experience_years?: number;
+  salary: number;
+  expected_salary?: number;
+  resume_index?: number;
+}
+
+export type ManualLeadStatus = "queued" | "waiting" | "duplicate" | "error";
+
+export interface ManualLeadsResponse {
+  results: {
+    index: number;
+    full_name: string | null;
+    status: ManualLeadStatus;
+    detail: string;
+  }[];
+  queued: number;
+  waiting: number;
+  duplicate: number;
+  error: number;
+}
+
+/** Read resumes into drafts for a person to check. Saves and uploads nothing. */
+export function parseResumes(apiFetch: ApiFetch, files: File[]): Promise<ResumeLeadDraft[]> {
+  const body = new FormData();
+  files.forEach((file) => body.append("files", file));
+  return postMultipart<ResumeLeadDraft[]>(apiFetch, "/leads/parse-resumes", body);
+}
+
+/** Add checked drafts as leads; each succeeds or fails on its own. */
+export function addLeads(
+  apiFetch: ApiFetch,
+  drafts: ManualLeadInput[],
+  files: File[],
+): Promise<ManualLeadsResponse> {
+  const body = new FormData();
+  body.append("drafts", JSON.stringify(drafts));
+  files.forEach((file) => body.append("files", file));
+  return postMultipart<ManualLeadsResponse>(apiFetch, "/leads/manual", body);
 }
 
 /** Leads the signed-in staff member put in themselves, newest first. */

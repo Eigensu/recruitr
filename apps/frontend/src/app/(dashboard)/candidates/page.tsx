@@ -7,7 +7,13 @@ import {
 import CandidatesClient from "@/components/candidates/CandidatesClient";
 import type { ApiCandidate, RecruiterOption } from "@/types";
 
-export default async function CandidatesPage() {
+export default async function CandidatesPage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}>) {
+  // "?add=1" — the dashboard's Add candidate shortcut — opens the form.
+  const openAdd = (await searchParams).add === "1";
   let initialCandidates: ApiCandidate[] = [];
   let initialTotal = 0;
   let initialPendingCandidates: ApiCandidate[] = [];
@@ -77,6 +83,7 @@ export default async function CandidatesPage() {
         </header>
 
         <CandidatesClient
+          openAdd={openAdd}
           initialCandidates={initialCandidates}
           initialTotal={initialTotal}
           initialPendingCandidates={initialPendingCandidates}

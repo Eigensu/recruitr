@@ -11,36 +11,19 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.dashboard.services.email_service import EmailService
 from app.modules.recruitment.enums import IntakeLeadStatus, NotificationKind
 from app.modules.recruitment.models import Candidate, Employee, IntakeLead, Notification
 from app.modules.recruitment.service.intake_sla import build_digests, send_digests, sweep_breaches
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name.title(), email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role, display_name=name.title())
 
 
 @pytest_asyncio.fixture
@@ -224,7 +207,7 @@ async def test_the_alert_lands_in_the_admins_inbox(http, chief):
     await _lead(telecaller=caller, hours_ago=30)
     await sweep_breaches()
 
-    res = await http.get("/api/v1/notifications", headers=await _headers("chief"))
+    res = await http.get("/api/v1/notifications", headers=await auth_headers("chief"))
 
     assert res.status_code == 200
     assert any(row["kind"] == NotificationKind.telecaller_sla_breach for row in res.json())
@@ -236,7 +219,7 @@ async def test_a_telecaller_does_not_see_the_complaint_about_themselves(http, ch
     await _lead(telecaller=caller, hours_ago=30)
     await sweep_breaches()
 
-    res = await http.get("/api/v1/notifications", headers=await _headers("caller"))
+    res = await http.get("/api/v1/notifications", headers=await auth_headers("caller"))
 
     assert res.json() == []
 

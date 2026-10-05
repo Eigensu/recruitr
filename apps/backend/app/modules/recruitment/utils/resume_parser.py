@@ -1,8 +1,12 @@
 """Rule-based resume parser — extracts structured fields from raw PDF text.
 
-Extracts: email, phone, experience_years, previous_company, skills.
-Skills are extracted from an explicit Skills section first; any term from
-the domain vocabulary that appears elsewhere in the text is appended.
+Extracts: name, email, phone, city, current role (and its department),
+experience_years, previous_company, skills. Skills are extracted from an
+explicit Skills section first; any term from the domain vocabulary that appears
+elsewhere in the text is appended.
+
+Name, city and role are best-effort prefill for a form a person reviews; each
+one returns None rather than a guess it can't stand behind.
 """
 
 from __future__ import annotations
@@ -11,13 +15,20 @@ import re
 from dataclasses import dataclass, field
 from datetime import date
 
-from app.modules.recruitment.enums import EducationLevel, Gender
+from app.modules.recruitment.enums import Department, EducationLevel, Gender
+from app.modules.recruitment.utils.constants import RESUME_CITY_ALIASES, ROLES_BY_CATEGORY
 
 # ── Regex ──────────────────────────────────────────────────────────────────────
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", re.IGNORECASE)
 
 _PHONE_RE = re.compile(r"(?:\+?\d{1,3}[\s.\-]?)?(?:\(?\d{2,4}\)?[\s.\-]?)?\d{3,4}[\s.\-]?\d{3,4}")
+
+# An Indian mobile: optional +91 / 91 / 0, then ten digits starting 6–9, written
+# whole or in the usual 5+5 split ("+91 98198 44180", "098198-44180"). Tried
+# before _PHONE_RE, whose last group takes at most four digits and so cut the
+# fifth off every 5+5 number — leaving a different, wrong number to call.
+_IN_MOBILE_RE = re.compile(r"(?<![\d+])(?:\+?91[\s\-]?|0)?[6-9]\d{4}[\s\-]?\d{5}(?!\d)")
 
 # "5 years", "5+ years of experience", "5 yrs exp" etc.
 _EXPLICIT_EXP_RE = re.compile(
@@ -163,6 +174,101 @@ class ParsedResume:
     gender: Gender | None = None
     tags: list[str] = field(default_factory=list)
     skills: list[str] = field(default_factory=list)
+    full_name: str | None = None
+    current_role: str | None = None  # a role from ROLES_BY_CATEGORY, as written there
+    department: Department | None = None  # the department that role belongs to
+
+
+# ── Name, city, role ───────────────────────────────────────────────────────────
+
+# Words that sit at the top of a resume but are never someone's name.
+_NOT_A_NAME = {
+    "resume",
+    "curriculum",
+    "vitae",
+    "cv",
+    "biodata",
+    "profile",
+    "objective",
+    "summary",
+    "contact",
+    "personal",
+    "details",
+    "career",
+    "experience",
+    "education",
+    "skills",
+    "address",
+    "mobile",
+    "phone",
+    "email",
+}
+_NAME_WORD = re.compile(r"^[A-Za-z][A-Za-z.'\-]*$")
+_NAME_LINES_SCANNED = 8
+
+
+def _extract_name(text: str) -> str | None:
+    """The candidate's name: the first short line near the top made only of words.
+
+    Resumes almost always open with the name. Anything with a digit, an @, a
+    colon or a resume heading is skipped, and only 2–4 words are accepted — a
+    sentence or a single word ("Resume") is not a name.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in lines[:_NAME_LINES_SCANNED]:
+        if any(ch.isdigit() for ch in line) or "@" in line or ":" in line:
+            continue
+        words = line.replace(",", " ").split()
+        if not 2 <= len(words) <= 4:
+            continue
+        if any(w.lower().strip(".") in _NOT_A_NAME for w in words):
+            continue
+        if all(_NAME_WORD.match(w) for w in words):
+            # "SHAWN DSOUZA" and "shawn dsouza" both come out as "Shawn Dsouza".
+            return " ".join(w if w.isupper() and len(w) <= 2 else w.capitalize() for w in words)
+    return None
+
+
+_CITY_RE = re.compile(
+    r"\b(" + "|".join(sorted(map(re.escape, RESUME_CITY_ALIASES), key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_city(text: str) -> str | None:
+    """The first known city mentioned, as the candidate forms spell it."""
+    match = _CITY_RE.search(text)
+    return RESUME_CITY_ALIASES[match.group(1).lower()] if match else None
+
+
+def _role_patterns() -> list[tuple[re.Pattern[str], str, Department]]:
+    # Longest first, so "Bar Manager" wins over "Manager"-like shorter names.
+    roles = [
+        (role, department) for department, names in ROLES_BY_CATEGORY.items() for role in names
+    ]
+    roles.sort(key=lambda item: len(item[0]), reverse=True)
+    return [
+        (re.compile(r"\b" + re.escape(role) + r"\b", re.IGNORECASE), role, department)
+        for role, department in roles
+    ]
+
+
+_ROLES = _role_patterns()
+
+
+def _extract_role(text: str) -> tuple[str | None, Department | None]:
+    """The earliest catalogue role named in the resume, and its department.
+
+    Earliest, because a resume leads with the current or most recent job. Only
+    roles from the catalogue are returned, so the value drops straight into the
+    form's role dropdown.
+    """
+    best: tuple[int, str, Department] | None = None
+    for pattern, role, department in _ROLES:
+        match = pattern.search(text)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), role, department)
+    return (best[1], best[2]) if best else (None, None)
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -179,6 +285,10 @@ def extract_email(text: str) -> str | None:
 
 
 def _extract_phone(text: str) -> str | None:
+    mobile = _IN_MOBILE_RE.search(text)
+    if mobile:
+        return mobile.group(0).strip()
+    # Anything else (landlines, other countries): the general pattern.
     for m in _PHONE_RE.finditer(text):
         digits = re.sub(r"\D", "", m.group(0))
         if 7 <= len(digits) <= 15:
@@ -285,6 +395,7 @@ def _extract_education_level(text: str) -> EducationLevel | None:
 def parse_resume(text: str) -> ParsedResume:
     """Extract structured fields from raw PDF text."""
     skills = _extract_skills(text)
+    current_role, department = _extract_role(text)
     return ParsedResume(
         email=extract_email(text),
         phone=_extract_phone(text),
@@ -293,4 +404,8 @@ def parse_resume(text: str) -> ParsedResume:
         education_level=_extract_education_level(text),
         skills=skills,
         tags=skills[:5],  # Take top 5 extracted skills as AI tags
+        full_name=_extract_name(text),
+        city=_extract_city(text),
+        current_role=current_role,
+        department=department,
     )

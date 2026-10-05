@@ -11,12 +11,9 @@ import io
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
-from httpx import ASGITransport, AsyncClient
 from openpyxl import Workbook
 
-from app.core.main import app
-from app.modules.auth.models import User, UserRole
-from app.modules.auth.security import create_access_token
+from app.modules.auth.models import UserRole
 from app.modules.recruitment.enums import (
     CandidateStatus,
     EducationLevel,
@@ -32,6 +29,7 @@ from app.modules.recruitment.utils.naukri_sheet import (
     parse_naukri_xlsx,
     parse_work_exp,
 )
+from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
 _URL = "/api/v1/intake"
@@ -214,23 +212,8 @@ def test_a_file_that_is_not_a_workbook_is_refused():
 # ── API ────────────────────────────────────────────────────────────────────────
 
 
-@pytest_asyncio.fixture
-async def http():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
 async def _staff(name: str, role: UserRole) -> Employee:
-    email = f"{name}@binge.consulting"
-    await User(email=email, role=role).insert()
-    employee = Employee(brand_id=_BRAND, name=name, email=email, role=role.value)
-    await employee.insert()
-    return employee
-
-
-async def _headers(name: str) -> dict[str, str]:
-    user = await User.find_one({"email": f"{name}@binge.consulting"})
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id)})}"}
+    return await make_staff(_BRAND, name, role)
 
 
 @pytest_asyncio.fixture
@@ -266,7 +249,7 @@ async def test_preview_classifies_every_row_and_writes_nothing(http, people):
     await _existing_candidate()
 
     res = await http.post(
-        f"{_URL}/imports/naukri/preview", files=_file(_export()), headers=await _headers("rae")
+        f"{_URL}/imports/naukri/preview", files=_file(_export()), headers=await auth_headers("rae")
     )
 
     assert res.status_code == 200, res.text
@@ -291,7 +274,7 @@ async def test_import_queues_new_people_for_telecallers(http, people):
     existing = await _existing_candidate()
 
     res = await http.post(
-        f"{_URL}/imports/naukri", files=_file(_export()), headers=await _headers("rae")
+        f"{_URL}/imports/naukri", files=_file(_export()), headers=await auth_headers("rae")
     )
 
     assert res.status_code == 200, res.text
@@ -321,7 +304,7 @@ async def test_import_queues_new_people_for_telecallers(http, people):
 
 
 async def test_uploading_the_same_export_again_creates_nothing(http, people):
-    headers = await _headers("rae")
+    headers = await auth_headers("rae")
     await http.post(f"{_URL}/imports/naukri", files=_file(_export()), headers=headers)
 
     res = await http.post(f"{_URL}/imports/naukri", files=_file(_export()), headers=headers)
@@ -337,7 +320,7 @@ async def test_uploading_the_same_export_again_creates_nothing(http, people):
 
 async def test_a_maintainer_can_import_too(http, people):
     res = await http.post(
-        f"{_URL}/imports/naukri", files=_file(_export()), headers=await _headers("mona")
+        f"{_URL}/imports/naukri", files=_file(_export()), headers=await auth_headers("mona")
     )
     assert res.status_code == 200, res.text
     lead = await IntakeLead.find_one({"brand_id": _BRAND})
@@ -347,7 +330,7 @@ async def test_a_maintainer_can_import_too(http, people):
 async def test_imported_candidates_are_tagged_and_list(http, people):
     """The department inferred from a designation comes with that designation
     as its specialization, and the candidate list reads the imported people."""
-    headers = await _headers("mona")
+    headers = await auth_headers("mona")
     await http.post(f"{_URL}/imports/naukri", files=_file(_export()), headers=headers)
 
     shawn = await Candidate.find_one({"brand_id": _BRAND, "phone": "9819844180"})
@@ -360,7 +343,7 @@ async def test_imported_candidates_are_tagged_and_list(http, people):
 
 
 async def test_a_telecaller_cannot_import_preview_or_list(http, people):
-    headers = await _headers("tara")
+    headers = await auth_headers("tara")
     for method, path in (
         ("post", "/imports/naukri/preview"),
         ("post", "/imports/naukri"),
@@ -373,11 +356,15 @@ async def test_a_telecaller_cannot_import_preview_or_list(http, people):
 
 
 async def test_my_submitted_leads_shows_only_mine(http, people):
-    await http.post(f"{_URL}/imports/naukri", files=_file(_export()), headers=await _headers("rae"))
+    await http.post(
+        f"{_URL}/imports/naukri", files=_file(_export()), headers=await auth_headers("rae")
+    )
     other = _xlsx([HEADER, _row(1, "Mona Pick", "9111111111")])
-    await http.post(f"{_URL}/imports/naukri", files=_file(other), headers=await _headers("mona"))
+    await http.post(
+        f"{_URL}/imports/naukri", files=_file(other), headers=await auth_headers("mona")
+    )
 
-    res = await http.get(f"{_URL}/leads/submitted", headers=await _headers("rae"))
+    res = await http.get(f"{_URL}/leads/submitted", headers=await auth_headers("rae"))
 
     assert res.status_code == 200, res.text
     names = sorted(row["full_name"] for row in res.json())
@@ -386,7 +373,7 @@ async def test_my_submitted_leads_shows_only_mine(http, people):
 
 
 async def test_bad_uploads_are_refused_with_a_reason(http, people):
-    headers = await _headers("rae")
+    headers = await auth_headers("rae")
 
     res = await http.post(
         f"{_URL}/imports/naukri", files=_file(_export(), name="naukri.csv"), headers=headers

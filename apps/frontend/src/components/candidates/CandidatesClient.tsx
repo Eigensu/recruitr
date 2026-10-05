@@ -33,6 +33,8 @@ interface Props {
   availableTags: string[];
   availableRoles: string[];
   recruiters?: RecruiterOption[];
+  /** Start with the add-candidate form open (the dashboard's shortcut). */
+  openAdd?: boolean;
 }
 
 const drawerStyle = {
@@ -47,6 +49,7 @@ export default function CandidatesClient({
   availableTags,
   availableRoles = [],
   recruiters = [],
+  openAdd = false,
 }: Readonly<Props>) {
   const { isMaintainer } = useCurrentUser();
   const toast = useToast();
@@ -58,7 +61,7 @@ export default function CandidatesClient({
   const [activeFilters, setActiveFilters] = useState<Partial<CandidateFilters>>({});
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(openAdd);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<ApiCandidate | null>(null);
 

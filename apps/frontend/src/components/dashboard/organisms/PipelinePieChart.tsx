@@ -15,6 +15,8 @@ interface PipelinePieChartProps {
   stages: PipelineStageMetric[];
   /** Populates the recruiter filter; omit to render the funnel unfiltered. */
   recruiters?: RecruiterOption[];
+  /** A recruiter's own funnel: the server already scoped it to them. */
+  personal?: boolean;
 }
 
 /** Stages fetched for one recruiter, tagged with whose they are. */
@@ -70,6 +72,7 @@ function FunnelShell({
 export default function PipelinePieChart({
   stages: initialStages,
   recruiters = [],
+  personal = false,
 }: Readonly<PipelinePieChartProps>) {
   const chartRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(chartRef, { once: true, amount: 0.42 });
@@ -86,9 +89,10 @@ export default function PipelinePieChart({
   // The subtitle says which of the two is on screen.
   const showingFiltered = applied !== null && applied.recruiterId === recruiterId;
   const stages = showingFiltered ? applied.stages : initialStages;
-  const subtitle = showingFiltered
-    ? `Candidate flow for ${recruiters.find((r) => r.id === recruiterId)?.name ?? "this recruiter"}`
-    : "Candidate flow across all recruiters";
+  let subtitle = "Candidate flow across all recruiters";
+  if (personal) subtitle = "Your candidates, by stage";
+  else if (showingFiltered)
+    subtitle = `Candidate flow for ${recruiters.find((r) => r.id === recruiterId)?.name ?? "this recruiter"}`;
 
   useEffect(() => () => requestRef.current?.abort(), []);
 
