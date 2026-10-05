@@ -7,6 +7,7 @@ import {
   IconChartBar,
   IconChevronLeft,
   IconChevronRight,
+  IconFileSpreadsheet,
   IconLoader2,
   IconRefresh,
   IconUserShare,
@@ -14,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
+import NaukriImportDialog from "@/components/leads/NaukriImportDialog";
 import ReassignDialog from "@/components/leads/ReassignDialog";
 import ReviewPanel from "@/components/leads/ReviewPanel";
 import CandidateDrawer from "@/components/candidates/CandidateDrawer";
@@ -80,6 +82,7 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
     recruiters: IntakeAssignee[];
   }>({ telecallers: [], recruiters: [] });
   const [reassigning, setReassigning] = useState<IntakeLead | null>(null);
+  const [importing, setImporting] = useState(false);
   const [viewing, setViewing] = useState<ApiCandidate | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const openingRef = useRef(0);
@@ -179,6 +182,14 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
+            <IconFileSpreadsheet className="size-4" />
+            Import Naukri file
+          </button>
           <Link
             href="/leads/analytics"
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
@@ -423,6 +434,9 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
 
       <CandidateDrawer candidate={viewing} onClose={() => setViewing(null)} onUpdate={setViewing} />
 
+      {importing && (
+        <NaukriImportDialog onClose={() => setImporting(false)} onImported={() => load()} />
+      )}
       {reassigning && (
         <ReassignDialog
           lead={reassigning}
