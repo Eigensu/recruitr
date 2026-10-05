@@ -64,9 +64,16 @@ jobs:
       # same single-node rs0 as docker-compose.yml. The member host has to be
       # localhost:27017 so the driver on the runner can reach whatever address
       # replica-set discovery hands back.
+      #
+      # Every test creates and drops a whole database, and WiredTiger defers
+      # removing the dropped files, so open files grow with the suite. At the
+      # container's default limit mongod aborted ("Too many open files", WT
+      # error 24) at test 579, killing every later test. Raise the limit.
       - name: Start MongoDB replica set
         run: |
-          docker run -d --name mongo --publish 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          docker run -d --name mongo --publish 27017:27017 \
+            --ulimit nofile=1048576:1048576 \
+            mongo:7 --replSet rs0 --bind_ip_all
           for _ in $(seq 1 30); do
             if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
               break
