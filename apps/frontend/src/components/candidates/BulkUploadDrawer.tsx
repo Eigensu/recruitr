@@ -34,6 +34,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<BulkUploadResult | null>(null);
+  const pendingCount = entries.filter((e) => e.status === "pending").length;
 
   function handleFileSelect(files: FileList | null) {
     if (!files) return;
@@ -46,7 +47,10 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         lower.endsWith(".docx")
       );
     });
-    if (pdfs.length + entries.length > RESUME_BATCH_MAX_FILES) {
+    // Only files that will be sent count toward the limit: an oversize file is
+    // failed on the spot and never uploaded, so it mustn't use up a slot.
+    const sendable = pdfs.filter((f) => f.size <= RESUME_MAX_BYTES).length;
+    if (sendable + pendingCount > RESUME_BATCH_MAX_FILES) {
       alert(`Maximum ${RESUME_BATCH_MAX_FILES} files per upload.`);
       return;
     }
@@ -156,7 +160,7 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
               >
                 {entry.status === "failed" ? `✗ ${entry.error ?? "failed"}` : entry.status}
               </span>
-              {entry.status === "pending" && (
+              {(entry.status === "pending" || entry.status === "failed") && (
                 <button
                   type="button"
                   onClick={() => removeFile(idx)}
@@ -180,17 +184,17 @@ export default function BulkUploadDrawer({ onComplete, onClose }: Props) {
         </div>
       )}
 
-      {!result && (
+      {/* Files picked during or after an upload are a new batch, so the button
+          comes back for them rather than leaving them pending with no action. */}
+      {(!result || pendingCount > 0) && (
         <button
           type="button"
-          disabled={entries.length === 0 || uploading}
+          disabled={pendingCount === 0 || uploading}
           onClick={handleUpload}
           className="rounded-lg py-2 text-sm font-semibold disabled:opacity-50"
           style={{ background: "var(--color-yellow)", color: "#002348" }}
         >
-          {uploading
-            ? "Uploading…"
-            : `Upload ${entries.length} file${entries.length !== 1 ? "s" : ""}`}
+          {uploading ? "Uploading…" : `Upload ${pendingCount} file${pendingCount !== 1 ? "s" : ""}`}
         </button>
       )}
     </div>

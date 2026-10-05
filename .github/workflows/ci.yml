@@ -102,10 +102,10 @@ jobs:
       - name: MongoDB diagnostics
         if: failure()
         run: |
-          docker inspect mongo --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}'
+          docker inspect mongo --format 'status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' || true
           docker exec mongo sh -c 'ulimit -n; ulimit -u' || true
           sudo dmesg | grep -iE 'out of memory|killed process' | tail -n 20 || true
-          docker logs --tail 200 mongo 2>&1
+          docker logs --tail 200 mongo 2>&1 || true
 
   frontend:
     name: Frontend
