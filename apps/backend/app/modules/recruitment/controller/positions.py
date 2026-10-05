@@ -858,7 +858,7 @@ async def update_position_approval(
 ):
     from app.modules.recruitment.enums.position_approval_status import PositionApprovalStatus
 
-    pos_oid = to_object_id(id)
+    pos_oid = to_object_id(id, "position_id")
     doc = await Position.find_one({"_id": pos_oid, "brand_id": tenant.brand_id})
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _ERR_POSITION_NOT_FOUND)
