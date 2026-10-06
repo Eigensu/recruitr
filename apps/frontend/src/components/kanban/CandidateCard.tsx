@@ -26,6 +26,20 @@ function scoreColor(score: number | null): string {
   return "text-red-400 bg-red-500/10 border-red-500/20";
 }
 
+function MatchScore({ score }: Readonly<{ score: number }>) {
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0",
+        scoreColor(score),
+      )}
+    >
+      <IconSparkles className="size-2.5" />
+      {Math.round(score * 100)}%
+    </span>
+  );
+}
+
 /** How long the card has sat in its stage, and the colour that age earns. */
 function stageAge(stageEnteredAt: string | undefined): { label: string; className: string } {
   const days = stageEnteredAt
@@ -120,6 +134,21 @@ export default function KanbanCard({
   // the plain link below would only repeat it.
   const offerLetterButton =
     card.stage === "joined" && !readOnly && !isClientBoard && !!onOfferLetterClick;
+  // Joined cards are drawn tighter. The match score moves up beside the
+  // client, which leaves the footer row wide enough for Rejected and Offer
+  // letter side by side instead of stacked.
+  const compact = card.stage === "joined";
+  // Staff-only: the match score is agency-internal.
+  const score = !readOnly && !isClientBoard ? card.match_score : null;
+  // The Select / Reject and Upload Offer Letter row at the bottom. Decided up
+  // front so a card with none of them skips the row: rendered empty, its top
+  // margin alone left a blank strip under every card without those buttons.
+  const hasBottomActions =
+    !readOnly &&
+    ((isClientBoard &&
+      !!onStageChange &&
+      (card.stage === "sent_to_client" || card.stage === "interview")) ||
+      (card.stage === "selected" && !card.offer_letter_url && !!onCardClick));
   const clickProps = clickable
     ? {
         onClick: (e: MouseEvent) => {
@@ -154,7 +183,8 @@ export default function KanbanCard({
       {...(readOnly ? {} : attributes)}
       {...clickProps}
       className={cn(
-        "group relative rounded-xl border bg-surface-panel p-3 select-none",
+        "group relative rounded-xl border bg-surface-panel select-none",
+        compact ? "p-2.5" : "p-3",
         "transition-all duration-150",
         isDragging && !isDragOverlay && "opacity-40 scale-95",
         isDragOverlay &&
@@ -197,7 +227,12 @@ export default function KanbanCard({
         <p className="text-sm font-semibold text-text-primary truncate leading-tight w-full">
           {card.candidate_name}
         </p>
-        <div className="flex items-center justify-between mt-1.5 gap-2 pr-1">
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 pr-1",
+            compact ? "mt-1" : "mt-1.5",
+          )}
+        >
           <p className="text-[11px] font-medium text-text-secondary truncate">
             {card.position_role}
           </p>
@@ -210,11 +245,18 @@ export default function KanbanCard({
             {age.label}
           </span>
         </div>
-        <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
+        {compact && score !== null ? (
+          <div className="flex items-center justify-between gap-2 pr-1 mt-0.5">
+            <p className="text-[11px] text-text-muted truncate">{card.position_client}</p>
+            <MatchScore score={score} />
+          </div>
+        ) : (
+          <p className="text-[11px] text-text-muted truncate mt-0.5">{card.position_client}</p>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="flex flex-col gap-1.5 mt-2">
+      <div className={cn("flex flex-col gap-1.5", !compact && "mt-2")}>
         {/* Staff-only: `joined -> rejected` isn't in the client transition whitelist
             (it would 403), and the match score is agency-internal. */}
         {!readOnly && !isClientBoard && (
@@ -227,7 +269,7 @@ export default function KanbanCard({
                     e.stopPropagation();
                     onStageChange(card, "rejected");
                   }}
-                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-1.5 text-[11px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 w-fit"
+                  className="rounded-lg bg-red-500/10 border border-red-500/20 px-2 py-1 text-[10px] font-semibold text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 w-fit"
                 >
                   Rejected
                 </button>
@@ -248,7 +290,7 @@ export default function KanbanCard({
                       : "Upload offer letter"
                   }
                   className={cn(
-                    "rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-all flex items-center justify-center gap-1 w-fit",
+                    "rounded-lg border px-2 py-1 text-[10px] font-semibold transition-all flex items-center justify-center gap-1 w-fit",
                     card.offer_letter_url
                       ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
                       : "bg-yellow/10 border-yellow/20 text-yellow hover:bg-yellow/20",
@@ -263,17 +305,7 @@ export default function KanbanCard({
                 </button>
               )}
             </div>
-            {card.match_score !== null && (
-              <span
-                className={cn(
-                  "flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0",
-                  scoreColor(card.match_score),
-                )}
-              >
-                <IconSparkles className="size-2.5" />
-                {Math.round(card.match_score * 100)}%
-              </span>
-            )}
+            {!compact && score !== null && <MatchScore score={score} />}
           </div>
         )}
 
@@ -294,7 +326,7 @@ export default function KanbanCard({
           same one on either board, but only the client board opens a card
           modal, so hanging these off onCardClick left the recruiter with
           drag-and-drop as the sole way to take them. */}
-      {!readOnly && (onStageChange || onCardClick) && (
+      {hasBottomActions && (
         <div className="mt-3 flex gap-2">
           {isClientBoard && card.stage === "sent_to_client" && onStageChange && (
             <>
