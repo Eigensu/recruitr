@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useApiFetch, apiErrorMessage } from "@/lib/api";
 import { FormActions, RosterTable } from "@/components/settings/RosterTable";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { listReferees, inviteReferee, removeReferee, type RefereeUser } from "@/lib/api/referees";
 
 const USER_STATUS_STYLES: Record<string, string> = {
@@ -28,6 +29,8 @@ export default function RefereeSettingsTab() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
+  // The referee whose access the confirmation dialog is asking about.
+  const [revoking, setRevoking] = useState<RefereeUser | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -76,16 +79,10 @@ export default function RefereeSettingsTab() {
     }
   }
 
-  async function handleRemove(userId: string) {
-    if (!window.confirm("Are you sure you want to deactivate this referee's access?")) {
-      return;
-    }
-    try {
-      await removeReferee(apiFetch, userId);
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_active: false } : u)));
-    } catch (err) {
-      alert(apiErrorMessage(err, "Failed to remove referee access"));
-    }
+  /** Rejections are left to ConfirmDialog, which shows them in place. */
+  async function revoke(user: RefereeUser) {
+    await removeReferee(apiFetch, user.id);
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_active: false } : u)));
   }
 
   if (isLoading) {
@@ -205,7 +202,7 @@ export default function RefereeSettingsTab() {
                   {u.is_active && (
                     <button
                       type="button"
-                      onClick={() => handleRemove(u.id)}
+                      onClick={() => setRevoking(u)}
                       className="p-1.5 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
                       title="Revoke Access"
                     >
@@ -225,6 +222,24 @@ export default function RefereeSettingsTab() {
           )}
         </RosterTable>
       </div>
+
+      <ConfirmDialog
+        open={revoking !== null}
+        title="Revoke referee access?"
+        description={
+          revoking && (
+            <>
+              <strong className="text-text-primary">{revoking.name || revoking.email}</strong> will
+              no longer be able to sign in. Their referrals are kept, and adding the same email
+              again restores access.
+            </>
+          )
+        }
+        confirmLabel="Revoke access"
+        destructive
+        onConfirm={() => (revoking ? revoke(revoking) : undefined)}
+        onClose={() => setRevoking(null)}
+      />
     </div>
   );
 }
