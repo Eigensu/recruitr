@@ -34,6 +34,7 @@ from app.modules.recruitment.models import Candidate, RefereeUser
 from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import CandidateResponse, TenantScope
 from app.modules.recruitment.service.intake_service import open_lead_for_application
+from app.modules.recruitment.service.intake_sla import alert_unqueued_application
 from app.modules.recruitment.service.resume_service import process_resume_bytes
 from app.modules.storage.service import (
     delete_cloudinary_asset,
@@ -181,6 +182,26 @@ async def public_apply(
     """Submit a public application."""
 
     target_brand_id = await _resolve_target_brand(brand_id)
+
+    # Codes are minted uppercase but typed by hand off a message or a screen, so
+    # match on the normalized form — a lowercased or padded code is the right
+    # code, and failing it silently costs the referee their attribution.
+    normalized_code = (connect_code or "").strip().upper() or None
+
+    referee_id = None
+    if normalized_code:
+        referee = await RefereeUser.find_one({"connect_code": normalized_code, "is_active": True})
+        # Refused rather than stored: an unmatched code credits nobody, and only
+        # the applicant can tell a typo from the code they were given. Checked
+        # before the resume upload so a refusal leaves nothing in Cloudinary.
+        if referee is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                "That connect code isn't recognised. Check it with whoever gave it to "
+                "you, or clear it to apply without one.",
+            )
+        referee_id = referee.id
+
     automation = await get_automation_settings(target_brand_id)
     (
         raw_text,
@@ -190,17 +211,6 @@ async def public_apply(
         parsed_tags,
         parsed_exp,
     ) = await _process_resume_upload(resume, automation)
-
-    # Codes are minted uppercase but typed by hand off a message or a screen, so
-    # match on the normalized form — a lowercased or padded code is the right
-    # code, and failing it silently costs the referee their attribution.
-    normalized_code = connect_code.strip().upper() if connect_code else None
-
-    referee_id = None
-    if normalized_code:
-        referee = await RefereeUser.find_one({"connect_code": normalized_code, "is_active": True})
-        if referee:
-            referee_id = referee.id
 
     try:
         doc = Candidate(
@@ -259,12 +269,32 @@ async def public_apply(
     )
 
     # Every external applicant — referrals included — is screened by a
-    # telecaller before a recruiter sees them. Best-effort: the application is
-    # already saved, and if the lead cannot be opened the candidate is still
-    # PENDING in the External tab, where a maintainer can approve them by hand.
-    try:
-        await open_lead_for_application(doc)
-    except Exception:
-        _log.exception("Could not open an intake lead for applicant %s", doc.id)
+    # telecaller before a recruiter sees them.
+    await _queue_for_screening(doc)
 
     return CandidateResponse.from_document(doc)
+
+
+async def _queue_for_screening(candidate: Candidate) -> None:
+    """Open the applicant's lead, or make sure somebody hears that it failed.
+
+    The application is already saved, so nothing here may fail the request.
+    Opening is idempotent — the lead is keyed on the candidate id — so a second
+    attempt cannot double it, and rides out a momentary blip. If both fail the
+    candidate is PENDING with no lead, which no page in the app shows; the
+    alert is what tells anyone they exist.
+    """
+    for attempt in (1, 2):
+        try:
+            await open_lead_for_application(candidate)
+            return
+        except Exception:
+            _log.exception(
+                "Could not open an intake lead for applicant %s (attempt %d)",
+                candidate.id,
+                attempt,
+            )
+    try:
+        await alert_unqueued_application(candidate)
+    except Exception:
+        _log.exception("Could not alert anyone about unqueued applicant %s", candidate.id)

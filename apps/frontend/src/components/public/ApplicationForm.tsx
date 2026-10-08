@@ -23,6 +23,11 @@ function isRupeeAmount(value: string): boolean {
   return value !== "" && Number.isFinite(n) && n >= 0;
 }
 
+/** Channels that come with somebody to credit, and so ask for a connect code. */
+function isReferralChannel(channel: string): boolean {
+  return channel === "Referred by a Friend" || channel === "Connected by a Binge Partner";
+}
+
 const schema = z
   .object({
     fullName: z.string().trim().min(1, "Enter your name."),
@@ -517,11 +522,15 @@ export default function ApplicationForm({
                   label="Where you heard about us"
                   value={form.sourceChannel}
                   onChange={(sourceChannel) => {
-                    const isConnectCodeOption = sourceChannel === "Referred by a Friend" || sourceChannel === "Connected by a Binge Partner";
-                    setForm({ 
-                      ...form, 
+                    // A code that came with the page — the referee's own Refer
+                    // page, or their shared link — is the attribution whatever is
+                    // picked here; clearing it lost the referee the credit. Only
+                    // a code typed on a plain form goes with the channel.
+                    const keepCode = isReferralChannel(sourceChannel) || !!startingConnectCode;
+                    setForm({
+                      ...form,
                       sourceChannel,
-                      connectCode: isConnectCodeOption ? form.connectCode : ""
+                      connectCode: keepCode ? form.connectCode : "",
                     });
                   }}
                   options={SOURCE_CHANNELS}
@@ -550,7 +559,9 @@ export default function ApplicationForm({
                     />
                   </div>
                 )}
-                {(form.sourceChannel === "Referred by a Friend" || form.sourceChannel === "Connected by a Binge Partner") && (
+                {/* Kept visible whenever a code came with the page, so a code
+                    that will be sent is never hidden from the person sending it. */}
+                {(isReferralChannel(form.sourceChannel) || !!startingConnectCode) && (
                   <div>
                     <label htmlFor="connectCode" className={labelCls}>
                       Connect Code

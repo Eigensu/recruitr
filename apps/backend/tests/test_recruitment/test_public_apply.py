@@ -200,3 +200,30 @@ async def test_a_referral_stores_the_salary_too(brand: Brand, client: AsyncClien
     stored = await _stored()
     assert stored["referee_id"] == referee.id
     assert (stored["salary"], stored["expected_salary"]) == (28000, 33000)
+
+
+@pytest.mark.asyncio
+async def test_an_unrecognised_connect_code_is_refused(brand: Brand, client: AsyncClient) -> None:
+    """Stored, it would credit nobody — and only the applicant can spot the typo."""
+    await RefereeUser(brand_id=_BRAND, email="ref@x.test", connect_code="BINGE7").insert()
+    await RefereeUser(
+        brand_id=_BRAND, email="gone@x.test", connect_code="LEFT99", is_active=False
+    ).insert()
+
+    for code in ("BINGE8", "400606", "Sanskrita Ekawade", "LEFT99"):
+        res = await client.post("/api/v1/public/apply", data={**APPLICATION, "connect_code": code})
+        assert res.status_code == 422, (code, res.text)
+        assert "connect code" in res.json()["detail"]
+
+    assert await Candidate.find_all().count() == 0
+    assert await IntakeLead.find_all().count() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_blank_connect_code_is_no_code(brand: Brand, client: AsyncClient) -> None:
+    res = await client.post("/api/v1/public/apply", data={**APPLICATION, "connect_code": "   "})
+
+    assert res.status_code == 201, res.text
+    stored = await _stored()
+    assert stored.get("connect_code") is None
+    assert stored.get("referee_id") is None

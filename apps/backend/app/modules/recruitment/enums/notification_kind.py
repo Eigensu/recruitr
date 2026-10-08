@@ -17,3 +17,6 @@ class NotificationKind(StrEnum):
     # person (Notification.employee_id) rather than raised brand-wide.
     telecaller_sla_breach = "telecaller_sla_breach"
     recruiter_sla_breach = "recruiter_sla_breach"
+    # A public-form applicant whose lead could not be opened, so no telecaller
+    # will ever see them. Addressed per person, like the breaches.
+    application_not_queued = "application_not_queued"

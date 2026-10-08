@@ -17,11 +17,13 @@ from beanie import PydanticObjectId
 
 from app.modules.auth.models import UserRole
 from app.modules.brands.models import Brand
+from app.modules.recruitment.controller import public_controller
 from app.modules.recruitment.enums import (
     CandidateStatus,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeSource,
+    NotificationKind,
 )
 from app.modules.recruitment.models import (
     Candidate,
@@ -29,7 +31,9 @@ from app.modules.recruitment.models import (
     Employee,
     IntakeLead,
     Mapping,
+    Notification,
     Position,
+    RefereeUser,
     Team,
 )
 from app.modules.recruitment.service.intake_service import close_lead_for_mapping
@@ -269,6 +273,77 @@ async def test_an_applicant_with_no_telecaller_is_kept_unassigned(http, brand):
 
     lead = await IntakeLead.find_one({"candidate_id": PydanticObjectId(res.json()["id"])})
     assert lead.status == IntakeLeadStatus.unassigned
+
+
+@pytest.mark.asyncio
+async def test_a_referral_is_queued_for_a_telecaller_like_anyone_else(http, brand):
+    """A referee's candidate comes through the same form and the same screening."""
+    caller = await _staff("caller", UserRole.telecaller)
+    referee = RefereeUser(brand_id=_BRAND, email="ref@x.test", connect_code="BINGE7")
+    await referee.insert()
+
+    res = await http.post(
+        "/api/v1/public/apply",
+        data={
+            **_application(),
+            "source_channel": "Connected by a Binge Partner",
+            "connect_code": "BINGE7",
+        },
+    )
+
+    assert res.status_code == 201, res.text
+    candidate = await Candidate.get(PydanticObjectId(res.json()["id"]))
+    assert candidate.referee_id == referee.id
+    lead = await IntakeLead.find_one({"candidate_id": candidate.id})
+    assert lead.source == IntakeSource.public_form
+    assert lead.status == IntakeLeadStatus.pending_telecaller
+    assert lead.telecaller_id == caller.id
+
+
+@pytest.mark.asyncio
+async def test_an_applicant_whose_lead_cannot_open_is_reported(http, brand, boss, monkeypatch):
+    await _staff("caller", UserRole.telecaller)
+    await _staff("admin", UserRole.admin)
+    await _staff("recruiter", UserRole.employee)
+    attempts = 0
+
+    async def broken(candidate, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("lead write failed")
+
+    monkeypatch.setattr(public_controller, "open_lead_for_application", broken)
+    res = await http.post("/api/v1/public/apply", data=_application())
+
+    # The application itself still goes through.
+    assert res.status_code == 201, res.text
+    assert attempts == 2
+    assert await IntakeLead.find_all().count() == 0
+    notes = await Notification.find({"kind": NotificationKind.application_not_queued}).to_list()
+    watchers = {e.id for e in await Employee.find({"name": {"$in": ["boss", "admin"]}}).to_list()}
+    assert {note.employee_id for note in notes} == watchers
+    assert "Rhea Kapoor" in notes[0].message
+
+
+@pytest.mark.asyncio
+async def test_a_lead_that_opens_on_the_retry_raises_no_alert(http, brand, boss, monkeypatch):
+    caller = await _staff("caller", UserRole.telecaller)
+    real = public_controller.open_lead_for_application
+    attempts = 0
+
+    async def flaky(candidate, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("blip")
+        return await real(candidate, **kwargs)
+
+    monkeypatch.setattr(public_controller, "open_lead_for_application", flaky)
+    res = await http.post("/api/v1/public/apply", data=_application())
+
+    lead = await IntakeLead.find_one({"candidate_id": PydanticObjectId(res.json()["id"])})
+    assert lead.telecaller_id == caller.id
+    assert await Notification.find_all().count() == 0
 
 
 @pytest.mark.asyncio
