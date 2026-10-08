@@ -69,21 +69,27 @@ jobs:
       # removing the dropped files, so open files grow with the suite. At the
       # container's default limit mongod aborted ("Too many open files", WT
       # error 24) at test 579, killing every later test. Raise the limit.
+      #
+      # The probes run mongosh with HOME=/tmp. The image sets HOME=/data/db, so
+      # mongosh would keep its state (lock files included) in the data dir while
+      # the entrypoint is still chowning it to the mongodb user under `set -e`.
+      # A lock file removed between `find` listing it and `chown` reaching it
+      # failed the chown, the entrypoint exited 1, and mongod never started.
       - name: Start MongoDB replica set
         run: |
           docker run -d --name mongo --publish 27017:27017 \
             --ulimit nofile=1048576:1048576 \
             mongo:7 --replSet rs0 --bind_ip_all
           for _ in $(seq 1 30); do
-            if docker exec mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
+            if docker exec -e HOME=/tmp mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1; then
               break
             fi
             sleep 2
           done
-          docker exec mongo mongosh --quiet --eval \
+          docker exec -e HOME=/tmp mongo mongosh --quiet --eval \
             'rs.initiate({_id:"rs0",members:[{_id:0,host:"localhost:27017"}]})'
           for _ in $(seq 1 30); do
-            if docker exec mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+            if docker exec -e HOME=/tmp mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
               echo "replica set primary is up"
               exit 0
             fi
