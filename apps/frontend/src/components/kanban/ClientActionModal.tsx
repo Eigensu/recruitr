@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { IconX, IconCheck, IconFileText } from "@tabler/icons-react";
 import type { PipelineCard, KanbanStage } from "@/types";
 import { isAbsoluteUrl } from "@/lib/api/candidates";
+import { parseApiDate, toDateTimeInputValue } from "@/lib/utils";
 import {
   setMappingInterviewDate,
   uploadMappingOffer,
@@ -30,11 +31,13 @@ export default function ClientActionModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // States for different actions. The joining fields start from what is saved,
+  // States for different actions. The interview and joining fields start from what is saved,
   // so reopening a card shows the stored details instead of a blank form that
   // reads as though the last save never happened. Parents key this modal by
   // mapping, so these initialisers run again for each card.
-  const [interviewDate, setInterviewDate] = useState("");
+  const [interviewDate, setInterviewDate] = useState(
+    card?.interview_date ? toDateTimeInputValue(parseApiDate(card.interview_date)) : "",
+  );
   const [joiningDate, setJoiningDate] = useState(card?.joining_date?.slice(0, 10) ?? "");
   const [salaryOffered, setSalaryOffered] = useState(
     card?.salary_offered == null ? "" : String(card.salary_offered),
@@ -212,6 +215,11 @@ export default function ClientActionModal({
                     <label className="text-xs font-semibold text-text-muted uppercase">
                       Set Interview Date
                     </label>
+                    {card.interview_date && (
+                      <p className="text-xs text-text-muted">
+                        Scheduled for {parseApiDate(card.interview_date).toLocaleString()}
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <input
                         type="datetime-local"
