@@ -132,7 +132,8 @@ class IntakeCandidateDetails(BaseModel):
     gender: Gender
     age: int | None = Field(default=None, gt=0)
     expected_salary: float = Field(..., ge=0)
-    salary: float = Field(..., ge=0)
+    # Current salary is optional: plenty of leads won't say, or have none.
+    salary: float | None = Field(default=None, ge=0)
     notice_period: str = Field(..., min_length=1, max_length=100)
     cv_link: str | None = Field(default=None, max_length=2000)
 
@@ -326,7 +327,7 @@ class ManualLeadDraft(BaseModel):
     department: Department | None = None
     current_company: str | None = None
     experience_years: float = Field(default=0, ge=0)
-    salary: float = Field(ge=0)  # current, ₹ per month — required
+    salary: float | None = Field(default=None, ge=0)  # current, ₹ per month
     expected_salary: float | None = Field(default=None, ge=0)  # ₹ per month
     # Which of the uploaded files is this lead's resume, if any.
     resume_index: int | None = Field(default=None, ge=0)

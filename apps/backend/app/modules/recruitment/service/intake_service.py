@@ -926,7 +926,7 @@ async def accept_lead(
         # a link the applicant sent.
         if not fields.get("cv_link"):
             fields.pop("cv_link", None)
-        # The form requires both salaries, entered per month. An update, so
+        # Salaries on the form are entered per month. An update, so
         # Candidate's Insert hook doesn't see it; stamp it here like the
         # candidate PATCH does.
         fields["salary_period"] = "monthly"

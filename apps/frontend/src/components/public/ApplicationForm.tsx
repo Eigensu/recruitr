@@ -33,8 +33,7 @@ const schema = z
     currentSalary: z
       .string()
       .trim()
-      .min(1, "Enter your current monthly salary.")
-      .refine(isRupeeAmount, "Enter an amount in rupees, e.g. 25000."),
+      .refine((v) => v === "" || isRupeeAmount(v), "Enter an amount in rupees, e.g. 25000."),
     expectedSalary: z
       .string()
       .trim()
@@ -195,7 +194,7 @@ function buildApplicationFormData(
   if (form.city) formData.append("city", form.city);
   if (form.currentRole) formData.append("current_role", form.currentRole);
   if (form.educationLevel) formData.append("education_level", form.educationLevel);
-  formData.append("current_salary", validated.currentSalary);
+  if (validated.currentSalary) formData.append("current_salary", validated.currentSalary);
   if (validated.expectedSalary) formData.append("expected_salary", validated.expectedSalary);
   // "Other" carries no information on its own — send what they typed instead.
   const channel =
@@ -468,7 +467,7 @@ export default function ApplicationForm({
                 />
                 <div>
                   <label htmlFor="currentSalary" className={labelCls}>
-                    Current salary (₹/month) <span className="text-yellow">*</span>
+                    Current salary (₹/month)
                   </label>
                   <input
                     id="currentSalary"
@@ -476,7 +475,6 @@ export default function ApplicationForm({
                     type="number"
                     inputMode="numeric"
                     min="0"
-                    required
                     aria-invalid={!!fieldErrors.currentSalary}
                     aria-describedby={fieldErrors.currentSalary ? "currentSalary-error" : undefined}
                     className={fieldErrors.currentSalary ? inputErrorCls : inputCls}

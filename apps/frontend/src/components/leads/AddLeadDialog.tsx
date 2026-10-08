@@ -63,7 +63,8 @@ function validate(fields: Fields): Draft["problems"] {
   const problems: Draft["problems"] = {};
   if (!fields.full_name.trim()) problems.full_name = "Required";
   if (fields.phone.replace(/\D/g, "").length < 10) problems.phone = "10-digit number";
-  if (fields.salary.trim() === "" || Number(fields.salary) < 0) problems.salary = "Required";
+  if (fields.salary.trim() !== "" && Number(fields.salary) < 0)
+    problems.salary = "Must be 0 or more";
   if (fields.expected_salary.trim() !== "" && Number(fields.expected_salary) < 0)
     problems.expected_salary = "Must be 0 or more";
   return problems;
@@ -81,7 +82,7 @@ function toInput(fields: Fields, resumeIndex: number | undefined): ManualLeadInp
     department: text("department"),
     current_company: text("current_company"),
     experience_years: num("experience_years"),
-    salary: Number(fields.salary),
+    salary: num("salary"),
     expected_salary: num("expected_salary"),
     resume_index: resumeIndex,
   };
@@ -439,7 +440,7 @@ export default function AddLeadDialog({
                     <Field
                       draft={draft}
                       k="salary"
-                      label="Current ₹/month *"
+                      label="Current ₹/month"
                       type="number"
                       onChange={update}
                     />

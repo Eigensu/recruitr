@@ -124,6 +124,23 @@ async def test_accepting_saves_the_form_and_waits_for_review(http, caller):
 
 
 @pytest.mark.asyncio
+async def test_accepting_without_a_current_salary_keeps_the_one_on_file(http, caller):
+    lead = await _lead(telecaller=caller)
+    candidate = await Candidate.get(lead.candidate_id)
+    await candidate.set({"salary": 25000})
+    details = {k: v for k, v in DETAILS.items() if k != "salary"}
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": details},
+        headers=await auth_headers("caller"),
+    )
+
+    assert res.status_code == 200, res.text
+    assert (await Candidate.get(lead.candidate_id)).salary == 25000
+
+
+@pytest.mark.asyncio
 async def test_accept_requires_the_form(http, caller):
     lead = await _lead(telecaller=caller)
     incomplete = {key: value for key, value in DETAILS.items() if key != "notice_period"}

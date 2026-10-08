@@ -322,12 +322,13 @@ export function ExpectedSalaryField(
   );
 }
 
-export function CurrentSalaryField(
-  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
-) {
+export function CurrentSalaryField({
+  optional = false,
+  ...props
+}: Readonly<{ value: string; onChange: (v: string) => void; error?: string; optional?: boolean }>) {
   return (
     <TextField
-      label="Current Salary (₹/month) *"
+      label={optional ? "Current Salary (₹/month)" : "Current Salary (₹/month) *"}
       type="number"
       min="0"
       placeholder="e.g. 30000"

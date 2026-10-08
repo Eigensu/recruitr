@@ -66,7 +66,7 @@ const schema = z.object({
     z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
   ),
   expected_salary: numberFrom("Expected Salary is required"),
-  salary: numberFrom("Current Salary is required"),
+  salary: z.preprocess(blankToUndefined, z.number().min(0, "Must be 0 or more").optional()),
   notice_period: z.string().min(1, "Notice Period is required"),
   cv_link: z
     .union([z.literal(""), z.string().regex(/^https?:\/\//i, "Must be an http(s) link")])
@@ -361,6 +361,7 @@ export default function AcceptLeadDialog({
                 error={errors.notice_period}
               />
               <CurrentSalaryField
+                optional
                 value={form.salary}
                 onChange={(salary) => update({ salary })}
                 error={errors.salary}

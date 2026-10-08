@@ -265,7 +265,7 @@ async def test_each_draft_succeeds_or_fails_on_its_own(http, people, cloudinary)
         [
             _draft(),
             _draft(full_name="Already Here", phone="9000000001", email=None),
-            _draft(full_name="No Salary", phone="9111111111", email=None, salary=None),
+            _draft(full_name="Bad Salary", phone="9111111111", email=None, salary=-1),
             _draft(full_name="Bad Phone", phone="12345", email=None),
             _draft(full_name="Bad Email", phone="9222222222", email="not-an-email"),
             _draft(full_name="Missing Resume", phone="9333333333", email=None, resume_index=4),
@@ -277,13 +277,13 @@ async def test_each_draft_succeeds_or_fails_on_its_own(http, people, cloudinary)
     assert statuses == [
         ("Shawn Dsouza", "queued"),
         ("Already Here", "duplicate"),
-        ("No Salary", "error"),
+        ("Bad Salary", "error"),
         ("Bad Phone", "error"),
         ("Bad Email", "error"),
         ("Missing Resume", "error"),
     ]
     details = {r["full_name"]: r["detail"] for r in res.json()["results"]}
-    assert "salary" in details["No Salary"].lower()
+    assert "salary" in details["Bad Salary"].lower()
     assert "10-digit" in details["Bad Phone"]
     assert "email" in details["Bad Email"].lower()
 
@@ -291,6 +291,13 @@ async def test_each_draft_succeeds_or_fails_on_its_own(http, people, cloudinary)
     assert sorted(lead.status for lead in leads) == sorted(
         [IntakeLeadStatus.pending_telecaller, IntakeLeadStatus.duplicate]
     )
+
+
+async def test_current_salary_is_optional(http, people, cloudinary):
+    res = await _submit(http, [_draft(salary=None)])
+
+    assert res.status_code == 200, res.text
+    assert res.json()["results"][0]["status"] == "queued"
 
 
 async def test_a_draft_whose_name_is_not_text_fails_on_its_own(http, people, cloudinary):

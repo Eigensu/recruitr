@@ -224,7 +224,7 @@ export interface IntakeCandidateDetails {
   gender: "male" | "female" | "other";
   age?: number;
   expected_salary: number;
-  salary: number;
+  salary?: number;
   notice_period: string;
   cv_link?: string;
 }
@@ -600,7 +600,7 @@ export interface ManualLeadInput {
   department?: string;
   current_company?: string;
   experience_years?: number;
-  salary: number;
+  salary?: number;
   expected_salary?: number;
   resume_index?: number;
 }

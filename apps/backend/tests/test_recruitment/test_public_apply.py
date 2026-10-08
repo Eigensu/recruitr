@@ -52,7 +52,7 @@ APPLICATION = {
     "city": "Mumbai",
     "education_level": "Bachelors",
     "source_channel": "LinkedIn",
-    "current_salary": "28000",  # ₹ per month; required on every external form
+    "current_salary": "28000",  # ₹ per month; optional on every external form
 }
 
 
@@ -163,13 +163,13 @@ async def test_expected_salary_is_stored_when_given(brand: Brand, client: AsyncC
 
 
 @pytest.mark.asyncio
-async def test_current_salary_is_required(brand: Brand, client: AsyncClient) -> None:
+async def test_current_salary_is_optional(brand: Brand, client: AsyncClient) -> None:
     form = {k: v for k, v in APPLICATION.items() if k != "current_salary"}
 
     res = await client.post("/api/v1/public/apply", data=form)
 
-    assert res.status_code == 422
-    assert await Candidate.find_all().count() == 0
+    assert res.status_code == 201, res.text
+    assert (await _stored())["salary"] is None
 
 
 @pytest.mark.asyncio
