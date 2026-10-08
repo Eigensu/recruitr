@@ -10,9 +10,10 @@
     POST /intake/leads/{id}/reassign   move a lead to someone else        (maintainer+)
     POST /intake/sync                  read the sheet now                 (admin)
 
-    GET  /intake/leads/review               leads waiting on a recruiter: their own,
-                                            or everyone's for maintainer+
-    POST /intake/leads/{id}/recruiter-accept  take the lead on (it is actioned)
+    GET  /intake/leads/review               leads waiting on a recruiter's decision:
+                                            their own, or everyone's for maintainer+
+    POST /intake/leads/{id}/recruiter-accept  take the lead on (candidate approved; the
+                                              clock runs on to the first mapping)
     POST /intake/leads/{id}/recruiter-reject  turn it down (archived, candidate hidden)
 
     GET  /intake/analytics/overview     funnel + both SLA clocks   (maintainer+)
@@ -244,6 +245,7 @@ def _to_response(
         recruiter_actioned_at=lead.recruiter_actioned_at,
         recruiter_response_seconds=lead.recruiter_response_seconds,
         recruiter_decision=lead.recruiter_decision,
+        recruiter_accepted_at=lead.recruiter_accepted_at,
         recruiter_reject_reason=lead.recruiter_reject_reason,
         recruiter_notes=lead.recruiter_notes,
         reassignment_count=lead.reassignment_count,
@@ -762,6 +764,12 @@ def _awaiting_recruiter_or_409(lead: IntakeLead) -> None:
             status.HTTP_409_CONFLICT,
             f"This lead is {lead.status.value.replace('_', ' ')} and is no longer in review.",
         )
+    # Accepted leads stay pending_recruiter until the first mapping, but their
+    # decision is made: neither a second accept nor a reject applies to them.
+    if lead.recruiter_decision is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "This lead was already accepted and is no longer in review."
+        )
 
 
 # Declared before /leads/{lead_id}, which would otherwise swallow "review".
@@ -775,10 +783,13 @@ async def review_leads(
 
     A recruiter sees only the leads handed to them, whatever `recruiter_id` they
     pass. A maintainer or admin sees every recruiter's, optionally narrowed to one.
+    Accepted leads leave the tab — their candidate is in the Candidates tab now —
+    though they stay pending_recruiter until the first mapping.
     """
     match: dict = {
         "brand_id": tenant.brand_id,
         "status": IntakeLeadStatus.pending_recruiter.value,
+        "recruiter_decision": None,
     }
     if not _is_manager(tenant):
         match["recruiter_id"] = tenant.employee_id
@@ -803,7 +814,7 @@ async def review_leads(
 
 @router.post("/leads/{lead_id}/recruiter-accept", response_model=IntakeLeadResponse)
 async def recruiter_accept(tenant: _Staff, lead_id: str):
-    """Accept a lead from the Review tab; the candidate moves to the Candidates tab."""
+    """Accept a lead from the Review tab; the candidate is approved into the Candidates tab."""
     lead = await _lead_or_404(tenant, lead_id)
     _own_review_lead_or_403(tenant, lead)
     _awaiting_recruiter_or_409(lead)

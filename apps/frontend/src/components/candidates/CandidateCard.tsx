@@ -170,31 +170,18 @@ function RefereeBadge({
     async function loadDetails() {
       setLoading(true);
       try {
-        // Two calls, not one: omitting `status` doesn't mean "all statuses" —
-        // list_candidates defaults it to APPROVED, which silently dropped
-        // pending referrals from this count. Pending + approved matches what
-        // "View all referrals" actually navigates to on the External tab.
-        const [pendingPage, approvedPage, referees] = await Promise.all([
-          clientFetchCandidates({
-            source: "external",
-            referee_id: refereeId,
-            status: "PENDING",
-            page: 1,
-            limit: 1,
-          }),
-          clientFetchCandidates({
-            source: "external",
-            referee_id: refereeId,
-            status: "APPROVED",
-            page: 1,
-            limit: 1,
-          }),
+        // The Candidates tab's own query, narrowed to this referee — exactly
+        // what "View all referrals" opens, so the count and the list agree.
+        // People still on the Leads page or in a Review tab are PENDING and
+        // left out of both.
+        const [referralPage, referees] = await Promise.all([
+          clientFetchCandidates({ referee_id: refereeId, page: 1, limit: 1 }),
           // Email/connect code stay behind the same maintainer gate GET /referees
           // already enforces — an ordinary recruiter never issues this call.
           isMaintainer ? listReferees(apiFetch) : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        setCount((pendingPage.meta?.total ?? 0) + (approvedPage.meta?.total ?? 0));
+        setCount(referralPage.meta?.total ?? 0);
         const match = referees?.find((r) => r.id === refereeId);
         if (match) setContact({ email: match.email, connect_code: match.connect_code });
       } catch {

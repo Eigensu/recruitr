@@ -35,7 +35,9 @@ const SEGMENTS: {
     bar: "bg-blue-500/70",
     dot: "bg-blue-500/70",
   },
-  { key: "actioned", label: "Taken on", bar: "bg-emerald-500/70", dot: "bg-emerald-500/70" },
+  // Actioned is the recruiter's first mapping; a Review-tab accept alone leaves
+  // the lead "With recruiter".
+  { key: "actioned", label: "Put forward", bar: "bg-emerald-500/70", dot: "bg-emerald-500/70" },
   { key: "rejected", label: "Rejected on the call", bar: "bg-red-500/60", dot: "bg-red-500/60" },
   {
     key: "archived",

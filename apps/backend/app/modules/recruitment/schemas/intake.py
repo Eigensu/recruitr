@@ -81,6 +81,7 @@ class IntakeLeadResponse(_UtcTimestamps):
     recruiter_actioned_at: datetime | None = None
     recruiter_response_seconds: int | None = None
     recruiter_decision: IntakeDecision | None = None
+    recruiter_accepted_at: datetime | None = None
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
     reassignment_count: int = 0
@@ -446,7 +447,8 @@ class IntakeCampaignRow(BaseModel):
     label: str
     leads: int = 0
     accepted: int = 0
-    rejected: int = 0
+    rejected: int = 0  # by the telecaller, on the call
+    recruiter_rejected: int = 0  # passed the call, turned down from Review
     actioned: int = 0
     duplicate: int = 0
     accept_rate: float | None = None

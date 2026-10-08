@@ -356,6 +356,38 @@ async def test_reject_reasons_are_ranked_and_the_unspecified_ones_are_named(http
     assert {"reason": "unspecified", "count": 1} in reasons
 
 
+@pytest.mark.asyncio
+async def test_reject_reasons_count_recruiter_rejects_under_their_own_reason(http, boss):
+    """A recruiter turning a lead down from Review is a reject like any other,
+    filed under the reason the recruiter gave, not the telecaller's accept."""
+    caller = await _staff("caller", UserRole.telecaller)
+    await _lead(
+        status=IntakeLeadStatus.rejected,
+        telecaller=caller,
+        decision=IntakeDecision.reject,
+        reject_reason=IntakeRejectReason.wrong_number,
+    )
+    for _ in range(2):
+        lead = await _lead(
+            status=IntakeLeadStatus.archived, telecaller=caller, decision=IntakeDecision.accept
+        )
+        await lead.set(
+            {
+                "recruiter_decision": IntakeDecision.reject,
+                "recruiter_reject_reason": IntakeRejectReason.not_eligible,
+            }
+        )
+
+    reasons = (
+        await http.get("/api/v1/intake/analytics/overview", headers=await auth_headers("boss"))
+    ).json()["reject_reasons"]
+
+    assert reasons == [
+        {"reason": "not_eligible", "count": 2},
+        {"reason": "wrong_number", "count": 1},
+    ]
+
+
 # ── Campaigns ──────────────────────────────────────────────────────────────────
 
 
@@ -371,6 +403,10 @@ async def test_campaigns_report_what_the_spend_produced(http, boss):
         status=IntakeLeadStatus.rejected,
         decision=IntakeDecision.reject,
     )
+    turned_down = await _lead(
+        campaign="Diwali Hiring", status=IntakeLeadStatus.archived, decision=IntakeDecision.accept
+    )
+    await turned_down.set({"recruiter_decision": IntakeDecision.reject})
     await _lead(
         campaign="Always On", status=IntakeLeadStatus.rejected, decision=IntakeDecision.reject
     )
@@ -380,9 +416,11 @@ async def test_campaigns_report_what_the_spend_produced(http, boss):
     ).json()["rows"]
 
     diwali = next(row for row in rows if row["label"] == "Diwali Hiring")
-    assert diwali["leads"] == 2
-    assert diwali["accept_rate"] == 0.5
-    assert diwali["actioned_rate"] == 0.5
+    assert diwali["leads"] == 3
+    # The telecaller's verdicts: two accepted (one later turned down at Review), one not.
+    assert diwali["accept_rate"] == round(2 / 3, 4)
+    assert diwali["recruiter_rejected"] == 1
+    assert diwali["actioned_rate"] == round(1 / 3, 4)
     assert next(row for row in rows if row["label"] == "Always On")["accept_rate"] == 0.0
 
 
@@ -400,6 +438,7 @@ async def test_leads_with_no_campaign_are_labelled_not_dropped(http, boss):
             "leads": 1,
             "accepted": 0,
             "rejected": 0,
+            "recruiter_rejected": 0,
             "actioned": 0,
             "duplicate": 0,
             "accept_rate": None,

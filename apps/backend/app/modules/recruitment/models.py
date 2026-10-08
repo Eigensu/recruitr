@@ -844,8 +844,12 @@ class IntakeLead(Document):
     recruiter_response_seconds: int | None = None
     recruiter_sla_breached_at: datetime | None = None
     # Set by the Review tab's accept / reject. Null when the lead was closed by
-    # a mapping instead, which also counts as the recruiter acting on it.
+    # a mapping instead — a recruiter can still map someone accepted before the
+    # Review step existed. Accept approves the candidate but is not the
+    # recruiter acting on the lead: it stays pending_recruiter, clock running,
+    # until the first mapping. Reject is final and archives it.
     recruiter_decision: IntakeDecision | None = None
+    recruiter_accepted_at: datetime | None = None
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
 

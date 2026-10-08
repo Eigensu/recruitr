@@ -58,14 +58,14 @@ const selectStyle = {
 /**
  * The Candidate Directory: two tabs.
  *
- * Candidates — everyone APPROVED, except people still waiting in a recruiter's
- * Review tab. Un-actioned (PENDING) people are not here at all: they live on the
- * Leads page until a telecaller screens them.
+ * Candidates — everyone APPROVED. Un-actioned (PENDING) people are not here at
+ * all: they live on the Leads page until a telecaller screens them, and stay
+ * PENDING through the Review tab until a recruiter accepts them.
  *
  * Review — leads a telecaller screened and an admin handed to a team, waiting
  * on the recruiter the team's round-robin picked. A recruiter sees their own;
  * a maintainer or admin sees everyone's and may decide on a recruiter's behalf.
- * Accept moves the person into the Candidates tab; reject archives them.
+ * Accept approves the person into the Candidates tab; reject archives them.
  */
 export default function CandidatesClient({
   initialCandidates,
@@ -100,17 +100,22 @@ export default function CandidatesClient({
   // Loaded on mount rather than on first open, so the tab can show its count.
   const [reviewLeads, setReviewLeads] = useState<IntakeLead[] | null>(null);
   const [reviewRecruiterId, setReviewRecruiterId] = useState("");
-  const [busyLeadId, setBusyLeadId] = useState<string | null>(null);
+  // A set, not one id: two leads can be in flight at once, and finishing one
+  // must not re-enable the other's buttons while its request is still out.
+  const [busyLeadIds, setBusyLeadIds] = useState<ReadonlySet<string>>(new Set());
   const reviewRequestRef = useRef(0);
 
+  function setLeadBusy(id: string, busy: boolean) {
+    setBusyLeadIds((prev) => {
+      const next = new Set(prev);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   function query(filters: Partial<CandidateFilters>, referee: string, nextPage: number) {
-    return {
-      ...filters,
-      referee_id: referee || undefined,
-      exclude_in_review: true,
-      page: nextPage,
-      limit: PAGE_SIZE,
-    };
+    return { ...filters, referee_id: referee || undefined, page: nextPage, limit: PAGE_SIZE };
   }
 
   async function loadCandidates(
@@ -247,7 +252,7 @@ export default function CandidatesClient({
   }
 
   async function handleAcceptLead(lead: IntakeLead) {
-    setBusyLeadId(lead.id);
+    setLeadBusy(lead.id, true);
     try {
       await recruiterAcceptLead(apiFetch, lead.id);
     } catch (err) {
@@ -256,7 +261,7 @@ export default function CandidatesClient({
       void loadReview();
       return;
     } finally {
-      setBusyLeadId(null);
+      setLeadBusy(lead.id, false);
     }
     dropReviewLead(lead.id);
     toast(`${lead.full_name} moved to Candidates`, "success");
@@ -270,7 +275,7 @@ export default function CandidatesClient({
     reason: IntakeRejectReason | undefined,
     notes: string,
   ) {
-    setBusyLeadId(lead.id);
+    setLeadBusy(lead.id, true);
     try {
       await recruiterRejectLead(apiFetch, lead.id, reason, notes);
     } catch (err) {
@@ -278,7 +283,7 @@ export default function CandidatesClient({
       void loadReview();
       return;
     } finally {
-      setBusyLeadId(null);
+      setLeadBusy(lead.id, false);
     }
     dropReviewLead(lead.id);
     toast(`${lead.full_name} rejected and archived`, "success");
@@ -385,18 +390,23 @@ export default function CandidatesClient({
         )}
       </div>
 
+      {/* Hidden rather than unmounted on the Review tab: its inputs are local
+          state, and remounting blanked them while activeFilters still applied,
+          so the list stayed filtered by values the bar no longer showed. */}
+      <div hidden={activeTab !== "candidates"}>
+        <CandidateFilterBar
+          availableTags={availableTags}
+          availableRoles={availableRoles}
+          recruiters={recruiters}
+          onFilterChange={handleFilterChange}
+          referees={referees}
+          refereeId={refereeId}
+          onRefereeChange={handleRefereeChange}
+        />
+      </div>
+
       {activeTab === "candidates" && (
         <>
-          <CandidateFilterBar
-            availableTags={availableTags}
-            availableRoles={availableRoles}
-            recruiters={recruiters}
-            onFilterChange={handleFilterChange}
-            referees={referees}
-            refereeId={refereeId}
-            onRefereeChange={handleRefereeChange}
-          />
-
           {showAddForm && (
             <div className="rounded-lg" style={drawerStyle}>
               <AddCandidateForm
@@ -490,7 +500,7 @@ export default function CandidatesClient({
                 <ReviewLeadCard
                   key={lead.id}
                   lead={lead}
-                  busy={busyLeadId === lead.id}
+                  busy={busyLeadIds.has(lead.id)}
                   showRecruiter={isMaintainer}
                   onAccept={() => handleAcceptLead(lead)}
                   onReject={(reason, notes) => handleRejectLead(lead, reason, notes)}

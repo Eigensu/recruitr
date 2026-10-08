@@ -1,18 +1,23 @@
 """Move un-actioned candidates onto the Leads page and hide telecaller rejects, once.
 
 Usage (from apps/backend):
-    python3 scripts/migrate_candidates_to_leads.py            # report only, writes nothing
-    python3 scripts/migrate_candidates_to_leads.py --confirm  # do it
+    python3 scripts/migrate_candidates_to_leads.py                     # report only
+    python3 scripts/migrate_candidates_to_leads.py --confirm           # do it
+    python3 scripts/migrate_candidates_to_leads.py --confirm --assign  # and queue them
 
 The Candidates page no longer has an External tab, which was the only place a
-PENDING candidate without a lead could be decided. Two things follow:
+PENDING candidate without a lead could be decided. Three things follow:
 
-  1. Every active PENDING candidate with no IntakeLead gets one, queued for a
-     telecaller by the same round-robin the public form uses
-     (`open_lead_for_application`), or left `unassigned` when the brand has no
-     telecaller. PENDING only ever came from the public form and the sheet
-     ingest, and the ingest always opens a lead, so these are applicants from
-     before the lead flow existed.
+  1. Every active PENDING candidate with no lead of their own gets one
+     (`open_lead_for_application`). A `duplicate` lead pointing at them does
+     not count: that is a later sheet row matched to them, not their screening.
+     PENDING only ever came from the public form and the sheet ingest, so these
+     are applicants from before the lead flow existed, or whose lead failed to
+     open. Each lead is dated when the person applied, so the analytics file it
+     in the week they arrived rather than the week this ran, and left
+     `unassigned` — a backlog handed out at once would start every telecaller's
+     SLA clock together and breach them all a day later. --assign round-robins
+     them to telecallers instead; otherwise assign from the Leads page.
 
   2. Candidates a telecaller already rejected are soft-deleted
      (is_active=False), as a telecaller reject now does going forward. Only
@@ -20,8 +25,13 @@ PENDING candidate without a lead could be decided. Two things follow:
      some other way (the old External tab's reject button) are counted in the
      report and left alone.
 
-Safe to re-run: a candidate that has a lead is skipped in step 1, and step 2
-only touches rows that are still active.
+  3. Candidates whose lead waits in a recruiter's Review tab go back to
+     PENDING. The old flow approved them when an admin assigned the team; now
+     only the recruiter's Accept does, and until then they belong in the
+     Review tab alone.
+
+Safe to re-run: step 1 skips anyone with a lead, step 2 only touches rows that
+are still active, and step 3 only rows that are still APPROVED.
 """
 
 from __future__ import annotations
@@ -54,6 +64,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--confirm", action="store_true", help="actually write (default: report only)"
     )
+    parser.add_argument(
+        "--assign",
+        action="store_true",
+        help="round-robin the opened leads to telecallers, starting their SLA clocks",
+    )
     return parser.parse_args()
 
 
@@ -64,8 +79,12 @@ async def _pending_without_lead() -> list[Candidate]:
     if not pending:
         return []
     with_lead = set(
-        await IntakeLead.get_motor_collection().distinct(
-            "candidate_id", {"candidate_id": {"$in": [c.id for c in pending]}}
+        await IntakeLead.distinct(
+            "candidate_id",
+            {
+                "candidate_id": {"$in": [c.id for c in pending]},
+                "status": {"$ne": IntakeLeadStatus.duplicate.value},
+            },
         )
     )
     return [c for c in pending if c.id not in with_lead]
@@ -79,7 +98,7 @@ async def _rejected_still_active() -> tuple[list[Candidate], int]:
     if not rejected:
         return [], 0
     by_telecaller = set(
-        await IntakeLead.get_motor_collection().distinct(
+        await IntakeLead.distinct(
             "candidate_id",
             {
                 "candidate_id": {"$in": [c.id for c in rejected]},
@@ -91,10 +110,24 @@ async def _rejected_still_active() -> tuple[list[Candidate], int]:
     return hide, len(rejected) - len(hide)
 
 
-async def run(*, confirm: bool) -> dict[str, int]:
+async def _approved_in_review() -> list[Candidate]:
+    """APPROVED candidates whose lead still waits on a recruiter's decision."""
+    in_review = await IntakeLead.distinct(
+        "candidate_id",
+        {"status": IntakeLeadStatus.pending_recruiter.value, "recruiter_decision": None},
+    )
+    if not in_review:
+        return []
+    return await Candidate.find(
+        {"_id": {"$in": in_review}, "status": CandidateStatus.approved.value, "is_active": True}
+    ).to_list()
+
+
+async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
     """Report, and with `confirm` apply. Returns the counts, for the tests."""
     orphans = await _pending_without_lead()
     to_hide, left_alone = await _rejected_still_active()
+    to_unapprove = await _approved_in_review()
 
     per_brand = Counter(str(c.brand_id) for c in orphans)
     print("\nPENDING candidates with no lead (→ Leads page)")
@@ -104,15 +137,29 @@ async def run(*, confirm: bool) -> dict[str, int]:
     print("REJECTED candidates still active")
     print(f"  rejected by a telecaller    {len(to_hide):>7,}   ← will be soft-deleted")
     print(f"  rejected some other way     {left_alone:>7,}   ← left as they are")
+    print("APPROVED candidates waiting in a recruiter's Review tab")
+    print(f"  total                       {len(to_unapprove):>7,}   ← back to PENDING")
 
-    counts = {"leads_opened": 0, "unassigned": 0, "hidden": 0, "left_alone": left_alone}
+    counts = {
+        "leads_opened": 0,
+        "unassigned": 0,
+        "hidden": 0,
+        "left_alone": left_alone,
+        "unapproved": 0,
+    }
     if not confirm:
         print("\nNothing written. Re-run with --confirm to apply.\n")
-        counts |= {"would_open": len(orphans), "would_hide": len(to_hide)}
+        counts |= {
+            "would_open": len(orphans),
+            "would_hide": len(to_hide),
+            "would_unapprove": len(to_unapprove),
+        }
         return counts
 
     for candidate in orphans:
-        lead = await open_lead_for_application(candidate)
+        lead = await open_lead_for_application(
+            candidate, assign=assign, arrived_at=candidate.created_at
+        )
         if lead is None:
             continue  # opened by something else since the report was read
         counts["leads_opened"] += 1
@@ -125,17 +172,28 @@ async def run(*, confirm: bool) -> dict[str, int]:
         ).update({"$set": {"is_active": False}})
         counts["hidden"] = result.modified_count if result is not None else 0
 
-    print(f"\n  leads opened                {counts['leads_opened']:>7,}")
-    print(
-        f"    of which unassigned       {counts['unassigned']:>7,}   ← no telecaller to take them"
+    if to_unapprove:
+        result = await Candidate.find(
+            {
+                "_id": {"$in": [c.id for c in to_unapprove]},
+                "status": CandidateStatus.approved.value,
+            }
+        ).update({"$set": {"status": CandidateStatus.pending.value}})
+        counts["unapproved"] = result.modified_count if result is not None else 0
+
+    unassigned_note = (
+        "← assign from the Leads page" if not assign else "← no telecaller to take them"
     )
-    print(f"  candidates soft-deleted     {counts['hidden']:>7,}\n")
+    print(f"\n  leads opened                {counts['leads_opened']:>7,}")
+    print(f"    of which unassigned       {counts['unassigned']:>7,}   {unassigned_note}")
+    print(f"  candidates soft-deleted     {counts['hidden']:>7,}")
+    print(f"  candidates back to PENDING  {counts['unapproved']:>7,}\n")
     return counts
 
 
 async def _main(args: argparse.Namespace) -> None:
     await init_db()
-    await run(confirm=args.confirm)
+    await run(confirm=args.confirm, assign=args.assign)
 
 
 def main() -> None:

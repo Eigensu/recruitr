@@ -22,9 +22,9 @@ export default async function CandidatesPage({
 
   try {
     const [candidatePage, tags, roles] = await Promise.all([
-      // Leaves out anyone still waiting in a recruiter's Review tab; PENDING
-      // people are on the Leads page, not here.
-      getCandidates({ page: 1, limit: 50, exclude_in_review: true }),
+      // APPROVED only, which by itself leaves out PENDING people on the Leads
+      // page and those still waiting in a recruiter's Review tab.
+      getCandidates({ page: 1, limit: 50 }),
       getCandidateTags(),
       getCandidateRoles().catch((err) => {
         console.error("Failed to load candidate roles:", err);

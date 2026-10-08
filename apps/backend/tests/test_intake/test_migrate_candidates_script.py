@@ -5,6 +5,8 @@ points at production: report mode must write nothing, and a second run must
 find nothing left to do.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from beanie import PydanticObjectId
 
@@ -49,7 +51,7 @@ async def test_report_mode_writes_nothing():
 
 
 @pytest.mark.asyncio
-async def test_pending_candidates_without_a_lead_are_queued_for_a_telecaller():
+async def test_with_assign_pending_candidates_without_a_lead_are_queued_for_a_telecaller():
     caller = Employee(
         brand_id=_BRAND, name="Caller", email="caller@binge.consulting", role=UserRole.telecaller
     )
@@ -59,7 +61,7 @@ async def test_pending_candidates_without_a_lead_are_queued_for_a_telecaller():
     await _lead_for(screened, status=IntakeLeadStatus.pending_review)
     await _candidate("Approved", CandidateStatus.approved)
 
-    counts = await migrate.run(confirm=True)
+    counts = await migrate.run(confirm=True, assign=True)
 
     assert counts["leads_opened"] == 1
     lead = await IntakeLead.find_one({"candidate_id": orphan.id})
@@ -73,9 +75,68 @@ async def test_pending_candidates_without_a_lead_are_queued_for_a_telecaller():
 async def test_with_no_telecaller_the_lead_waits_unassigned():
     await _candidate("Old applicant", CandidateStatus.pending)
 
-    counts = await migrate.run(confirm=True)
+    counts = await migrate.run(confirm=True, assign=True)
 
     assert counts == counts | {"leads_opened": 1, "unassigned": 1}
+
+
+@pytest.mark.asyncio
+async def test_by_default_leads_are_left_unassigned_and_dated_when_they_applied():
+    """A backlog handed out at once would breach every telecaller a day later,
+    and dating it today would file months of applicants under this week."""
+    caller = Employee(
+        brand_id=_BRAND, name="Caller", email="caller@binge.consulting", role=UserRole.telecaller
+    )
+    await caller.insert()
+    applied = datetime.now(UTC).replace(microsecond=0) - timedelta(days=40)
+    orphan = await _candidate("Old applicant", CandidateStatus.pending, created_at=applied)
+
+    await migrate.run(confirm=True)
+
+    lead = await IntakeLead.find_one({"candidate_id": orphan.id})
+    assert lead.status == IntakeLeadStatus.unassigned
+    assert lead.telecaller_id is None
+    assert lead.telecaller_assigned_at is None
+    assert lead.external_created_at.replace(tzinfo=UTC) == applied
+    assert lead.ingested_at.replace(tzinfo=UTC) == applied
+
+
+@pytest.mark.asyncio
+async def test_a_duplicate_lead_pointing_at_someone_is_not_their_screening():
+    """A later sheet row matched to an applicant files a `duplicate` lead with
+    their candidate_id; they still have no lead of their own."""
+    orphan = await _candidate("Applied twice", CandidateStatus.pending)
+    await _lead_for(orphan, status=IntakeLeadStatus.duplicate)
+
+    counts = await migrate.run(confirm=True)
+
+    assert counts["leads_opened"] == 1
+    statuses = {
+        lead.status for lead in await IntakeLead.find({"candidate_id": orphan.id}).to_list()
+    }
+    assert statuses == {IntakeLeadStatus.duplicate, IntakeLeadStatus.unassigned}
+
+
+@pytest.mark.asyncio
+async def test_candidates_approved_into_a_review_tab_go_back_to_pending():
+    """The old flow approved at team assignment; only the recruiter's Accept does now."""
+    waiting = await _candidate("Waiting on recruiter", CandidateStatus.approved)
+    await _lead_for(waiting, status=IntakeLeadStatus.pending_recruiter)
+    accepted = await _candidate("Accepted", CandidateStatus.approved)
+    await _lead_for(
+        accepted,
+        status=IntakeLeadStatus.pending_recruiter,
+        recruiter_decision=IntakeDecision.accept,
+    )
+    mapped = await _candidate("Already mapped", CandidateStatus.approved)
+    await _lead_for(mapped, status=IntakeLeadStatus.actioned)
+
+    counts = await migrate.run(confirm=True)
+
+    assert counts["unapproved"] == 1
+    assert (await Candidate.get(waiting.id)).status == CandidateStatus.pending
+    assert (await Candidate.get(accepted.id)).status == CandidateStatus.approved
+    assert (await Candidate.get(mapped.id)).status == CandidateStatus.approved
 
 
 @pytest.mark.asyncio
@@ -101,9 +162,12 @@ async def test_a_second_run_finds_nothing_to_do():
     await _candidate("Old applicant", CandidateStatus.pending)
     rejected = await _candidate("Caller said no", CandidateStatus.rejected)
     await _lead_for(rejected, telecaller_decision=IntakeDecision.reject)
+    in_review = await _candidate("Waiting on recruiter", CandidateStatus.approved)
+    await _lead_for(in_review, status=IntakeLeadStatus.pending_recruiter)
     await migrate.run(confirm=True)
 
     again = await migrate.run(confirm=False)
 
     assert again["would_open"] == 0
     assert again["would_hide"] == 0
+    assert again["would_unapprove"] == 0

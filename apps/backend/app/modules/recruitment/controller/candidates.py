@@ -39,17 +39,9 @@ from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
-    IntakeLeadStatus,
     PipelineStage,
 )
-from app.modules.recruitment.models import (
-    Candidate,
-    CandidateEvent,
-    Employee,
-    IntakeLead,
-    Mapping,
-    RefereeUser,
-)
+from app.modules.recruitment.models import Candidate, CandidateEvent, Employee, Mapping, RefereeUser
 from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
@@ -208,9 +200,21 @@ def _name_from_filename(filename: str) -> str:
     return " ".join(words) if words else stem
 
 
-async def _get_or_404(scope: TenantScope, candidate_id: str) -> Candidate:
+# A telecaller's or recruiter's reject hides the candidate (is_active=False) but
+# keeps the row, so the Leads page can still open the profile behind a rejected
+# or archived lead. Only the read endpoints accept it: an edit, delete or
+# approve on a hidden row would change someone no list shows.
+_VISIBLE = {"is_active": True}
+_READABLE = {"$or": [{"is_active": True}, {"status": CandidateStatus.rejected.value}]}
+
+
+async def _get_or_404(
+    scope: TenantScope, candidate_id: str, *, include_rejected: bool = False
+) -> Candidate:
     oid = to_object_id(candidate_id, "candidate_id")
-    doc = await Candidate.find_one({"_id": oid, "brand_id": scope.brand_id, "is_active": True})
+    doc = await Candidate.find_one(
+        {"_id": oid, "brand_id": scope.brand_id, **(_READABLE if include_rejected else _VISIBLE)}
+    )
     if not doc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
     return doc
@@ -296,13 +300,14 @@ async def list_candidate_roles(tenant: _Tenant) -> list[str]:
 async def list_candidate_referees(tenant: _Tenant) -> list[CandidateReferrerOption]:
     """Distinct referees with at least one attributed candidate in this brand.
 
-    Feeds the External Candidates referee filter. Name only, open to any staff
+    Feeds the Candidates tab's referee filter. Name only, open to any staff
     role — unlike GET /referees (the full roster with email + connect code),
     which stays maintainer-gated. See CandidateReferrerOption.
 
-    Scoped to source=external and PENDING/APPROVED to match what the External
-    tab actually lists — a referee whose only candidate is internal or
-    rejected would otherwise show up in the dropdown and return zero rows.
+    Scoped to exactly what the Candidates tab lists — active and APPROVED, any
+    source — so a referee whose referrals are all still PENDING (on the Leads
+    page, or waiting in a recruiter's Review tab) or rejected does not show up
+    in the dropdown only to return zero rows.
     """
     pipeline = [
         {
@@ -310,19 +315,11 @@ async def list_candidate_referees(tenant: _Tenant) -> list[CandidateReferrerOpti
                 "brand_id": tenant.brand_id,
                 "referee_id": {"$ne": None},
                 "is_active": True,
-                "source": "external",
                 # Missing status included for the same reason list_candidates
                 # includes it: candidates predating the field are listed by the
                 # tab, so their referee belongs in the tab's dropdown.
                 "$or": [
-                    {
-                        "status": {
-                            "$in": [
-                                CandidateStatus.pending.value,
-                                CandidateStatus.approved.value,
-                            ]
-                        }
-                    },
+                    {"status": CandidateStatus.approved.value},
                     {"status": {"$exists": False}},
                 ],
             }
@@ -385,24 +382,10 @@ async def list_candidates(
     communication: Annotated[str | None, Query()] = None,
     education: Annotated[str | None, Query()] = None,
     status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
-    exclude_in_review: Annotated[
-        bool,
-        Query(description="Leave out candidates whose lead waits in a recruiter's Review tab"),
-    ] = False,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
-    if exclude_in_review:
-        # Approved at team assignment, but not the Candidates tab's until the
-        # recruiter accepts them from Review. The open set is small, so a
-        # distinct + $nin is cheaper than a $lookup over every candidate.
-        in_review = await IntakeLead.get_motor_collection().distinct(
-            "candidate_id",
-            {"brand_id": tenant.brand_id, "status": IntakeLeadStatus.pending_recruiter.value},
-        )
-        if in_review:
-            match["_id"] = {"$nin": in_review}
     # Status and search each need their own $or, so they are collected as $and
     # clauses. Assigning both to match["$or"] let search overwrite status,
     # leaking unapproved candidates into the directory whenever anyone searched.
@@ -785,7 +768,7 @@ async def bulk_upload_resumes(
 
 @router.get("/{candidate_id}")
 async def get_candidate(tenant: _Tenant, candidate_id: str) -> CandidateResponse:
-    doc = await _get_or_404(tenant, candidate_id)
+    doc = await _get_or_404(tenant, candidate_id, include_rejected=True)
     return await _build_candidate_response(doc, await _mappings_count(tenant, candidate_id), tenant)
 
 
@@ -887,13 +870,8 @@ async def reject_candidate(
 
 @router.get("/{candidate_id}/mappings")
 async def get_candidate_mappings(tenant: _Tenant, candidate_id: str) -> list[CandidateMappingItem]:
-    cand_oid = to_object_id(candidate_id, "candidate_id")
     # Verify candidate belongs to this brand first
-    exists = await Candidate.find_one(
-        {"_id": cand_oid, "brand_id": tenant.brand_id, "is_active": True}
-    )
-    if not exists:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
+    cand_oid = (await _get_or_404(tenant, candidate_id, include_rejected=True)).id
 
     pipeline = [
         {_MATCH: {"candidate_id": cand_oid, "brand_id": tenant.brand_id}},
@@ -1071,7 +1049,7 @@ async def get_candidate_history(tenant: _Tenant, candidate_id: str) -> Candidate
     feed: activities carry a 90-day TTL, so anything older has already been
     deleted, and a placement made last year still belongs on the profile.
     """
-    candidate = await _get_or_404(tenant, candidate_id)
+    candidate = await _get_or_404(tenant, candidate_id, include_rejected=True)
 
     # _id breaks ties on `at`: BSON stores datetimes at millisecond resolution,
     # so two events recorded in the same request (a move that also closes a

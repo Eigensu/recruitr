@@ -1,15 +1,18 @@
 """The Candidates page's Review tab: a recruiter accepts or rejects the leads a
 team's round-robin handed them.
 
-Accept actions the lead (the recruiter's clock stops there, without waiting for
-a mapping). Reject archives it and soft-deletes the candidate. The Candidates
-tab leaves out anyone still waiting in someone's Review tab.
+The candidate stays PENDING until the recruiter accepts, so someone in review is
+in that Review tab and in no list of approved people anywhere, and cannot be
+mapped. Accept approves them but does not action the lead: the recruiter's
+clock runs on to their first mapping, which a click cannot stand in for. Reject
+archives the lead and soft-deletes the candidate.
 
 Signed in with real tokens, like test_review.py, so the role guards are
 exercised rather than assumed.
 """
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -22,7 +25,9 @@ from app.modules.recruitment.enums import (
     IntakeLeadStatus,
     IntakeRejectReason,
 )
-from app.modules.recruitment.models import Candidate, Employee, IntakeLead
+from app.modules.recruitment.models import Candidate, Client, Employee, IntakeLead, Position
+from app.modules.recruitment.service.intake_service import close_lead_for_mapping
+from app.modules.recruitment.service.intake_sla import sweep_breaches
 from tests.staff import auth_headers, make_staff
 
 _BRAND = PydanticObjectId()
@@ -33,13 +38,22 @@ async def rec() -> Employee:
     return await make_staff(_BRAND, "rec", UserRole.employee)
 
 
-async def _with_recruiter(recruiter: Employee, name: str = "Asha Rao") -> IntakeLead:
-    """A lead an admin has handed to `recruiter`'s team, waiting in their Review tab."""
+async def _with_recruiter(
+    recruiter: Employee,
+    name: str = "Asha Rao",
+    *,
+    status: CandidateStatus = CandidateStatus.pending,
+) -> IntakeLead:
+    """A lead an admin has handed to `recruiter`'s team, waiting in their Review tab.
+
+    PENDING, as team assignment leaves it. `status=APPROVED` is a lead assigned
+    before the Review step existed, when assignment approved the candidate.
+    """
     candidate = Candidate(
         brand_id=_BRAND,
         full_name=name,
         phone="9876543210",
-        status=CandidateStatus.approved,
+        status=status,
         assigned_recruiter_id=recruiter.id,
     )
     await candidate.insert()
@@ -54,6 +68,36 @@ async def _with_recruiter(recruiter: Employee, name: str = "Asha Rao") -> Intake
     )
     await lead.insert()
     return lead
+
+
+async def _position() -> Position:
+    client = Client(brand_id=_BRAND, code="CLI-001", name="Hunger Inc")
+    await client.insert()
+    position = Position(
+        brand_id=_BRAND,
+        code="CLI-001-POS-001",
+        client_id=client.id,
+        client_name=client.name,
+        role="Steward",
+        total_seats=1,
+        remaining_seats=1,
+    )
+    await position.insert()
+    return position
+
+
+async def _map(http, position: Position, lead: IntakeLead, who: str = "rec"):
+    return await http.post(
+        f"/api/v1/positions/{position.id}/map-candidate",
+        json={"candidate_id": str(lead.candidate_id)},
+        headers=await auth_headers(who),
+    )
+
+
+async def _accept(http, lead: IntakeLead, who: str = "rec"):
+    return await http.post(
+        f"/api/v1/intake/leads/{lead.id}/recruiter-accept", headers=await auth_headers(who)
+    )
 
 
 # ── The list ───────────────────────────────────────────────────────────────────
@@ -92,10 +136,12 @@ async def test_a_maintainer_sees_every_recruiters_review_leads_and_can_filter(ht
 
 
 @pytest.mark.asyncio
-async def test_only_leads_waiting_on_a_recruiter_are_listed(http, rec):
+async def test_only_leads_still_waiting_on_a_decision_are_listed(http, rec):
     waiting = await _with_recruiter(rec)
     done = await _with_recruiter(rec, "Done")
     await done.set({"status": IntakeLeadStatus.actioned})
+    accepted = await _with_recruiter(rec, "Accepted")
+    await _accept(http, accepted)
 
     res = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("rec"))
 
@@ -115,21 +161,47 @@ async def test_a_telecaller_cannot_open_the_review_tab(http):
 
 
 @pytest.mark.asyncio
-async def test_accepting_actions_the_lead_and_stops_the_clock(http, rec):
+async def test_accepting_approves_the_candidate_but_leaves_the_clock_running(http, rec):
     lead = await _with_recruiter(rec)
 
-    res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/recruiter-accept", headers=await auth_headers("rec")
-    )
+    res = await _accept(http, lead)
 
     assert res.status_code == 200
     body = res.json()
-    assert body["status"] == IntakeLeadStatus.actioned
+    assert body["status"] == IntakeLeadStatus.pending_recruiter
     assert body["recruiter_decision"] == IntakeDecision.accept
-    assert body["recruiter_response_seconds"] >= 2 * 3600
+    assert body["recruiter_accepted_at"] is not None
+    assert body["recruiter_actioned_at"] is None
+    assert body["recruiter_response_seconds"] is None
     candidate = await Candidate.get(lead.candidate_id)
     assert candidate.is_active is True
     assert candidate.status == CandidateStatus.approved
+
+
+@pytest.mark.asyncio
+async def test_the_first_mapping_after_accepting_stops_the_clock(http, rec):
+    lead = await _with_recruiter(rec)
+    position = await _position()
+    await _accept(http, lead)
+
+    res = await _map(http, position, lead)
+
+    assert res.status_code == 200, res.text
+    stored = await IntakeLead.get(lead.id)
+    assert stored.status == IntakeLeadStatus.actioned
+    assert stored.recruiter_decision == IntakeDecision.accept
+    assert stored.recruiter_response_seconds >= 2 * 3600
+
+
+@pytest.mark.asyncio
+async def test_an_accepted_lead_still_breaches_if_nobody_is_put_forward(http, rec):
+    lead = await _with_recruiter(rec)
+    await lead.set({"recruiter_assigned_at": datetime.now(UTC) - timedelta(hours=30)})
+    await _accept(http, lead)
+
+    await sweep_breaches()
+
+    assert (await IntakeLead.get(lead.id)).recruiter_sla_breached_at is not None
 
 
 @pytest.mark.asyncio
@@ -137,12 +209,12 @@ async def test_a_recruiter_cannot_decide_someone_elses_lead(http, rec):
     other = await make_staff(_BRAND, "other", UserRole.employee)
     lead = await _with_recruiter(other)
 
-    res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/recruiter-accept", headers=await auth_headers("rec")
-    )
+    res = await _accept(http, lead)
 
     assert res.status_code == 403
-    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.pending_recruiter
+    stored = await IntakeLead.get(lead.id)
+    assert stored.recruiter_decision is None
+    assert (await Candidate.get(lead.candidate_id)).status == CandidateStatus.pending
 
 
 @pytest.mark.asyncio
@@ -150,12 +222,10 @@ async def test_a_maintainer_may_decide_on_a_recruiters_behalf(http, rec):
     await make_staff(_BRAND, "boss", UserRole.maintainer)
     lead = await _with_recruiter(rec)
 
-    res = await http.post(
-        f"/api/v1/intake/leads/{lead.id}/recruiter-accept", headers=await auth_headers("boss")
-    )
+    res = await _accept(http, lead, who="boss")
 
     assert res.status_code == 200
-    assert res.json()["status"] == IntakeLeadStatus.actioned
+    assert res.json()["recruiter_decision"] == IntakeDecision.accept
 
 
 @pytest.mark.asyncio
@@ -163,14 +233,19 @@ async def test_a_lead_cannot_be_decided_twice(http, rec):
     lead = await _with_recruiter(rec)
     headers = await auth_headers("rec")
 
-    await http.post(f"/api/v1/intake/leads/{lead.id}/recruiter-accept", headers=headers)
-    again = await http.post(
+    await _accept(http, lead)
+    reject = await http.post(
         f"/api/v1/intake/leads/{lead.id}/recruiter-reject", json={}, headers=headers
     )
+    accept_again = await _accept(http, lead)
 
-    assert again.status_code == 409
-    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.actioned
-    assert (await Candidate.get(lead.candidate_id)).is_active is True
+    assert reject.status_code == 409
+    assert accept_again.status_code == 409
+    stored = await IntakeLead.get(lead.id)
+    assert stored.status == IntakeLeadStatus.pending_recruiter
+    assert stored.recruiter_decision == IntakeDecision.accept
+    candidate = await Candidate.get(lead.candidate_id)
+    assert (candidate.is_active, candidate.status) == (True, CandidateStatus.approved)
 
 
 # ── Reject ─────────────────────────────────────────────────────────────────────
@@ -211,21 +286,92 @@ async def test_a_reject_reason_is_optional(http, rec):
     assert res.json()["recruiter_reject_reason"] is None
 
 
-# ── The Candidates tab ─────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_a_rejected_leads_profile_can_still_be_opened(http, rec):
+    """Hidden from every list, but the Leads page links to them by id."""
+    await make_staff(_BRAND, "boss", UserRole.maintainer)
+    lead = await _with_recruiter(rec)
+    headers = await auth_headers("boss")
+    await http.post(f"/api/v1/intake/leads/{lead.id}/recruiter-reject", json={}, headers=headers)
+    cid = lead.candidate_id
+
+    profile = await http.get(f"/api/v1/candidates/{cid}", headers=headers)
+    history = await http.get(f"/api/v1/candidates/{cid}/history", headers=headers)
+    mappings = await http.get(f"/api/v1/candidates/{cid}/mappings", headers=headers)
+    # Reading only: an edit on a row no list shows stays refused.
+    edit = await http.patch(f"/api/v1/candidates/{cid}", json={"city": "Pune"}, headers=headers)
+
+    assert profile.status_code == 200, profile.text
+    assert profile.json()["status"] == CandidateStatus.rejected
+    assert history.status_code == 200
+    assert mappings.status_code == 200
+    assert edit.status_code == 404
+
+
+# ── Everywhere else ────────────────────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_the_candidates_tab_leaves_out_people_still_in_review(http, rec):
+async def test_someone_in_review_is_in_no_approved_list_until_accepted(http, rec):
     in_review = await _with_recruiter(rec, "Waiting")
     accepted = await _with_recruiter(rec, "Accepted")
-    headers = await auth_headers("rec")
-    await http.post(f"/api/v1/intake/leads/{accepted.id}/recruiter-accept", headers=headers)
+    await _accept(http, accepted)
     plain = Candidate(brand_id=_BRAND, full_name="Walk-in", status=CandidateStatus.approved)
     await plain.insert()
+    position = await _position()
+    headers = await auth_headers("rec")
 
-    tab = await http.get("/api/v1/candidates?exclude_in_review=true", headers=headers)
-    everyone = await http.get("/api/v1/candidates", headers=headers)
+    directory = await http.get("/api/v1/candidates", headers=headers)
+    top = await http.get(f"/api/v1/positions/{position.id}/top-candidates", headers=headers)
 
-    assert {row["full_name"] for row in tab.json()["items"]} == {"Accepted", "Walk-in"}
-    # The filter is opt-in: other callers of the list still see them.
-    assert str(in_review.candidate_id) in {row["id"] for row in everyone.json()["items"]}
+    assert {row["full_name"] for row in directory.json()["items"]} == {"Accepted", "Walk-in"}
+    assert "Waiting" not in {row["full_name"] for row in top.json()}
+    assert (await _map(http, position, in_review)).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_someone_in_review_cannot_be_approved_around_the_recruiter(http, rec):
+    await make_staff(_BRAND, "boss", UserRole.maintainer)
+    lead = await _with_recruiter(rec)
+
+    res = await http.post(
+        f"/api/v1/candidates/{lead.candidate_id}/approve", headers=await auth_headers("boss")
+    )
+
+    assert res.status_code == 409
+    assert (await Candidate.get(lead.candidate_id)).status == CandidateStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_a_mapping_does_not_reopen_a_lead_rejected_while_it_ran(rec, monkeypatch):
+    """The mapping reads the lead as waiting, a reject lands, then the mapping
+    writes. Its write must miss rather than flip the archived lead to actioned.
+
+    A lead assigned before the Review step (candidate already APPROVED) is the
+    case where both can happen: it is mappable and still undecided.
+    """
+    lead = await _with_recruiter(rec, status=CandidateStatus.approved)
+    stale = await IntakeLead.get(lead.id)
+    await lead.set({"status": IntakeLeadStatus.archived})
+    real = IntakeLead.find_one
+    calls = 0
+
+    def find_one(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:  # the mapping's read, from before the reject
+
+            async def read():
+                return stale
+
+            return read()
+        return real(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(IntakeLead, "find_one", find_one)
+        await close_lead_for_mapping(
+            SimpleNamespace(id=PydanticObjectId(), brand_id=_BRAND, candidate_id=lead.candidate_id)
+        )
+
+    assert calls == 2
+    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.archived

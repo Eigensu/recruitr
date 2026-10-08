@@ -67,6 +67,11 @@ export default function ReviewLeadCard({
   const [reason, setReason] = useState<IntakeRejectReason | undefined>();
   const [notes, setNotes] = useState("");
   const waited = elapsedHours(lead.recruiter_assigned_at);
+  // One string, so Meta's emptiness check sees an empty row as empty: passed as
+  // two children it got an array, which is truthy even when both are blank.
+  const work = [lead.current_role, lead.experience_years > 0 && `${lead.experience_years} yrs`]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <article className="flex flex-col rounded-xl border border-border bg-surface p-4 shadow-sm">
@@ -111,10 +116,7 @@ export default function ReviewLeadCard({
           </a>
         )}
         <Meta icon={IconMapPin}>{lead.city}</Meta>
-        <Meta icon={IconBriefcase}>
-          {lead.current_role}
-          {lead.experience_years > 0 && ` · ${lead.experience_years} yrs`}
-        </Meta>
+        <Meta icon={IconBriefcase}>{work}</Meta>
         <Meta icon={IconSchool}>{lead.education}</Meta>
         {showRecruiter && <Meta icon={IconUser}>{lead.recruiter_name ?? "—"}</Meta>}
       </div>

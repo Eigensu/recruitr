@@ -71,28 +71,34 @@ are submitted (`intake_service.open_lead_for_application`). Design doc and decis
 `specs/telecaller_intake_spec.md`.
 
 ```
-pending_telecaller ──accept + details form──▶ pending_review ──admin picks a team──▶ pending_recruiter ──Review tab accept (or first mapping)──▶ actioned
+pending_telecaller ──accept + details form──▶ pending_review ──admin picks a team──▶ pending_recruiter ──first mapping──▶ actioned
         └──reject──▶ rejected                   (no SLA clock)     (team round-robin)     (recruiter SLA)
-                     (candidate soft-deleted)                                                  └──Review tab reject──▶ archived
-                                                                                                    (candidate soft-deleted)
+                     (candidate soft-deleted)                      Review tab accept: candidate approved, clock keeps running
+                                                                   Review tab reject──▶ archived (candidate soft-deleted)
 ```
 
-**The Candidates page has two tabs.** *Candidates* is `GET /candidates?exclude_in_review=true`:
-APPROVED people, minus anyone whose lead is still `pending_recruiter`. *Review* is
-`GET /intake/leads/review` — a recruiter's own `pending_recruiter` leads, or everyone's for
-maintainer+ — with `POST /intake/leads/{id}/recruiter-accept` / `recruiter-reject` (maintainer+ may
-act on a recruiter's behalf). PENDING candidates never appear on the Candidates page; they live on
-the Leads page. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for
-analytics. `scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) opens leads for
-the PENDING candidates that predate the flow and hides the ones telecallers already rejected.
+**The Candidates page has two tabs.** *Candidates* is plain `GET /candidates`: APPROVED people.
+*Review* is `GET /intake/leads/review` — a recruiter's own `pending_recruiter` leads with no
+`recruiter_decision` yet, or everyone's for maintainer+ — with `POST /intake/leads/{id}/recruiter-accept`
+/ `recruiter-reject` (maintainer+ may act on a recruiter's behalf). **A candidate stays PENDING until
+the recruiter accepts**: team assignment does not approve them, so someone in review is in that
+Review tab and in no APPROVED list anywhere (directory, position pickers, matching, dashboards), and
+cannot be mapped. Accept approves them but is not the recruiter acting on the lead — it stays
+`pending_recruiter`, SLA clock running, until the first mapping, so the clock cannot be stopped with
+a click. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for analytics;
+the ingest's duplicate check (`_ContactIndex`) still matches rejected rows, and the profile, mappings
+and history endpoints still read them so the Leads page can open a rejected lead.
+`scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) opens leads for PENDING
+candidates that have none (dated when they applied, unassigned unless `--assign`), hides the ones
+telecallers already rejected, and returns candidates already approved into a Review tab to PENDING.
 
 **Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
 minus brand experience, CV link optional) and parks the lead in `pending_review` with the
 candidate still PENDING. **`POST /intake/leads/assign-team`** (maintainer+) picks the recruiter
 with a per-team round-robin (`Counter` key `intake_team_rr:<team_id>`, roster =
-`intake_service.team_roster`), approves the candidate, and starts the recruiter SLA clock. The
-External tab's approve/reject refuses (409) any candidate whose lead is still being screened or
-reviewed (`open_lead_for`), so the two paths cannot both decide one person.
+`intake_service.team_roster`) and starts the recruiter SLA clock; the candidate stays PENDING. The
+candidate approve/reject endpoints refuse (409) any candidate whose lead is still being screened or
+reviewed, recruiter's Review included (`open_lead_for`), so two paths cannot both decide one person.
 
 | Piece | Where |
 |---|---|

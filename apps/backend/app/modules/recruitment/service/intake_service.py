@@ -128,6 +128,12 @@ class _ContactRow(BaseModel):
 class _ContactIndex:
     """Phone and email of every live candidate, for matching leads against.
 
+    "Live" includes the rejected: a telecaller's or recruiter's reject hides the
+    candidate (is_active=False) but they are still someone we have decided on,
+    and a second form submission from them must be filed as a duplicate, not
+    queued for a telecaller as a stranger. Other inactive rows — deleted by
+    staff, or retired by an ingest race — stay out, as before.
+
     Built per run and updated as rows are ingested, because the same person can
     appear twice in one sheet: Meta issues a new lead id each time someone
     submits the form again, so both rows are new to the `external_id` check and
@@ -142,7 +148,12 @@ class _ContactIndex:
     async def build(cls, brand_id: PydanticObjectId) -> _ContactIndex:
         index = cls()
         rows = (
-            await Candidate.find({"brand_id": brand_id, "is_active": True})
+            await Candidate.find(
+                {
+                    "brand_id": brand_id,
+                    "$or": [{"is_active": True}, {"status": CandidateStatus.rejected.value}],
+                }
+            )
             .project(_ContactRow)
             .to_list()
         )
@@ -546,7 +557,11 @@ async def ingest_leads(
 
 
 async def open_lead_for_application(
-    candidate: Candidate, *, now: datetime | None = None
+    candidate: Candidate,
+    *,
+    now: datetime | None = None,
+    assign: bool = True,
+    arrived_at: datetime | None = None,
 ) -> IntakeLead | None:
     """Put a public-form applicant (or a referral) into a telecaller's queue.
 
@@ -555,20 +570,27 @@ async def open_lead_for_application(
     applicant however many times this is retried. No contact dedupe here — the
     form already refuses an email the brand holds, and the candidate row exists
     by the time this runs.
+
+    `arrived_at` and `assign=False` are for opening leads after the fact (see
+    scripts/migrate_candidates_to_leads.py): dated when the person applied, so
+    the analytics file them in the week they arrived, and left unassigned so a
+    backlog does not start everyone's SLA clock at once — the same choice
+    backfill_intake_leads.py makes for old sheet rows.
     """
     stamp = now or datetime.now(UTC)
-    telecaller = await next_assignee(candidate.brand_id, telecallers=True)
+    arrived = arrived_at or stamp
+    telecaller = await next_assignee(candidate.brand_id, telecallers=True) if assign else None
     lead = IntakeLead(
         brand_id=candidate.brand_id,
         candidate_id=candidate.id,
         source=IntakeSource.public_form,
         source_channel=candidate.source_channel,
         external_id=f"candidate:{candidate.id}",
-        external_created_at=stamp,
+        external_created_at=arrived,
         status=(IntakeLeadStatus.pending_telecaller if telecaller else IntakeLeadStatus.unassigned),
         telecaller_id=telecaller.id if telecaller else None,
         telecaller_assigned_at=stamp if telecaller else None,
-        ingested_at=stamp,
+        ingested_at=arrived,
     )
     try:
         await lead.insert()
@@ -593,8 +615,15 @@ async def open_lead_for(brand_id: PydanticObjectId, candidate_id: PydanticObject
     filed unassigned by the old flow has already been screened), and only while
     the brand has a telecaller to give it to. With none, nobody could ever
     decide it on the Leads page, so the External tab has to be able to.
+
+    A lead in a recruiter's Review tab counts until they accept it: the
+    candidate is still PENDING, and approving them anywhere else would skip the
+    recruiter's decision.
     """
-    open_statuses: list[dict[str, object]] = [{"status": {"$in": list(_SCREENING_STATUSES)}}]
+    open_statuses: list[dict[str, object]] = [
+        {"status": {"$in": list(_SCREENING_STATUSES)}},
+        {"status": IntakeLeadStatus.pending_recruiter.value, "recruiter_decision": None},
+    ]
     if await _roster(brand_id, telecallers=True):
         open_statuses.append(
             {"status": IntakeLeadStatus.unassigned.value, "telecaller_decision": None}
@@ -994,7 +1023,9 @@ async def assign_to_team(
     detects, so two reviewers cannot both assign the same lead.
 
     The recruiter's SLA clock starts here, not at the telecaller's accept: until
-    now there was nobody specific to be late.
+    now there was nobody specific to be late. The candidate stays PENDING — only
+    the recruiter's own Accept approves them — so until then they are in that
+    recruiter's Review tab and in no list that shows APPROVED people.
     """
     roster = await team_roster(team.brand_id, team.id)
     if not roster:
@@ -1007,8 +1038,8 @@ async def assign_to_team(
         if lead.status != IntakeLeadStatus.pending_review:
             skipped.append(lead)
             continue
-        # A lead whose candidate is gone cannot be approved into the directory;
-        # leave it for someone to look at rather than assign it to nobody.
+        # A lead whose candidate is gone has nobody to review; leave it for
+        # someone to look at rather than assign it to nobody.
         candidate = await Candidate.get(lead.candidate_id)
         if candidate is None:
             skipped.append(lead)
@@ -1035,25 +1066,13 @@ async def assign_to_team(
             setattr(lead, attr, value)
 
         try:
-            await candidate.set(
-                {
-                    # Into the recruiter directory, which filters to APPROVED.
-                    "status": CandidateStatus.approved,
-                    "assigned_recruiter_id": recruiter.id,
-                }
-            )
+            await candidate.set({"assigned_recruiter_id": recruiter.id})
         except Exception:
             # The lead was claimed first so two reviewers cannot both assign
-            # it; without the candidate approved, the recruiter would be
-            # blocked and the reviewer unable to retry. Hand it back.
+            # it; without the candidate pointing at the recruiter, the handoff
+            # is half done and the reviewer unable to retry. Hand it back.
             await _undo_assignment(lead, recruiter.id)
             raise
-        await record_candidate_event(
-            scope=TenantScope(brand_id=lead.brand_id, employee_id=reviewer_id),
-            candidate_id=lead.candidate_id,
-            event_type=CandidateEventType.approved,
-            note=f"Assigned to {team.name} ({recruiter.name})",
-        )
         assigned.append(lead)
 
     if assigned:
@@ -1062,7 +1081,7 @@ async def assign_to_team(
 
 
 async def _undo_assignment(lead: IntakeLead, recruiter_id: PydanticObjectId) -> None:
-    """Return a lead whose candidate could not be approved to the review queue."""
+    """Return a lead whose candidate could not be updated to the review queue."""
     updates: dict[str, object] = {
         "status": IntakeLeadStatus.pending_review,
         "team_id": None,
@@ -1133,12 +1152,18 @@ async def reject_lead(
 async def _decide_recruiter_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
     """Write a recruiter's decision only if the lead is still waiting on one.
 
-    The same guard as `_decide_pending` on the telecaller leg: a mapping, a
-    reassign or a second click can all close the lead between the read and this
-    write, and the loser must match nothing rather than decide it twice.
+    The same guard as `_decide_pending` on the telecaller leg: a reassign or a
+    second click can land between the read and this write, and the loser must
+    match nothing rather than decide it twice. An accepted lead is still
+    pending_recruiter (its clock runs to the first mapping) but has had its
+    decision, so `recruiter_decision` is part of the match.
     """
     result = await IntakeLead.find_one(
-        {"_id": lead.id, "status": IntakeLeadStatus.pending_recruiter.value}
+        {
+            "_id": lead.id,
+            "status": IntakeLeadStatus.pending_recruiter.value,
+            "recruiter_decision": None,
+        }
     ).update({"$set": updates})
     if result is None or result.matched_count == 0:
         raise LeadAlreadyDecided(str(lead.id))
@@ -1152,22 +1177,33 @@ async def recruiter_accept_lead(
     actor_id: PydanticObjectId | None,
     now: datetime | None = None,
 ) -> IntakeLead:
-    """Recruiter took the lead on: it is actioned and their SLA clock stops.
+    """Recruiter took the lead on: the candidate is approved into their directory.
 
-    The candidate is already APPROVED (that happened at team assignment); this
-    only moves them out of the Review tab and into the Candidates tab.
+    This is a decision, not the recruiter acting on the lead. The lead stays
+    pending_recruiter and their SLA clock keeps running until the first mapping
+    (`close_lead_for_mapping`): "actioned" is the first real recruiting act,
+    which a click cannot satisfy. Accepted leads still raise the breach alert.
     """
     stamp = now or datetime.now(UTC)
-    await _decide_recruiter_pending(
-        lead,
-        {
-            "status": IntakeLeadStatus.actioned,
-            "recruiter_decision": IntakeDecision.accept,
-            "recruiter_actioned_at": stamp,
-            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
-            "updated_at": stamp,
-        },
-    )
+    updates: dict[str, object] = {
+        "recruiter_decision": IntakeDecision.accept,
+        "recruiter_accepted_at": stamp,
+        "updated_at": stamp,
+    }
+    await _decide_recruiter_pending(lead, updates)
+    candidate = await Candidate.get(lead.candidate_id)
+    try:
+        if candidate is not None:
+            await candidate.set({"status": CandidateStatus.approved})
+    except Exception:
+        # Claimed first so two clicks cannot both accept; without the approval
+        # the recruiter could not map them, so hand the decision back.
+        await IntakeLead.find_one(
+            {"_id": lead.id, "recruiter_decision": IntakeDecision.accept}
+        ).update({"$set": {"recruiter_decision": None, "recruiter_accepted_at": None}})
+        lead.recruiter_decision = None
+        lead.recruiter_accepted_at = None
+        raise
     await record_candidate_event(
         scope=TenantScope(brand_id=lead.brand_id, employee_id=actor_id),
         candidate_id=lead.candidate_id,
@@ -1298,12 +1334,18 @@ async def close_lead_for_mapping(mapping) -> None:
         return
 
     stamp = datetime.now(UTC)
-    await lead.set(
+    # Conditional, like every other write on this leg: a reject from the Review
+    # tab landing between the read and here must not be flipped to actioned.
+    await IntakeLead.find_one(
+        {"_id": lead.id, "status": IntakeLeadStatus.pending_recruiter.value}
+    ).update(
         {
-            "status": IntakeLeadStatus.actioned,
-            "recruiter_actioned_at": stamp,
-            "recruiter_action_mapping_id": mapping.id,
-            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
-            "updated_at": stamp,
+            "$set": {
+                "status": IntakeLeadStatus.actioned,
+                "recruiter_actioned_at": stamp,
+                "recruiter_action_mapping_id": mapping.id,
+                "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
+                "updated_at": stamp,
+            }
         }
     )

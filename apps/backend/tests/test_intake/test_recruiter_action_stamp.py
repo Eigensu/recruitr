@@ -1,8 +1,9 @@
 """The recruiter's clock stops at their first mapping of an inbound lead.
 
-Accepting from the Candidates page's Review tab also actions a lead (see
-test_recruiter_review.py); a mapping made before that still closes it, so a
-recruiter who maps straight away is not left owing a click.
+"Actioned" is deliberately the first real recruiting act rather than an
+acknowledgement click: it is already an auditable event, and it cannot be
+satisfied by opening a page. Accepting from the Review tab approves the
+candidate but leaves the clock running (see test_recruiter_review.py).
 """
 
 from datetime import UTC, datetime, timedelta

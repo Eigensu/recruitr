@@ -64,6 +64,7 @@ export interface IntakeLead {
   recruiter_actioned_at: string | null;
   recruiter_response_seconds: number | null;
   recruiter_decision: IntakeDecision | null;
+  recruiter_accepted_at: string | null;
   recruiter_reject_reason: IntakeRejectReason | null;
   recruiter_notes: string | null;
   reassignment_count: number;
@@ -130,7 +131,10 @@ export interface IntakeCampaignRow {
   label: string;
   leads: number;
   accepted: number;
+  /** By the telecaller, on the call. */
   rejected: number;
+  /** Passed the call, then turned down from a recruiter's Review tab. */
+  recruiter_rejected: number;
   actioned: number;
   duplicate: number;
   accept_rate: number | null;
@@ -285,7 +289,8 @@ export function fetchReviewLeads(apiFetch: ApiFetch, recruiterId?: string): Prom
   );
 }
 
-/** Take the lead on: it is actioned and the candidate joins the Candidates tab. */
+/** Take the lead on: the candidate is approved into the Candidates tab. The
+ * recruiter's clock keeps running until their first mapping of them. */
 export function recruiterAcceptLead(apiFetch: ApiFetch, id: string): Promise<IntakeLead> {
   return apiFetch<IntakeLead>(`/api/v1/intake/leads/${id}/recruiter-accept`, {
     method: "POST",

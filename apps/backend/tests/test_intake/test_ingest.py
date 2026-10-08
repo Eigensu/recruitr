@@ -154,6 +154,28 @@ async def test_an_email_match_also_counts_as_the_same_person(callers):
 
 
 @pytest.mark.asyncio
+async def test_someone_already_rejected_who_applies_again_is_a_duplicate(callers):
+    """A reject hides the candidate (is_active=False) but they have been decided
+    on: a fresh form submission, phone only so no email collision catches it,
+    must not land back in a telecaller's queue as a stranger."""
+    rejected = Candidate(
+        brand_id=_BRAND,
+        full_name="Asha R",
+        phone="09876543210",
+        status=CandidateStatus.rejected,
+        is_active=False,
+    )
+    await rejected.insert()
+
+    result = await ingest_leads(_leads(_row(email="")), brand_id=_BRAND)
+
+    assert (result.created, result.matched_existing) == (0, 1)
+    lead = await IntakeLead.find_one({"brand_id": _BRAND})
+    assert lead.status == IntakeLeadStatus.duplicate
+    assert lead.candidate_id == rejected.id
+
+
+@pytest.mark.asyncio
 async def test_a_lead_whose_email_belongs_to_an_archived_candidate_is_still_filed(callers):
     # The contact index only holds live candidates, but the unique email index
     # covers archived ones too: without a fallback the insert collided and the
