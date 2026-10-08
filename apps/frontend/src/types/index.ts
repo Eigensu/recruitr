@@ -200,6 +200,8 @@ export interface CandidateFilters {
   communication?: string;
   education?: string;
   status?: string;
+  /** Leave out candidates still waiting in a recruiter's Review tab. */
+  exclude_in_review?: boolean;
   page: number;
   limit: number;
 }

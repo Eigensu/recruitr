@@ -80,6 +80,9 @@ class IntakeLeadResponse(_UtcTimestamps):
     recruiter_assigned_at: datetime | None = None
     recruiter_actioned_at: datetime | None = None
     recruiter_response_seconds: int | None = None
+    recruiter_decision: IntakeDecision | None = None
+    recruiter_reject_reason: IntakeRejectReason | None = None
+    recruiter_notes: str | None = None
     reassignment_count: int = 0
     # Filled on the admin list, where the table is read by someone who does not
     # know the ids; left None on the telecaller's own queue, which is all theirs.
@@ -409,6 +412,7 @@ class IntakeFunnel(BaseModel):
     pending_review: int = 0
     pending_recruiter: int = 0
     actioned: int = 0
+    archived: int = 0
     duplicate: int = 0
 
 

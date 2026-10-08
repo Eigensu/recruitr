@@ -843,6 +843,11 @@ class IntakeLead(Document):
     recruiter_action_mapping_id: PydanticObjectId | None = None
     recruiter_response_seconds: int | None = None
     recruiter_sla_breached_at: datetime | None = None
+    # Set by the Review tab's accept / reject. Null when the lead was closed by
+    # a mapping instead, which also counts as the recruiter acting on it.
+    recruiter_decision: IntakeDecision | None = None
+    recruiter_reject_reason: IntakeRejectReason | None = None
+    recruiter_notes: str | None = None
 
     # Reassignment restarts the SLA clock for the new owner, so this counts how
     # often that happened — otherwise a lead could be passed around indefinitely

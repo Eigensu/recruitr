@@ -35,8 +35,14 @@ const SEGMENTS: {
     bar: "bg-blue-500/70",
     dot: "bg-blue-500/70",
   },
-  { key: "actioned", label: "Put forward", bar: "bg-emerald-500/70", dot: "bg-emerald-500/70" },
-  { key: "rejected", label: "Rejected", bar: "bg-red-500/60", dot: "bg-red-500/60" },
+  { key: "actioned", label: "Taken on", bar: "bg-emerald-500/70", dot: "bg-emerald-500/70" },
+  { key: "rejected", label: "Rejected on the call", bar: "bg-red-500/60", dot: "bg-red-500/60" },
+  {
+    key: "archived",
+    label: "Rejected by recruiter",
+    bar: "bg-rose-700/60",
+    dot: "bg-rose-700/60",
+  },
   { key: "unassigned", label: "Unassigned", bar: "bg-orange-500/60", dot: "bg-orange-500/60" },
   { key: "duplicate", label: "Duplicate", bar: "bg-text-muted/40", dot: "bg-text-muted/40" },
 ];

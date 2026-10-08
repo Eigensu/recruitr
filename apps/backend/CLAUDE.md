@@ -71,9 +71,20 @@ are submitted (`intake_service.open_lead_for_application`). Design doc and decis
 `specs/telecaller_intake_spec.md`.
 
 ```
-pending_telecaller ──accept + details form──▶ pending_review ──admin picks a team──▶ pending_recruiter ──first mapping──▶ actioned
+pending_telecaller ──accept + details form──▶ pending_review ──admin picks a team──▶ pending_recruiter ──Review tab accept (or first mapping)──▶ actioned
         └──reject──▶ rejected                   (no SLA clock)     (team round-robin)     (recruiter SLA)
+                     (candidate soft-deleted)                                                  └──Review tab reject──▶ archived
+                                                                                                    (candidate soft-deleted)
 ```
+
+**The Candidates page has two tabs.** *Candidates* is `GET /candidates?exclude_in_review=true`:
+APPROVED people, minus anyone whose lead is still `pending_recruiter`. *Review* is
+`GET /intake/leads/review` — a recruiter's own `pending_recruiter` leads, or everyone's for
+maintainer+ — with `POST /intake/leads/{id}/recruiter-accept` / `recruiter-reject` (maintainer+ may
+act on a recruiter's behalf). PENDING candidates never appear on the Candidates page; they live on
+the Leads page. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for
+analytics. `scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) opens leads for
+the PENDING candidates that predate the flow and hides the ones telecallers already rejected.
 
 **Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
 minus brand experience, CV link optional) and parks the lead in `pending_review` with the

@@ -31,7 +31,10 @@ class IntakeLeadStatus(StrEnum):
     # maintainer to hand it to a team. No SLA clock: nobody specific owes it.
     pending_review = "pending_review"
     pending_recruiter = "pending_recruiter"  # accepted, awaiting the first mapping
-    actioned = "actioned"  # recruiter mapped them — terminal
+    actioned = "actioned"  # recruiter accepted or mapped them — terminal
+    # Recruiter turned them down from their Review tab. The candidate is
+    # soft-deleted (is_active=False); the lead stays for the analytics.
+    archived = "archived"  # recruiter rejected — terminal
     duplicate = "duplicate"  # matched a candidate already in the pool — terminal
 
 

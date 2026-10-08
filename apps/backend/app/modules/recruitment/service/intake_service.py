@@ -1092,11 +1092,12 @@ async def reject_lead(
     notes: str | None = None,
     now: datetime | None = None,
 ) -> IntakeLead:
-    """Telecaller rejected: mark the candidate REJECTED but keep the record.
+    """Telecaller rejected: mark the candidate REJECTED and soft-delete them.
 
-    is_active is deliberately untouched. The directory hides them because it
-    filters to APPROVED, while the row stays searchable and countable — which is
-    what makes "what are we rejecting, and why" answerable later.
+    is_active=False takes them out of every list in the app. The lead itself is
+    kept, which is what keeps "what are we rejecting, and why" answerable in the
+    analytics; the candidate row stays too, so re-applying with the same email
+    is filed as a duplicate of it rather than as a stranger.
     """
     stamp = now or datetime.now(UTC)
 
@@ -1115,12 +1116,102 @@ async def reject_lead(
 
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is not None:
-        await candidate.set({"status": CandidateStatus.rejected})
+        await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
         await record_candidate_event(
             scope=TenantScope(brand_id=lead.brand_id, employee_id=lead.telecaller_id),
             candidate_id=lead.candidate_id,
             event_type=CandidateEventType.declined,
             note=f"Rejected by telecaller ({reason.value})" if reason else "Rejected by telecaller",
+        )
+    await _drop_analytics_cache(lead.brand_id)
+    return lead
+
+
+# ── Recruiter's Review tab ─────────────────────────────────────────────────────
+
+
+async def _decide_recruiter_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
+    """Write a recruiter's decision only if the lead is still waiting on one.
+
+    The same guard as `_decide_pending` on the telecaller leg: a mapping, a
+    reassign or a second click can all close the lead between the read and this
+    write, and the loser must match nothing rather than decide it twice.
+    """
+    result = await IntakeLead.find_one(
+        {"_id": lead.id, "status": IntakeLeadStatus.pending_recruiter.value}
+    ).update({"$set": updates})
+    if result is None or result.matched_count == 0:
+        raise LeadAlreadyDecided(str(lead.id))
+    for attr, value in updates.items():
+        setattr(lead, attr, value)
+
+
+async def recruiter_accept_lead(
+    lead: IntakeLead,
+    *,
+    actor_id: PydanticObjectId | None,
+    now: datetime | None = None,
+) -> IntakeLead:
+    """Recruiter took the lead on: it is actioned and their SLA clock stops.
+
+    The candidate is already APPROVED (that happened at team assignment); this
+    only moves them out of the Review tab and into the Candidates tab.
+    """
+    stamp = now or datetime.now(UTC)
+    await _decide_recruiter_pending(
+        lead,
+        {
+            "status": IntakeLeadStatus.actioned,
+            "recruiter_decision": IntakeDecision.accept,
+            "recruiter_actioned_at": stamp,
+            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
+            "updated_at": stamp,
+        },
+    )
+    await record_candidate_event(
+        scope=TenantScope(brand_id=lead.brand_id, employee_id=actor_id),
+        candidate_id=lead.candidate_id,
+        event_type=CandidateEventType.approved,
+        note="Accepted by recruiter",
+    )
+    await _drop_analytics_cache(lead.brand_id)
+    return lead
+
+
+async def recruiter_reject_lead(
+    lead: IntakeLead,
+    *,
+    actor_id: PydanticObjectId | None,
+    reason: IntakeRejectReason | None = None,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> IntakeLead:
+    """Recruiter turned the lead down: archive it and soft-delete the candidate.
+
+    Counts as the recruiter acting on the lead (their response time is stamped),
+    so a quick "no" is measured the same way as a quick "yes".
+    """
+    stamp = now or datetime.now(UTC)
+    await _decide_recruiter_pending(
+        lead,
+        {
+            "status": IntakeLeadStatus.archived,
+            "recruiter_decision": IntakeDecision.reject,
+            "recruiter_actioned_at": stamp,
+            "recruiter_reject_reason": reason,
+            "recruiter_notes": notes,
+            "recruiter_response_seconds": _elapsed_seconds(lead.recruiter_assigned_at, stamp),
+            "updated_at": stamp,
+        },
+    )
+    candidate = await Candidate.get(lead.candidate_id)
+    if candidate is not None:
+        await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
+        await record_candidate_event(
+            scope=TenantScope(brand_id=lead.brand_id, employee_id=actor_id),
+            candidate_id=lead.candidate_id,
+            event_type=CandidateEventType.declined,
+            note=f"Rejected by recruiter ({reason.value})" if reason else "Rejected by recruiter",
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead

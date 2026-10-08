@@ -39,9 +39,17 @@ from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import (
     CandidateEventType,
     CandidateStatus,
+    IntakeLeadStatus,
     PipelineStage,
 )
-from app.modules.recruitment.models import Candidate, CandidateEvent, Employee, Mapping, RefereeUser
+from app.modules.recruitment.models import (
+    Candidate,
+    CandidateEvent,
+    Employee,
+    IntakeLead,
+    Mapping,
+    RefereeUser,
+)
 from app.modules.recruitment.repository import record_candidate_event
 from app.modules.recruitment.schemas import (
     BulkUploadFailure,
@@ -377,10 +385,24 @@ async def list_candidates(
     communication: Annotated[str | None, Query()] = None,
     education: Annotated[str | None, Query()] = None,
     status: Annotated[CandidateStatus | None, Query()] = CandidateStatus.approved,
+    exclude_in_review: Annotated[
+        bool,
+        Query(description="Leave out candidates whose lead waits in a recruiter's Review tab"),
+    ] = False,
     page: _Page = 1,
     limit: _Limit = 30,
 ) -> CandidatePage:
     match: dict = {"brand_id": tenant.brand_id, "is_active": True}
+    if exclude_in_review:
+        # Approved at team assignment, but not the Candidates tab's until the
+        # recruiter accepts them from Review. The open set is small, so a
+        # distinct + $nin is cheaper than a $lookup over every candidate.
+        in_review = await IntakeLead.get_motor_collection().distinct(
+            "candidate_id",
+            {"brand_id": tenant.brand_id, "status": IntakeLeadStatus.pending_recruiter.value},
+        )
+        if in_review:
+            match["_id"] = {"$nin": in_review}
     # Status and search each need their own $or, so they are collected as $and
     # clauses. Assigning both to match["$or"] let search overwrite status,
     # leaking unapproved candidates into the directory whenever anyone searched.
