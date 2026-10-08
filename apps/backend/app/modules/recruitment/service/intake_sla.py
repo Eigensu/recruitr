@@ -109,7 +109,8 @@ async def alert_unqueued_application(candidate: Candidate) -> int:
     in between leaves someone PENDING with no lead and no clock running — the
     sweep below never finds them, because there is nothing for it to find, and
     no page lists them either. `scripts/migrate_candidates_to_leads.py` is what
-    queues them, being exactly "every PENDING candidate with no lead".
+    queues them: it opens a lead for every PENDING candidate without one, and
+    `--assign` hands those to telecallers instead of leaving them unassigned.
     Returns the number of notification rows written.
     """
     rows = [
@@ -120,7 +121,8 @@ async def alert_unqueued_application(candidate: Candidate) -> int:
             message=(
                 f"{candidate.full_name} applied through the public form but could not be "
                 "added to a telecaller's queue, so they are not on the Leads page yet. "
-                "Running scripts/migrate_candidates_to_leads.py will queue them."
+                "Running scripts/migrate_candidates_to_leads.py --confirm --assign will "
+                "queue them."
             ),
         )
         for watcher in await _watchers(candidate.brand_id)
