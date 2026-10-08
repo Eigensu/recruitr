@@ -279,7 +279,11 @@ export default function ApplicationForm({
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong. Try again.";
-      setError(errorMessage);
+      // The API refuses an unrecognised connect code. Said under the field the
+      // applicant has to fix, beside the button they just pressed: the banner
+      // sits at the top of a long form, out of view from Send.
+      if (/connect code/i.test(errorMessage)) setFieldErrors({ connectCode: errorMessage });
+      else setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -569,14 +573,20 @@ export default function ApplicationForm({
                     <input
                       id="connectCode"
                       name="connectCode"
-                      className={inputCls}
+                      aria-invalid={!!fieldErrors.connectCode}
+                      aria-describedby={fieldErrors.connectCode ? "connectCode-error" : undefined}
+                      className={fieldErrors.connectCode ? inputErrorCls : inputCls}
                       placeholder="e.g. ABC1234"
                       value={form.connectCode}
                       onChange={(e) => setForm({ ...form, connectCode: e.target.value })}
                     />
-                    <p className="mt-1.5 text-xs text-text-secondary">
-                      Have a Connect Code? Enter it here (optional).
-                    </p>
+                    {fieldErrors.connectCode ? (
+                      <FieldError id="connectCode-error" message={fieldErrors.connectCode} />
+                    ) : (
+                      <p className="mt-1.5 text-xs text-text-secondary">
+                        Have a Connect Code? Enter it here (optional).
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
