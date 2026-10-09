@@ -26,7 +26,10 @@ from app.modules.recruitment.enums import (
     IntakeRejectReason,
 )
 from app.modules.recruitment.models import Candidate, Client, Employee, IntakeLead, Position
-from app.modules.recruitment.service.intake_service import close_lead_for_mapping
+from app.modules.recruitment.service.intake_service import (
+    close_lead_for_mapping,
+    recruiter_reject_lead,
+)
 from app.modules.recruitment.service.intake_sla import sweep_breaches
 from tests.staff import auth_headers, make_staff
 
@@ -306,6 +309,41 @@ async def test_a_rejected_leads_profile_can_still_be_opened(http, rec):
     assert history.status_code == 200
     assert mappings.status_code == 200
     assert edit.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_a_reject_that_cannot_hide_the_candidate_goes_back_to_review(http, rec, monkeypatch):
+    """The lead is archived first. Left that way, a failed candidate write would
+    keep the person PENDING behind a lead no Review tab lists — in no list at
+    all, with nothing left to retry."""
+    lead = await _with_recruiter(rec)
+
+    async def fail(self, *args, **kwargs):
+        raise RuntimeError("write failed")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Candidate, "set", fail)
+        with pytest.raises(RuntimeError):
+            await recruiter_reject_lead(
+                lead, actor_id=rec.id, reason=IntakeRejectReason.not_eligible, notes="No"
+            )
+
+    stored = await IntakeLead.get(lead.id)
+    assert stored.status == IntakeLeadStatus.pending_recruiter
+    assert stored.recruiter_decision is None
+    assert stored.recruiter_reject_reason is None
+    assert stored.recruiter_notes is None
+    assert stored.recruiter_actioned_at is None
+    assert stored.recruiter_response_seconds is None
+    candidate = await Candidate.get(lead.candidate_id)
+    assert (candidate.is_active, candidate.status) == (True, CandidateStatus.pending)
+    # Back in the tab, so the recruiter can simply try again.
+    retry = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/recruiter-reject",
+        json={},
+        headers=await auth_headers("rec"),
+    )
+    assert retry.status_code == 200
 
 
 # ── Everywhere else ────────────────────────────────────────────────────────────

@@ -1242,7 +1242,14 @@ async def recruiter_reject_lead(
     )
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is not None:
-        await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
+        try:
+            await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
+        except Exception:
+            # Archived first so two clicks cannot both reject; left there, the
+            # candidate would stay PENDING behind a lead no Review tab lists —
+            # in no list at all, with nobody able to retry. Hand it back.
+            await _undo_recruiter_reject(lead)
+            raise
         await record_candidate_event(
             scope=TenantScope(brand_id=lead.brand_id, employee_id=actor_id),
             candidate_id=lead.candidate_id,
@@ -1251,6 +1258,30 @@ async def recruiter_reject_lead(
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead
+
+
+async def _undo_recruiter_reject(lead: IntakeLead) -> None:
+    """Return a lead whose candidate could not be hidden to the Review tab."""
+    updates: dict[str, object] = {
+        "status": IntakeLeadStatus.pending_recruiter,
+        "recruiter_decision": None,
+        "recruiter_actioned_at": None,
+        "recruiter_reject_reason": None,
+        "recruiter_notes": None,
+        "recruiter_response_seconds": None,
+    }
+    try:
+        await IntakeLead.find_one(
+            {
+                "_id": lead.id,
+                "status": IntakeLeadStatus.archived.value,
+                "recruiter_decision": IntakeDecision.reject.value,
+            }
+        ).update({"$set": updates})
+        for attr, value in updates.items():
+            setattr(lead, attr, value)
+    except Exception:
+        logger.exception("Recruiter reject: could not roll lead %s back to review", lead.id)
 
 
 def waiting_on_recruiter(lead: IntakeLead) -> bool:
