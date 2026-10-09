@@ -5,6 +5,7 @@ import { AnimatePresence } from "motion/react";
 import { IconLoader2, IconPhoneCall, IconRefresh } from "@tabler/icons-react";
 import { useApiFetch, apiErrorMessage } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
+import { NotificationBell } from "@/components/dashboard";
 import AcceptLeadDialog from "@/components/leads/AcceptLeadDialog";
 import LeadCard from "@/components/leads/LeadCard";
 import {
@@ -97,14 +98,20 @@ export default function TelecallerQueue() {
           </h1>
           <p className="mt-1 text-sm text-text-secondary">{queueSummary(leads.length)}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => load()}
-          aria-label="Refresh"
-          className="rounded-lg border border-border p-2 text-text-muted transition-colors hover:text-text-primary"
-        >
-          <IconRefresh className="size-4" />
-        </button>
+        {/* The telecaller's only way to hear that a candidate sent the CV
+            they asked for; the dashboard that carries the bell for everyone
+            else is closed to them. */}
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => load()}
+            aria-label="Refresh"
+            className="rounded-lg border border-border p-2 text-text-muted transition-colors hover:text-text-primary"
+          >
+            <IconRefresh className="size-4" />
+          </button>
+        </div>
       </header>
 
       {leads.length === 0 ? (

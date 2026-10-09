@@ -108,6 +108,7 @@ reviewed, recruiter's Review included (`open_lead_for`), so two paths cannot bot
 | Ingest, round-robin, accept / reject / team assignment / reassign | `recruitment/service/intake_service.py` |
 | Funnel, per-leg timings, campaign report | `recruitment/service/intake_analytics.py` |
 | Hourly breach sweep, daily digest | `recruitment/service/intake_sla.py` |
+| CV upload links (telecaller/recruiter → candidate, no login) | `recruitment/service/cv_requests.py`, public half in `controller/public_controller.py` |
 | HTTP | `recruitment/controller/intake.py` |
 | Scheduled jobs | `recruitment/tasks.py` + the beat schedule in `core/celery_app.py` |
 | Historical import | `scripts/backfill_intake_leads.py` (report-only unless `--confirm`) |
@@ -136,7 +137,15 @@ dependency that admits the role. Everything under `/intake/analytics`, `/intake/
 list), `/intake/assignees` and `/intake/config` takes plain `get_tenant`, so the refusal that
 protects the rest of the app also keeps a telecaller out of the reports about their own response
 times. `/leads/mine` must stay declared *before* `/leads/{lead_id}` or the path parameter swallows
-it — there is a test for exactly that.
+it — there is a test for exactly that. A third door, `get_lead_holder_tenant`, admits telecallers
+*and* recruiters for the one endpoint either may need on a lead they hold (`POST
+/leads/{id}/cv-link`); it is wider than both, so its handler checks the caller holds that lead.
+
+**CV upload links.** Most leads arrive with no CV (Meta's lead-ad form does not ask), so whoever
+holds a lead can make a 7-day link and send it to the candidate themselves. The candidate uploads
+at `/cv/{token}` with no account; the file is merged like a staff upload, shows on the Review card
+and in the drawer, and notifies whoever holds the lead. Only the token's SHA-256 is stored, one per
+lead, so a new link cancels the last. Nothing waits on it.
 
 **Assignment rosters** come from `intake_service.assignment_roster()`, which is what the round-robin
 itself draws from. Do not build a picker out of `GET /teams/employees`: that endpoint deliberately

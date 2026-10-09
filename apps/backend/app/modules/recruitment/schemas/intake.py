@@ -42,6 +42,27 @@ class _UtcTimestamps(BaseModel):
         return value
 
 
+class CvUploadLinkInfo(_UtcTimestamps):
+    """What the public CV upload page shows: enough to greet the person, no more.
+
+    Unauthenticated, and the link may be forwarded, so a first name only: the
+    page must not tell whoever holds it the candidate's phone or email.
+    """
+
+    first_name: str
+    brand_name: str
+    brand_logo_url: str | None = None
+    expires_at: datetime
+    uploaded: bool
+
+
+class IntakeCvLinkResponse(_UtcTimestamps):
+    """A CV upload link: the page is /cv/{token} on the app's own domain."""
+
+    token: str
+    expires_at: datetime
+
+
 class IntakeLeadResponse(_UtcTimestamps):
     """One lead as the queue shows it.
 
@@ -85,6 +106,10 @@ class IntakeLeadResponse(_UtcTimestamps):
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
     reassignment_count: int = 0
+    # When the latest CV upload link stops working, and when the candidate last
+    # used one (service/cv_requests.py).
+    cv_link_expires_at: datetime | None = None
+    cv_uploaded_at: datetime | None = None
     # The candidate's CV, under the directory's rule (utils/cv_access): None when
     # there is none or the viewer may not open it, and cv_locked says which.
     cv_link: str | None = None

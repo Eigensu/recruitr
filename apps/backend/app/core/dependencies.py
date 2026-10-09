@@ -244,6 +244,29 @@ def get_telecaller_tenant(
     return _staff_scope(employee, user)
 
 
+def get_lead_holder_tenant(
+    employee=Depends(get_current_employee),  # noqa: B008
+    user=Depends(get_current_user_doc),  # noqa: B008
+):
+    """TenantScope for acting on one lead as whoever holds it.
+
+    A lead is held by a telecaller while it is screened and by a recruiter once
+    it is in their Review tab, so this admits both, where get_tenant refuses
+    the one and get_telecaller_tenant the other. That makes it wider than
+    either: every endpoint behind it must check that the caller holds the lead
+    it names, or is maintainer+.
+    """
+    from app.modules.auth.models import UserRole
+
+    holders = (UserRole.telecaller, UserRole.employee, UserRole.maintainer, UserRole.admin)
+    if user.role not in holders:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This area is not available to this account.",
+        )
+    return _staff_scope(employee, user)
+
+
 async def get_inbox_viewer(
     user=Depends(get_current_user_doc),  # noqa: B008
 ):

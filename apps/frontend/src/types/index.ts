@@ -314,7 +314,8 @@ export type CandidateEventType =
   | "declined"
   | "mapped"
   | "stage_moved"
-  | "unmapped";
+  | "unmapped"
+  | "cv_uploaded";
 
 /** One entry in a candidate's permanent history — GET /candidates/{id}/history */
 export interface ApiCandidateHistoryEvent {
@@ -460,7 +461,8 @@ export type NotificationKind =
   | "client_message"
   | "telecaller_sla_breach"
   | "recruiter_sla_breach"
-  | "application_not_queued";
+  | "application_not_queued"
+  | "cv_uploaded";
 
 export interface PipelineNotification {
   id: string;

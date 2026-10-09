@@ -10,8 +10,8 @@ export function middleware(request: NextRequest) {
   // Onboarding: requires a cookie but should not bounce authenticated users away.
   const isOnboarding = pathname.startsWith("/onboarding");
 
-  // Public form: requires no authentication
-  const isPublicForm = pathname.startsWith("/form");
+  // Public pages: the application form, and the page a CV upload link opens.
+  const isPublicForm = pathname.startsWith("/form") || pathname.startsWith("/cv/");
 
   // Already logged in → don't show auth pages again
   if (token && isAuthPage) {
