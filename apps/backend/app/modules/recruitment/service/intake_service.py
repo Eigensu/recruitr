@@ -422,6 +422,37 @@ async def _insert_candidate(
     return candidate
 
 
+async def _unscreened(brand_id: PydanticObjectId, candidate_id: PydanticObjectId) -> bool:
+    """Whether this is a live PENDING candidate with no lead of their own.
+
+    Nobody is screening them: their lead was deleted, or never opened (a
+    public-form lead that failed — see intake_sla.alert_unqueued_application).
+    A row matched to them is the screening they are missing, so it becomes
+    their lead rather than a duplicate of someone no telecaller will call. Meta
+    applicants went unscreened for two weeks exactly that way: their first
+    leads were removed, and the next ingest filed each person's own row as a
+    duplicate of the candidate left behind.
+    """
+    live_pending = await Candidate.find(
+        {
+            "_id": candidate_id,
+            "brand_id": brand_id,
+            "is_active": True,
+            "status": CandidateStatus.pending.value,
+        }
+    ).count()
+    if not live_pending:
+        return False
+    own = await IntakeLead.find_one(
+        {
+            "brand_id": brand_id,
+            "candidate_id": candidate_id,
+            "status": {"$ne": IntakeLeadStatus.duplicate.value},
+        }
+    )
+    return own is None
+
+
 async def _initial_assignment(
     brand_id: PydanticObjectId, *, duplicate: bool, assign: bool
 ) -> tuple[Employee | None, IntakeLeadStatus]:
@@ -506,9 +537,8 @@ async def ingest_leads(
             else:
                 candidate_id = created_candidate.id
 
-        telecaller, status = await _initial_assignment(
-            brand_id, duplicate=existing_id is not None, assign=assign
-        )
+        duplicate = existing_id is not None and not await _unscreened(brand_id, existing_id)
+        telecaller, status = await _initial_assignment(brand_id, duplicate=duplicate, assign=assign)
         if not await _insert_lead(
             lead,
             brand_id=brand_id,
@@ -524,7 +554,7 @@ async def ingest_leads(
             result.outcomes[lead.external_id] = LeadOutcome("already_ingested")
             continue
 
-        if existing_id is not None:
+        if duplicate:
             result.matched_existing += 1
             result.outcomes[lead.external_id] = LeadOutcome("matched_existing", existing_id)
             continue
@@ -598,6 +628,38 @@ async def open_lead_for_application(
         return None
     await _drop_analytics_cache(candidate.brand_id)
     return lead
+
+
+async def screen_duplicate_lead(
+    lead: IntakeLead, *, now: datetime | None = None, assign: bool = True
+) -> IntakeLeadStatus | None:
+    """Queue a `duplicate` lead as its candidate's screening lead.
+
+    For a candidate nobody is screening (see _unscreened) whose sheet row was
+    filed as a duplicate of them: that row is a better lead to queue than a new
+    public-form one, since it keeps the ad that brought them and the date they
+    really applied. Unassigned unless `assign`, for the reason
+    open_lead_for_application gives. Returns the status it was queued with, or
+    None if it was no longer a duplicate by the time this ran.
+    """
+    stamp = now or datetime.now(UTC)
+    telecaller, status = await _initial_assignment(lead.brand_id, duplicate=False, assign=assign)
+    result = await IntakeLead.find_one(
+        {"_id": lead.id, "status": IntakeLeadStatus.duplicate.value}
+    ).update(
+        {
+            "$set": {
+                "status": status,
+                "telecaller_id": telecaller.id if telecaller else None,
+                "telecaller_assigned_at": stamp if telecaller else None,
+                "updated_at": stamp,
+            }
+        }
+    )
+    if result is None or result.matched_count == 0:
+        return None
+    await _drop_analytics_cache(lead.brand_id)
+    return status
 
 
 # Leads still waiting on screening or review. A candidate with one of these is
@@ -825,8 +887,9 @@ async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId
     # ids never repeat within a sheet; a Naukri row's id is its phone, which can.
     batch: set[str] = set()
     index = await _ContactIndex.build(brand_id)
-    # Candidates this plan would create, so the second row for one person counts
-    # as a duplicate within the sheet rather than as another new candidate.
+    # Candidates this plan would create or queue a screening lead for, so the
+    # second row for one person counts as a duplicate within the sheet rather
+    # than as another new lead.
     pending: set[PydanticObjectId] = set()
 
     def record(outcome: PlanOutcome) -> None:
@@ -850,6 +913,10 @@ async def plan_ingest(leads: Sequence[ParsedLead], *, brand_id: PydanticObjectId
             record("new")
         elif match in pending:
             record("duplicate_in_sheet")
+        elif await _unscreened(brand_id, match):
+            # ingest_leads queues this row as their screening lead.
+            pending.add(match)
+            record("new")
         else:
             record("matched_existing")
 

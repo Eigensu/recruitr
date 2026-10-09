@@ -88,8 +88,9 @@ cannot be mapped. Accept approves them but is not the recruiter acting on the le
 a click. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for analytics;
 the ingest's duplicate check (`_ContactIndex`) still matches rejected rows, and the profile, mappings
 and history endpoints still read them so the Leads page can open a rejected lead.
-`scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) opens leads for PENDING
-candidates that have none (dated when they applied, unassigned unless `--assign`), hides the ones
+`scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) queues PENDING candidates
+that have no lead of their own (their earliest `duplicate` sheet row if they have one, keeping its
+ad and date, else a new lead dated when they applied; unassigned unless `--assign`), hides the ones
 telecallers already rejected, and returns candidates already approved into a Review tab to PENDING.
 
 **Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
@@ -126,7 +127,9 @@ which is what keeps all three importable.
 is a no-op — which is what lets the poll read the whole range every run instead of tracking a
 cursor into someone else's spreadsheet. Dedupe against *people* already in the pool is separate,
 and is an in-memory index built per run (`_ContactIndex`), not a stored field: a stored
-`phone_normalized` would have missed every candidate created before it existed.
+`phone_normalized` would have missed every candidate created before it existed. A match is filed as
+a `duplicate` only if that person already has a lead of their own: a row matched to a PENDING
+candidate with none (`_unscreened`) becomes their screening lead, since otherwise nobody calls them.
 
 **Two doors into this module, on purpose.** The queue routes take `get_telecaller_tenant`, the only
 dependency that admits the role. Everything under `/intake/analytics`, `/intake/leads` (the admin

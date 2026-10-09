@@ -17,7 +17,7 @@ from app.modules.recruitment.enums import (
     IntakeLeadStatus,
     IntakeSource,
 )
-from app.modules.recruitment.models import Candidate, Employee, IntakeLead
+from app.modules.recruitment.models import Candidate, Employee, IntakeAttribution, IntakeLead
 from scripts import migrate_candidates_to_leads as migrate
 
 _BRAND = PydanticObjectId()
@@ -102,19 +102,53 @@ async def test_by_default_leads_are_left_unassigned_and_dated_when_they_applied(
 
 
 @pytest.mark.asyncio
-async def test_a_duplicate_lead_pointing_at_someone_is_not_their_screening():
-    """A later sheet row matched to an applicant files a `duplicate` lead with
-    their candidate_id; they still have no lead of their own."""
-    orphan = await _candidate("Applied twice", CandidateStatus.pending)
-    await _lead_for(orphan, status=IntakeLeadStatus.duplicate)
+async def test_someone_whose_only_lead_is_a_duplicate_has_that_row_queued():
+    """Their first lead was removed and the next ingest filed their own sheet
+    row as a duplicate of them. That row is queued, not a new public-form lead:
+    it holds the ad that brought them and the day they applied."""
+    orphan = await _candidate("Lost by an ingest", CandidateStatus.pending)
+    applied = datetime(2026, 9, 9, 14, 46, 47, tzinfo=UTC)
+    their_row = await _lead_for(
+        orphan,
+        status=IntakeLeadStatus.duplicate,
+        source=IntakeSource.google_sheet,
+        external_created_at=applied,
+        attribution=IntakeAttribution(campaign_name="Video Campaign"),
+    )
 
+    report = await migrate.run(confirm=False)
     counts = await migrate.run(confirm=True)
 
-    assert counts["leads_opened"] == 1
-    statuses = {
-        lead.status for lead in await IntakeLead.find({"candidate_id": orphan.id}).to_list()
-    }
-    assert statuses == {IntakeLeadStatus.duplicate, IntakeLeadStatus.unassigned}
+    assert (report["would_queue_duplicate"], report["would_open"]) == (1, 0)
+    assert (counts["duplicates_queued"], counts["leads_opened"], counts["unassigned"]) == (1, 0, 1)
+    [lead] = await IntakeLead.find({"candidate_id": orphan.id}).to_list()
+    assert lead.id == their_row.id
+    assert lead.status == IntakeLeadStatus.unassigned
+    assert lead.source == IntakeSource.google_sheet
+    assert lead.attribution.campaign_name == "Video Campaign"
+    assert lead.external_created_at.replace(tzinfo=UTC) == applied
+
+
+@pytest.mark.asyncio
+async def test_of_several_duplicate_rows_the_earliest_is_queued_and_assigned_with_assign():
+    caller = Employee(
+        brand_id=_BRAND, name="Caller", email="caller@binge.consulting", role=UserRole.telecaller
+    )
+    await caller.insert()
+    orphan = await _candidate("Applied twice", CandidateStatus.pending)
+    first = datetime(2026, 9, 1, tzinfo=UTC)
+    later = await _lead_for(
+        orphan, status=IntakeLeadStatus.duplicate, external_created_at=first + timedelta(days=5)
+    )
+    earliest = await _lead_for(orphan, status=IntakeLeadStatus.duplicate, external_created_at=first)
+
+    await migrate.run(confirm=True, assign=True)
+
+    queued = await IntakeLead.get(earliest.id)
+    assert queued.status == IntakeLeadStatus.pending_telecaller
+    assert queued.telecaller_id == caller.id
+    assert queued.telecaller_assigned_at is not None
+    assert (await IntakeLead.get(later.id)).status == IntakeLeadStatus.duplicate
 
 
 @pytest.mark.asyncio
@@ -164,10 +198,13 @@ async def test_a_second_run_finds_nothing_to_do():
     await _lead_for(rejected, telecaller_decision=IntakeDecision.reject)
     in_review = await _candidate("Waiting on recruiter", CandidateStatus.approved)
     await _lead_for(in_review, status=IntakeLeadStatus.pending_recruiter)
+    filed_as_duplicate = await _candidate("Lost by an ingest", CandidateStatus.pending)
+    await _lead_for(filed_as_duplicate, status=IntakeLeadStatus.duplicate)
     await migrate.run(confirm=True)
 
     again = await migrate.run(confirm=False)
 
     assert again["would_open"] == 0
+    assert again["would_queue_duplicate"] == 0
     assert again["would_hide"] == 0
     assert again["would_unapprove"] == 0
