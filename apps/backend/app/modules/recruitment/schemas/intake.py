@@ -85,6 +85,11 @@ class IntakeLeadResponse(_UtcTimestamps):
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
     reassignment_count: int = 0
+    # The candidate's CV, under the directory's rule (utils/cv_access): None when
+    # there is none or the viewer may not open it, and cv_locked says which.
+    cv_link: str | None = None
+    resume_url: str | None = None
+    cv_locked: bool = False
     # Filled on the admin list, where the table is read by someone who does not
     # know the ids; left None on the telecaller's own queue, which is all theirs.
     telecaller_name: str | None = None

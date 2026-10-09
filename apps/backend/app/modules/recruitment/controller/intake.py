@@ -126,6 +126,7 @@ from app.modules.recruitment.utils.constants import (
     RESUME_MAX_BYTES,
     ROLES_BY_CATEGORY,
 )
+from app.modules.recruitment.utils.cv_access import can_view_cv
 from app.modules.recruitment.utils.naukri_sheet import (
     NaukriFileError,
     NaukriRows,
@@ -208,11 +209,21 @@ def _to_response(
     lead: IntakeLead,
     candidate: Candidate | None,
     *,
+    viewer: TenantScope,
     telecaller: Employee | None = None,
     recruiter: Employee | None = None,
     team_name: str | None = None,
     now: datetime | None = None,
 ) -> IntakeLeadResponse:
+    # `viewer` is required rather than defaulted, so no endpoint hands out a CV
+    # without having said who is asking.
+    cv_link = resume_url = None
+    cv_locked = False
+    if candidate is not None and (candidate.cv_link or candidate.resume_url):
+        if can_view_cv(viewer, candidate.created_by_id):
+            cv_link, resume_url = candidate.cv_link, candidate.resume_url
+        else:
+            cv_locked = True
     return IntakeLeadResponse(
         id=str(lead.id),
         status=lead.status,
@@ -249,16 +260,19 @@ def _to_response(
         recruiter_reject_reason=lead.recruiter_reject_reason,
         recruiter_notes=lead.recruiter_notes,
         reassignment_count=lead.reassignment_count,
+        cv_link=cv_link,
+        resume_url=resume_url,
+        cv_locked=cv_locked,
         telecaller_name=telecaller.name if telecaller else None,
         recruiter_name=recruiter.name if recruiter else None,
         overdue=_is_overdue(lead, now or datetime.now(UTC)),
     )
 
 
-async def _fetch_response(lead: IntakeLead) -> IntakeLeadResponse:
+async def _fetch_response(lead: IntakeLead, viewer: TenantScope) -> IntakeLeadResponse:
     """One lead with its candidate fetched. Fine for a single row; the list
     endpoints batch instead, rather than doing this once per row."""
-    return _to_response(lead, await Candidate.get(lead.candidate_id))
+    return _to_response(lead, await Candidate.get(lead.candidate_id), viewer=viewer)
 
 
 async def _team_names(brand_id) -> dict:
@@ -288,7 +302,10 @@ async def my_leads(
     leads = await IntakeLead.find(match).sort("telecaller_assigned_at").limit(limit).to_list()
     candidates, _ = await intake_analytics.people_for(leads)
     now = datetime.now(UTC)
-    return [_to_response(lead, candidates.get(lead.candidate_id), now=now) for lead in leads]
+    return [
+        _to_response(lead, candidates.get(lead.candidate_id), viewer=tenant, now=now)
+        for lead in leads
+    ]
 
 
 @router.get("/leads/{lead_id}/candidate", response_model=IntakeCandidateDraft)
@@ -338,7 +355,7 @@ async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest
         await accept_lead(lead, details=payload.details, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    return await _fetch_response(lead)
+    return await _fetch_response(lead, tenant)
 
 
 @router.post("/leads/{lead_id}/reject", response_model=IntakeLeadResponse)
@@ -352,7 +369,7 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
         await reject_lead(lead, reason=payload.reason, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    return await _fetch_response(lead)
+    return await _fetch_response(lead, tenant)
 
 
 # ── Review ─────────────────────────────────────────────────────────────────────
@@ -421,6 +438,7 @@ async def assign_team(tenant: _Staff, payload: IntakeAssignTeamRequest):
             _to_response(
                 lead,
                 candidates.get(lead.candidate_id),
+                viewer=tenant,
                 telecaller=employees.get(lead.telecaller_id),
                 recruiter=employees.get(lead.recruiter_id),
                 team_name=team.name,
@@ -468,7 +486,7 @@ async def reassign(tenant: _Telecaller, lead_id: str, payload: IntakeReassignReq
         await reassign_lead(lead, assignee=assignee)
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    return await _fetch_response(lead)
+    return await _fetch_response(lead, tenant)
 
 
 @router.post("/sync", dependencies=[_RequireAdmin])
@@ -803,6 +821,7 @@ async def review_leads(
         _to_response(
             lead,
             candidates.get(lead.candidate_id),
+            viewer=tenant,
             telecaller=employees.get(lead.telecaller_id),
             recruiter=employees.get(lead.recruiter_id),
             team_name=teams.get(lead.team_id),
@@ -822,7 +841,7 @@ async def recruiter_accept(tenant: _Staff, lead_id: str):
         await recruiter_accept_lead(lead, actor_id=tenant.employee_id)
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    return await _fetch_response(lead)
+    return await _fetch_response(lead, tenant)
 
 
 @router.post("/leads/{lead_id}/recruiter-reject", response_model=IntakeLeadResponse)
@@ -837,7 +856,7 @@ async def recruiter_reject(tenant: _Staff, lead_id: str, payload: IntakeRejectRe
         )
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    return await _fetch_response(lead)
+    return await _fetch_response(lead, tenant)
 
 
 # Declared before /leads/{lead_id}, which would otherwise swallow "submitted".
@@ -859,6 +878,7 @@ async def my_submitted_leads(
         _to_response(
             lead,
             candidates.get(lead.candidate_id),
+            viewer=tenant,
             telecaller=employees.get(lead.telecaller_id),
             recruiter=employees.get(lead.recruiter_id),
             team_name=teams.get(lead.team_id),
@@ -908,6 +928,7 @@ async def all_leads(
             _to_response(
                 lead,
                 candidates.get(lead.candidate_id),
+                viewer=tenant,
                 telecaller=employees.get(lead.telecaller_id),
                 recruiter=employees.get(lead.recruiter_id),
                 team_name=teams.get(lead.team_id),
@@ -938,6 +959,7 @@ async def one_lead(tenant: _Staff, lead_id: str):
     return _to_response(
         lead,
         candidates.get(lead.candidate_id),
+        viewer=tenant,
         telecaller=employees.get(lead.telecaller_id),
         recruiter=employees.get(lead.recruiter_id),
         team_name=teams.get(lead.team_id),

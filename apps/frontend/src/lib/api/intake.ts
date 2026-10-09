@@ -68,6 +68,13 @@ export interface IntakeLead {
   recruiter_reject_reason: IntakeRejectReason | null;
   recruiter_notes: string | null;
   reassignment_count: number;
+  /**
+   * The candidate's CV, withheld under the directory's rule; `cv_locked` says
+   * it exists but another recruiter sourced it, rather than that there is none.
+   */
+  cv_link: string | null;
+  resume_url: string | null;
+  cv_locked: boolean;
   telecaller_name: string | null;
   recruiter_name: string | null;
   overdue: boolean;
