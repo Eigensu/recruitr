@@ -28,6 +28,7 @@ from app.modules.recruitment.enums import (
 from app.modules.recruitment.models import Candidate, Client, Employee, IntakeLead, Position
 from app.modules.recruitment.service.intake_service import (
     close_lead_for_mapping,
+    reassign_lead,
     recruiter_reject_lead,
 )
 from app.modules.recruitment.service.intake_sla import sweep_breaches
@@ -378,6 +379,39 @@ async def test_someone_in_review_cannot_be_approved_around_the_recruiter(http, r
 
     assert res.status_code == 409
     assert (await Candidate.get(lead.candidate_id)).status == CandidateStatus.pending
+
+
+@pytest.mark.asyncio
+async def test_reassigning_an_accept_from_before_the_review_step_does_not_ask_again(http, rec):
+    """Accepted when no recruiter was free, and approved by the flow of the day.
+    Given to a recruiter now, they are already in the Candidates tab, so they
+    must not also land in Review, where a reject would hide them."""
+
+    async def accepted_unassigned(name: str, status: CandidateStatus) -> IntakeLead:
+        lead = await _with_recruiter(rec, name, status=status)
+        await lead.set(
+            {
+                "status": IntakeLeadStatus.unassigned,
+                "recruiter_id": None,
+                "recruiter_assigned_at": None,
+            }
+        )
+        return await IntakeLead.get(lead.id)
+
+    approved = await accepted_unassigned("Approved then", CandidateStatus.approved)
+    pending = await accepted_unassigned("Still pending", CandidateStatus.pending)
+
+    await reassign_lead(approved, assignee=rec)
+    await reassign_lead(pending, assignee=rec)
+
+    stored = await IntakeLead.get(approved.id)
+    assert stored.status == IntakeLeadStatus.pending_recruiter
+    assert stored.recruiter_decision == IntakeDecision.accept
+    assert stored.recruiter_accepted_at is not None
+    # Someone the old flow never approved still gets the recruiter's decision.
+    assert (await IntakeLead.get(pending.id)).recruiter_decision is None
+    res = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("rec"))
+    assert [row["full_name"] for row in res.json()] == ["Still pending"]
 
 
 @pytest.mark.asyncio

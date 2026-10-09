@@ -1310,6 +1310,7 @@ async def reassign_lead(
     """
     stamp = now or datetime.now(UTC)
     recruiter_leg = waiting_on_recruiter(lead)
+    candidate = await Candidate.get(lead.candidate_id) if recruiter_leg else None
     updates: dict[str, object] = {
         "reassignment_count": lead.reassignment_count + 1,
         "updated_at": stamp,
@@ -1321,6 +1322,19 @@ async def reassign_lead(
             "recruiter_assigned_at": stamp,
             "recruiter_sla_breached_at": None,
         }
+        # An `unassigned` lead with a telecaller's accept predates the Review
+        # step, and the flow then approved the candidate. Their decision is
+        # made: as undecided it would land in the new recruiter's Review tab
+        # while they are also in the Candidates tab, and a reject there would
+        # hide someone who may already be in a pipeline. Filed as accepted, the
+        # clock still runs to the first mapping, as for any accepted lead.
+        if (
+            lead.status == IntakeLeadStatus.unassigned
+            and lead.recruiter_decision is None
+            and candidate is not None
+            and candidate.status == CandidateStatus.approved
+        ):
+            updates |= {"recruiter_decision": IntakeDecision.accept, "recruiter_accepted_at": stamp}
     else:
         updates |= {
             "status": IntakeLeadStatus.pending_telecaller,
@@ -1339,10 +1353,8 @@ async def reassign_lead(
     for attr, value in updates.items():
         setattr(lead, attr, value)
 
-    if recruiter_leg:
-        candidate = await Candidate.get(lead.candidate_id)
-        if candidate is not None:
-            await candidate.set({"assigned_recruiter_id": assignee.id})
+    if candidate is not None:
+        await candidate.set({"assigned_recruiter_id": assignee.id})
     await _drop_analytics_cache(lead.brand_id)
     return lead
 
