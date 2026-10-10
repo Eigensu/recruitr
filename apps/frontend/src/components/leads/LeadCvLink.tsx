@@ -37,7 +37,7 @@ export default function LeadCvLink({
       </span>
     );
   }
-  const Icon = lead.cv_link ? IconLink : IconFileText;
+  const Icon = cv.label === "CV Link" ? IconLink : IconFileText;
   return (
     <a
       href={cv.href}
