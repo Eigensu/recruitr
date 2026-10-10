@@ -11,6 +11,9 @@ Two jobs with deliberately different jobs to do:
     deliver, and it reports the current state rather than the moment of
     crossing.
 
+`alert_unqueued_application` is the one alert that is not about time: an
+applicant whose lead never opened has no clock for either job to watch.
+
 The clock is 24 calendar hours, nights and weekends included: a lead assigned
 at 6pm Friday breaches on Saturday evening and says so then. There is no
 working-calendar configuration, and if weekend noise turns out to be a real
@@ -97,6 +100,36 @@ async def _watchers(brand_id: PydanticObjectId) -> list[Employee]:
     return await Employee.find(
         {"brand_id": brand_id, "is_active": True, "role": {"$in": list(_WATCHER_ROLES)}}
     ).to_list()
+
+
+async def alert_unqueued_application(candidate: Candidate) -> int:
+    """Tell admins and maintainers about an applicant no telecaller will see.
+
+    The public form saves the candidate before it opens their lead, so a failure
+    in between leaves someone PENDING with no lead and no clock running — the
+    sweep below never finds them, because there is nothing for it to find, and
+    no page lists them either. `scripts/migrate_candidates_to_leads.py` is what
+    queues them: it opens a lead for every PENDING candidate without one, and
+    `--assign` hands those to telecallers instead of leaving them unassigned.
+    Returns the number of notification rows written.
+    """
+    rows = [
+        Notification(
+            brand_id=candidate.brand_id,
+            employee_id=watcher.id,
+            kind=NotificationKind.application_not_queued,
+            message=(
+                f"{candidate.full_name} applied through the public form but could not be "
+                "added to a telecaller's queue, so they are not on the Leads page yet. "
+                "Running scripts/migrate_candidates_to_leads.py --confirm --assign will "
+                "queue them."
+            ),
+        )
+        for watcher in await _watchers(candidate.brand_id)
+    ]
+    if rows:
+        await Notification.insert_many(rows)
+    return len(rows)
 
 
 async def _describe(leads: list[IntakeLead], *, leg: str, now: datetime) -> list[OverdueLead]:

@@ -23,6 +23,11 @@ function isRupeeAmount(value: string): boolean {
   return value !== "" && Number.isFinite(n) && n >= 0;
 }
 
+/** Channels that come with somebody to credit, and so ask for a connect code. */
+function isReferralChannel(channel: string): boolean {
+  return channel === "Referred by a Friend" || channel === "Connected by a Binge Partner";
+}
+
 const schema = z
   .object({
     fullName: z.string().trim().min(1, "Enter your name."),
@@ -274,7 +279,11 @@ export default function ApplicationForm({
     } catch (err: unknown) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong. Try again.";
-      setError(errorMessage);
+      // The API refuses an unrecognised connect code. Said under the field the
+      // applicant has to fix, beside the button they just pressed: the banner
+      // sits at the top of a long form, out of view from Send.
+      if (/connect code/i.test(errorMessage)) setFieldErrors({ connectCode: errorMessage });
+      else setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -517,11 +526,15 @@ export default function ApplicationForm({
                   label="Where you heard about us"
                   value={form.sourceChannel}
                   onChange={(sourceChannel) => {
-                    const isConnectCodeOption = sourceChannel === "Referred by a Friend" || sourceChannel === "Connected by a Binge Partner";
-                    setForm({ 
-                      ...form, 
+                    // A code that came with the page — the referee's own Refer
+                    // page, or their shared link — is the attribution whatever is
+                    // picked here; clearing it lost the referee the credit. Only
+                    // a code typed on a plain form goes with the channel.
+                    const keepCode = isReferralChannel(sourceChannel) || !!startingConnectCode;
+                    setForm({
+                      ...form,
                       sourceChannel,
-                      connectCode: isConnectCodeOption ? form.connectCode : ""
+                      connectCode: keepCode ? form.connectCode : "",
                     });
                   }}
                   options={SOURCE_CHANNELS}
@@ -550,7 +563,9 @@ export default function ApplicationForm({
                     />
                   </div>
                 )}
-                {(form.sourceChannel === "Referred by a Friend" || form.sourceChannel === "Connected by a Binge Partner") && (
+                {/* Kept visible whenever a code came with the page, so a code
+                    that will be sent is never hidden from the person sending it. */}
+                {(isReferralChannel(form.sourceChannel) || !!startingConnectCode) && (
                   <div>
                     <label htmlFor="connectCode" className={labelCls}>
                       Connect Code
@@ -558,14 +573,20 @@ export default function ApplicationForm({
                     <input
                       id="connectCode"
                       name="connectCode"
-                      className={inputCls}
+                      aria-invalid={!!fieldErrors.connectCode}
+                      aria-describedby={fieldErrors.connectCode ? "connectCode-error" : undefined}
+                      className={fieldErrors.connectCode ? inputErrorCls : inputCls}
                       placeholder="e.g. ABC1234"
                       value={form.connectCode}
                       onChange={(e) => setForm({ ...form, connectCode: e.target.value })}
                     />
-                    <p className="mt-1.5 text-xs text-text-secondary">
-                      Have a Connect Code? Enter it here (optional).
-                    </p>
+                    {fieldErrors.connectCode ? (
+                      <FieldError id="connectCode-error" message={fieldErrors.connectCode} />
+                    ) : (
+                      <p className="mt-1.5 text-xs text-text-secondary">
+                        Have a Connect Code? Enter it here (optional).
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

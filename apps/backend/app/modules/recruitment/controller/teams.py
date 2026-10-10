@@ -64,7 +64,9 @@ async def update_team(tenant: _Tenant, team_id: str, payload: TeamUpdate):
 
 @router.get("/employees", response_model=list[EmployeeTeamResponse])
 async def list_employees(tenant: _Tenant):
-    employees = await Employee.find({"brand_id": tenant.brand_id}).to_list(None)
+    # Inactive staff have left, like the dashboard table and the leaderboard
+    # already treat them. Their candidates and mappings still carry their id.
+    employees = await Employee.find({"brand_id": tenant.brand_id, "is_active": True}).to_list(None)
     hidden = await _non_recruiter_emails()
     return [employee for employee in employees if employee.email.lower() not in hidden]
 

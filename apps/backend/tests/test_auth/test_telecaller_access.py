@@ -208,6 +208,26 @@ async def test_employee_listing_hides_telecallers(http: AsyncClient):
     assert {row["email"] for row in res.json()} == {"recruiter@binge.consulting"}
 
 
+@pytest.mark.asyncio
+async def test_employee_listing_hides_staff_who_have_left(http: AsyncClient):
+    await _sign_up(UserRole.maintainer, "boss@binge.consulting")
+    await _sign_up(UserRole.employee, "recruiter@binge.consulting")
+    # Their login removed but the staff record kept, which is the state a
+    # departed recruiter was left in before anything checked is_active here.
+    left = Employee(
+        brand_id=_BRAND,
+        name="Gone",
+        email="gone@binge.consulting",
+        role="employee",
+        is_active=False,
+    )
+    await left.insert()
+
+    res = await http.get("/api/v1/teams/employees", headers=await _headers("boss@binge.consulting"))
+
+    assert {row["email"] for row in res.json()} == {"recruiter@binge.consulting"}
+
+
 # ── Login redirect ─────────────────────────────────────────────────────────────
 
 

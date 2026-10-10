@@ -457,7 +457,10 @@ export type NotificationKind =
   | "awaiting_decision"
   | "awaiting_interview_decision"
   | "awaiting_offer_upload"
-  | "client_message";
+  | "client_message"
+  | "telecaller_sla_breach"
+  | "recruiter_sla_breach"
+  | "application_not_queued";
 
 export interface PipelineNotification {
   id: string;
