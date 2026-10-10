@@ -47,6 +47,7 @@ async def _with_recruiter(
     name: str = "Asha Rao",
     *,
     status: CandidateStatus = CandidateStatus.pending,
+    **candidate_fields,
 ) -> IntakeLead:
     """A lead an admin has handed to `recruiter`'s team, waiting in their Review tab.
 
@@ -59,6 +60,7 @@ async def _with_recruiter(
         phone="9876543210",
         status=status,
         assigned_recruiter_id=recruiter.id,
+        **candidate_fields,
     )
     await candidate.insert()
     lead = IntakeLead(
@@ -150,6 +152,37 @@ async def test_only_leads_still_waiting_on_a_decision_are_listed(http, rec):
     res = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("rec"))
 
     assert [row["id"] for row in res.json()] == [str(waiting.id)]
+
+
+@pytest.mark.asyncio
+async def test_the_review_list_carries_the_cv_so_the_card_can_link_it(http, rec):
+    await _with_recruiter(rec, "With CV", resume_url="https://res.cloudinary.com/x/cv.pdf")
+    await _with_recruiter(rec, "Without")
+
+    res = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("rec"))
+
+    rows = {row["full_name"]: row for row in res.json()}
+    assert rows["With CV"]["resume_url"] == "https://res.cloudinary.com/x/cv.pdf"
+    assert rows["With CV"]["cv_locked"] is False
+    without = rows["Without"]
+    assert (without["cv_link"], without["resume_url"], without["cv_locked"]) == (None, None, False)
+
+
+@pytest.mark.asyncio
+async def test_a_cv_another_recruiter_sourced_stays_theirs_in_the_review_tab(http, rec):
+    # The directory's rule (utils/cv_access): the card must not be a way round it.
+    other = await make_staff(_BRAND, "other", UserRole.employee)
+    await make_staff(_BRAND, "boss", UserRole.maintainer)
+    await _with_recruiter(rec, cv_link="https://drive.example/cv", created_by_id=other.id)
+
+    mine = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("rec"))
+    boss = await http.get("/api/v1/intake/leads/review", headers=await auth_headers("boss"))
+
+    assert (mine.json()[0]["cv_link"], mine.json()[0]["cv_locked"]) == (None, True)
+    assert (boss.json()[0]["cv_link"], boss.json()[0]["cv_locked"]) == (
+        "https://drive.example/cv",
+        False,
+    )
 
 
 @pytest.mark.asyncio

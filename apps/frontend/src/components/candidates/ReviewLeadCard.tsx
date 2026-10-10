@@ -13,6 +13,7 @@ import {
   IconUser,
   IconX,
 } from "@tabler/icons-react";
+import LeadCvLink from "@/components/leads/LeadCvLink";
 import { cn } from "@/lib/utils";
 import {
   REJECT_REASON_LABELS,
@@ -115,6 +116,7 @@ export default function ReviewLeadCard({
             {lead.phone}
           </a>
         )}
+        <LeadCvLink lead={lead} />
         <Meta icon={IconMapPin}>{lead.city}</Meta>
         <Meta icon={IconBriefcase}>{work}</Meta>
         <Meta icon={IconSchool}>{lead.education}</Meta>
