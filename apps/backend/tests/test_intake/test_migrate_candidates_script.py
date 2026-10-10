@@ -18,6 +18,7 @@ from app.modules.recruitment.enums import (
     IntakeSource,
 )
 from app.modules.recruitment.models import Candidate, Employee, IntakeAttribution, IntakeLead
+from app.modules.recruitment.service.intake_service import recruiter_accept_lead
 from scripts import migrate_candidates_to_leads as migrate
 
 _BRAND = PydanticObjectId()
@@ -171,6 +172,26 @@ async def test_candidates_approved_into_a_review_tab_go_back_to_pending():
     assert (await Candidate.get(waiting.id)).status == CandidateStatus.pending
     assert (await Candidate.get(accepted.id)).status == CandidateStatus.approved
     assert (await Candidate.get(mapped.id)).status == CandidateStatus.approved
+
+
+@pytest.mark.asyncio
+async def test_an_accept_while_the_migration_runs_is_not_undone(monkeypatch):
+    """The recruiter accepts after the script read who is waiting but before it
+    wrote them back to PENDING — here, while it is still opening leads."""
+    waiting = await _candidate("Waiting on recruiter", CandidateStatus.approved)
+    lead = await _lead_for(waiting, status=IntakeLeadStatus.pending_recruiter)
+    await _candidate("Old applicant", CandidateStatus.pending)
+    real_open = migrate.open_lead_for_application
+
+    async def open_after_an_accept(candidate, **kwargs):
+        await recruiter_accept_lead(await IntakeLead.get(lead.id), actor_id=None)
+        return await real_open(candidate, **kwargs)
+
+    monkeypatch.setattr(migrate, "open_lead_for_application", open_after_an_accept)
+    counts = await migrate.run(confirm=True)
+
+    assert counts["unapproved"] == 0
+    assert (await Candidate.get(waiting.id)).status == CandidateStatus.approved
 
 
 @pytest.mark.asyncio

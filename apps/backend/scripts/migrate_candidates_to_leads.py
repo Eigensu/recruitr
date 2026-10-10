@@ -221,13 +221,26 @@ async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
         counts["hidden"] = result.modified_count if result is not None else 0
 
     if to_unapprove:
+        ids = [c.id for c in to_unapprove]
         result = await Candidate.find(
-            {
-                "_id": {"$in": [c.id for c in to_unapprove]},
-                "status": CandidateStatus.approved.value,
-            }
+            {"_id": {"$in": ids}, "status": CandidateStatus.approved.value}
         ).update({"$set": {"status": CandidateStatus.pending.value}})
-        counts["unapproved"] = result.modified_count if result is not None else 0
+        unapproved = result.modified_count if result is not None else 0
+        # A recruiter may have accepted one of these since they were read at the
+        # top, and the write above just undid that approval: the lead has left
+        # their Review tab, the candidate the Candidates tab. Accept records the
+        # decision on the lead before it approves the candidate, so any accept
+        # not visible here approves them after this, and nothing is lost.
+        accepted = await IntakeLead.distinct(
+            "candidate_id",
+            {"candidate_id": {"$in": ids}, "recruiter_decision": IntakeDecision.accept.value},
+        )
+        if accepted:
+            result = await Candidate.find(
+                {"_id": {"$in": accepted}, "status": CandidateStatus.pending.value}
+            ).update({"$set": {"status": CandidateStatus.approved.value}})
+            unapproved -= result.modified_count if result is not None else 0
+        counts["unapproved"] = unapproved
 
     unassigned_note = (
         "← assign from the Leads page" if not assign else "← no telecaller to take them"
