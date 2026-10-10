@@ -2,7 +2,8 @@
 
 "Actioned" is deliberately the first real recruiting act rather than an
 acknowledgement click: it is already an auditable event, and it cannot be
-satisfied by opening a page.
+satisfied by opening a page. Accepting from the Review tab approves the
+candidate but leaves the clock running (see test_recruiter_review.py).
 """
 
 from datetime import UTC, datetime, timedelta

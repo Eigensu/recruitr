@@ -203,7 +203,7 @@ async def test_acceptance_is_recorded_on_the_candidate_history(http, caller):
 
 
 @pytest.mark.asyncio
-async def test_rejecting_marks_the_candidate_but_keeps_the_record(http, caller):
+async def test_rejecting_hides_the_candidate_but_keeps_the_lead(http, caller):
     lead = await _lead(telecaller=caller)
 
     res = await http.post(
@@ -218,9 +218,12 @@ async def test_rejecting_marks_the_candidate_but_keeps_the_record(http, caller):
 
     candidate = await Candidate.get(lead.candidate_id)
     assert candidate.status == CandidateStatus.rejected
-    # Still on record: the directory hides them by filtering to APPROVED, but
-    # "what are we rejecting, and why" stays answerable.
-    assert candidate.is_active is True
+    # Soft-deleted: gone from every list, but the row and the lead stay, so
+    # "what are we rejecting, and why" is still answerable.
+    assert candidate.is_active is False
+    assert (await IntakeLead.get(lead.id)).telecaller_reject_reason == (
+        IntakeRejectReason.not_interested
+    )
     assert candidate.assigned_recruiter_id is None
 
 

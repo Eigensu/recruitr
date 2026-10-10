@@ -385,20 +385,35 @@ async def funnel(
 async def reject_reasons(
     brand_id: PydanticObjectId, *, start: datetime | None = None, end: datetime | None = None
 ) -> list[dict[str, Any]]:
-    """Why leads were turned away, commonest first.
+    """Why leads were turned away, on the call or from a recruiter's Review tab,
+    commonest first.
 
     `wrong_number` dominating this list is a data-quality problem with the ad
     form, not a telecaller problem — which is the distinction it exists to make.
+    A lead is rejected on one leg at most (a telecaller's reject never reaches a
+    recruiter), so each counts once, under the reason its own rejecter gave.
     """
+    reject = IntakeDecision.reject.value
     rows = await _aggregate(
         [
             {
                 _MATCH: {
                     **_window(brand_id, start, end),
-                    "telecaller_decision": IntakeDecision.reject.value,
+                    "$or": [{"telecaller_decision": reject}, {"recruiter_decision": reject}],
                 }
             },
-            {_GROUP: {"_id": "$telecaller_reject_reason", "count": {_SUM: 1}}},
+            {
+                _GROUP: {
+                    "_id": {
+                        _COND: [
+                            {"$eq": ["$recruiter_decision", reject]},
+                            "$recruiter_reject_reason",
+                            "$telecaller_reject_reason",
+                        ]
+                    },
+                    "count": {_SUM: 1},
+                }
+            },
             {_SORT: {"count": -1}},
         ]
     )
@@ -447,6 +462,18 @@ async def campaigns(
                             ]
                         }
                     },
+                    # Separate from `rejected`, which is the telecaller's
+                    # verdict and the accept rate's denominator: these leads
+                    # passed the call and were turned down at Review.
+                    "recruiter_rejected": {
+                        _SUM: {
+                            _COND: [
+                                {"$eq": ["$recruiter_decision", IntakeDecision.reject.value]},
+                                1,
+                                0,
+                            ]
+                        }
+                    },
                     "actioned": {
                         _SUM: {
                             _COND: [
@@ -477,6 +504,7 @@ async def campaigns(
             "leads": int(row["leads"]),
             "accepted": int(row["accepted"]),
             "rejected": int(row["rejected"]),
+            "recruiter_rejected": int(row["recruiter_rejected"]),
             "actioned": int(row["actioned"]),
             "duplicate": int(row["duplicate"]),
             "accept_rate": _rate(int(row["accepted"]), int(row["accepted"]) + int(row["rejected"])),

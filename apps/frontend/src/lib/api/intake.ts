@@ -17,6 +17,7 @@ export type IntakeLeadStatus =
   | "pending_review"
   | "pending_recruiter"
   | "actioned"
+  | "archived"
   | "duplicate";
 
 export type IntakeSource = "google_sheet" | "public_form" | "naukri_import";
@@ -62,6 +63,10 @@ export interface IntakeLead {
   recruiter_assigned_at: string | null;
   recruiter_actioned_at: string | null;
   recruiter_response_seconds: number | null;
+  recruiter_decision: IntakeDecision | null;
+  recruiter_accepted_at: string | null;
+  recruiter_reject_reason: IntakeRejectReason | null;
+  recruiter_notes: string | null;
   reassignment_count: number;
   telecaller_name: string | null;
   recruiter_name: string | null;
@@ -99,6 +104,7 @@ export interface IntakeFunnel {
   pending_review: number;
   pending_recruiter: number;
   actioned: number;
+  archived: number;
   duplicate: number;
 }
 
@@ -125,7 +131,10 @@ export interface IntakeCampaignRow {
   label: string;
   leads: number;
   accepted: number;
+  /** By the telecaller, on the call. */
   rejected: number;
+  /** Passed the call, then turned down from a recruiter's Review tab. */
+  recruiter_rejected: number;
   actioned: number;
   duplicate: number;
   accept_rate: number | null;
@@ -262,6 +271,40 @@ export function rejectLead(
   notes?: string,
 ): Promise<IntakeLead> {
   return apiFetch<IntakeLead>(`/api/v1/intake/leads/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason: reason ?? null, notes: notes || null }),
+  });
+}
+
+// ── The recruiter's Review tab ─────────────────────────────────────────────────
+
+/**
+ * Leads waiting on a recruiter, oldest assignment first. A recruiter gets only
+ * their own whatever `recruiterId` says; a maintainer or admin gets everyone's,
+ * narrowed to one recruiter when `recruiterId` is given.
+ */
+export function fetchReviewLeads(apiFetch: ApiFetch, recruiterId?: string): Promise<IntakeLead[]> {
+  return apiFetch<IntakeLead[]>(
+    `/api/v1/intake/leads/review${query({ recruiter_id: recruiterId })}`,
+  );
+}
+
+/** Take the lead on: the candidate is approved into the Candidates tab. The
+ * recruiter's clock keeps running until their first mapping of them. */
+export function recruiterAcceptLead(apiFetch: ApiFetch, id: string): Promise<IntakeLead> {
+  return apiFetch<IntakeLead>(`/api/v1/intake/leads/${id}/recruiter-accept`, {
+    method: "POST",
+  });
+}
+
+/** Turn the lead down: it is archived and the candidate is hidden everywhere. */
+export function recruiterRejectLead(
+  apiFetch: ApiFetch,
+  id: string,
+  reason?: IntakeRejectReason,
+  notes?: string,
+): Promise<IntakeLead> {
+  return apiFetch<IntakeLead>(`/api/v1/intake/leads/${id}/recruiter-reject`, {
     method: "POST",
     body: JSON.stringify({ reason: reason ?? null, notes: notes || null }),
   });
@@ -441,6 +484,7 @@ export const STATUS_LABELS: Record<IntakeLeadStatus, string> = {
   pending_review: "Awaiting review",
   pending_recruiter: "With recruiter",
   actioned: "Actioned",
+  archived: "Rejected by recruiter",
   duplicate: "Duplicate",
 };
 
@@ -451,6 +495,7 @@ export const STATUS_STYLES: Record<IntakeLeadStatus, string> = {
   pending_review: "bg-violet-500/10 text-violet-400 border-violet-500/20",
   pending_recruiter: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   actioned: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  archived: "bg-red-500/10 text-red-400 border-red-500/20",
   duplicate: "bg-surface-panel text-text-muted border-border",
 };
 

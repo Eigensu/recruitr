@@ -16,15 +16,15 @@ export default async function CandidatesPage({
   const openAdd = (await searchParams).add === "1";
   let initialCandidates: ApiCandidate[] = [];
   let initialTotal = 0;
-  let initialPendingCandidates: ApiCandidate[] = [];
   let availableTags: string[] = [];
   let availableRoles: string[] = [];
   let recruiters: RecruiterOption[] = [];
 
   try {
-    const [candidatePage, pendingPage1, tags, roles] = await Promise.all([
+    const [candidatePage, tags, roles] = await Promise.all([
+      // APPROVED only, which by itself leaves out PENDING people on the Leads
+      // page and those still waiting in a recruiter's Review tab.
       getCandidates({ page: 1, limit: 50 }),
-      getCandidates({ page: 1, limit: 50, status: "PENDING" }),
       getCandidateTags(),
       getCandidateRoles().catch((err) => {
         console.error("Failed to load candidate roles:", err);
@@ -33,20 +33,6 @@ export default async function CandidatesPage({
     ]);
     initialCandidates = candidatePage.items ?? [];
     initialTotal = candidatePage.meta?.total ?? initialCandidates.length;
-
-    let allPending = pendingPage1.items ?? [];
-    const pendingMeta = pendingPage1.meta;
-    if (pendingMeta && pendingMeta.pages > 1) {
-      const promises = [];
-      for (let p = 2; p <= pendingMeta.pages; p++) {
-        promises.push(getCandidates({ page: p, limit: 50, status: "PENDING" }));
-      }
-      const restPages = await Promise.all(promises);
-      for (const rp of restPages) {
-        allPending = allPending.concat(rp.items ?? []);
-      }
-    }
-    initialPendingCandidates = allPending;
     availableTags = tags;
     availableRoles = roles;
   } catch (err) {
@@ -86,7 +72,6 @@ export default async function CandidatesPage({
           openAdd={openAdd}
           initialCandidates={initialCandidates}
           initialTotal={initialTotal}
-          initialPendingCandidates={initialPendingCandidates}
           availableTags={availableTags}
           availableRoles={availableRoles}
           recruiters={recruiters}

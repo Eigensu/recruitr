@@ -10,6 +10,12 @@
     POST /intake/leads/{id}/reassign   move a lead to someone else        (maintainer+)
     POST /intake/sync                  read the sheet now                 (admin)
 
+    GET  /intake/leads/review               leads waiting on a recruiter's decision:
+                                            their own, or everyone's for maintainer+
+    POST /intake/leads/{id}/recruiter-accept  take the lead on (candidate approved; the
+                                              clock runs on to the first mapping)
+    POST /intake/leads/{id}/recruiter-reject  turn it down (archived, candidate hidden)
+
     GET  /intake/analytics/overview     funnel + both SLA clocks   (maintainer+)
     GET  /intake/analytics/telecallers  per-telecaller table       (maintainer+)
     GET  /intake/analytics/recruiters   per-recruiter table        (maintainer+)
@@ -103,6 +109,8 @@ from app.modules.recruitment.service.intake_service import (
     poll_google_sheet,
     provision_telecaller,
     reassign_lead,
+    recruiter_accept_lead,
+    recruiter_reject_lead,
     reject_lead,
     team_roster,
     waiting_on_recruiter,
@@ -236,6 +244,10 @@ def _to_response(
         recruiter_assigned_at=lead.recruiter_assigned_at,
         recruiter_actioned_at=lead.recruiter_actioned_at,
         recruiter_response_seconds=lead.recruiter_response_seconds,
+        recruiter_decision=lead.recruiter_decision,
+        recruiter_accepted_at=lead.recruiter_accepted_at,
+        recruiter_reject_reason=lead.recruiter_reject_reason,
+        recruiter_notes=lead.recruiter_notes,
         reassignment_count=lead.reassignment_count,
         telecaller_name=telecaller.name if telecaller else None,
         recruiter_name=recruiter.name if recruiter else None,
@@ -331,7 +343,7 @@ async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest
 
 @router.post("/leads/{lead_id}/reject", response_model=IntakeLeadResponse)
 async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest):
-    """Reject a lead. The candidate stays on record, marked REJECTED."""
+    """Reject a lead. The candidate is marked REJECTED and soft-deleted."""
     lead = await _lead_or_404(tenant, lead_id)
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)
@@ -727,6 +739,105 @@ async def add_leads(
         submitted_by_id=tenant.employee_id,
         automation=await get_automation_settings(tenant.brand_id),
     )
+
+
+# ── Recruiter review ───────────────────────────────────────────────────────────
+
+
+def _is_manager(tenant: TenantScope) -> bool:
+    return tenant.role in (UserRole.maintainer, UserRole.admin)
+
+
+def _own_review_lead_or_403(tenant: TenantScope, lead: IntakeLead) -> None:
+    """A recruiter may decide only the leads handed to them; management, any."""
+    if _is_manager(tenant):
+        return
+    if lead.recruiter_id != tenant.employee_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "This lead is assigned to another recruiter."
+        )
+
+
+def _awaiting_recruiter_or_409(lead: IntakeLead) -> None:
+    if lead.status != IntakeLeadStatus.pending_recruiter:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This lead is {lead.status.value.replace('_', ' ')} and is no longer in review.",
+        )
+    # Accepted leads stay pending_recruiter until the first mapping, but their
+    # decision is made: neither a second accept nor a reject applies to them.
+    if lead.recruiter_decision is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "This lead was already accepted and is no longer in review."
+        )
+
+
+# Declared before /leads/{lead_id}, which would otherwise swallow "review".
+@router.get("/leads/review", response_model=list[IntakeLeadResponse])
+async def review_leads(
+    tenant: _Staff,
+    recruiter_id: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[IntakeLeadResponse]:
+    """The Candidates page's Review tab, oldest assignment first.
+
+    A recruiter sees only the leads handed to them, whatever `recruiter_id` they
+    pass. A maintainer or admin sees every recruiter's, optionally narrowed to one.
+    Accepted leads leave the tab — their candidate is in the Candidates tab now —
+    though they stay pending_recruiter until the first mapping.
+    """
+    match: dict = {
+        "brand_id": tenant.brand_id,
+        "status": IntakeLeadStatus.pending_recruiter.value,
+        "recruiter_decision": None,
+    }
+    if not _is_manager(tenant):
+        match["recruiter_id"] = tenant.employee_id
+    elif recruiter_id:
+        match["recruiter_id"] = to_object_id(recruiter_id, "recruiter_id")
+    leads = await IntakeLead.find(match).sort("recruiter_assigned_at").limit(limit).to_list()
+    candidates, employees = await intake_analytics.people_for(leads)
+    teams = await _team_names(tenant.brand_id)
+    now = datetime.now(UTC)
+    return [
+        _to_response(
+            lead,
+            candidates.get(lead.candidate_id),
+            telecaller=employees.get(lead.telecaller_id),
+            recruiter=employees.get(lead.recruiter_id),
+            team_name=teams.get(lead.team_id),
+            now=now,
+        )
+        for lead in leads
+    ]
+
+
+@router.post("/leads/{lead_id}/recruiter-accept", response_model=IntakeLeadResponse)
+async def recruiter_accept(tenant: _Staff, lead_id: str):
+    """Accept a lead from the Review tab; the candidate is approved into the Candidates tab."""
+    lead = await _lead_or_404(tenant, lead_id)
+    _own_review_lead_or_403(tenant, lead)
+    _awaiting_recruiter_or_409(lead)
+    try:
+        await recruiter_accept_lead(lead, actor_id=tenant.employee_id)
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
+    return await _fetch_response(lead)
+
+
+@router.post("/leads/{lead_id}/recruiter-reject", response_model=IntakeLeadResponse)
+async def recruiter_reject(tenant: _Staff, lead_id: str, payload: IntakeRejectRequest):
+    """Reject a lead from the Review tab: archived, and the candidate is hidden."""
+    lead = await _lead_or_404(tenant, lead_id)
+    _own_review_lead_or_403(tenant, lead)
+    _awaiting_recruiter_or_409(lead)
+    try:
+        await recruiter_reject_lead(
+            lead, actor_id=tenant.employee_id, reason=payload.reason, notes=payload.notes
+        )
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
+    return await _fetch_response(lead)
 
 
 # Declared before /leads/{lead_id}, which would otherwise swallow "submitted".

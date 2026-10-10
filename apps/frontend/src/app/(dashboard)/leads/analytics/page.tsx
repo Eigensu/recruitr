@@ -375,7 +375,7 @@ export default function LeadAnalyticsPage() {
               </div>
             </header>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
+              <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="text-text-secondary">
                   <tr>
                     <th className="border-b border-border p-2 font-semibold">Name</th>
@@ -387,6 +387,9 @@ export default function LeadAnalyticsPage() {
                       Accept rate
                     </th>
                     <th className="border-b border-border p-2 text-right font-semibold">
+                      Rejected by recruiter
+                    </th>
+                    <th className="border-b border-border p-2 text-right font-semibold">
                       Reached a recruiter
                     </th>
                   </tr>
@@ -394,7 +397,7 @@ export default function LeadAnalyticsPage() {
                 <tbody className="divide-y divide-border">
                   {campaigns.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-6 text-center text-text-muted">
+                      <td colSpan={6} className="p-6 text-center text-text-muted">
                         Nothing to report for this window.
                       </td>
                     </tr>
@@ -408,6 +411,9 @@ export default function LeadAnalyticsPage() {
                         <td className="p-2 text-right text-text-secondary">{row.accepted}</td>
                         <td className="p-2 text-right text-text-secondary">
                           {formatRate(row.accept_rate)}
+                        </td>
+                        <td className="p-2 text-right text-text-secondary">
+                          {row.recruiter_rejected}
                         </td>
                         <td className="p-2 text-right text-text-secondary">
                           {formatRate(row.actioned_rate)}

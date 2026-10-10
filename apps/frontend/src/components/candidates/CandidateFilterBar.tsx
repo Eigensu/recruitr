@@ -20,21 +20,19 @@ interface Props {
   availableTags: string[];
   availableRoles?: string[];
   recruiters?: readonly RecruiterOption[];
-  /** `refereeId` is passed only by "Clear all" in external mode, so the referee
-   *  and the filters are cleared by a single parent update. */
+  /** `refereeId` is passed only by "Clear all" when the referee filter is shown,
+   *  so the referee and the filters are cleared by a single parent update. */
   onFilterChange: (filters: Partial<CandidateFilters>, refereeId?: string) => void;
-  /** "internal" hides the source select (the tab fixes it); "external" also swaps
-   *  it for a Referee filter. */
-  mode?: "all" | "internal" | "external";
   referees?: readonly CandidateReferrerOption[];
-  /** Controlled — the External tab drives this from a referee badge click too. */
+  /** Controlled — a referee badge click drives this too. The Referee filter is
+   *  shown only when `onRefereeChange` is given. */
   refereeId?: string;
   onRefereeChange?: (refereeId: string) => void;
 }
 
 /** Sentinel the API accepts for candidates nobody owns (public applications). */
 const UNASSIGNED = "unassigned";
-/** Sentinel the API accepts for external candidates with no referee. */
+/** Sentinel the API accepts for candidates with no referee. */
 const NOT_REFERRED = "none";
 
 const inputStyle = {
@@ -51,11 +49,11 @@ export default function CandidateFilterBar({
   availableRoles = [],
   recruiters = [],
   onFilterChange,
-  mode = "all",
   referees = [],
   refereeId = "",
   onRefereeChange,
 }: Props) {
+  const showReferee = onRefereeChange !== undefined;
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<CandidateSource | "">("");
   const [sourceChannel, setSourceChannel] = useState("");
@@ -183,7 +181,7 @@ export default function CandidateFilterBar({
     // fired its own fetch with the filters still applied, and the fetch that
     // followed read the pre-clear refereeId from state — so "Clear all" left
     // the referee filter on the results while the dropdown showed it empty.
-    if (mode === "external") onFilterChange({ page: 1, limit: 50 }, "");
+    if (showReferee) onFilterChange({ page: 1, limit: 50 }, "");
     else onFilterChange({ page: 1, limit: 50 });
   }
 
@@ -204,7 +202,7 @@ export default function CandidateFilterBar({
     !!establishmentTag ||
     !!communication ||
     !!education ||
-    (mode === "external" && !!refereeId);
+    (showReferee && !!refereeId);
 
   return (
     <div
@@ -250,24 +248,23 @@ export default function CandidateFilterBar({
         <option value={UNASSIGNED}>Unassigned</option>
       </select>
 
-      {mode === "all" && (
-        <select
-          value={source}
-          onChange={(e) => {
-            const v = e.target.value as CandidateSource | "";
-            setSource(v);
-            emit({ source: v });
-          }}
-          className="rounded-lg px-3 py-1.5 text-sm outline-none"
-          style={inputStyle}
-        >
-          <option value="">All Sources</option>
-          <option value="internal">Internal</option>
-          <option value="external">External</option>
-        </select>
-      )}
+      <select
+        value={source}
+        onChange={(e) => {
+          const v = e.target.value as CandidateSource | "";
+          setSource(v);
+          emit({ source: v });
+        }}
+        className="rounded-lg px-3 py-1.5 text-sm outline-none"
+        style={inputStyle}
+        aria-label="Filter by source"
+      >
+        <option value="">All Sources</option>
+        <option value="internal">Internal</option>
+        <option value="external">External</option>
+      </select>
 
-      {mode === "external" && (
+      {showReferee && (
         <select
           value={refereeId}
           onChange={(e) => onRefereeChange?.(e.target.value)}

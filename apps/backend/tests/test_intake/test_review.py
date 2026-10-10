@@ -105,7 +105,9 @@ async def test_a_team_shares_its_leads_round_robin(http, boss):
 
 
 @pytest.mark.asyncio
-async def test_assignment_approves_the_candidate_and_starts_the_recruiter_clock(http, boss):
+async def test_assignment_starts_the_recruiter_clock_but_does_not_approve(http, boss):
+    """Only the recruiter's own Accept approves: until then the candidate is in
+    their Review tab and nowhere that lists approved people."""
     team = await _team("North")
     recruiter = await _staff("recruiter", UserRole.employee, team=team)
     lead = await _reviewed_lead()
@@ -118,7 +120,7 @@ async def test_assignment_approves_the_candidate_and_starts_the_recruiter_clock(
     assert stored.recruiter_id == recruiter.id
     assert stored.recruiter_assigned_at is not None
     candidate = await Candidate.get(lead.candidate_id)
-    assert candidate.status == CandidateStatus.approved
+    assert candidate.status == CandidateStatus.pending
     assert candidate.assigned_recruiter_id == recruiter.id
 
 
