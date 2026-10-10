@@ -190,10 +190,14 @@ async def public_apply(
 
     referee_id = None
     if normalized_code:
-        referee = await RefereeUser.find_one({"connect_code": normalized_code, "is_active": True})
+        referee = await RefereeUser.find_one(
+            {"brand_id": target_brand_id, "connect_code": normalized_code, "is_active": True}
+        )
         # Refused rather than stored: an unmatched code credits nobody, and only
         # the applicant can tell a typo from the code they were given. Checked
         # before the resume upload so a refusal leaves nothing in Cloudinary.
+        # Matched within the brand being applied to: another agency's referee
+        # must not be credited with, or see, this brand's candidate.
         if referee is None:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,

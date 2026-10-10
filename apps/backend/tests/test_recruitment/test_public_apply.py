@@ -220,6 +220,19 @@ async def test_an_unrecognised_connect_code_is_refused(brand: Brand, client: Asy
 
 
 @pytest.mark.asyncio
+async def test_another_brands_connect_code_is_refused(brand: Brand, client: AsyncClient) -> None:
+    """A live code from a different agency must not attach its referee to this brand."""
+    await RefereeUser(
+        brand_id=PydanticObjectId(), email="other@x.test", connect_code="ELSE42"
+    ).insert()
+
+    res = await client.post("/api/v1/public/apply", data={**APPLICATION, "connect_code": "ELSE42"})
+
+    assert res.status_code == 422, res.text
+    assert await Candidate.find_all().count() == 0
+
+
+@pytest.mark.asyncio
 async def test_a_blank_connect_code_is_no_code(brand: Brand, client: AsyncClient) -> None:
     res = await client.post("/api/v1/public/apply", data={**APPLICATION, "connect_code": "   "})
 

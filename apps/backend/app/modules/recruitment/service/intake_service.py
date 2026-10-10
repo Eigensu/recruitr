@@ -964,6 +964,16 @@ def _elapsed_seconds(since: datetime | None, until: datetime) -> int | None:
     return max(0, int((until - since).total_seconds()))
 
 
+async def _lead_candidate(lead: IntakeLead) -> Candidate | None:
+    """The lead's candidate, looked up within the lead's own brand.
+
+    The lead is tenant-scoped; matching on brand_id too means a lead whose
+    candidate_id ever pointed outside its brand finds nothing, rather than
+    approving, reassigning or soft-deleting another tenant's candidate.
+    """
+    return await Candidate.find_one({"_id": lead.candidate_id, "brand_id": lead.brand_id})
+
+
 class LeadAlreadyDecided(Exception):
     """The lead left `pending_telecaller` before this decision could be written."""
 
@@ -1013,7 +1023,7 @@ async def accept_lead(
         },
     )
 
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
         # Only what the telecaller filled in: an omitted optional field must
         # not wipe what the applicant already gave us.
@@ -1107,7 +1117,7 @@ async def assign_to_team(
             continue
         # A lead whose candidate is gone has nobody to review; leave it for
         # someone to look at rather than assign it to nobody.
-        candidate = await Candidate.get(lead.candidate_id)
+        candidate = await _lead_candidate(lead)
         if candidate is None:
             skipped.append(lead)
             continue
@@ -1200,7 +1210,7 @@ async def reject_lead(
         },
     )
 
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
         await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
         await record_candidate_event(
@@ -1258,7 +1268,7 @@ async def recruiter_accept_lead(
         "updated_at": stamp,
     }
     await _decide_recruiter_pending(lead, updates)
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     try:
         if candidate is not None:
             await candidate.set({"status": CandidateStatus.approved})
@@ -1307,9 +1317,16 @@ async def recruiter_reject_lead(
             "updated_at": stamp,
         },
     )
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
-        await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
+        try:
+            await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
+        except Exception:
+            # Archived first so two clicks cannot both reject; left there, the
+            # candidate would stay PENDING behind a lead no Review tab lists —
+            # in no list at all, with nobody able to retry. Hand it back.
+            await _undo_recruiter_reject(lead)
+            raise
         await record_candidate_event(
             scope=TenantScope(brand_id=lead.brand_id, employee_id=actor_id),
             candidate_id=lead.candidate_id,
@@ -1318,6 +1335,30 @@ async def recruiter_reject_lead(
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead
+
+
+async def _undo_recruiter_reject(lead: IntakeLead) -> None:
+    """Return a lead whose candidate could not be hidden to the Review tab."""
+    updates: dict[str, object] = {
+        "status": IntakeLeadStatus.pending_recruiter,
+        "recruiter_decision": None,
+        "recruiter_actioned_at": None,
+        "recruiter_reject_reason": None,
+        "recruiter_notes": None,
+        "recruiter_response_seconds": None,
+    }
+    try:
+        await IntakeLead.find_one(
+            {
+                "_id": lead.id,
+                "status": IntakeLeadStatus.archived.value,
+                "recruiter_decision": IntakeDecision.reject.value,
+            }
+        ).update({"$set": updates})
+        for attr, value in updates.items():
+            setattr(lead, attr, value)
+    except Exception:
+        logger.exception("Recruiter reject: could not roll lead %s back to review", lead.id)
 
 
 def waiting_on_recruiter(lead: IntakeLead) -> bool:
@@ -1346,6 +1387,7 @@ async def reassign_lead(
     """
     stamp = now or datetime.now(UTC)
     recruiter_leg = waiting_on_recruiter(lead)
+    candidate = await _lead_candidate(lead) if recruiter_leg else None
     updates: dict[str, object] = {
         "reassignment_count": lead.reassignment_count + 1,
         "updated_at": stamp,
@@ -1357,6 +1399,19 @@ async def reassign_lead(
             "recruiter_assigned_at": stamp,
             "recruiter_sla_breached_at": None,
         }
+        # An `unassigned` lead with a telecaller's accept predates the Review
+        # step, and the flow then approved the candidate. Their decision is
+        # made: as undecided it would land in the new recruiter's Review tab
+        # while they are also in the Candidates tab, and a reject there would
+        # hide someone who may already be in a pipeline. Filed as accepted, the
+        # clock still runs to the first mapping, as for any accepted lead.
+        if (
+            lead.status == IntakeLeadStatus.unassigned
+            and lead.recruiter_decision is None
+            and candidate is not None
+            and candidate.status == CandidateStatus.approved
+        ):
+            updates |= {"recruiter_decision": IntakeDecision.accept, "recruiter_accepted_at": stamp}
     else:
         updates |= {
             "status": IntakeLeadStatus.pending_telecaller,
@@ -1375,10 +1430,8 @@ async def reassign_lead(
     for attr, value in updates.items():
         setattr(lead, attr, value)
 
-    if recruiter_leg:
-        candidate = await Candidate.get(lead.candidate_id)
-        if candidate is not None:
-            await candidate.set({"assigned_recruiter_id": assignee.id})
+    if candidate is not None:
+        await candidate.set({"assigned_recruiter_id": assignee.id})
     await _drop_analytics_cache(lead.brand_id)
     return lead
 
