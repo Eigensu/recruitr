@@ -34,8 +34,15 @@ export function resolveCvRef(
   cvLink: string | null | undefined,
   resumeUrl: string | null | undefined,
 ): { label: string; href: string | null } | null {
+  if (cvLink && isAbsoluteUrl(cvLink)) {
+    return { label: "CV Link", href: cvLink };
+  }
+  // An unlinkable cv_link must not hide an uploaded resume that can be opened.
+  if (resumeUrl && isAbsoluteUrl(resumeUrl)) {
+    return { label: "Resume", href: resumeUrl };
+  }
   if (cvLink) {
-    return { label: "CV Link", href: isAbsoluteUrl(cvLink) ? cvLink : null };
+    return { label: "CV Link", href: null };
   }
   if (resumeUrl) {
     return { label: "Resume", href: isAbsoluteUrl(resumeUrl) ? resumeUrl : null };
