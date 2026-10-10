@@ -68,6 +68,9 @@ export interface IntakeLead {
   recruiter_reject_reason: IntakeRejectReason | null;
   recruiter_notes: string | null;
   reassignment_count: number;
+  /** When the latest CV upload link stops working, and when the candidate last used one. */
+  cv_link_expires_at: string | null;
+  cv_uploaded_at: string | null;
   /**
    * The candidate's CV, withheld under the directory's rule; `cv_locked` says
    * it exists but another recruiter sourced it, rather than that there is none.
@@ -315,6 +318,26 @@ export function recruiterRejectLead(
     method: "POST",
     body: JSON.stringify({ reason: reason ?? null, notes: notes || null }),
   });
+}
+
+// ── CV upload links ───────────────────────────────────────────────────────────
+
+export interface CvLink {
+  token: string;
+  expires_at: string;
+}
+
+/**
+ * A link the lead's candidate can upload their CV through, for whoever holds
+ * the lead to send them. Cancels any link made for the lead before it.
+ */
+export function createCvLink(apiFetch: ApiFetch, id: string): Promise<CvLink> {
+  return apiFetch<CvLink>(`/api/v1/intake/leads/${id}/cv-link`, { method: "POST" });
+}
+
+/** The page a CV link opens, on whichever domain this app is being served from. */
+export function cvUploadPageUrl(token: string): string {
+  return `${window.location.origin}/cv/${token}`;
 }
 
 // ── Management ────────────────────────────────────────────────────────────────

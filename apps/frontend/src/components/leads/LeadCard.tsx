@@ -13,6 +13,8 @@ import {
   IconSchool,
   IconX,
 } from "@tabler/icons-react";
+import CvLinkButton, { needsCv } from "@/components/leads/CvLinkButton";
+import LeadCvLink from "@/components/leads/LeadCvLink";
 import { cn } from "@/lib/utils";
 import {
   REJECT_REASON_LABELS,
@@ -116,7 +118,14 @@ export default function LeadCard({ lead, busy, onAccept, onReject }: Readonly<Le
           {lead.experience_years > 0 && ` · ${lead.experience_years} yrs`}
         </Meta>
         <Meta icon={IconSchool}>{lead.education}</Meta>
+        <LeadCvLink lead={lead} />
       </div>
+
+      {needsCv(lead) && (
+        <div className="mt-3">
+          <CvLinkButton lead={lead} />
+        </div>
+      )}
 
       {showNotes && (
         <textarea

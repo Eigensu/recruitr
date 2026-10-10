@@ -24,6 +24,7 @@ from app.modules.recruitment.schemas.client import (
     ClientUserResponse,
 )
 from app.modules.recruitment.schemas.intake import (
+    CvUploadLinkInfo,
     IntakeAcceptRequest,
     IntakeAssignee,
     IntakeAssigneesResponse,
@@ -35,6 +36,7 @@ from app.modules.recruitment.schemas.intake import (
     IntakeCandidateDraft,
     IntakeConfigResponse,
     IntakeConfigUpdate,
+    IntakeCvLinkResponse,
     IntakeFunnel,
     IntakeLeadPage,
     IntakeLeadResponse,
@@ -115,6 +117,8 @@ __all__ = [
     "IntakeConfigResponse",
     "IntakeConfigUpdate",
     "IntakeFunnel",
+    "CvUploadLinkInfo",
+    "IntakeCvLinkResponse",
     "IntakeLeadPage",
     "IntakeLeadResponse",
     "IntakeLegStats",

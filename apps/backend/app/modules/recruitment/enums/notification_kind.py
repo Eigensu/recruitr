@@ -20,3 +20,6 @@ class NotificationKind(StrEnum):
     # A public-form applicant whose lead could not be opened, so no telecaller
     # will ever see them. Addressed per person, like the breaches.
     application_not_queued = "application_not_queued"
+    # A candidate uploaded their CV through a link someone sent them. Addressed
+    # to whoever holds the lead.
+    cv_uploaded = "cv_uploaded"

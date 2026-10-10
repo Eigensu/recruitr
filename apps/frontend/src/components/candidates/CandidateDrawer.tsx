@@ -734,6 +734,8 @@ function eventSummary(event: ApiCandidateHistoryEvent): string {
       return `Put forward for ${event.position_role ?? "a position"}${at}`;
     case "unmapped":
       return `Withdrawn from ${event.position_role ?? "a position"}${at}`;
+    case "cv_uploaded":
+      return "Sent their CV through an upload link";
     case "stage_moved":
       return event.from_stage
         ? `${stageLabel(event.from_stage)} → ${stageLabel(event.to_stage)}${at}`

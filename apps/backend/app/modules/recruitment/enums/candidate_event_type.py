@@ -20,3 +20,4 @@ class CandidateEventType(StrEnum):
     mapped = "mapped"  # put forward for a position
     stage_moved = "stage_moved"  # advanced/returned within a position's pipeline
     unmapped = "unmapped"  # withdrawn from a position
+    cv_uploaded = "cv_uploaded"  # sent their CV through an upload link

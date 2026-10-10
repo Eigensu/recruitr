@@ -16,6 +16,9 @@
                                               clock runs on to the first mapping)
     POST /intake/leads/{id}/recruiter-reject  turn it down (archived, candidate hidden)
 
+    POST /intake/leads/{id}/cv-link     a link the candidate uploads their CV through,
+                                        for whoever holds the lead to send them
+
     GET  /intake/analytics/overview     funnel + both SLA clocks   (maintainer+)
     GET  /intake/analytics/telecallers  per-telecaller table       (maintainer+)
     GET  /intake/analytics/recruiters   per-recruiter table        (maintainer+)
@@ -29,13 +32,15 @@
     GET  /intake/config                 sheet connection + health  (maintainer+)
     PUT  /intake/config                 point it at a sheet        (admin)
 
-Two dependencies, on purpose. The queue routes take `get_telecaller_tenant`,
+Three dependencies, on purpose. The queue routes take `get_telecaller_tenant`,
 which is the only door open to the role: `get_tenant` refuses telecallers
 everywhere else, so nothing outside this module has been reviewed for one, and
 the decision routes therefore check ownership explicitly — a telecaller may act
 only on a lead assigned to them. Everything under the second heading takes plain
 `get_tenant` instead, so the same refusal that protects the rest of the app
-keeps a telecaller out of the reports about their own response times.
+keeps a telecaller out of the reports about their own response times. The CV
+link alone takes `get_lead_holder_tenant`, since a lead is held by a telecaller
+and later by a recruiter, and checks that the caller holds the lead it names.
 """
 
 from __future__ import annotations
@@ -50,6 +55,7 @@ from app.common.dtos.pagination import PaginationMeta
 from app.common.utils.object_id import to_object_id
 from app.core.config import settings
 from app.core.dependencies import (
+    get_lead_holder_tenant,
     get_telecaller_tenant,
     get_tenant,
     require_admin,
@@ -75,6 +81,7 @@ from app.modules.recruitment.schemas import (
     IntakeCandidateDraft,
     IntakeConfigResponse,
     IntakeConfigUpdate,
+    IntakeCvLinkResponse,
     IntakeLeadPage,
     IntakeLeadResponse,
     IntakeOverviewResponse,
@@ -95,6 +102,7 @@ from app.modules.recruitment.schemas import (
     TenantScope,
 )
 from app.modules.recruitment.service import intake_analytics
+from app.modules.recruitment.service.cv_requests import REQUESTABLE_STATUSES, issue_link
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
     TeamHasNoRecruiters,
@@ -141,6 +149,8 @@ _Telecaller = Annotated[TenantScope, Depends(get_telecaller_tenant)]
 # so the reports about a telecaller's response times are closed to them by the
 # same rule that closes the rest of the app, not by a second one written here.
 _Staff = Annotated[TenantScope, Depends(get_tenant)]
+# Telecallers and recruiters both, for acting on a lead as whoever holds it.
+_LeadHolder = Annotated[TenantScope, Depends(get_lead_holder_tenant)]
 _RequireAdmin = Depends(require_admin)
 _RequireMaintainer = Depends(require_maintainer)
 
@@ -260,6 +270,8 @@ def _to_response(
         recruiter_reject_reason=lead.recruiter_reject_reason,
         recruiter_notes=lead.recruiter_notes,
         reassignment_count=lead.reassignment_count,
+        cv_link_expires_at=lead.cv_upload_expires_at,
+        cv_uploaded_at=lead.cv_uploaded_at,
         cv_link=cv_link,
         resume_url=resume_url,
         cv_locked=cv_locked,
@@ -857,6 +869,51 @@ async def recruiter_reject(tenant: _Staff, lead_id: str, payload: IntakeRejectRe
     except LeadAlreadyDecided:
         raise _already_decided() from None
     return await _fetch_response(lead, tenant)
+
+
+# ── CV links ───────────────────────────────────────────────────────────────────
+
+
+def _holds_lead_or_403(tenant: TenantScope, lead: IntakeLead) -> None:
+    """Only whoever the lead is waiting on may ask for the CV; management, on any.
+
+    A telecaller while it is in their queue, a recruiter while it is in their
+    Review tab. Neither once it has moved on: the link goes out in that
+    person's name, and the upload notifies them.
+    """
+    if lead.status not in REQUESTABLE_STATUSES:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This lead is {lead.status.value.replace('_', ' ')}, so there is no CV to ask for.",
+        )
+    if _is_manager(tenant):
+        return
+    if tenant.role == UserRole.telecaller:
+        holds = (
+            lead.status == IntakeLeadStatus.pending_telecaller
+            and lead.telecaller_id == tenant.employee_id
+        )
+    else:
+        holds = (
+            lead.status == IntakeLeadStatus.pending_recruiter
+            and lead.recruiter_id == tenant.employee_id
+        )
+    if not holds:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This lead is not in your queue.")
+
+
+@router.post("/leads/{lead_id}/cv-link", response_model=IntakeCvLinkResponse)
+async def cv_link(tenant: _LeadHolder, lead_id: str) -> IntakeCvLinkResponse:
+    """A link the candidate can upload their CV through, for the caller to send them.
+
+    Works for service/cv_requests.CV_LINK_TTL, and cancels any link made for
+    this lead before it. The client builds the page address from the token,
+    since the API does not know which domain the app is served on.
+    """
+    lead = await _lead_or_404(tenant, lead_id)
+    _holds_lead_or_403(tenant, lead)
+    token, expires_at = await issue_link(lead, actor_id=tenant.employee_id)
+    return IntakeCvLinkResponse(token=token, expires_at=expires_at)
 
 
 # Declared before /leads/{lead_id}, which would otherwise swallow "submitted".

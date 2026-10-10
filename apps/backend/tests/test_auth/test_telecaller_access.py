@@ -41,6 +41,9 @@ _ALLOWED_PATHS = {
     # The accept form: the candidate on their own lead, and the role dropdown.
     "/api/v1/intake/leads/{lead_id}/candidate",
     "/api/v1/intake/role-catalog",
+    # Asking a lead's candidate for their CV. Checks that the caller holds the
+    # lead, which tests/test_intake/test_cv_links.py covers.
+    "/api/v1/intake/leads/{lead_id}/cv-link",
 }
 
 _PATH_PARAM = re.compile(r"\{[^}]+\}")

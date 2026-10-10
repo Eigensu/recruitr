@@ -3,6 +3,8 @@
 Endpoints:
   GET    /brands/{domain}             Resolve an agency by its public domain (unauthenticated)
   POST   /apply                       Submit a candidate application (unauthenticated)
+  GET    /cv-upload/{token}           What a CV upload link is for (unauthenticated)
+  POST   /cv-upload/{token}           Upload a CV through that link (unauthenticated)
 """
 
 from __future__ import annotations
@@ -30,9 +32,10 @@ from app.modules.brands.models import AutomationSettings, Brand
 from app.modules.brands.schemas import PublicBrandResponse
 from app.modules.brands.service import get_automation_settings
 from app.modules.recruitment.enums import CandidateEventType, CandidateStatus
-from app.modules.recruitment.models import Candidate, RefereeUser
+from app.modules.recruitment.models import Candidate, IntakeLead, RefereeUser
 from app.modules.recruitment.repository import record_candidate_event
-from app.modules.recruitment.schemas import CandidateResponse, TenantScope
+from app.modules.recruitment.schemas import CandidateResponse, CvUploadLinkInfo, TenantScope
+from app.modules.recruitment.service.cv_requests import attach_cv, lead_for_token
 from app.modules.recruitment.service.intake_service import open_lead_for_application
 from app.modules.recruitment.service.intake_sla import alert_unqueued_application
 from app.modules.recruitment.service.resume_service import process_resume_bytes
@@ -115,7 +118,23 @@ async def _process_resume_upload(
     """
     if not resume:
         return None, None, None, [], [], 0.0
+    raw_text, parsed, resume_url, resume_public_id = await _store_resume(resume, automation)
+    return (
+        raw_text,
+        resume_url,
+        resume_public_id,
+        parsed.skills or [],
+        parsed.tags or [],
+        parsed.experience_years or 0.0,
+    )
 
+
+async def _store_resume(resume: UploadFile, automation: AutomationSettings) -> tuple:
+    """Check one uploaded resume, read and parse it, and put it in Cloudinary.
+
+    Returns process_resume_bytes' (raw_text, parsed, resume_url, resume_public_id),
+    or raises the error to show whoever sent it.
+    """
     filename = resume.filename or "unknown"
     if not filename.lower().endswith((".pdf", ".docx")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only PDF and DOCX files are accepted")
@@ -134,15 +153,7 @@ async def _process_resume_upload(
                 status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Resume file too large (max 10MB)"
             )
 
-        raw_text, parsed, resume_url, resume_public_id = await process_resume_bytes(
-            file_bytes, filename, automation
-        )
-
-        parsed_skills = parsed.skills or []
-        parsed_tags = parsed.tags or []
-        parsed_exp = parsed.experience_years or 0.0
-
-        return raw_text, resume_url, resume_public_id, parsed_skills, parsed_tags, parsed_exp
+        return await process_resume_bytes(file_bytes, filename, automation)
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Resume extraction failed due to invalid file content"
@@ -150,7 +161,7 @@ async def _process_resume_upload(
     except HTTPException:
         raise
     except Exception as exc:
-        _log.exception("Upload failed for public form")
+        _log.exception("Resume upload failed on a public page")
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected error occurred during upload"
         ) from exc
@@ -302,3 +313,64 @@ async def _queue_for_screening(candidate: Candidate) -> None:
         await alert_unqueued_application(candidate)
     except Exception:
         _log.exception("Could not alert anyone about unqueued applicant %s", candidate.id)
+
+
+# ── CV upload links ────────────────────────────────────────────────────────────
+
+_LINK_GONE = "This link has expired or been replaced. Ask whoever sent it to you for a new one."
+
+
+async def _live_link(token: str) -> tuple[IntakeLead, Candidate]:
+    lead = await lead_for_token(token)
+    candidate = (
+        await Candidate.find_one({"_id": lead.candidate_id, "brand_id": lead.brand_id})
+        if lead is not None
+        else None
+    )
+    if lead is None or candidate is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _LINK_GONE)
+    return lead, candidate
+
+
+async def _link_info(lead: IntakeLead, candidate: Candidate, *, uploaded: bool) -> CvUploadLinkInfo:
+    brand = await Brand.get(lead.brand_id)
+    return CvUploadLinkInfo(
+        first_name=(candidate.full_name or "").split(" ")[0],
+        brand_name=brand.name if brand else "",
+        brand_logo_url=brand.branding.logo_url if brand else None,
+        expires_at=lead.cv_upload_expires_at,
+        uploaded=uploaded,
+    )
+
+
+@router.get("/cv-upload/{token}", response_model=CvUploadLinkInfo)
+async def cv_upload_page(token: str) -> CvUploadLinkInfo:
+    """Who a CV upload link is for, to greet them. 404 once it no longer works."""
+    lead, candidate = await _live_link(token)
+    return await _link_info(lead, candidate, uploaded=lead.cv_uploaded_at is not None)
+
+
+@router.post("/cv-upload/{token}", response_model=CvUploadLinkInfo)
+async def upload_cv_through_link(
+    token: str, resume: Annotated[UploadFile, File()]
+) -> CvUploadLinkInfo:
+    """Put the candidate's CV on their record, replacing any earlier one.
+
+    The token is the whole credential: it was made for one lead by whoever
+    holds it, and only its hash is stored (service/cv_requests.py).
+    """
+    lead, _ = await _live_link(token)
+    automation = await get_automation_settings(lead.brand_id)
+    raw_text, parsed, resume_url, resume_public_id = await _store_resume(resume, automation)
+    candidate = await attach_cv(
+        lead,
+        parsed=parsed,
+        raw_text=raw_text,
+        resume_url=resume_url,
+        resume_public_id=resume_public_id,
+    )
+    if candidate is None:
+        if resume_public_id:
+            await asyncio.to_thread(delete_cloudinary_asset, resume_public_id)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, _LINK_GONE)
+    return await _link_info(lead, candidate, uploaded=True)

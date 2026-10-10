@@ -13,6 +13,7 @@ import {
   IconUser,
   IconX,
 } from "@tabler/icons-react";
+import CvLinkButton, { needsCv } from "@/components/leads/CvLinkButton";
 import LeadCvLink from "@/components/leads/LeadCvLink";
 import { cn } from "@/lib/utils";
 import {
@@ -122,6 +123,12 @@ export default function ReviewLeadCard({
         <Meta icon={IconSchool}>{lead.education}</Meta>
         {showRecruiter && <Meta icon={IconUser}>{lead.recruiter_name ?? "—"}</Meta>}
       </div>
+
+      {needsCv(lead) && (
+        <div className="mt-3">
+          <CvLinkButton lead={lead} />
+        </div>
+      )}
 
       {lead.telecaller_notes && (
         <p className="mt-3 rounded-lg border border-border bg-canvas p-2.5 text-xs text-text-secondary">

@@ -858,6 +858,14 @@ class IntakeLead(Document):
     # and never appear overdue.
     reassignment_count: int = 0
 
+    # A link the candidate can upload their CV through (service/cv_requests.py).
+    # Only the token's SHA-256 is kept, and one per lead, so a new link cancels
+    # the last.
+    cv_upload_token_hash: str | None = None
+    cv_upload_expires_at: datetime | None = None
+    cv_upload_requested_by_id: PydanticObjectId | None = None
+    cv_uploaded_at: datetime | None = None
+
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -880,6 +888,12 @@ class IntakeLead(Document):
             IndexModel([("brand_id", 1), ("ingested_at", -1)]),
             # "My submitted leads".
             IndexModel([("brand_id", 1), ("submitted_by_id", 1), ("ingested_at", -1)]),
+            # A CV upload link is looked up by its hash, with no brand to go on.
+            # Partial, so the leads that never had one are not in it at all.
+            IndexModel(
+                [("cv_upload_token_hash", 1)],
+                partialFilterExpression={"cv_upload_token_hash": {"$type": "string"}},
+            ),
         ]
 
 
