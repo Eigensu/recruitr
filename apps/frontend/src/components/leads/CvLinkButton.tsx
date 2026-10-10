@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { IconBrandWhatsapp, IconCheck, IconCopy, IconLink, IconLoader2 } from "@tabler/icons-react";
 import { useApiFetch, apiErrorMessage } from "@/lib/api";
+import { resolveCvRef } from "@/lib/api/candidates";
 import { createCvLink, cvUploadPageUrl, type IntakeLead } from "@/lib/api/intake";
 import { useToast } from "@/components/ui/Toast";
 
@@ -10,9 +11,12 @@ function untilLabel(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-/** Whether a lead has no CV anyone could open — the case a CV link is for. */
+/**
+ * Whether a lead has no CV anyone could open — the case a CV link is for. A CV
+ * "on file" as a bare filename counts as none: there is nothing to click.
+ */
 export function needsCv(lead: Pick<IntakeLead, "cv_link" | "resume_url" | "cv_locked">): boolean {
-  return !lead.cv_link && !lead.resume_url && !lead.cv_locked;
+  return !lead.cv_locked && !resolveCvRef(lead.cv_link, lead.resume_url)?.href;
 }
 
 /**
