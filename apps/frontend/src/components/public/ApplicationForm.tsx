@@ -20,7 +20,15 @@ import type { PublicBrand } from "@/types";
 // is stored silently and the applicant simply never hears back. Validate it.
 function isRupeeAmount(value: string): boolean {
   const n = Number(value);
-  return value !== "" && Number.isFinite(n) && n >= 0;
+  return Number.isFinite(n) && n >= 0;
+}
+
+/** An optional salary: blank, or an amount in rupees. */
+function optionalRupees(example: string) {
+  return z
+    .string()
+    .trim()
+    .refine((v) => v === "" || isRupeeAmount(v), `Enter an amount in rupees, e.g. ${example}.`);
 }
 
 const schema = z
@@ -30,14 +38,8 @@ const schema = z
     phone: z.string().trim().min(6, "Enter a phone number we can reach you on."),
     // ₹ per month, like every candidate salary. Kept as the typed string and
     // sent as-is; the API parses it.
-    currentSalary: z
-      .string()
-      .trim()
-      .refine((v) => v === "" || isRupeeAmount(v), "Enter an amount in rupees, e.g. 25000."),
-    expectedSalary: z
-      .string()
-      .trim()
-      .refine((v) => v === "" || isRupeeAmount(v), "Enter an amount in rupees, e.g. 30000."),
+    currentSalary: optionalRupees("25000"),
+    expectedSalary: optionalRupees("30000"),
     sourceChannel: z.string(),
     sourceChannelOther: z.string().trim(),
   })
@@ -167,8 +169,8 @@ function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string,
   const next: Record<string, string> = {};
   issues.forEach((issue) => {
     const key = issue.path[0] as string | undefined;
-    // Keep the first: zod reports every failing check, and the later ones are
-    // the less specific — an empty salary fails "required" and then "amount".
+    // Keep the first: zod reports every failing check, and a field given more
+    // than one should show the earlier, more specific message.
     if (key && !(key in next)) next[key] = issue.message;
   });
   return next;

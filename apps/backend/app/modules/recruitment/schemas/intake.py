@@ -107,10 +107,12 @@ class IntakeCandidateDetails(BaseModel):
     """What a telecaller fills in on the call before accepting a lead.
 
     The same required fields as adding a candidate by hand
-    (`CandidateCreateStrict`) except two. Brand experience is left to the
+    (`CandidateCreateStrict`) except three. Brand experience is left to the
     recruiter, who is the one placing the person with a brand. The CV link is
     optional: a telecaller is on the phone, and a lead from an Instagram ad
     usually has no CV to link to — requiring one would make accept impossible.
+    Current salary is optional too: plenty of leads won't say, or have none.
+    Omitting it keeps the one on file; sending null clears it.
     Source is not asked for at all: every lead here is external by definition.
     """
 
@@ -132,7 +134,7 @@ class IntakeCandidateDetails(BaseModel):
     gender: Gender
     age: int | None = Field(default=None, gt=0)
     expected_salary: float = Field(..., ge=0)
-    # Current salary is optional: plenty of leads won't say, or have none.
+    # Optional, and null is not the same as omitted: see the docstring.
     salary: float | None = Field(default=None, ge=0)
     notice_period: str = Field(..., min_length=1, max_length=100)
     cv_link: str | None = Field(default=None, max_length=2000)

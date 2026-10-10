@@ -133,7 +133,7 @@ async def test_pending_application_is_hidden_from_the_default_directory(
     assert [c["full_name"] for c in res.json()["items"]] == ["Rhea Kapoor"]
 
 
-# ── Salary: current required, expected optional, both ₹ per month ────────────
+# ── Salary: current and expected both optional, both ₹ per month ─────────────
 
 
 async def _stored(email: str = "rhea@applicant.test") -> dict:

@@ -298,6 +298,10 @@ async def test_current_salary_is_optional(http, people, cloudinary):
 
     assert res.status_code == 200, res.text
     assert res.json()["results"][0]["status"] == "queued"
+    lead = await IntakeLead.find_one({"brand_id": _BRAND})
+    candidate = await Candidate.get(lead.candidate_id)
+    # Not a ₹0 salary nobody gave.
+    assert (candidate.salary, candidate.expected_salary) == (None, 38000)
 
 
 async def test_a_draft_whose_name_is_not_text_fails_on_its_own(http, people, cloudinary):

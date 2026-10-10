@@ -926,10 +926,17 @@ async def accept_lead(
         # a link the applicant sent.
         if not fields.get("cv_link"):
             fields.pop("cv_link", None)
+        # Current salary is the exception: the form shows the one on file, so
+        # a null means the telecaller cleared it, not that they left it alone.
+        if "salary" in details.model_fields_set and details.salary is None:
+            fields["salary"] = None
         # Salaries on the form are entered per month. An update, so
         # Candidate's Insert hook doesn't see it; stamp it here like the
-        # candidate PATCH does.
-        fields["salary_period"] = "monthly"
+        # candidate PATCH does — unless the current salary kept from before
+        # was never marked. Stamping would relabel that possibly-yearly figure
+        # as monthly without anyone having re-entered it.
+        if "salary" in fields or candidate.salary is None or candidate.salary_period:
+            fields["salary_period"] = "monthly"
         try:
             try:
                 await candidate.set(fields)

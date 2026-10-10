@@ -127,6 +127,7 @@ async def test_accepting_saves_the_form_and_waits_for_review(http, caller):
 async def test_accepting_without_a_current_salary_keeps_the_one_on_file(http, caller):
     lead = await _lead(telecaller=caller)
     candidate = await Candidate.get(lead.candidate_id)
+    # Set after the insert, so unmarked: a row from before the per-month convention.
     await candidate.set({"salary": 25000})
     details = {k: v for k, v in DETAILS.items() if k != "salary"}
 
@@ -137,7 +138,29 @@ async def test_accepting_without_a_current_salary_keeps_the_one_on_file(http, ca
     )
 
     assert res.status_code == 200, res.text
-    assert (await Candidate.get(lead.candidate_id)).salary == 25000
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.salary == 25000
+    # Nobody re-entered it, so it must not be relabelled as monthly.
+    assert stored.salary_period is None
+
+
+@pytest.mark.asyncio
+async def test_clearing_the_current_salary_removes_it(http, caller):
+    lead = await _lead(telecaller=caller)
+    candidate = await Candidate.get(lead.candidate_id)
+    await candidate.set({"salary": 25000})
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": {**DETAILS, "salary": None}},
+        headers=await auth_headers("caller"),
+    )
+
+    assert res.status_code == 200, res.text
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.salary is None
+    # What's left is the expected salary just entered, which is per month.
+    assert stored.salary_period == "monthly"
 
 
 @pytest.mark.asyncio

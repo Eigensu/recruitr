@@ -76,7 +76,7 @@ pending_telecaller ──accept + details form──▶ pending_review ──adm
 ```
 
 **Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
-minus brand experience, CV link optional) and parks the lead in `pending_review` with the
+minus brand experience, with CV link and current salary optional) and parks the lead in `pending_review` with the
 candidate still PENDING. **`POST /intake/leads/assign-team`** (maintainer+) picks the recruiter
 with a per-team round-robin (`Counter` key `intake_team_rr:<team_id>`, roster =
 `intake_service.team_roster`), approves the candidate, and starts the recruiter SLA clock. The
