@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/client-messaging-admin";
 import { listClients, type Client } from "@/lib/api/clients";
 import { useApiFetch } from "@/lib/api";
+import { toDateTimeInputValue } from "@/lib/utils";
 import { IconTrash, IconPlus } from "@tabler/icons-react";
 
 interface MessageItem {
@@ -58,19 +59,10 @@ export default function ClientMessagingPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMessages();
 
-    const formatLocalDatetime = (date: Date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      return `${year}-${month}-${day}T${hours}:${minutes}`;
-    };
-
     setFormData((prev) => ({
       ...prev,
-      start_at: formatLocalDatetime(new Date()),
-      end_at: formatLocalDatetime(new Date(Date.now() + 86400000 * 7)),
+      start_at: toDateTimeInputValue(new Date()),
+      end_at: toDateTimeInputValue(new Date(Date.now() + 86400000 * 7)),
     }));
   }, []);
 

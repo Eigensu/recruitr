@@ -154,7 +154,7 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
   }
 
   function load() {
-    fetchBoard()
+    return fetchBoard()
       .then((data) => setBoard(data))
       .catch((err) => console.error("Failed to load pipeline board:", err))
       .finally(() => setLoading(false));

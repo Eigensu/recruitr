@@ -18,7 +18,8 @@ interface Props {
   onClose: () => void;
   card: PipelineCard | null;
   onStageChange: (newStage: KanbanStage) => void | Promise<void>;
-  onActionComplete: () => void;
+  /** Refreshes the board. Awaited before closing: see handleAction. */
+  onActionComplete: () => void | Promise<void>;
 }
 
 export default function ClientActionModal({
@@ -35,7 +36,7 @@ export default function ClientActionModal({
   // so reopening a card shows the stored details instead of a blank form that
   // reads as though the last save never happened. Parents key this modal by
   // mapping, so these initialisers run again for each card.
-  const [interviewDate, setInterviewDate] = useState(
+  const [interviewDate, setInterviewDate] = useState(() =>
     card?.interview_date ? toDateTimeInputValue(parseApiDate(card.interview_date)) : "",
   );
   const [joiningDate, setJoiningDate] = useState(card?.joining_date?.slice(0, 10) ?? "");
@@ -55,7 +56,10 @@ export default function ClientActionModal({
     setError(null);
     try {
       await action();
-      onActionComplete();
+      // Wait for the refreshed card before closing. Reopening it sooner would
+      // remount this modal from the stale one, and the fields would show the
+      // old values as though the save never happened.
+      await onActionComplete();
       if (close) onClose();
     } catch (err: unknown) {
       setError((err as Error).message || "Action failed");

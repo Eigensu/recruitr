@@ -176,7 +176,7 @@ export default function GlobalPipelineBoard({
 
   const load = useCallback(() => {
     const request = ++requestRef.current;
-    fetchBoard(view)
+    return fetchBoard(view)
       .then((data) => {
         if (request === requestRef.current) setBoard(data);
       })
