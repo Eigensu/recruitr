@@ -897,6 +897,16 @@ def _elapsed_seconds(since: datetime | None, until: datetime) -> int | None:
     return max(0, int((until - since).total_seconds()))
 
 
+async def _lead_candidate(lead: IntakeLead) -> Candidate | None:
+    """The lead's candidate, looked up within the lead's own brand.
+
+    The lead is tenant-scoped; matching on brand_id too means a lead whose
+    candidate_id ever pointed outside its brand finds nothing, rather than
+    approving, reassigning or soft-deleting another tenant's candidate.
+    """
+    return await Candidate.find_one({"_id": lead.candidate_id, "brand_id": lead.brand_id})
+
+
 class LeadAlreadyDecided(Exception):
     """The lead left `pending_telecaller` before this decision could be written."""
 
@@ -946,7 +956,7 @@ async def accept_lead(
         },
     )
 
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
         # Only what the telecaller filled in: an omitted optional field must
         # not wipe what the applicant already gave us.
@@ -1040,7 +1050,7 @@ async def assign_to_team(
             continue
         # A lead whose candidate is gone has nobody to review; leave it for
         # someone to look at rather than assign it to nobody.
-        candidate = await Candidate.get(lead.candidate_id)
+        candidate = await _lead_candidate(lead)
         if candidate is None:
             skipped.append(lead)
             continue
@@ -1133,7 +1143,7 @@ async def reject_lead(
         },
     )
 
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
         await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
         await record_candidate_event(
@@ -1191,7 +1201,7 @@ async def recruiter_accept_lead(
         "updated_at": stamp,
     }
     await _decide_recruiter_pending(lead, updates)
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     try:
         if candidate is not None:
             await candidate.set({"status": CandidateStatus.approved})
@@ -1240,7 +1250,7 @@ async def recruiter_reject_lead(
             "updated_at": stamp,
         },
     )
-    candidate = await Candidate.get(lead.candidate_id)
+    candidate = await _lead_candidate(lead)
     if candidate is not None:
         try:
             await candidate.set({"status": CandidateStatus.rejected, "is_active": False})
@@ -1310,7 +1320,7 @@ async def reassign_lead(
     """
     stamp = now or datetime.now(UTC)
     recruiter_leg = waiting_on_recruiter(lead)
-    candidate = await Candidate.get(lead.candidate_id) if recruiter_leg else None
+    candidate = await _lead_candidate(lead) if recruiter_leg else None
     updates: dict[str, object] = {
         "reassignment_count": lead.reassignment_count + 1,
         "updated_at": stamp,
