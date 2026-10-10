@@ -537,8 +537,9 @@ export function elapsedHours(assignedAt: string | null): number | null {
 // ── Naukri import ─────────────────────────────────────────────────────────────
 
 /**
- * What would happen to one row: `new` becomes a lead for the telecallers;
- * `matched_existing` is someone already in the pool (filed as a duplicate);
+ * What would happen to one row: `new` becomes a lead for the telecallers (a
+ * new candidate, or one in the pool nobody is screening); `matched_existing`
+ * is someone already in the pool and being screened (filed as a duplicate);
  * `already_ingested` was imported before; `duplicate_in_sheet` is on an
  * earlier row of the same file.
  */

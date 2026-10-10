@@ -196,6 +196,77 @@ async def test_a_lead_whose_email_belongs_to_an_archived_candidate_is_still_file
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("filed_as_duplicate_before", [False, True])
+async def test_a_lead_for_someone_nobody_is_screening_becomes_their_lead(
+    callers, filed_as_duplicate_before
+):
+    """A PENDING candidate with no lead of their own is someone the flow lost:
+    their lead was removed, or never opened. Filing this row as a duplicate of
+    them would leave them uncalled, so it becomes their screening lead. A
+    `duplicate` row already pointing at them is not theirs either."""
+    unscreened = Candidate(
+        brand_id=_BRAND, full_name="Asha R", phone="09876543210", status=CandidateStatus.pending
+    )
+    await unscreened.insert()
+    if filed_as_duplicate_before:
+        await IntakeLead(
+            brand_id=_BRAND,
+            candidate_id=unscreened.id,
+            external_id="l_earlier",
+            status=IntakeLeadStatus.duplicate,
+        ).insert()
+
+    result = await ingest_leads(_leads(_row()), brand_id=_BRAND)
+
+    assert (result.created, result.assigned, result.matched_existing) == (1, 1, 0)
+    assert await Candidate.find({"brand_id": _BRAND}).count() == 1
+    lead = await IntakeLead.find_one({"brand_id": _BRAND, "external_id": "l_1001"})
+    assert lead.status == IntakeLeadStatus.pending_telecaller
+    assert lead.candidate_id == unscreened.id
+    assert lead.telecaller_id in {caller.id for caller in callers}
+    assert lead.attribution.campaign_name == "F&B Hiring Sept"
+
+
+@pytest.mark.asyncio
+async def test_someone_pending_with_a_lead_of_their_own_is_still_a_duplicate(callers):
+    # Screened and accepted, waiting on an admin: already somebody's work.
+    accepted = Candidate(
+        brand_id=_BRAND, full_name="Asha R", phone="09876543210", status=CandidateStatus.pending
+    )
+    await accepted.insert()
+    await IntakeLead(
+        brand_id=_BRAND,
+        candidate_id=accepted.id,
+        external_id="l_earlier",
+        status=IntakeLeadStatus.pending_review,
+    ).insert()
+
+    result = await ingest_leads(_leads(_row()), brand_id=_BRAND)
+
+    assert (result.created, result.matched_existing) == (0, 1)
+    lead = await IntakeLead.find_one({"brand_id": _BRAND, "external_id": "l_1001"})
+    assert lead.status == IntakeLeadStatus.duplicate
+
+
+@pytest.mark.asyncio
+async def test_someone_nobody_is_screening_twice_in_one_sheet_gets_one_lead(callers):
+    unscreened = Candidate(
+        brand_id=_BRAND, full_name="Asha R", phone="09876543210", status=CandidateStatus.pending
+    )
+    await unscreened.insert()
+    rows = _leads(_row(id="l_1"), _row(id="l_2"))
+
+    plan = await plan_ingest(rows, brand_id=_BRAND)
+    result = await ingest_leads(rows, brand_id=_BRAND)
+
+    assert (result.created, result.matched_existing) == (1, 1)
+    statuses = [lead.status for lead in await IntakeLead.find({"brand_id": _BRAND}).to_list()]
+    assert sorted(statuses) == [IntakeLeadStatus.duplicate, IntakeLeadStatus.pending_telecaller]
+    # The preview says the same, so the Naukri dialog does not promise a duplicate.
+    assert (plan.new, plan.duplicate_in_sheet) == (1, 1)
+
+
+@pytest.mark.asyncio
 async def test_the_same_person_twice_in_one_sheet_creates_one_candidate(callers):
     # Meta issues a new lead id each time someone submits the form again, so
     # both rows are new to the external_id check.

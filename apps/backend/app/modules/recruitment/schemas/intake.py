@@ -259,8 +259,9 @@ class NaukriPreviewRow(BaseModel):
     current_company: str | None = None
     experience_years: float = 0
     salary: float | None = None  # ₹ per month, converted from Naukri's yearly figure
-    # new: becomes a lead for the telecallers · matched_existing: already in the
-    # pool, filed as a duplicate · already_ingested: imported before ·
+    # new: becomes a lead for the telecallers (a new candidate, or one in the
+    # pool nobody is screening) · matched_existing: already in the pool and
+    # being screened, filed as a duplicate · already_ingested: imported before ·
     # duplicate_in_sheet: this person is on an earlier row of the same file.
     outcome: str
     warnings: list[str] = Field(default_factory=list)

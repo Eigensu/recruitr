@@ -8,16 +8,22 @@ Usage (from apps/backend):
 The Candidates page no longer has an External tab, which was the only place a
 PENDING candidate without a lead could be decided. Three things follow:
 
-  1. Every active PENDING candidate with no lead of their own gets one
-     (`open_lead_for_application`). A `duplicate` lead pointing at them does
-     not count: that is a later sheet row matched to them, not their screening.
-     PENDING only ever came from the public form and the sheet ingest, so these
-     are applicants from before the lead flow existed, or whose lead failed to
-     open. Each lead is dated when the person applied, so the analytics file it
-     in the week they arrived rather than the week this ran, and left
-     `unassigned` — a backlog handed out at once would start every telecaller's
-     SLA clock together and breach them all a day later. --assign round-robins
-     them to telecallers instead; otherwise assign from the Leads page.
+  1. Every active PENDING candidate with no lead of their own gets one. A
+     `duplicate` lead pointing at them does not count as theirs: it is a sheet
+     row matched to them, not their screening. PENDING only ever came from the
+     public form and the sheet ingest, so these are applicants from before the
+     lead flow existed, whose lead failed to open, or whose lead was removed
+     and whose own row the next ingest then filed as a duplicate of them.
+
+     Someone with a duplicate row has their earliest one queued
+     (`screen_duplicate_lead`), keeping the ad that brought them and the date
+     they applied. Anyone else gets a new public-form lead
+     (`open_lead_for_application`), dated when their candidate was created.
+     Either way the analytics file them in the week they arrived rather than
+     the week this ran, and the lead is left `unassigned` — a backlog handed
+     out at once would start every telecaller's SLA clock together and breach
+     them all a day later. --assign round-robins them to telecallers instead;
+     otherwise assign from the Leads page.
 
   2. Candidates a telecaller already rejected are soft-deleted
      (is_active=False), as a telecaller reject now does going forward. Only
@@ -41,6 +47,9 @@ import asyncio
 import pathlib
 import sys
 from collections import Counter
+from datetime import datetime
+
+from beanie import PydanticObjectId
 
 # Resolve the backend package regardless of where this is invoked from.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -55,7 +64,9 @@ from app.modules.recruitment.enums import (  # noqa: E402
 )
 from app.modules.recruitment.models import Candidate, IntakeLead  # noqa: E402
 from app.modules.recruitment.service.intake_service import (  # noqa: E402
+    as_utc,
     open_lead_for_application,
+    screen_duplicate_lead,
 )
 
 
@@ -88,6 +99,28 @@ async def _pending_without_lead() -> list[Candidate]:
         )
     )
     return [c for c in pending if c.id not in with_lead]
+
+
+def _applied_at(lead: IntakeLead) -> datetime:
+    return as_utc(lead.external_created_at or lead.created_at)  # type: ignore[return-value]
+
+
+async def _earliest_duplicates(candidates: list[Candidate]) -> dict[PydanticObjectId, IntakeLead]:
+    """Each candidate's first `duplicate` lead, for those who have any."""
+    if not candidates:
+        return {}
+    duplicates = await IntakeLead.find(
+        {
+            "candidate_id": {"$in": [c.id for c in candidates]},
+            "status": IntakeLeadStatus.duplicate.value,
+        }
+    ).to_list()
+    earliest: dict[PydanticObjectId, IntakeLead] = {}
+    for lead in duplicates:
+        current = earliest.get(lead.candidate_id)
+        if current is None or _applied_at(lead) < _applied_at(current):
+            earliest[lead.candidate_id] = lead
+    return earliest
 
 
 async def _rejected_still_active() -> tuple[list[Candidate], int]:
@@ -126,6 +159,9 @@ async def _approved_in_review() -> list[Candidate]:
 async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
     """Report, and with `confirm` apply. Returns the counts, for the tests."""
     orphans = await _pending_without_lead()
+    their_rows = await _earliest_duplicates(orphans)
+    to_screen = list(their_rows.values())
+    to_open = [c for c in orphans if c.id not in their_rows]
     to_hide, left_alone = await _rejected_still_active()
     to_unapprove = await _approved_in_review()
 
@@ -134,6 +170,8 @@ async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
     print(f"  total                       {len(orphans):>7,}")
     for brand, count in sorted(per_brand.items()):
         print(f"    brand {brand}  {count:>7,}")
+    print(f"  their duplicate row queued  {len(to_screen):>7,}   ← keeps the ad and the date")
+    print(f"  new public-form lead        {len(to_open):>7,}")
     print("REJECTED candidates still active")
     print(f"  rejected by a telecaller    {len(to_hide):>7,}   ← will be soft-deleted")
     print(f"  rejected some other way     {left_alone:>7,}   ← left as they are")
@@ -142,6 +180,7 @@ async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
 
     counts = {
         "leads_opened": 0,
+        "duplicates_queued": 0,
         "unassigned": 0,
         "hidden": 0,
         "left_alone": left_alone,
@@ -150,13 +189,22 @@ async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
     if not confirm:
         print("\nNothing written. Re-run with --confirm to apply.\n")
         counts |= {
-            "would_open": len(orphans),
+            "would_open": len(to_open),
+            "would_queue_duplicate": len(to_screen),
             "would_hide": len(to_hide),
             "would_unapprove": len(to_unapprove),
         }
         return counts
 
-    for candidate in orphans:
+    for lead in to_screen:
+        status = await screen_duplicate_lead(lead, assign=assign)
+        if status is None:
+            continue  # no longer a duplicate since the report was read
+        counts["duplicates_queued"] += 1
+        if status == IntakeLeadStatus.unassigned:
+            counts["unassigned"] += 1
+
+    for candidate in to_open:
         lead = await open_lead_for_application(
             candidate, assign=assign, arrived_at=candidate.created_at
         )
@@ -198,6 +246,7 @@ async def run(*, confirm: bool, assign: bool = False) -> dict[str, int]:
         "← assign from the Leads page" if not assign else "← no telecaller to take them"
     )
     print(f"\n  leads opened                {counts['leads_opened']:>7,}")
+    print(f"  duplicate rows queued       {counts['duplicates_queued']:>7,}")
     print(f"    of which unassigned       {counts['unassigned']:>7,}   {unassigned_note}")
     print(f"  candidates soft-deleted     {counts['hidden']:>7,}")
     print(f"  candidates back to PENDING  {counts['unapproved']:>7,}\n")
