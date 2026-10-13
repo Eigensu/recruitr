@@ -245,10 +245,13 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
     }
   }
 
-  const full = "sm:col-span-2";
+  const full = "col-span-full";
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-x-4 gap-y-3.5 p-4 sm:grid-cols-2">
+    <form
+      onSubmit={handleSubmit}
+      className="grid grid-cols-1 gap-x-4 gap-y-3.5 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+    >
       <h2
         className={`text-lg font-semibold ${full}`}
         style={{ color: "var(--color-text-primary)" }}
@@ -293,7 +296,6 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
 
       {form.source === "external" && (
         <SourceChannelField
-          className={full}
           channel={form.source_channel}
           other={form.source_channel_other}
           onChannel={(source_channel) => setForm((f) => ({ ...f, source_channel }))}
@@ -302,15 +304,6 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         />
       )}
 
-      <CurrentRoleField
-        roleCatalog={roleCatalog}
-        department={form.department}
-        value={form.current_role}
-        other={form.current_role_other}
-        onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
-        onOther={(current_role_other) => setForm((f) => ({ ...f, current_role_other }))}
-        error={errors.current_role}
-      />
       <ExperienceYearsField
         value={form.experience_years}
         onChange={(experience_years) => setForm((f) => ({ ...f, experience_years }))}
@@ -376,6 +369,15 @@ export default function AddCandidateForm({ onSuccess, onCancel }: Props) {
         value={form.cv_link}
         onChange={(cv_link) => setForm((f) => ({ ...f, cv_link }))}
         error={errors.cv_link}
+      />
+      <CurrentRoleField
+        roleCatalog={roleCatalog}
+        department={form.department}
+        value={form.current_role}
+        other={form.current_role_other}
+        onChange={(current_role) => setForm((f) => ({ ...f, current_role }))}
+        onOther={(current_role_other) => setForm((f) => ({ ...f, current_role_other }))}
+        error={errors.current_role}
       />
 
       <NotesField
