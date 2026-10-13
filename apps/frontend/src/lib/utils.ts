@@ -29,3 +29,10 @@ export function toDateInputValue(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
 }
+
+/** Format a date as the local `YYYY-MM-DDTHH:mm` string an `<input type="datetime-local">` expects. */
+export function toDateTimeInputValue(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${toDateInputValue(date)}T${hours}:${minutes}`;
+}

@@ -34,7 +34,8 @@ import {
  * The same required fields as adding a candidate by hand, minus brand
  * experience — the recruiter's to fill, since they are the one placing the
  * person with a brand — and with the CV link optional, because a lead from an
- * ad usually has no CV to link. The backend enforces the same rules
+ * ad usually has no CV to link, and current salary optional, because plenty of
+ * leads won't say or have none. The backend enforces the same rules
  * (`IntakeCandidateDetails`); this copy exists so a missing field is caught
  * before the round trip, on a handset, next to the field itself.
  */
@@ -66,7 +67,7 @@ const schema = z.object({
     z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
   ),
   expected_salary: numberFrom("Expected Salary is required"),
-  salary: numberFrom("Current Salary is required"),
+  salary: z.preprocess(blankToUndefined, z.number().min(0, "Must be 0 or more").optional()),
   notice_period: z.string().min(1, "Notice Period is required"),
   cv_link: z
     .union([z.literal(""), z.string().regex(/^https?:\/\//i, "Must be an http(s) link")])
@@ -210,6 +211,9 @@ export default function AcceptLeadDialog({
           establishment_tag: orUndefined(data.establishment_tag),
           area: orUndefined(data.area),
           cv_link: orUndefined(data.cv_link),
+          // The field starts from the salary on file, so a blank one was
+          // cleared on purpose. Null says so; omitting it would keep the old one.
+          salary: data.salary ?? null,
         },
         form.notes,
       );
@@ -361,6 +365,7 @@ export default function AcceptLeadDialog({
                 error={errors.notice_period}
               />
               <CurrentSalaryField
+                required={false}
                 value={form.salary}
                 onChange={(salary) => update({ salary })}
                 error={errors.salary}

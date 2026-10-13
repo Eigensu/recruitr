@@ -126,11 +126,11 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
         body: JSON.stringify({ new_stage: newStage }),
       });
       if (!res.ok) throw new Error(await res.text());
-      load();
+      void load();
     } catch (err) {
       console.error(err);
       // Roll the optimistic move back by re-reading the server's state.
-      load();
+      void load();
       alert("Failed to change stage: " + err);
     }
   }
@@ -154,14 +154,14 @@ export default function ClientPipelineBoard({ positions, initialPositionId }: Pr
   }
 
   function load() {
-    fetchBoard()
+    return fetchBoard()
       .then((data) => setBoard(data))
       .catch((err) => console.error("Failed to load pipeline board:", err))
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   const clientStagesData = useMemo(() => {

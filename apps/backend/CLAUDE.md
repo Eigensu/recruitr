@@ -94,7 +94,7 @@ ad and date, else a new lead dated when they applied; unassigned unless `--assig
 telecallers already rejected, and returns candidates already approved into a Review tab to PENDING.
 
 **Accept requires the details form** (`IntakeCandidateDetails`: the manual-create required fields
-minus brand experience, CV link optional) and parks the lead in `pending_review` with the
+minus brand experience, with CV link and current salary optional) and parks the lead in `pending_review` with the
 candidate still PENDING. **`POST /intake/leads/assign-team`** (maintainer+) picks the recruiter
 with a per-team round-robin (`Counter` key `intake_team_rr:<team_id>`, roster =
 `intake_service.team_roster`) and starts the recruiter SLA clock; the candidate stays PENDING. The

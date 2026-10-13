@@ -20,7 +20,15 @@ import type { PublicBrand } from "@/types";
 // is stored silently and the applicant simply never hears back. Validate it.
 function isRupeeAmount(value: string): boolean {
   const n = Number(value);
-  return value !== "" && Number.isFinite(n) && n >= 0;
+  return Number.isFinite(n) && n >= 0;
+}
+
+/** An optional salary: blank, or an amount in rupees. */
+function optionalRupees(example: string) {
+  return z
+    .string()
+    .trim()
+    .refine((v) => v === "" || isRupeeAmount(v), `Enter an amount in rupees, e.g. ${example}.`);
 }
 
 /** Channels that come with somebody to credit, and so ask for a connect code. */
@@ -35,15 +43,8 @@ const schema = z
     phone: z.string().trim().min(6, "Enter a phone number we can reach you on."),
     // ₹ per month, like every candidate salary. Kept as the typed string and
     // sent as-is; the API parses it.
-    currentSalary: z
-      .string()
-      .trim()
-      .min(1, "Enter your current monthly salary.")
-      .refine(isRupeeAmount, "Enter an amount in rupees, e.g. 25000."),
-    expectedSalary: z
-      .string()
-      .trim()
-      .refine((v) => v === "" || isRupeeAmount(v), "Enter an amount in rupees, e.g. 30000."),
+    currentSalary: optionalRupees("25000"),
+    expectedSalary: optionalRupees("30000"),
     sourceChannel: z.string(),
     sourceChannelOther: z.string().trim(),
   })
@@ -173,8 +174,8 @@ function collectFieldErrors(issues: readonly z.core.$ZodIssue[]): Record<string,
   const next: Record<string, string> = {};
   issues.forEach((issue) => {
     const key = issue.path[0] as string | undefined;
-    // Keep the first: zod reports every failing check, and the later ones are
-    // the less specific — an empty salary fails "required" and then "amount".
+    // Keep the first: zod reports every failing check, and a field given more
+    // than one should show the earlier, more specific message.
     if (key && !(key in next)) next[key] = issue.message;
   });
   return next;
@@ -200,7 +201,7 @@ function buildApplicationFormData(
   if (form.city) formData.append("city", form.city);
   if (form.currentRole) formData.append("current_role", form.currentRole);
   if (form.educationLevel) formData.append("education_level", form.educationLevel);
-  formData.append("current_salary", validated.currentSalary);
+  if (validated.currentSalary) formData.append("current_salary", validated.currentSalary);
   if (validated.expectedSalary) formData.append("expected_salary", validated.expectedSalary);
   // "Other" carries no information on its own — send what they typed instead.
   const channel =
@@ -477,7 +478,7 @@ export default function ApplicationForm({
                 />
                 <div>
                   <label htmlFor="currentSalary" className={labelCls}>
-                    Current salary (₹/month) <span className="text-yellow">*</span>
+                    Current salary (₹/month)
                   </label>
                   <input
                     id="currentSalary"
@@ -485,7 +486,6 @@ export default function ApplicationForm({
                     type="number"
                     inputMode="numeric"
                     min="0"
-                    required
                     aria-invalid={!!fieldErrors.currentSalary}
                     aria-describedby={fieldErrors.currentSalary ? "currentSalary-error" : undefined}
                     className={fieldErrors.currentSalary ? inputErrorCls : inputCls}

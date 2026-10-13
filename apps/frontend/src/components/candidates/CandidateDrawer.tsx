@@ -983,6 +983,7 @@ function EditForm({
         onChange={(expected_salary) => setForm((f) => ({ ...f, expected_salary }))}
       />
       <CurrentSalaryField
+        required={false}
         value={form.salary}
         onChange={(salary) => setForm((f) => ({ ...f, salary }))}
       />
