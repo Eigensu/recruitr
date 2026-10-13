@@ -187,7 +187,7 @@ export default function GlobalPipelineBoard({
   }, [view]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   function switchView(next: BoardView) {
@@ -324,7 +324,7 @@ export default function GlobalPipelineBoard({
       });
       if (!res.ok) throw new Error(await res.text());
       // Refresh board
-      load();
+      void load();
     } catch (err) {
       console.error(err);
       alert("Failed to change stage: " + err);
@@ -370,7 +370,7 @@ export default function GlobalPipelineBoard({
         const notes = window.prompt("Reason for candidate drop:");
         if (!notes) {
           // Cancel drop if no reason is given
-          load();
+          void load();
           return;
         }
         extra = { dropped_notes: notes };
@@ -379,7 +379,7 @@ export default function GlobalPipelineBoard({
       // I should update moveMapping to take extra payload
       await moveMapping(mappingId, newStage, extra);
     } catch {
-      load(); // revert on failure
+      void load(); // revert on failure
     }
   }
 
@@ -582,7 +582,7 @@ export default function GlobalPipelineBoard({
             },
           );
           if (!res.ok) throw new Error(await res.text());
-          load();
+          void load();
         }}
         onActionComplete={load}
       />

@@ -889,6 +889,31 @@ async def _decide_pending(lead: IntakeLead, updates: dict[str, object]) -> None:
         setattr(lead, attr, value)
 
 
+def _accepted_candidate_fields(
+    details: IntakeCandidateDetails, candidate: Candidate
+) -> dict[str, object]:
+    """The candidate update an accept writes from the telecaller's form."""
+    # Only what the telecaller filled in: an omitted optional field must
+    # not wipe what the applicant already gave us.
+    fields = details.model_dump(exclude_none=True)
+    # The form only ever fills a CV link in; clearing it would throw away
+    # a link the applicant sent.
+    if not fields.get("cv_link"):
+        fields.pop("cv_link", None)
+    # Current salary is the exception: the form shows the one on file, so
+    # a null means the telecaller cleared it, not that they left it alone.
+    if "salary" in details.model_fields_set and details.salary is None:
+        fields["salary"] = None
+    # Salaries on the form are entered per month. An update, so
+    # Candidate's Insert hook doesn't see it; stamp it here like the
+    # candidate PATCH does — unless the current salary kept from before
+    # was never marked. Stamping would relabel that possibly-yearly figure
+    # as monthly without anyone having re-entered it.
+    if "salary" in fields or candidate.salary is None or candidate.salary_period:
+        fields["salary_period"] = "monthly"
+    return fields
+
+
 async def accept_lead(
     lead: IntakeLead,
     *,
@@ -919,24 +944,7 @@ async def accept_lead(
 
     candidate = await Candidate.get(lead.candidate_id)
     if candidate is not None:
-        # Only what the telecaller filled in: an omitted optional field must
-        # not wipe what the applicant already gave us.
-        fields = details.model_dump(exclude_none=True)
-        # The form only ever fills a CV link in; clearing it would throw away
-        # a link the applicant sent.
-        if not fields.get("cv_link"):
-            fields.pop("cv_link", None)
-        # Current salary is the exception: the form shows the one on file, so
-        # a null means the telecaller cleared it, not that they left it alone.
-        if "salary" in details.model_fields_set and details.salary is None:
-            fields["salary"] = None
-        # Salaries on the form are entered per month. An update, so
-        # Candidate's Insert hook doesn't see it; stamp it here like the
-        # candidate PATCH does — unless the current salary kept from before
-        # was never marked. Stamping would relabel that possibly-yearly figure
-        # as monthly without anyone having re-entered it.
-        if "salary" in fields or candidate.salary is None or candidate.salary_period:
-            fields["salary_period"] = "monthly"
+        fields = _accepted_candidate_fields(details, candidate)
         try:
             try:
                 await candidate.set(fields)
