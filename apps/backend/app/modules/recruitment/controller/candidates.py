@@ -97,8 +97,8 @@ _ARRAY_ELEM_AT = "$arrayElemAt"
 
 _log = logging.getLogger(__name__)
 
+_EXTERNAL = "external"  # the source filter's value; matched without regard to case
 # Sentinel accepted by the created_by filter for candidates nobody owns.
-_EXTERNAL = "external"
 _UNASSIGNED = "unassigned"
 # Sentinel accepted by the referee_id filter for candidates with no referee —
 # the public form and manually-added external candidates alike.

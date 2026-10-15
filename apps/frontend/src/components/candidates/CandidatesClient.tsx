@@ -115,6 +115,7 @@ export default function CandidatesClient({
   // ── Reviewed tab ─────────────────────────────────────────────────────────
   // null until first needed, and reset to null when an accept makes it stale.
   const [reviewedLeads, setReviewedLeads] = useState<IntakeLead[] | null>(null);
+  const [reviewedFailed, setReviewedFailed] = useState(false);
   const reviewedRequestRef = useRef(0);
 
   function setLeadBusy(id: string, busy: boolean) {
@@ -166,14 +167,23 @@ export default function CandidatesClient({
 
   async function loadReviewed(recruiterId: string = reviewRecruiterId) {
     const requestId = ++reviewedRequestRef.current;
+    setReviewedFailed(false);
     try {
       const leads = await fetchReviewedLeads(apiFetch, recruiterId || undefined);
       if (requestId === reviewedRequestRef.current) setReviewedLeads(leads);
     } catch (err) {
       if (requestId !== reviewedRequestRef.current) return;
-      setReviewedLeads([]);
+      // Left null, not [], so the tab offers a retry instead of claiming that
+      // nobody has been reviewed.
+      setReviewedFailed(true);
       toast(apiErrorMessage(err, "Could not load reviewed candidates."), "error");
     }
+  }
+
+  /** Drop the list and any fetch still in flight: its answer predates the change. */
+  function invalidateReviewed() {
+    reviewedRequestRef.current++;
+    setReviewedLeads(null);
   }
 
   /** Fetched on first open (and after an accept made it stale), not on mount. */
@@ -294,7 +304,7 @@ export default function CandidatesClient({
       setLeadBusy(lead.id, false);
     }
     dropReviewLead(lead.id);
-    setReviewedLeads(null); // stale now: the lead just accepted belongs in it
+    invalidateReviewed(); // stale now: the lead just accepted belongs in it
     toast(`${lead.full_name} moved to Candidates`, "success");
     // They are in the Candidates tab now; refetch rather than splice, since the
     // card there needs the full candidate row, not the lead.
@@ -331,7 +341,7 @@ export default function CandidatesClient({
   function handleReviewRecruiterChange(recruiterId: string) {
     setReviewRecruiterId(recruiterId);
     setReviewLeads(null);
-    setReviewedLeads(null);
+    invalidateReviewed();
     void loadReview(recruiterId);
     if (activeTab === "reviewed") void loadReviewed(recruiterId);
   }
@@ -342,7 +352,9 @@ export default function CandidatesClient({
   const reviewedCount = reviewedLeads?.length ?? 0;
   const reviewedLabel =
     reviewedLeads === null
-      ? "Loading…"
+      ? reviewedFailed
+        ? "Could not load"
+        : "Loading…"
       : `${reviewedCount} ${reviewedCount === 1 ? "candidate" : "candidates"} reviewed`;
   const reviewCount = reviewLeads?.length ?? 0;
   const reviewLabel =
@@ -557,7 +569,22 @@ export default function CandidatesClient({
 
       {activeTab === "reviewed" && (
         <>
-          {reviewedLeads === null && (
+          {reviewedLeads === null && reviewedFailed && (
+            <div
+              className="py-12 text-center text-sm"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Could not load reviewed candidates.{" "}
+              <button
+                type="button"
+                onClick={() => void loadReviewed()}
+                className="font-medium underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          {reviewedLeads === null && !reviewedFailed && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
                 <CandidateCardSkeleton key={i} />
