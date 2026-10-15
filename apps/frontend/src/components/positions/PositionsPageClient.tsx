@@ -17,6 +17,7 @@ import {
   IconAlertCircle,
   IconTrash,
   IconPencil,
+  IconLock,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useApiFetch } from "@/lib/api";
@@ -27,6 +28,7 @@ import {
   mapCandidateToPosition,
   unmapCandidateFromPosition,
   deletePosition,
+  closePosition,
   reopenPosition,
   updatePositionApproval,
 } from "@/lib/api/positions";
@@ -34,6 +36,7 @@ import { clientFetchCandidates } from "@/lib/api/candidates.client";
 import type { ApiClientOption, ApiPosition, ApiTopCandidate, ApiPositionFilters } from "@/types";
 import AddPositionModal from "@/components/positions/AddPositionModal";
 import { useToast } from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   DndContext,
   DragOverlay,
@@ -101,7 +104,9 @@ function PositionCard({
   isSelected,
   onClick,
   isMaintainer,
+  canManage,
   onDelete,
+  onClosePosition,
   onReopen,
   onEdit,
   onApprove,
@@ -110,7 +115,10 @@ function PositionCard({
   isSelected: boolean;
   onClick: () => void;
   isMaintainer?: boolean;
+  /** Any staff role: edit, delete and close. Reopen and approve stay maintainer-only. */
+  canManage?: boolean;
   onDelete?: (id: string) => Promise<void>;
+  onClosePosition?: (id: string, reason: string) => Promise<void>;
   onReopen?: (id: string) => Promise<void>;
   onEdit?: (position: ApiPosition) => void;
   onApprove?: (id: string, status: string) => Promise<void>;
@@ -120,6 +128,8 @@ function PositionCard({
   const [deleting, setDeleting] = React.useState(false);
   const [reopening, setReopening] = React.useState(false);
   const [approving, setApproving] = React.useState(false);
+  const [closeOpen, setCloseOpen] = React.useState(false);
+  const [closeReason, setCloseReason] = React.useState("");
 
   const total = position.total_seats;
   const filled = position.mapped_count;
@@ -274,7 +284,7 @@ function PositionCard({
               seats
             </div>
           </div>
-          {isMaintainer && (
+          {canManage && (
             <div className="flex gap-0.5">
               {onEdit && (
                 <button
@@ -287,6 +297,19 @@ function PositionCard({
                   className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-yellow hover:bg-yellow/10 transition-colors z-10 relative"
                 >
                   <IconPencil className="size-3.5" />
+                </button>
+              )}
+              {onClosePosition && position.status !== "closed" && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCloseOpen(true);
+                  }}
+                  aria-label="Close position"
+                  className="pointer-events-auto p-1 rounded-lg text-text-muted hover:text-amber-500 hover:bg-amber-500/10 transition-colors z-10 relative"
+                >
+                  <IconLock className="size-3.5" />
                 </button>
               )}
               {onDelete &&
@@ -313,6 +336,39 @@ function PositionCard({
           )}
         </div>
       </div>
+      {/* Clicks inside the dialog bubble through the React tree to the card's own
+          onClick, which would select the position; stop them here. */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <ConfirmDialog
+          open={closeOpen}
+          title="Close this position?"
+          confirmLabel="Close position"
+          destructive
+          confirmDisabled={!closeReason.trim()}
+          description={
+            <div className="space-y-2">
+              <p>
+                {position.role} at {position.client_name} will stop taking new mappings. Say why it
+                is closing.
+              </p>
+              <textarea
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="e.g. Client filled it internally"
+                aria-label="Reason for closing"
+                className="w-full rounded-lg border border-border bg-canvas px-3 py-2 text-sm text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow"
+              />
+            </div>
+          }
+          onConfirm={async () => {
+            await onClosePosition?.(position.id, closeReason.trim());
+            setCloseReason("");
+          }}
+          onClose={() => setCloseOpen(false)}
+        />
+      </div>
       {confirmDelete && (
         <button
           type="button"
@@ -323,6 +379,12 @@ function PositionCard({
             setConfirmDelete(false);
           }}
         />
+      )}
+
+      {position.status === "closed" && position.close_reason && (
+        <p className="mb-3 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-[11px] text-text-secondary">
+          <span className="font-bold">Closed:</span> {position.close_reason}
+        </p>
       )}
 
       {/* Tags row */}
@@ -809,6 +871,12 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
     if (selectedPositionId === id) setSelectedPositionId(null);
   }
 
+  async function handleClosePosition(id: string, reason: string) {
+    const updated = await closePosition(apiFetch, id, reason);
+    setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
+    toast("Position closed", "success");
+  }
+
   async function handleReopenPosition(id: string) {
     const updated = await reopenPosition(apiFetch, id);
     setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, ...updated } : p)));
@@ -975,7 +1043,9 @@ export default function PositionsPageClient({ isClient, isMaintainer }: Position
                         setDebouncedCandidateSearch("");
                       }}
                       isMaintainer={isMaintainer}
+                      canManage={!isClient}
                       onDelete={handleDeletePosition}
+                      onClosePosition={handleClosePosition}
                       onReopen={handleReopenPosition}
                       onEdit={(p) => setEditingPosition(p)}
                       onApprove={handleApprovePosition}

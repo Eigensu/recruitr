@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.common.dtos.pagination import PaginatedResponse
 from app.modules.recruitment.enums.department import Department
@@ -55,6 +55,8 @@ class PositionListItem(BaseModel):
     date_opened: datetime
     target_close: datetime | None = None
     notes: str | None = None
+    close_reason: str | None = None
+    closed_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -143,6 +145,10 @@ class PositionUpdate(BaseModel):
             if getattr(self, name) is None:
                 raise ValueError(f"{name} can't be cleared")
 
+        # Closing carries a reason, which only POST /positions/{id}/close takes.
+        if self.status == PositionStatus.closed:
+            raise ValueError("Use POST /positions/{id}/close to close a position, with a reason")
+
         if self.department and self.role:
             allowed_roles = ROLES_BY_CATEGORY.get(self.department, [])
             if self.role not in allowed_roles:
@@ -157,6 +163,20 @@ class PositionUpdate(BaseModel):
             self.mumbai_area = None
 
         return self
+
+
+class PositionCloseRequest(BaseModel):
+    """Closing a position needs a reason: it is the only record of why it went."""
+
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("A reason is required to close a position")
+        return v
 
 
 class PositionApprovalRequest(BaseModel):

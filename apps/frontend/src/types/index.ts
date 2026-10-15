@@ -129,6 +129,9 @@ export interface ApiPosition {
   date_opened: string;
   target_close: string | null;
   notes: string | null;
+  /** Why it was closed; null unless status is "closed". */
+  close_reason: string | null;
+  closed_at: string | null;
 }
 
 /** Ranked candidate from GET /positions/{id}/top-candidates. match_score is 0..1. */

@@ -34,6 +34,7 @@ from app.modules.recruitment.schemas import (
     MapCandidateResponse,
     MappedPreview,
     PositionApprovalRequest,
+    PositionCloseRequest,
     PositionCreate,
     PositionFiltersResponse,
     PositionListItem,
@@ -532,6 +533,9 @@ async def update_position(
         )
     if "total_seats" in update:
         update["remaining_seats"] = max(update["total_seats"] - (doc.filled_seats or 0), 0)
+    if update.get("status") == PositionStatus.open:
+        # Reopening by PATCH must not leave the last closure's reason behind.
+        update.update(close_reason=None, closed_at=None, closed_by_id=None)
 
     if update:
         await doc.set(update)
@@ -544,13 +548,37 @@ async def update_position(
 
 
 @router.delete("/{position_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_position(
-    tenant: _Tenant,
-    position_id: str,
-    _: Annotated[object, Depends(require_maintainer)],
-):
+async def delete_position(tenant: _Tenant, position_id: str):
+    """Soft-delete. Recruiters may, like editing: `_Tenant` already refuses clients."""
     doc = await _get_or_404(tenant, position_id)
     await doc.set({"is_active": False})
+
+
+# ── Close ──────────────────────────────────────────────────────────────────────
+
+
+@router.post("/{position_id}/close", status_code=status.HTTP_200_OK)
+async def close_position(
+    tenant: _Tenant, position_id: str, data: PositionCloseRequest
+) -> PositionListItem:
+    """Close a position, recording why (the client closed it, no longer needed, …).
+
+    A dedicated endpoint rather than PATCH status=closed, so a closure can never
+    be recorded without its reason. Open to every staff role, like editing.
+    """
+    doc = await _get_or_404(tenant, position_id)
+    if doc.status == PositionStatus.closed:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Position is already closed")
+    await doc.set(
+        {
+            "status": PositionStatus.closed,
+            "close_reason": data.reason,
+            "closed_at": datetime.now(UTC),
+            "closed_by_id": tenant.employee_id,
+        }
+    )
+    count, preview = await _mapped_summary(tenant.brand_id, doc.id)
+    return _to_item(doc, mapped_count=count, mapped_preview=preview)
 
 
 # ── Reopen ─────────────────────────────────────────────────────────────────────
@@ -569,7 +597,14 @@ async def reopen_position(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Position not found")
     if doc.status == PositionStatus.open:
         raise HTTPException(status.HTTP_409_CONFLICT, "Position is already open")
-    await doc.set({"status": PositionStatus.open})
+    await doc.set(
+        {
+            "status": PositionStatus.open,
+            "close_reason": None,
+            "closed_at": None,
+            "closed_by_id": None,
+        }
+    )
     count, preview = await _mapped_summary(tenant.brand_id, doc.id)
     return _to_item(doc, mapped_count=count, mapped_preview=preview)
 

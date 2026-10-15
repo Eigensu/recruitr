@@ -13,6 +13,8 @@ export interface ConfirmDialogProps {
   readonly cancelLabel?: string;
   /** Red confirm button, for actions that remove or revoke something. */
   readonly destructive?: boolean;
+  /** Holds the confirm button back, e.g. until a required field is filled in. */
+  readonly confirmDisabled?: boolean;
   /**
    * May return a promise. The dialog stays open and busy until it settles,
    * closes when it resolves, and shows the error in place when it rejects —
@@ -37,6 +39,7 @@ export default function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   destructive = false,
+  confirmDisabled = false,
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
@@ -121,7 +124,7 @@ export default function ConfirmDialog({
         <button
           type="button"
           onClick={confirm}
-          disabled={busy}
+          disabled={busy || confirmDisabled}
           className={cn(
             "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer",
             destructive
