@@ -228,6 +228,42 @@ async def test_list_filter_by_source_treats_missing_source_as_internal(
 
 
 @pytest.mark.asyncio
+async def test_list_source_filter_ignores_case_and_keeps_the_tabs_complementary(
+    client_a: AsyncClient,
+) -> None:
+    """The public form once stored "External"; an exact match dropped those people
+    from the External filter (while a name search still found them), and a channel
+    name stored as the source fitted neither tab."""
+    for name, source in (
+        ("Lower Lee", "external"),
+        ("Legacy Lou", "External"),
+        ("Intern Ian", "internal"),
+        ("Channel Chi", "LinkedIn"),
+        ("Missing Mo", None),
+    ):
+        await Candidate(
+            brand_id=_BRAND_A,
+            full_name=name,
+            email=f"{name.split()[0].lower()}@test.com",
+            source=source,
+        ).insert()
+
+    async def names(**params: str) -> set[str]:
+        res = await client_a.get("/api/v1/candidates", params=params)
+        assert res.status_code == 200, res.text
+        return {c["full_name"] for c in res.json()["items"]}
+
+    external = await names(source="external")
+    internal = await names(source="internal")
+
+    assert external == {"Lower Lee", "Legacy Lou"}
+    assert await names(source="EXTERNAL") == external
+    assert internal == {"Intern Ian", "Channel Chi", "Missing Mo"}
+    assert external | internal == await names()
+    assert external & internal == set()
+
+
+@pytest.mark.asyncio
 async def test_list_search_by_name(client_a: AsyncClient) -> None:
     await _create_via_api(client_a)
     await _create_via_api(client_a, {"email": "other@test.com", "full_name": "Rohan Joshi"})

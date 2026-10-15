@@ -194,6 +194,78 @@ async def test_a_telecaller_cannot_open_the_review_tab(http):
     assert res.status_code == 403
 
 
+# ── The REVIEWED tab ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_accepted_leads_move_to_the_reviewed_tab(http, rec):
+    waiting = await _with_recruiter(rec, "Waiting")
+    accepted = await _with_recruiter(rec, "Accepted")
+    await _accept(http, accepted)
+    headers = await auth_headers("rec")
+
+    reviewed = await http.get("/api/v1/intake/leads/reviewed", headers=headers)
+    review = await http.get("/api/v1/intake/leads/review", headers=headers)
+
+    assert reviewed.status_code == 200
+    assert [row["id"] for row in reviewed.json()] == [str(accepted.id)]
+    assert [row["id"] for row in review.json()] == [str(waiting.id)]
+
+
+@pytest.mark.asyncio
+async def test_a_lead_stays_reviewed_after_its_first_mapping_closes_it(http, rec):
+    lead = await _with_recruiter(rec)
+    await _accept(http, lead)
+    assert (await _map(http, await _position(), lead)).status_code == 200
+
+    res = await http.get("/api/v1/intake/leads/reviewed", headers=await auth_headers("rec"))
+
+    assert [row["id"] for row in res.json()] == [str(lead.id)]
+    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.actioned
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_lead_is_not_reviewed(http, rec):
+    lead = await _with_recruiter(rec)
+    await recruiter_reject_lead(lead, actor_id=rec.id, reason=None, notes=None)
+
+    res = await http.get("/api/v1/intake/leads/reviewed", headers=await auth_headers("rec"))
+
+    assert res.json() == []
+
+
+@pytest.mark.asyncio
+async def test_a_recruiter_sees_only_their_own_reviewed_leads_and_a_maintainer_all(http, rec):
+    await make_staff(_BRAND, "boss", UserRole.maintainer)
+    other = await make_staff(_BRAND, "other", UserRole.employee)
+    mine = await _with_recruiter(rec, "Mine")
+    theirs = await _with_recruiter(other, "Theirs")
+    await _accept(http, mine)
+    await _accept(http, theirs, who="other")
+
+    own = await http.get(
+        f"/api/v1/intake/leads/reviewed?recruiter_id={other.id}", headers=await auth_headers("rec")
+    )
+    boss = await http.get("/api/v1/intake/leads/reviewed", headers=await auth_headers("boss"))
+    one = await http.get(
+        f"/api/v1/intake/leads/reviewed?recruiter_id={other.id}",
+        headers=await auth_headers("boss"),
+    )
+
+    assert [row["id"] for row in own.json()] == [str(mine.id)]
+    assert {row["full_name"] for row in boss.json()} == {"Mine", "Theirs"}
+    assert [row["id"] for row in one.json()] == [str(theirs.id)]
+
+
+@pytest.mark.asyncio
+async def test_a_telecaller_cannot_open_the_reviewed_tab(http):
+    await make_staff(_BRAND, "caller", UserRole.telecaller)
+
+    res = await http.get("/api/v1/intake/leads/reviewed", headers=await auth_headers("caller"))
+
+    assert res.status_code == 403
+
+
 # ── Accept ─────────────────────────────────────────────────────────────────────
 
 

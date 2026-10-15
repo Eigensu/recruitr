@@ -98,6 +98,7 @@ _ARRAY_ELEM_AT = "$arrayElemAt"
 _log = logging.getLogger(__name__)
 
 # Sentinel accepted by the created_by filter for candidates nobody owns.
+_EXTERNAL = "external"
 _UNASSIGNED = "unassigned"
 # Sentinel accepted by the referee_id filter for candidates with no referee —
 # the public form and manually-added external candidates alike.
@@ -423,13 +424,23 @@ async def list_candidates(
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
 
-    if source == "internal":
-        # Candidates created before `source` existed have none; the pipeline
-        # already reads those as internal ($ifNull), so the Internal tab must too
-        # or it and the External tab would not add up to the full directory.
-        and_clauses.append({"$or": [{"source": "internal"}, {"source": None}]})
-    elif source:
-        match["source"] = source
+    if source:
+        # Matched without regard to case: the public form used to store
+        # "External", and an exact match dropped those people from the filter —
+        # including everyone a recruiter had since accepted from the Review tab,
+        # who then showed up only when searched for by name.
+        #
+        # Internal is "anything that is not external" rather than its own match:
+        # it then covers a candidate with no `source` (the pipeline reads those as
+        # internal via $ifNull) and one with a channel name stored there, so the
+        # two filters always add up to the whole directory.
+        external = {"$regex": f"^{_EXTERNAL}$", "$options": "i"}
+        if source.lower() == "internal":
+            and_clauses.append({"source": {"$not": external}})
+        elif source.lower() == _EXTERNAL:
+            match["source"] = external
+        else:
+            match["source"] = source
 
     if source_channel:
         match["source_channel"] = source_channel

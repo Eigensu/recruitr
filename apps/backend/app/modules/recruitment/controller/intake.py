@@ -63,7 +63,7 @@ from app.core.dependencies import (
 )
 from app.modules.auth.models import UserRole
 from app.modules.brands.service import get_automation_settings
-from app.modules.recruitment.enums import IntakeLeadStatus, IntakeSource
+from app.modules.recruitment.enums import IntakeDecision, IntakeLeadStatus, IntakeSource
 from app.modules.recruitment.models import (
     Candidate,
     Employee,
@@ -826,6 +826,47 @@ async def review_leads(
     elif recruiter_id:
         match["recruiter_id"] = to_object_id(recruiter_id, "recruiter_id")
     leads = await IntakeLead.find(match).sort("recruiter_assigned_at").limit(limit).to_list()
+    candidates, employees = await intake_analytics.people_for(leads)
+    teams = await _team_names(tenant.brand_id)
+    now = datetime.now(UTC)
+    return [
+        _to_response(
+            lead,
+            candidates.get(lead.candidate_id),
+            viewer=tenant,
+            telecaller=employees.get(lead.telecaller_id),
+            recruiter=employees.get(lead.recruiter_id),
+            team_name=teams.get(lead.team_id),
+            now=now,
+        )
+        for lead in leads
+    ]
+
+
+# Declared before /leads/{lead_id}, which would otherwise swallow "reviewed".
+@router.get("/leads/reviewed", response_model=list[IntakeLeadResponse])
+async def reviewed_leads(
+    tenant: _Staff,
+    recruiter_id: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[IntakeLeadResponse]:
+    """The Candidates page's REVIEWED tab: leads a recruiter accepted, newest first.
+
+    Rules for who sees what are the Review tab's: a recruiter their own, a
+    maintainer or admin everyone's, optionally narrowed to one recruiter. A lead
+    stays here after its first mapping closes it (status `actioned`), since the
+    decision, not the status, is what puts it in the tab. A rejected lead never
+    is: its decision is a reject.
+    """
+    match: dict = {
+        "brand_id": tenant.brand_id,
+        "recruiter_decision": IntakeDecision.accept.value,
+    }
+    if not _is_manager(tenant):
+        match["recruiter_id"] = tenant.employee_id
+    elif recruiter_id:
+        match["recruiter_id"] = to_object_id(recruiter_id, "recruiter_id")
+    leads = await IntakeLead.find(match).sort("-recruiter_accepted_at").limit(limit).to_list()
     candidates, employees = await intake_analytics.people_for(leads)
     teams = await _team_names(tenant.brand_id)
     now = datetime.now(UTC)

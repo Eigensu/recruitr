@@ -300,6 +300,20 @@ export function fetchReviewLeads(apiFetch: ApiFetch, recruiterId?: string): Prom
   );
 }
 
+/**
+ * The REVIEWED tab: leads a recruiter has accepted, newest first. A recruiter
+ * gets their own; a maintainer or admin gets everyone's, narrowed to one
+ * recruiter when `recruiterId` is given.
+ */
+export function fetchReviewedLeads(
+  apiFetch: ApiFetch,
+  recruiterId?: string,
+): Promise<IntakeLead[]> {
+  return apiFetch<IntakeLead[]>(
+    `/api/v1/intake/leads/reviewed${query({ recruiter_id: recruiterId })}`,
+  );
+}
+
 /** Take the lead on: the candidate is approved into the Candidates tab. The
  * recruiter's clock keeps running until their first mapping of them. */
 export function recruiterAcceptLead(apiFetch: ApiFetch, id: string): Promise<IntakeLead> {
