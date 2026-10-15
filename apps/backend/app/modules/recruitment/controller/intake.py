@@ -327,12 +327,18 @@ async def my_leads(
     match: dict = {"brand_id": tenant.brand_id, "telecaller_id": tenant.employee_id}
     if not include_actioned:
         match["status"] = IntakeLeadStatus.pending_telecaller.value
-    leads = (
-        await IntakeLead.find(match)
-        .sort([("call_attempts", -1), ("telecaller_assigned_at", 1)])
-        .limit(limit)
-        .to_list()
-    )
+    # Sorted here rather than by Mongo: a lead from before call tracking has no
+    # call_attempts stored, and Mongo sorts a missing field below zero, which
+    # would put the oldest leads behind fresh ones. The model reads it as 0, and
+    # Python's sort is stable, so oldest-first holds within a count. The open
+    # queue is small, so no limit is applied until after the sort — a limit first
+    # could cut the called leads this ordering exists to bring forward.
+    query = IntakeLead.find(match).sort("telecaller_assigned_at")
+    if include_actioned:
+        query = query.limit(limit)
+    leads = await query.to_list()
+    leads.sort(key=lambda lead: -lead.call_attempts)
+    leads = leads[:limit]
     candidates, _ = await intake_analytics.people_for(leads)
     now = datetime.now(UTC)
     return [
