@@ -46,7 +46,7 @@ and later by a recruiter, and checks that the caller holds the lead it names.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -113,9 +113,12 @@ from app.modules.recruitment.schemas import (
     NaukriPreviewRow,
     NaukriSkippedRow,
     ResumeLeadDraft,
+    TelecallerReport,
+    TelecallerTargetResponse,
+    TelecallerTargetUpdate,
     TenantScope,
 )
-from app.modules.recruitment.service import intake_analytics, lead_notes
+from app.modules.recruitment.service import intake_analytics, lead_notes, telecaller_metrics
 from app.modules.recruitment.service.cv_requests import REQUESTABLE_STATUSES, issue_link
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
@@ -398,7 +401,13 @@ async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest
         await accept_lead(lead, details=payload.details, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
-    await _log_decision_call(tenant, lead, outcome=IntakeCallOutcome.connected, note=payload.notes)
+    await _log_decision_call(
+        tenant,
+        lead,
+        outcome=IntakeCallOutcome.connected,
+        decision=IntakeDecision.accept,
+        note=payload.notes,
+    )
     return await _fetch_response(lead, tenant)
 
 
@@ -420,7 +429,9 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
         if payload.reason == IntakeRejectReason.not_reachable
         else IntakeCallOutcome.connected
     )
-    await _log_decision_call(tenant, lead, outcome=outcome, note=payload.notes)
+    await _log_decision_call(
+        tenant, lead, outcome=outcome, decision=IntakeDecision.reject, note=payload.notes
+    )
     return await _fetch_response(lead, tenant)
 
 
@@ -428,14 +439,23 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
 
 
 async def _log_decision_call(
-    tenant: TenantScope, lead: IntakeLead, *, outcome: IntakeCallOutcome, note: str | None
+    tenant: TenantScope,
+    lead: IntakeLead,
+    *,
+    outcome: IntakeCallOutcome,
+    decision: IntakeDecision,
+    note: str | None,
 ) -> None:
     """Log the call a decision ended, but only a telecaller's: a manager deciding
     on someone's behalf did not make a call, and must not inflate that
     telecaller's numbers (or their own)."""
     if tenant.role == UserRole.telecaller:
         await record_decision_call(
-            lead, telecaller_id=tenant.employee_id, outcome=outcome, note=note
+            lead,
+            telecaller_id=tenant.employee_id,
+            outcome=outcome,
+            decision=decision,
+            note=note,
         )
 
 
@@ -463,6 +483,7 @@ async def _call_responses(calls: list[LeadCall], *, names: bool) -> list[IntakeC
             lead_id=str(c.lead_id),
             attempt=c.attempt,
             outcome=c.outcome,
+            decision=c.decision,
             note=c.note,
             at=c.at,
             telecaller_id=str(c.telecaller_id),
@@ -480,6 +501,13 @@ async def log_call(tenant: _Telecaller, lead_id: str, payload: IntakeCallRequest
     Five of these close the lead as unreachable. A call that was answered is not
     logged here: accepting or rejecting the lead records it.
     """
+    # Calls are the telecaller's: the log is what their numbers are read from, and
+    # five of them close the lead. A manager who rang someone is not that
+    # telecaller, and must not appear as one in the report.
+    if tenant.role != UserRole.telecaller:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the telecaller on a lead logs its calls."
+        )
     lead = await _lead_or_404(tenant, lead_id)
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)
@@ -529,6 +557,79 @@ async def call_log(
         match["at"] = when
     calls = await LeadCall.find(match).sort("-at").limit(limit).to_list()
     return await _call_responses(calls, names=True)
+
+
+# ── Telecaller metrics ─────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/telecaller-report", response_model=TelecallerReport, dependencies=[_RequireMaintainer]
+)
+async def telecaller_report(
+    tenant: _Staff,
+    period: Annotated[
+        Literal["day", "week", "range"],
+        Query(description="One day, the Monday-to-Sunday week around `date`, or start..end"),
+    ] = "day",
+    on: Annotated[
+        date | None,
+        Query(alias="date", description="A day, or any day in the week; today (IST) if omitted"),
+    ] = None,
+    start: Annotated[date | None, Query(description="First day of a range")] = None,
+    end: Annotated[date | None, Query(description="Last day of a range, inclusive")] = None,
+    telecaller_id: Annotated[str | None, Query()] = None,
+):
+    """Every telecaller's calls and decisions for a day, a week or a range, vs their targets.
+
+    For admins and maintainers. Days are IST dates. A telecaller with no activity
+    is listed with zeros, and `telecaller_id` narrows the report to one person.
+    """
+    try:
+        first, last = telecaller_metrics.period_dates(period, anchor=on, start=start, end=end)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from None
+    return await telecaller_metrics.build_report(
+        tenant.brand_id,
+        period=period,
+        first=first,
+        last=last,
+        telecaller_id=to_object_id(telecaller_id, "telecaller_id") if telecaller_id else None,
+    )
+
+
+@router.get(
+    "/telecaller-targets",
+    response_model=list[TelecallerTargetResponse],
+    dependencies=[_RequireMaintainer],
+)
+async def telecaller_targets(tenant: _Staff):
+    """Every telecaller with their daily and weekly calls targets (null where unset)."""
+    return await telecaller_metrics.list_targets(tenant.brand_id)
+
+
+@router.put(
+    "/telecaller-targets/{employee_id}",
+    response_model=TelecallerTargetResponse,
+    dependencies=[_RequireMaintainer],
+)
+async def set_telecaller_target(tenant: _Staff, employee_id: str, payload: TelecallerTargetUpdate):
+    """Change a telecaller's daily and/or weekly calls target; null clears one, omitted keeps it."""
+    telecaller = await Employee.find_one(
+        {
+            "_id": to_object_id(employee_id, "employee_id"),
+            "brand_id": tenant.brand_id,
+            "role": UserRole.telecaller.value,
+        }
+    )
+    if telecaller is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Telecaller not found")
+    # Only the fields the caller sent: PUT {"daily_calls": 50} leaves the weekly
+    # target alone, and an explicit null clears one.
+    changes = payload.model_dump(exclude_unset=True)
+    target = await telecaller_metrics.set_target(
+        tenant.brand_id, telecaller, changes=changes, updated_by_id=tenant.employee_id
+    )
+    return telecaller_metrics.target_row(telecaller, target)
 
 
 # ── Screening notes ────────────────────────────────────────────────────────────

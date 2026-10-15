@@ -315,6 +315,8 @@ export interface IntakeCall {
   lead_id: string;
   attempt: number;
   outcome: "no_answer" | "connected";
+  /** Set when this call ended in the telecaller's accept or reject. */
+  decision: "accept" | "reject" | null;
   note: string | null;
   at: string;
   telecaller_id: string;
@@ -328,6 +330,101 @@ export interface IntakeLogCallResult {
   call: IntakeCall;
   /** True when this was the last allowed call and it closed the lead as unreachable. */
   dead: boolean;
+}
+
+/** One telecaller over a report's period. `bad_lead_rate` and `target_pct` are fractions. */
+export interface TelecallerDay {
+  date: string;
+  calls: number;
+  unanswered: number;
+  connected: number;
+  forwarded: number;
+  rejected: number;
+  dead: number;
+}
+
+export interface TelecallerReportRow extends Omit<TelecallerDay, "date"> {
+  telecaller_id: string;
+  telecaller_name: string;
+  active: boolean;
+  bad_lead_rate: number | null;
+  notes_written: number;
+  target_calls: number | null;
+  target_pct: number | null;
+  days: TelecallerDay[];
+}
+
+export type TelecallerPeriod = "day" | "week" | "range";
+
+export interface TelecallerReport {
+  period: TelecallerPeriod;
+  /** Inclusive IST dates, YYYY-MM-DD. */
+  start_date: string;
+  end_date: string;
+  rows: TelecallerReportRow[];
+  totals: Omit<TelecallerDay, "date"> & { bad_lead_rate: number | null; notes_written: number };
+}
+
+export interface TelecallerReportParams {
+  period: TelecallerPeriod;
+  /** A day, or any day in the week wanted (IST); today if omitted. */
+  date?: string;
+  start?: string;
+  end?: string;
+  telecaller_id?: string;
+}
+
+export function fetchTelecallerReport(
+  apiFetch: ApiFetch,
+  params: TelecallerReportParams,
+): Promise<TelecallerReport> {
+  return apiFetch<TelecallerReport>(`/api/v1/intake/telecaller-report${query({ ...params })}`);
+}
+
+export interface TelecallerTarget {
+  telecaller_id: string;
+  telecaller_name: string;
+  active: boolean;
+  daily_calls: number | null;
+  weekly_calls: number | null;
+}
+
+export function fetchTelecallerTargets(apiFetch: ApiFetch): Promise<TelecallerTarget[]> {
+  return apiFetch<TelecallerTarget[]>("/api/v1/intake/telecaller-targets");
+}
+
+/** Change a target: an omitted key is kept, `null` clears it. */
+export function saveTelecallerTarget(
+  apiFetch: ApiFetch,
+  telecallerId: string,
+  changes: { daily_calls?: number | null; weekly_calls?: number | null },
+): Promise<TelecallerTarget> {
+  return apiFetch<TelecallerTarget>(`/api/v1/intake/telecaller-targets/${telecallerId}`, {
+    method: "PUT",
+    body: JSON.stringify(changes),
+  });
+}
+
+/** Every telecaller's calls, newest first (management). Dates are ISO datetimes. */
+export function fetchCallLog(
+  apiFetch: ApiFetch,
+  params: { telecaller_id?: string; start_date?: string; end_date?: string; limit?: number },
+): Promise<IntakeCall[]> {
+  return apiFetch<IntakeCall[]>(`/api/v1/intake/calls${query({ ...params })}`);
+}
+
+/** Every screening note, newest first (management). Dates are ISO datetimes. */
+export function fetchNoteLog(
+  apiFetch: ApiFetch,
+  params: {
+    author_id?: string;
+    stage?: IntakeNoteStage;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+  },
+): Promise<IntakeNote[]> {
+  return apiFetch<IntakeNote[]>(`/api/v1/intake/notes${query({ ...params })}`);
 }
 
 /** Log a call nobody answered, with an optional note on how it went. */
