@@ -25,6 +25,7 @@ import {
   fetchIntakeRoleCatalog,
   fetchLeadCandidate,
   type IntakeCandidateDetails,
+  type IntakeCandidateDraft,
   type IntakeLead,
 } from "@/lib/api/intake";
 
@@ -106,6 +107,15 @@ const str = (v: string | number | null | undefined): string =>
 /** Only what the form must not contain drops out of an optional field. */
 const orUndefined = (v: string | undefined) => (v ? v : undefined);
 
+/**
+ * A salary as the accept request carries it: omitted when it is still the
+ * figure on file, null when the telecaller cleared it, otherwise what they
+ * entered. Omitting an untouched one is what keeps the backend from stamping
+ * a figure from before the per-month convention as monthly.
+ */
+const salaryChange = (entered: number | undefined, onFile: number | null) =>
+  entered === (onFile ?? undefined) ? undefined : (entered ?? null);
+
 export default function AcceptLeadDialog({
   lead,
   initialNotes = "",
@@ -121,6 +131,10 @@ export default function AcceptLeadDialog({
 }) {
   const apiFetch = useApiFetch();
   const [form, setForm] = useState<FormState | null>(null);
+  const [onFile, setOnFile] = useState<Pick<IntakeCandidateDraft, "salary" | "expected_salary">>({
+    salary: null,
+    expected_salary: null,
+  });
   const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [hasResume, setHasResume] = useState(false);
@@ -146,6 +160,7 @@ export default function AcceptLeadDialog({
         setRoleCatalog(catalog ?? {});
         setCatalogFailed(catalog === null);
         setHasResume(draft.has_resume);
+        setOnFile({ salary: draft.salary, expected_salary: draft.expected_salary });
         setForm({
           full_name: str(draft.full_name),
           email: str(draft.email),
@@ -215,9 +230,9 @@ export default function AcceptLeadDialog({
           area: orUndefined(data.area),
           cv_link: orUndefined(data.cv_link),
           // The fields start from the salaries on file, so a blank one was
-          // cleared on purpose. Null says so; omitting it would keep the old one.
-          salary: data.salary ?? null,
-          expected_salary: data.expected_salary ?? null,
+          // cleared on purpose and an unchanged one was left alone.
+          salary: salaryChange(data.salary, onFile.salary),
+          expected_salary: salaryChange(data.expected_salary, onFile.expected_salary),
         },
         form.notes,
       );
