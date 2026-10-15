@@ -1281,6 +1281,21 @@ async def _count_call(
     return updated
 
 
+async def _close_as_unreachable(lead: IntakeLead, now: datetime) -> bool:
+    """Reject a lead that has used up its calls. False if someone else decided it first."""
+    try:
+        await reject_lead(
+            lead,
+            reason=IntakeRejectReason.not_reachable,
+            notes=f"Not reached after {MAX_CALL_ATTEMPTS} calls",
+            now=now,
+        )
+    except LeadAlreadyDecided:
+        # A manager decided it between the call and the close; theirs stands.
+        return False
+    return True
+
+
 async def log_unanswered_call(
     lead: IntakeLead,
     *,
@@ -1296,6 +1311,17 @@ async def log_unanswered_call(
     """
     stamp = now or datetime.now(UTC)
     if await _count_call(lead, stamp, only_while_pending=True) is None:
+        # Either someone decided the lead, or an earlier fifth call was counted and
+        # then failed before it could close the lead (a Mongo error between the two
+        # writes), which would otherwise leave it pending at the limit for good:
+        # every later call would be refused here. Finish that close now.
+        fresh = await IntakeLead.get(lead.id)
+        if (
+            fresh is not None
+            and fresh.status == IntakeLeadStatus.pending_telecaller
+            and fresh.call_attempts >= MAX_CALL_ATTEMPTS
+        ):
+            await _close_as_unreachable(lead, stamp)
         raise LeadAlreadyDecided(str(lead.id))
     call = LeadCall(
         brand_id=lead.brand_id,
@@ -1312,16 +1338,12 @@ async def log_unanswered_call(
     dead = False
     if lead.call_attempts >= MAX_CALL_ATTEMPTS:
         try:
-            await reject_lead(
-                lead,
-                reason=IntakeRejectReason.not_reachable,
-                notes=f"Not reached after {MAX_CALL_ATTEMPTS} calls",
-                now=stamp,
-            )
-            dead = True
-        except LeadAlreadyDecided:
-            # A manager decided it between the call and the close; theirs stands.
-            pass
+            dead = await _close_as_unreachable(lead, stamp)
+        except Exception:
+            # The call is logged and counted; the next attempt finds the lead at
+            # the limit and finishes the close (above), so this must not be a 500
+            # that hides a call which did happen.
+            logger.exception("Could not close lead %s after its last call", lead.id)
     await _drop_analytics_cache(lead.brand_id)
     return call, dead
 

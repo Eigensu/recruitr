@@ -331,3 +331,36 @@ async def test_a_telecaller_cannot_open_the_management_log(http, caller):
     res = await http.get("/api/v1/intake/calls", headers=await auth_headers("caller"))
 
     assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_lead_left_at_the_limit_by_a_failed_close_is_closed_by_the_next_call(
+    http, caller, monkeypatch
+):
+    """The fifth call was counted but the close failed: the lead must not be stuck."""
+    from app.modules.recruitment.service import intake_service
+
+    lead = await _lead(caller)
+    for _ in range(MAX_CALL_ATTEMPTS - 1):
+        await _call(http, lead)
+
+    real_reject = intake_service.reject_lead
+
+    async def failing_reject(*args, **kwargs):
+        raise RuntimeError("mongo hiccup")
+
+    monkeypatch.setattr(intake_service, "reject_lead", failing_reject)
+    res = await _call(http, lead, "fifth")
+    # The call happened and was logged, and the failed close is not a 500.
+    assert res.status_code == 200, res.text
+    assert res.json()["dead"] is False
+    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.pending_telecaller
+    assert await LeadCall.find({"lead_id": lead.id}).count() == MAX_CALL_ATTEMPTS
+
+    monkeypatch.setattr(intake_service, "reject_lead", real_reject)
+    retry = await _call(http, lead)
+
+    # Refused as it always was, but the lead is closed rather than stuck.
+    assert retry.status_code == 409
+    assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.rejected
+    assert await LeadCall.find({"lead_id": lead.id}).count() == MAX_CALL_ATTEMPTS
