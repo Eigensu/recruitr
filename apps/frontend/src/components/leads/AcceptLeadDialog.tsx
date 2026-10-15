@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { z } from "zod";
 import { IconLoader2, IconX } from "@tabler/icons-react";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
+import CvLinkButton from "@/components/leads/CvLinkButton";
 import {
   AgeField,
   AreaField,
@@ -401,6 +402,14 @@ export default function AcceptLeadDialog({
                 onChange={(cv_link) => update({ cv_link })}
                 error={errors.cv_link}
               />
+              {/* Here, not only on the card behind this dialog: the caller is
+                  mid-call with the form open and should not have to close it,
+                  find the card and come back to ask for a CV. */}
+              {!hasResume && (
+                <div className={full}>
+                  <CvLinkButton lead={lead} />
+                </div>
+              )}
               {hasResume && (
                 <p className={`-mt-2 text-xs text-text-muted ${full}`}>
                   They uploaded a resume with their application — it is already on file.

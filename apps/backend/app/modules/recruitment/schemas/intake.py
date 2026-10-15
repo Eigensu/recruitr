@@ -9,9 +9,11 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 
 from app.common.dtos.pagination import PaginationMeta
 from app.modules.recruitment.enums import (
+    MAX_CALL_ATTEMPTS,
     Department,
     EstablishmentTag,
     Gender,
+    IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
@@ -106,6 +108,12 @@ class IntakeLeadResponse(_UtcTimestamps):
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
     reassignment_count: int = 0
+    # Calls made so far and when the last one was, from the telecaller's log. The
+    # fifth unanswered call closes the lead, so `max_call_attempts` lets the card
+    # say "call 3 of 5" without the client hard-coding the limit.
+    call_attempts: int = 0
+    last_call_at: datetime | None = None
+    max_call_attempts: int = MAX_CALL_ATTEMPTS
     # When the latest CV upload link stops working, and when the candidate last
     # used one (service/cv_requests.py).
     cv_link_expires_at: datetime | None = None
@@ -231,6 +239,41 @@ class IntakeCandidateDraft(BaseModel):
 class IntakeAcceptRequest(BaseModel):
     details: IntakeCandidateDetails
     notes: str | None = Field(default=None, max_length=2000)
+
+
+class IntakeCallRequest(BaseModel):
+    """An unanswered call, with an optional note on how it went."""
+
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v: object) -> object:
+        # A note box left empty (or spaces) is no note, so the log never holds one.
+        if isinstance(v, str):
+            return v.strip() or None
+        return v
+
+
+class IntakeCallResponse(BaseModel):
+    id: str
+    lead_id: str
+    attempt: int
+    outcome: IntakeCallOutcome
+    note: str | None = None
+    at: datetime
+    telecaller_id: str
+    telecaller_name: str | None = None
+    # Filled on the management log, where rows from many leads are read together.
+    lead_name: str | None = None
+
+
+class IntakeLogCallResponse(BaseModel):
+    """The lead after the call, the call itself, and whether it closed the lead."""
+
+    lead: IntakeLeadResponse
+    call: IntakeCallResponse
+    dead: bool = False
 
 
 class IntakeRejectRequest(BaseModel):

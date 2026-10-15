@@ -63,12 +63,19 @@ from app.core.dependencies import (
 )
 from app.modules.auth.models import UserRole
 from app.modules.brands.service import get_automation_settings
-from app.modules.recruitment.enums import IntakeDecision, IntakeLeadStatus, IntakeSource
+from app.modules.recruitment.enums import (
+    IntakeCallOutcome,
+    IntakeDecision,
+    IntakeLeadStatus,
+    IntakeRejectReason,
+    IntakeSource,
+)
 from app.modules.recruitment.models import (
     Candidate,
     Employee,
     IntakeLead,
     IntakeSourceConfig,
+    LeadCall,
     Team,
 )
 from app.modules.recruitment.schemas import (
@@ -77,6 +84,8 @@ from app.modules.recruitment.schemas import (
     IntakeAssigneesResponse,
     IntakeAssignTeamRequest,
     IntakeAssignTeamResponse,
+    IntakeCallRequest,
+    IntakeCallResponse,
     IntakeCampaignResponse,
     IntakeCandidateDraft,
     IntakeConfigResponse,
@@ -84,6 +93,7 @@ from app.modules.recruitment.schemas import (
     IntakeCvLinkResponse,
     IntakeLeadPage,
     IntakeLeadResponse,
+    IntakeLogCallResponse,
     IntakeOverviewResponse,
     IntakePersonStats,
     IntakeReassignRequest,
@@ -113,10 +123,12 @@ from app.modules.recruitment.service.intake_service import (
     assignment_roster,
     ingest_leads,
     list_telecallers,
+    log_unanswered_call,
     plan_ingest,
     poll_google_sheet,
     provision_telecaller,
     reassign_lead,
+    record_decision_call,
     recruiter_accept_lead,
     recruiter_reject_lead,
     reject_lead,
@@ -270,6 +282,8 @@ def _to_response(
         recruiter_reject_reason=lead.recruiter_reject_reason,
         recruiter_notes=lead.recruiter_notes,
         reassignment_count=lead.reassignment_count,
+        call_attempts=lead.call_attempts,
+        last_call_at=lead.last_call_at,
         cv_link_expires_at=lead.cv_upload_expires_at,
         cv_uploaded_at=lead.cv_uploaded_at,
         cv_link=cv_link,
@@ -302,16 +316,23 @@ async def my_leads(
     include_actioned: Annotated[bool, Query()] = False,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ):
-    """The signed-in telecaller's queue, oldest assignment first.
+    """The signed-in telecaller's queue: leads already called first, then oldest.
 
-    Oldest first because the SLA is measured from assignment: working the list
-    top to bottom is then the same thing as working it in the order that keeps
-    people inside the day.
+    A lead that has been called and not answered leads the queue, the most-called
+    first, so the people closest to being written off get their next attempt
+    before fresh leads. Within a count it is oldest assignment first, because the
+    SLA is measured from assignment: working the list top to bottom is then the
+    same thing as working it in the order that keeps people inside the day.
     """
     match: dict = {"brand_id": tenant.brand_id, "telecaller_id": tenant.employee_id}
     if not include_actioned:
         match["status"] = IntakeLeadStatus.pending_telecaller.value
-    leads = await IntakeLead.find(match).sort("telecaller_assigned_at").limit(limit).to_list()
+    leads = (
+        await IntakeLead.find(match)
+        .sort([("call_attempts", -1), ("telecaller_assigned_at", 1)])
+        .limit(limit)
+        .to_list()
+    )
     candidates, _ = await intake_analytics.people_for(leads)
     now = datetime.now(UTC)
     return [
@@ -367,6 +388,7 @@ async def accept(tenant: _Telecaller, lead_id: str, payload: IntakeAcceptRequest
         await accept_lead(lead, details=payload.details, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
+    await _log_decision_call(tenant, lead, outcome=IntakeCallOutcome.connected, note=payload.notes)
     return await _fetch_response(lead, tenant)
 
 
@@ -381,7 +403,122 @@ async def reject(tenant: _Telecaller, lead_id: str, payload: IntakeRejectRequest
         await reject_lead(lead, reason=payload.reason, notes=payload.notes)
     except LeadAlreadyDecided:
         raise _already_decided() from None
+    # Turning someone away as unreachable is a call nobody answered; any other
+    # reason came out of a conversation.
+    outcome = (
+        IntakeCallOutcome.no_answer
+        if payload.reason == IntakeRejectReason.not_reachable
+        else IntakeCallOutcome.connected
+    )
+    await _log_decision_call(tenant, lead, outcome=outcome, note=payload.notes)
     return await _fetch_response(lead, tenant)
+
+
+# ── Calls ──────────────────────────────────────────────────────────────────────
+
+
+async def _log_decision_call(
+    tenant: TenantScope, lead: IntakeLead, *, outcome: IntakeCallOutcome, note: str | None
+) -> None:
+    """Log the call a decision ended, but only a telecaller's: a manager deciding
+    on someone's behalf did not make a call, and must not inflate that
+    telecaller's numbers (or their own)."""
+    if tenant.role == UserRole.telecaller:
+        await record_decision_call(
+            lead, telecaller_id=tenant.employee_id, outcome=outcome, note=note
+        )
+
+
+async def _call_responses(calls: list[LeadCall], *, names: bool) -> list[IntakeCallResponse]:
+    """Calls as the API shows them, with who made each and, on the management
+    log, who it was to. One lookup each for the lot rather than one per row."""
+    employees = {
+        e.id: e.name
+        for e in await Employee.find(
+            {"_id": {"$in": list({c.telecaller_id for c in calls})}}
+        ).to_list()
+    }
+    leads: dict = {}
+    if names:
+        candidates = {
+            c.id: c.full_name
+            for c in await Candidate.find(
+                {"_id": {"$in": list({c.candidate_id for c in calls})}}
+            ).to_list()
+        }
+        leads = {c.lead_id: candidates.get(c.candidate_id) for c in calls}
+    return [
+        IntakeCallResponse(
+            id=str(c.id),
+            lead_id=str(c.lead_id),
+            attempt=c.attempt,
+            outcome=c.outcome,
+            note=c.note,
+            at=c.at,
+            telecaller_id=str(c.telecaller_id),
+            telecaller_name=employees.get(c.telecaller_id),
+            lead_name=leads.get(c.lead_id),
+        )
+        for c in calls
+    ]
+
+
+@router.post("/leads/{lead_id}/calls", response_model=IntakeLogCallResponse)
+async def log_call(tenant: _Telecaller, lead_id: str, payload: IntakeCallRequest):
+    """Log a call nobody answered, with an optional note on how it went.
+
+    Five of these close the lead as unreachable. A call that was answered is not
+    logged here: accepting or rejecting the lead records it.
+    """
+    lead = await _lead_or_404(tenant, lead_id)
+    _own_lead_or_403(tenant, lead)
+    _pending_or_409(lead)
+    try:
+        call, dead = await log_unanswered_call(
+            lead, telecaller_id=tenant.employee_id, note=payload.note
+        )
+    except LeadAlreadyDecided:
+        raise _already_decided() from None
+    (response,) = await _call_responses([call], names=False)
+    return IntakeLogCallResponse(lead=await _fetch_response(lead, tenant), call=response, dead=dead)
+
+
+@router.get("/leads/{lead_id}/calls", response_model=list[IntakeCallResponse])
+async def lead_calls(tenant: _Telecaller, lead_id: str):
+    """The calls made to one lead, oldest first: a telecaller's own, any for management."""
+    lead = await _lead_or_404(tenant, lead_id)
+    _own_lead_or_403(tenant, lead)
+    calls = (
+        await LeadCall.find({"brand_id": tenant.brand_id, "lead_id": lead.id}).sort("at").to_list()
+    )
+    return await _call_responses(calls, names=False)
+
+
+@router.get("/calls", response_model=list[IntakeCallResponse], dependencies=[_RequireMaintainer])
+async def call_log(
+    tenant: _Staff,
+    telecaller_id: Annotated[str | None, Query()] = None,
+    start_date: _Since = None,
+    end_date: _Until = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+):
+    """Every telecaller's call log, newest first, for admins and maintainers.
+
+    Narrowed to one telecaller with `telecaller_id`, and to a date range. Each row
+    carries who called, whom, and the note they left.
+    """
+    match: dict = {"brand_id": tenant.brand_id}
+    if telecaller_id:
+        match["telecaller_id"] = to_object_id(telecaller_id, "telecaller_id")
+    when: dict = {}
+    if start_date:
+        when["$gte"] = start_date
+    if end_date:
+        when["$lte"] = end_date
+    if when:
+        match["at"] = when
+    calls = await LeadCall.find(match).sort("-at").limit(limit).to_list()
+    return await _call_responses(calls, names=True)
 
 
 # ── Review ─────────────────────────────────────────────────────────────────────

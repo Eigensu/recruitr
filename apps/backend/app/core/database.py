@@ -33,6 +33,7 @@ from app.modules.recruitment.models import (
     Employee,
     IntakeLead,
     IntakeSourceConfig,
+    LeadCall,
     Mapping,
     Notification,
     PaymentBatch,
@@ -223,6 +224,7 @@ async def init_db() -> None:
         Notification,
         IntakeLead,
         IntakeSourceConfig,
+        LeadCall,
         # Gamification
         RecruiterProfile,
         # Leaderboard

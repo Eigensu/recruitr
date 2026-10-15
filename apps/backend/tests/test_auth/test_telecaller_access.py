@@ -38,6 +38,8 @@ _ALLOWED_PATHS = {
     "/api/v1/intake/leads/mine",
     "/api/v1/intake/leads/{lead_id}/accept",
     "/api/v1/intake/leads/{lead_id}/reject",
+    # Logging an unanswered call, and reading the calls on their own lead.
+    "/api/v1/intake/leads/{lead_id}/calls",
     # The accept form: the candidate on their own lead, and the role dropdown.
     "/api/v1/intake/leads/{lead_id}/candidate",
     "/api/v1/intake/role-catalog",

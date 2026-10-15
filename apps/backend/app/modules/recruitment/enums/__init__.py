@@ -9,7 +9,9 @@ from app.modules.recruitment.enums.education_level import EducationLevel
 from app.modules.recruitment.enums.establishment_tag import EstablishmentTag
 from app.modules.recruitment.enums.gender import Gender
 from app.modules.recruitment.enums.intake import (
+    MAX_CALL_ATTEMPTS,
     OPEN_INTAKE_STATUSES,
+    IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
@@ -57,6 +59,8 @@ __all__ = [
     "IntakeSource",
     "IntakeLeadStatus",
     "OPEN_INTAKE_STATUSES",
+    "MAX_CALL_ATTEMPTS",
+    "IntakeCallOutcome",
     "IntakeDecision",
     "IntakeRejectReason",
 ]

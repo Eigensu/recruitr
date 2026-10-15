@@ -25,6 +25,7 @@ from app.modules.recruitment.enums import (
     EducationLevel,
     EstablishmentTag,
     Gender,
+    IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
@@ -858,6 +859,12 @@ class IntakeLead(Document):
     recruiter_reject_reason: IntakeRejectReason | None = None
     recruiter_notes: str | None = None
 
+    # Calls made to this lead, from the telecaller's log (LeadCall). The queue
+    # sorts on it so half-worked leads come first, and the fifth unanswered one
+    # closes the lead as unreachable. Denormalised: the log is the record.
+    call_attempts: int = 0
+    last_call_at: datetime | None = None
+
     # Reassignment restarts the SLA clock for the new owner, so this counts how
     # often that happened — otherwise a lead could be passed around indefinitely
     # and never appear overdue.
@@ -899,6 +906,33 @@ class IntakeLead(Document):
                 [("cv_upload_token_hash", 1)],
                 partialFilterExpression={"cv_upload_token_hash": {"$type": "string"}},
             ),
+        ]
+
+
+class LeadCall(Document):
+    """One call a telecaller made to a lead: the telecaller's activity log.
+
+    Permanent, like IntakeLead and CandidateEvent and unlike the 90-day
+    ActivityLog, which is the recruiters' feed and has no telecaller entries. It
+    is what the per-telecaller metrics count, so a call is one row whether or not
+    anyone picked up. `attempt` is the lead's call count after this one.
+    """
+
+    brand_id: PydanticObjectId
+    lead_id: PydanticObjectId  # FK → intake_leads._id
+    candidate_id: PydanticObjectId  # FK → candidates._id
+    telecaller_id: PydanticObjectId  # FK → employees._id: who made the call
+    attempt: int
+    outcome: IntakeCallOutcome
+    note: str | None = None
+    at: datetime = Field(default_factory=_utcnow)
+
+    class Settings:
+        name = "lead_calls"
+        indexes = [
+            IndexModel([("brand_id", 1), ("lead_id", 1), ("at", 1)]),
+            IndexModel([("brand_id", 1), ("telecaller_id", 1), ("at", -1)]),
+            IndexModel([("brand_id", 1), ("at", -1)]),
         ]
 
 

@@ -11,23 +11,26 @@ import LeadCard from "@/components/leads/LeadCard";
 import {
   acceptLead,
   fetchMyLeads,
+  logCall,
   rejectLead,
   type IntakeLead,
   type IntakeRejectReason,
 } from "@/lib/api/intake";
 
 /**
- * A telecaller's own queue: the people to ring, oldest assignment first.
+ * A telecaller's own queue: the people to ring, leads already called first.
  *
- * Oldest first is the server's ordering and is deliberately not re-sorted here
- * — the oldest lead is the closest to breaching, so working the list top to
- * bottom is the same thing as working it in the order that keeps people inside
- * the day.
+ * The order is the server's and is deliberately not re-sorted here: leads that
+ * have been tried and not answered come first, most-called first, then the
+ * oldest assignment — the closest to breaching — so working the list top to
+ * bottom keeps people inside the day and gives the nearly-dead leads their next
+ * attempt. A lead keeps its place on screen after a call is logged, rather than
+ * jumping out from under the cursor; it moves up the next time the queue loads.
  */
 function queueSummary(count: number): string {
   if (count === 0) return "Nothing waiting.";
   const people = count === 1 ? "person" : "people";
-  return `${count} ${people} to call, longest wait first.`;
+  return `${count} ${people} to call, leads already called first.`;
 }
 
 export default function TelecallerQueue() {
@@ -81,6 +84,21 @@ export default function TelecallerQueue() {
     }
   }
 
+  /** Log an unanswered call. The fifth closes the lead, which then leaves the list. */
+  async function handleCall(lead: IntakeLead, note: string) {
+    const result = await logCall(apiFetch, lead.id, note);
+    if (result.dead) {
+      setLeads((prev) => prev.filter((row) => row.id !== lead.id));
+      toast(
+        `${lead.full_name} closed as unreachable after ${result.lead.max_call_attempts} calls.`,
+        "success",
+      );
+      return;
+    }
+    setLeads((prev) => prev.map((row) => (row.id === lead.id ? result.lead : row)));
+    toast(`Call ${result.call.attempt} of ${result.lead.max_call_attempts} logged.`, "success");
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -129,6 +147,7 @@ export default function TelecallerQueue() {
                 key={lead.id}
                 lead={lead}
                 busy={busyId === lead.id}
+                onCall={(note) => handleCall(lead, note)}
                 onAccept={(notes) => setAccepting({ lead, notes })}
                 onReject={(reason: IntakeRejectReason | undefined, notes) =>
                   decide(
