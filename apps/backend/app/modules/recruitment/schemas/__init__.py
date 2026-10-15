@@ -65,6 +65,9 @@ from app.modules.recruitment.schemas.intake import (
     NaukriPreviewRow,
     NaukriSkippedRow,
     ResumeLeadDraft,
+    TelecallerReport,
+    TelecallerTargetResponse,
+    TelecallerTargetUpdate,
 )
 from app.modules.recruitment.schemas.pipeline import (
     PipelineBoard,
@@ -118,6 +121,9 @@ __all__ = [
     "IntakeTelecaller",
     "IntakeTelecallerCreate",
     "IntakeTelecallerUpdate",
+    "TelecallerReport",
+    "TelecallerTargetResponse",
+    "TelecallerTargetUpdate",
     "IntakeCampaignResponse",
     "IntakeCampaignRow",
     "IntakeConfigResponse",

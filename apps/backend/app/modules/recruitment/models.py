@@ -925,6 +925,10 @@ class LeadCall(Document):
     telecaller_id: PydanticObjectId  # FK → employees._id: who made the call
     attempt: int
     outcome: IntakeCallOutcome
+    # Set on the call that ended in the telecaller's accept or reject, so the log
+    # reads "accepted" / "rejected" at the moment it happened; None on an
+    # unanswered call.
+    decision: IntakeDecision | None = None
     note: str | None = None
     at: datetime = Field(default_factory=_utcnow)
 
@@ -964,6 +968,30 @@ class LeadNote(Document):
             IndexModel([("brand_id", 1), ("candidate_id", 1), ("created_at", 1)]),
             IndexModel([("brand_id", 1), ("author_id", 1), ("created_at", -1)]),
         ]
+
+
+class TelecallerTarget(Document):
+    """What an admin expects of one telecaller: calls per day and per week.
+
+    Optional each way, and one row per telecaller. The metrics report compares a
+    telecaller's calls in a period with the matching target. Nothing is enforced
+    by it; it is a yardstick, so an absent row or a null just means no target.
+    """
+
+    brand_id: PydanticObjectId
+    telecaller_id: PydanticObjectId  # FK → employees._id
+    daily_calls: int | None = None
+    weekly_calls: int | None = None
+    updated_by_id: PydanticObjectId | None = None
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    @before_event(Update, Replace)
+    def update_timestamp(self) -> None:
+        _touch(self)
+
+    class Settings:
+        name = "telecaller_targets"
+        indexes = [IndexModel([("brand_id", 1), ("telecaller_id", 1)], unique=True)]
 
 
 class IntakeSourceConfig(Document):

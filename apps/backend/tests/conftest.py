@@ -44,6 +44,7 @@ from app.modules.recruitment.models import (
     RefereeUser,
     ReferralRecord,
     Team,
+    TelecallerTarget,
 )
 
 
@@ -99,6 +100,7 @@ async def init_test_db(request) -> AsyncGenerator[None, None]:
             IntakeSourceConfig,
             LeadCall,
             LeadNote,
+            TelecallerTarget,
             # Gamification
             RecruiterProfile,
             # Leaderboard

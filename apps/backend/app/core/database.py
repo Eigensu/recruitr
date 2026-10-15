@@ -44,6 +44,7 @@ from app.modules.recruitment.models import (
     RefereeUser,
     ReferralRecord,
     Team,
+    TelecallerTarget,
 )
 
 # Module-level client reference for transaction access
@@ -227,6 +228,7 @@ async def init_db() -> None:
         IntakeSourceConfig,
         LeadCall,
         LeadNote,
+        TelecallerTarget,
         # Gamification
         RecruiterProfile,
         # Leaderboard

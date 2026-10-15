@@ -15,6 +15,7 @@ from app.modules.recruitment.enums import (
     MAX_CALL_ATTEMPTS,
     CandidateStatus,
     IntakeCallOutcome,
+    IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
 )
@@ -364,3 +365,37 @@ async def test_a_lead_left_at_the_limit_by_a_failed_close_is_closed_by_the_next_
     assert retry.status_code == 409
     assert (await IntakeLead.get(lead.id)).status == IntakeLeadStatus.rejected
     assert await LeadCall.find({"lead_id": lead.id}).count() == MAX_CALL_ATTEMPTS
+
+
+@pytest.mark.asyncio
+async def test_decision_calls_are_labelled_with_the_decision_and_unanswered_ones_are_not(
+    http, caller
+):
+    await make_staff(_BRAND, "recruiter", UserRole.employee)
+    boss = await make_staff(_BRAND, "boss", UserRole.maintainer)
+    accepted = await _lead(caller, name="Accepted")
+    rejected = await _lead(caller, name="Rejected")
+    unanswered = await _lead(caller, name="Unanswered")
+    headers = await auth_headers("caller")
+
+    await http.post(f"/api/v1/intake/leads/{accepted.id}/accept", json=ACCEPT, headers=headers)
+    await http.post(
+        f"/api/v1/intake/leads/{rejected.id}/reject",
+        json={"reason": "not_interested"},
+        headers=headers,
+    )
+    await _call(http, unanswered)
+
+    assert (await LeadCall.find_one({"lead_id": accepted.id})).decision == IntakeDecision.accept
+    assert (await LeadCall.find_one({"lead_id": rejected.id})).decision == IntakeDecision.reject
+    assert (await LeadCall.find_one({"lead_id": unanswered.id})).decision is None
+    # And the management log shows it, with the time, for each action.
+    log = await http.get("/api/v1/intake/calls", headers=await auth_headers("boss"))
+    by_lead = {row["lead_id"]: row["decision"] for row in log.json()}
+    assert boss.id is not None
+    assert by_lead == {
+        str(accepted.id): "accept",
+        str(rejected.id): "reject",
+        str(unanswered.id): None,
+    }
+    assert all(row["at"] for row in log.json())

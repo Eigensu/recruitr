@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
@@ -269,6 +270,80 @@ class IntakeNoteResponse(BaseModel):
     candidate_name: str | None = None
 
 
+class TelecallerDay(BaseModel):
+    """One telecaller's numbers for one day (an IST date)."""
+
+    date: str
+    calls: int = 0
+    unanswered: int = 0
+    connected: int = 0
+    forwarded: int = 0
+    rejected: int = 0
+    dead: int = 0
+
+
+class TelecallerReportRow(BaseModel):
+    """One telecaller over the report's period.
+
+    `calls` counts every call made, answered or not; `connected` and `unanswered`
+    split it. `forwarded` and `rejected` are the leads they decided in the
+    period, and `dead` the rejected ones that ran out of calls. `bad_lead_rate` is
+    rejected over decided, null when they decided nothing.
+    """
+
+    telecaller_id: str
+    telecaller_name: str
+    active: bool = True
+    calls: int = 0
+    unanswered: int = 0
+    connected: int = 0
+    forwarded: int = 0
+    rejected: int = 0
+    dead: int = 0
+    bad_lead_rate: float | None = None
+    notes_written: int = 0
+    # The calls target that applies to this period, and how far along they are;
+    # null when no target is set.
+    target_calls: int | None = None
+    target_pct: float | None = None
+    days: list[TelecallerDay] = Field(default_factory=list)
+
+
+class TelecallerReportTotals(BaseModel):
+    calls: int = 0
+    unanswered: int = 0
+    connected: int = 0
+    forwarded: int = 0
+    rejected: int = 0
+    dead: int = 0
+    bad_lead_rate: float | None = None
+    notes_written: int = 0
+
+
+class TelecallerReport(BaseModel):
+    period: Literal["day", "week", "range"]
+    # Inclusive IST dates the report covers.
+    start_date: date
+    end_date: date
+    rows: list[TelecallerReportRow]
+    totals: TelecallerReportTotals
+
+
+class TelecallerTargetResponse(BaseModel):
+    telecaller_id: str
+    telecaller_name: str
+    active: bool = True
+    daily_calls: int | None = None
+    weekly_calls: int | None = None
+
+
+class TelecallerTargetUpdate(BaseModel):
+    """Either target, or both: an omitted one is kept, null clears it."""
+
+    daily_calls: int | None = Field(default=None, ge=0, le=10_000)
+    weekly_calls: int | None = Field(default=None, ge=0, le=50_000)
+
+
 class IntakeCallRequest(BaseModel):
     """An unanswered call, with an optional note on how it went."""
 
@@ -288,6 +363,8 @@ class IntakeCallResponse(BaseModel):
     lead_id: str
     attempt: int
     outcome: IntakeCallOutcome
+    # Accept or reject when this call ended in the telecaller's decision.
+    decision: IntakeDecision | None = None
     note: str | None = None
     at: datetime
     telecaller_id: str

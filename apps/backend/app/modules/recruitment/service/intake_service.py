@@ -1353,6 +1353,7 @@ async def record_decision_call(
     *,
     telecaller_id: PydanticObjectId,
     outcome: IntakeCallOutcome,
+    decision: IntakeDecision,
     note: str | None = None,
     now: datetime | None = None,
 ) -> None:
@@ -1373,6 +1374,7 @@ async def record_decision_call(
             telecaller_id=telecaller_id,
             attempt=lead.call_attempts,
             outcome=outcome,
+            decision=decision,
             note=note,
             at=stamp,
         ).insert()
