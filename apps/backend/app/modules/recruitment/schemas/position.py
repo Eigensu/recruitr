@@ -170,13 +170,12 @@ class PositionCloseRequest(BaseModel):
 
     reason: str = Field(min_length=1, max_length=1000)
 
-    @field_validator("reason")
+    @field_validator("reason", mode="before")
     @classmethod
-    def _not_blank(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("A reason is required to close a position")
-        return v
+    def _trimmed(cls, v: object) -> object:
+        # Before the length checks, so padding can't push a fitting reason over
+        # max_length and a blank one fails min_length like an empty one.
+        return v.strip() if isinstance(v, str) else v
 
 
 class PositionApprovalRequest(BaseModel):

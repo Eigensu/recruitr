@@ -366,7 +366,10 @@ function PositionCard({
             await onClosePosition?.(position.id, closeReason.trim());
             setCloseReason("");
           }}
-          onClose={() => setCloseOpen(false)}
+          onClose={() => {
+            setCloseOpen(false);
+            setCloseReason("");
+          }}
         />
       </div>
       {confirmDelete && (

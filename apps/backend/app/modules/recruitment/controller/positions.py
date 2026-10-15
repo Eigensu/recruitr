@@ -533,8 +533,9 @@ async def update_position(
         )
     if "total_seats" in update:
         update["remaining_seats"] = max(update["total_seats"] - (doc.filled_seats or 0), 0)
-    if update.get("status") == PositionStatus.open:
-        # Reopening by PATCH must not leave the last closure's reason behind.
+    if "status" in update:
+        # PATCH can't close (the schema refuses it), so any status it sets leaves
+        # the closed state and must not keep the last closure's reason behind.
         update.update(close_reason=None, closed_at=None, closed_by_id=None)
 
     if update:

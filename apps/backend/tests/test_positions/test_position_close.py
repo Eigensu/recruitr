@@ -122,3 +122,20 @@ async def test_reopening_clears_the_closure(api, position):
     stored = await Position.get(position.id)
     assert stored.status == PositionStatus.open
     assert (stored.close_reason, stored.closed_at, stored.closed_by_id) == (None, None, None)
+
+
+async def test_any_patch_status_change_clears_the_closure(api, position):
+    await api.post(f"{_URL}/{position.id}/close", json={"reason": "Paused by client"})
+
+    res = await api.patch(f"{_URL}/{position.id}", json={"status": "on_hold"})
+
+    assert res.status_code == 200, res.text
+    stored = await Position.get(position.id)
+    assert stored.status == PositionStatus.on_hold
+    assert (stored.close_reason, stored.closed_at, stored.closed_by_id) == (None, None, None)
+
+
+async def test_a_padded_reason_that_fits_once_trimmed_is_accepted(api, position):
+    res = await api.post(f"{_URL}/{position.id}/close", json={"reason": f"  {'x' * 1000}  "})
+
+    assert res.status_code == 200, res.text
