@@ -14,6 +14,7 @@ from app.modules.recruitment.enums.intake import (
     IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
+    IntakeNoteStage,
     IntakeRejectReason,
     IntakeSource,
 )
@@ -62,5 +63,6 @@ __all__ = [
     "MAX_CALL_ATTEMPTS",
     "IntakeCallOutcome",
     "IntakeDecision",
+    "IntakeNoteStage",
     "IntakeRejectReason",
 ]

@@ -279,6 +279,36 @@ export function acceptLead(
   });
 }
 
+export type IntakeNoteStage = "telecaller" | "review" | "recruiter";
+
+/** One screening note: who wrote it, at which stage, and when. Append-only. */
+export interface IntakeNote {
+  id: string;
+  lead_id: string;
+  candidate_id: string;
+  stage: IntakeNoteStage;
+  body: string;
+  author_id: string;
+  author_name: string | null;
+  author_role: string | null;
+  created_at: string;
+  /** Filled on the management log only. */
+  candidate_name: string | null;
+}
+
+/** Save a note on a lead, stamped with its author and the stage the lead is at. */
+export function addLeadNote(apiFetch: ApiFetch, id: string, body: string): Promise<IntakeNote> {
+  return apiFetch<IntakeNote>(`/api/v1/intake/leads/${id}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+/** A lead's notes, oldest first, as far as the caller may read them. */
+export function fetchLeadNotes(apiFetch: ApiFetch, id: string): Promise<IntakeNote[]> {
+  return apiFetch<IntakeNote[]>(`/api/v1/intake/leads/${id}/notes`);
+}
+
 /** One call a telecaller made to a lead. */
 export interface IntakeCall {
   id: string;

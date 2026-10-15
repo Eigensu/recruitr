@@ -28,6 +28,7 @@ from app.modules.recruitment.enums import (
     IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
+    IntakeNoteStage,
     IntakeRejectReason,
     IntakeSource,
     NotificationKind,
@@ -933,6 +934,35 @@ class LeadCall(Document):
             IndexModel([("brand_id", 1), ("lead_id", 1), ("at", 1)]),
             IndexModel([("brand_id", 1), ("telecaller_id", 1), ("at", -1)]),
             IndexModel([("brand_id", 1), ("at", -1)]),
+        ]
+
+
+class LeadNote(Document):
+    """One screening note someone wrote about a lead, at their own stage.
+
+    Append-only and permanent: there is no edit and no delete, which is what
+    makes it an access log. Together the rows answer "what did each person who
+    screened this candidate think, and when", before anyone has spoken to them.
+    The author's name and role are snapshotted, so the history still reads right
+    after someone is renamed, changes role or leaves.
+    """
+
+    brand_id: PydanticObjectId
+    lead_id: PydanticObjectId  # FK → intake_leads._id
+    candidate_id: PydanticObjectId  # FK → candidates._id
+    stage: IntakeNoteStage
+    body: str
+    author_id: PydanticObjectId  # FK → employees._id
+    author_name: str | None = None
+    author_role: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+
+    class Settings:
+        name = "lead_notes"
+        indexes = [
+            IndexModel([("brand_id", 1), ("lead_id", 1), ("created_at", 1)]),
+            IndexModel([("brand_id", 1), ("candidate_id", 1), ("created_at", 1)]),
+            IndexModel([("brand_id", 1), ("author_id", 1), ("created_at", -1)]),
         ]
 
 

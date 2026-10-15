@@ -15,6 +15,7 @@ import {
 } from "@tabler/icons-react";
 import CvLinkButton, { needsCv } from "@/components/leads/CvLinkButton";
 import LeadCvLink from "@/components/leads/LeadCvLink";
+import LeadNotes from "@/components/leads/LeadNotes";
 import { cn } from "@/lib/utils";
 import {
   REJECT_REASON_LABELS,
@@ -139,6 +140,8 @@ export default function ReviewLeadCard({
           {lead.telecaller_notes}
         </p>
       )}
+
+      <LeadNotes leadId={lead.id} />
 
       <div className="mt-auto">
         {rejecting ? (

@@ -67,6 +67,19 @@ class IntakeCallOutcome(StrEnum):
     connected = "connected"  # a person answered, and the call ended in a decision
 
 
+class IntakeNoteStage(StrEnum):
+    """Whose stage of the journey a screening note belongs to.
+
+    Fixed when the note is written, from where the lead is then, and never
+    recomputed: the point of the log is what each person knew and wrote at their
+    own step, even after the lead has moved on.
+    """
+
+    telecaller = "telecaller"  # while a telecaller is screening it (or rejected it)
+    review = "review"  # waiting for an admin or maintainer to hand it to a team
+    recruiter = "recruiter"  # with the recruiter, and after
+
+
 class IntakeRejectReason(StrEnum):
     """Why a telecaller turned a lead away.
 

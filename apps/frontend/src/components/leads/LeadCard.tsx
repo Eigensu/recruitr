@@ -18,6 +18,7 @@ import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
 import CvLinkButton, { needsCv } from "@/components/leads/CvLinkButton";
 import LeadCvLink from "@/components/leads/LeadCvLink";
+import LeadNotes from "@/components/leads/LeadNotes";
 import { cn } from "@/lib/utils";
 import {
   REJECT_REASON_LABELS,
@@ -234,6 +235,8 @@ export default function LeadCard({
       )}
 
       <CallHistory lead={lead} />
+
+      <LeadNotes leadId={lead.id} />
 
       {noAnswer && (
         <div className="mt-3 rounded-lg border border-border bg-canvas p-3">

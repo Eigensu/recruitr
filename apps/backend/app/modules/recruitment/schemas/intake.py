@@ -16,6 +16,7 @@ from app.modules.recruitment.enums import (
     IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
+    IntakeNoteStage,
     IntakeRejectReason,
     IntakeSource,
 )
@@ -239,6 +240,33 @@ class IntakeCandidateDraft(BaseModel):
 class IntakeAcceptRequest(BaseModel):
     details: IntakeCandidateDetails
     notes: str | None = Field(default=None, max_length=2000)
+
+
+class IntakeNoteCreate(BaseModel):
+    """A screening note. Whitespace around it is trimmed, and blank is refused."""
+
+    body: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def _trimmed(cls, v: object) -> object:
+        # Before the length checks, so padding can't push a fitting note over the
+        # limit and a blank one fails min_length like an empty one.
+        return v.strip() if isinstance(v, str) else v
+
+
+class IntakeNoteResponse(BaseModel):
+    id: str
+    lead_id: str
+    candidate_id: str
+    stage: IntakeNoteStage
+    body: str
+    author_id: str
+    author_name: str | None = None
+    author_role: str | None = None
+    created_at: datetime
+    # Filled on the management log, where notes from many leads are read together.
+    candidate_name: str | None = None
 
 
 class IntakeCallRequest(BaseModel):
