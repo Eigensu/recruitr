@@ -167,6 +167,20 @@ lead, a telecaller only their own stage's notes on their own lead. `GET /candida
 (staff, not telecallers) is the same history across all of a candidate's leads, for the profile, and
 `GET /intake/notes` (maintainer+) is the all-people log filterable by author, stage and date.
 
+**Telecaller metrics.** `GET /intake/telecaller-report` (maintainer+; `service/telecaller_metrics.py`) is
+each telecaller's calls (answered or not), forwarded, rejected and *dead* leads, bad-lead rate, notes
+written and progress against their calls target, for a day, a Monday-to-Sunday week or a range
+(`period=day|week|range`; dates that do not belong to the period are a 422, not ignored). Days are cut
+in **IST** — a fixed `+05:30`, since India has no DST — and rows carry a per-day breakdown. Forwarded and
+rejected are counted from the call each decision ended (`LeadCall.decision`), so a manager deciding on a
+telecaller's behalf is not credited to them; managers cannot log calls for the same reason. *Dead* is
+only `IntakeLead.closed_unreachable` — the call limit's own close — never a telecaller's own
+"not reachable" reject, which is a rejected lead counted once. `bad_lead_rate` is
+(rejected + dead) / (forwarded + rejected + dead). Targets are `TelecallerTarget` (daily and weekly calls,
+one row per telecaller, changed independently by `PUT /intake/telecaller-targets/{id}`); a yardstick, never
+enforced. Aggregations go through `telecaller_metrics._aggregate`, because the async driver's `aggregate`
+is a coroutine and Beanie's `.aggregate().to_list()` fails on it.
+
 **CV upload links.** Most leads arrive with no CV (Meta's lead-ad form does not ask), so whoever
 holds a lead can make a 7-day link and send it to the candidate themselves. The candidate uploads
 at `/cv/{token}` with no account; the file is merged like a staff upload, shows on the Review card

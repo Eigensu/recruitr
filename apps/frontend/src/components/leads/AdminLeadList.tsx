@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   IconAlertTriangle,
   IconChartBar,
+  IconPhoneCall,
   IconChevronLeft,
   IconChevronRight,
   IconFileSpreadsheet,
@@ -207,6 +208,13 @@ export default function AdminLeadList({ isAdmin }: { readonly isAdmin: boolean }
           >
             <IconChartBar className="size-4" />
             Analytics
+          </Link>
+          <Link
+            href="/leads/telecallers"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary"
+          >
+            <IconPhoneCall className="size-4" />
+            Telecaller metrics
           </Link>
           {isAdmin && (
             <button
