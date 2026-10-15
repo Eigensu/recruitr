@@ -865,6 +865,10 @@ class IntakeLead(Document):
     # closes the lead as unreachable. Denormalised: the log is the record.
     call_attempts: int = 0
     last_call_at: datetime | None = None
+    # True only when the system closed the lead because its calls ran out. A
+    # telecaller who rejects as "not reachable" by choice is a judgement, and
+    # stays False, so the two are never counted as one lead.
+    closed_unreachable: bool = False
 
     # Reassignment restarts the SLA clock for the new owner, so this counts how
     # often that happened — otherwise a lead could be passed around indefinitely

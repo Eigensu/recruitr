@@ -286,9 +286,11 @@ class TelecallerReportRow(BaseModel):
     """One telecaller over the report's period.
 
     `calls` counts every call made, answered or not; `connected` and `unanswered`
-    split it. `forwarded` and `rejected` are the leads they decided in the
-    period, and `dead` the rejected ones that ran out of calls. `bad_lead_rate` is
-    rejected over decided, null when they decided nothing.
+    split it. `forwarded` and `rejected` are the accepts and rejects they made;
+    `dead` is leads closed because their calls ran out, which nobody judged and
+    which are not in `rejected`. `bad_lead_rate` is (rejected + dead) over
+    (forwarded + rejected + dead), as a fraction (0.4 is 40%), null when they
+    finished with none.
     """
 
     telecaller_id: str
@@ -302,8 +304,8 @@ class TelecallerReportRow(BaseModel):
     dead: int = 0
     bad_lead_rate: float | None = None
     notes_written: int = 0
-    # The calls target that applies to this period, and how far along they are;
-    # null when no target is set.
+    # The calls target that applies to this period, and how far along they are as
+    # a fraction of it (0.5 is half way); null when no target is set.
     target_calls: int | None = None
     target_pct: float | None = None
     days: list[TelecallerDay] = Field(default_factory=list)

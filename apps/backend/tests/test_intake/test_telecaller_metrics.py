@@ -74,6 +74,7 @@ async def _lead(
     decision: IntakeDecision | None = None,
     reason: IntakeRejectReason | None = None,
     actioned_at: datetime | None = None,
+    closed_unreachable: bool = False,
 ) -> IntakeLead:
     candidate = Candidate(
         brand_id=_BRAND, full_name="Asha Rao", phone="9876543210", status=CandidateStatus.pending
@@ -90,6 +91,7 @@ async def _lead(
         telecaller_decision=decision,
         telecaller_reject_reason=reason,
         telecaller_actioned_at=actioned_at,
+        closed_unreachable=closed_unreachable,
     ).insert()
 
 
@@ -168,6 +170,7 @@ async def test_leads_closed_as_unreachable_are_dead_and_count_as_bad_leads(http,
         decision=IntakeDecision.reject,
         reason=IntakeRejectReason.not_reachable,
         actioned_at=_utc(14, 9),
+        closed_unreachable=True,
     )
     # Rejected as unreachable by choice, before the calls ran out: not dead.
     await _lead(
@@ -184,6 +187,41 @@ async def test_leads_closed_as_unreachable_are_dead_and_count_as_bad_leads(http,
     assert (row["forwarded"], row["rejected"], row["dead"]) == (3, 1, 1)
     # 1 rejected + 1 dead of 5 finished.
     assert row["bad_lead_rate"] == pytest.approx(0.4)
+
+
+@pytest.mark.asyncio
+async def test_a_manual_unreachable_reject_is_one_rejected_lead_never_also_dead(http, ann, boss):
+    """Rejecting as "not reachable" on the way to the limit is a telecaller's own
+    call: the decision call brings the count to 5, but the lead was not closed by it."""
+    lead = await _lead(ann, attempts=4)
+    headers = await auth_headers("ann")
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/reject", json={"reason": "not_reachable"}, headers=headers
+    )
+
+    assert res.status_code == 200, res.text
+    assert (await IntakeLead.get(lead.id)).call_attempts == MAX_CALL_ATTEMPTS
+    today = telecaller_metrics.today_ist().isoformat()
+    row = _row((await _report(http, {"date": today})).json(), "ann")
+    assert (row["rejected"], row["dead"]) == (1, 0)
+    assert row["bad_lead_rate"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_a_lead_the_call_limit_closes_is_dead_and_not_also_rejected(http, ann, boss):
+    lead = await _lead(ann)
+    headers = await auth_headers("ann")
+    for _ in range(MAX_CALL_ATTEMPTS):
+        await http.post(f"/api/v1/intake/leads/{lead.id}/calls", json={}, headers=headers)
+
+    today = telecaller_metrics.today_ist().isoformat()
+    row = _row((await _report(http, {"date": today})).json(), "ann")
+
+    assert (row["calls"], row["unanswered"]) == (MAX_CALL_ATTEMPTS, MAX_CALL_ATTEMPTS)
+    assert (row["rejected"], row["dead"], row["forwarded"]) == (0, 1, 0)
+    assert row["bad_lead_rate"] == 1.0
+    assert (await IntakeLead.get(lead.id)).closed_unreachable is True
 
 
 @pytest.mark.asyncio

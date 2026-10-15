@@ -399,3 +399,16 @@ async def test_decision_calls_are_labelled_with_the_decision_and_unanswered_ones
         str(unanswered.id): None,
     }
     assert all(row["at"] for row in log.json())
+
+
+@pytest.mark.asyncio
+async def test_a_manager_cannot_log_a_call(http, caller):
+    """Calls are the telecaller's: a manager's would appear in the report as theirs."""
+    await make_staff(_BRAND, "boss", UserRole.maintainer)
+    lead = await _lead(caller)
+
+    res = await _call(http, lead, "from the manager", who="boss")
+
+    assert res.status_code == 403
+    assert await LeadCall.find({"lead_id": lead.id}).count() == 0
+    assert (await IntakeLead.get(lead.id)).call_attempts == 0

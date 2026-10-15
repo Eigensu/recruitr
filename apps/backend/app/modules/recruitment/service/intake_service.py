@@ -1211,8 +1211,12 @@ async def reject_lead(
     reason: IntakeRejectReason | None = None,
     notes: str | None = None,
     now: datetime | None = None,
+    closed_unreachable: bool = False,
 ) -> IntakeLead:
     """Telecaller rejected: mark the candidate REJECTED and soft-delete them.
+
+    `closed_unreachable` marks the close the call limit forces (log_unanswered_call),
+    as opposed to a telecaller's own reject, so the metrics can tell them apart.
 
     is_active=False takes them out of every list in the app. The lead itself is
     kept, which is what keeps "what are we rejecting, and why" answerable in the
@@ -1230,6 +1234,7 @@ async def reject_lead(
             "telecaller_reject_reason": reason,
             "telecaller_notes": notes,
             "telecaller_response_seconds": _elapsed_seconds(lead.telecaller_assigned_at, stamp),
+            "closed_unreachable": closed_unreachable,
             "updated_at": stamp,
         },
     )
@@ -1289,6 +1294,7 @@ async def _close_as_unreachable(lead: IntakeLead, now: datetime) -> bool:
             reason=IntakeRejectReason.not_reachable,
             notes=f"Not reached after {MAX_CALL_ATTEMPTS} calls",
             now=now,
+            closed_unreachable=True,
         )
     except LeadAlreadyDecided:
         # A manager decided it between the call and the close; theirs stands.
@@ -1321,7 +1327,10 @@ async def log_unanswered_call(
             and fresh.status == IntakeLeadStatus.pending_telecaller
             and fresh.call_attempts >= MAX_CALL_ATTEMPTS
         ):
-            await _close_as_unreachable(lead, stamp)
+            try:
+                await _close_as_unreachable(lead, stamp)
+            except Exception:
+                logger.exception("Could not finish closing lead %s at the call limit", lead.id)
         raise LeadAlreadyDecided(str(lead.id))
     call = LeadCall(
         brand_id=lead.brand_id,

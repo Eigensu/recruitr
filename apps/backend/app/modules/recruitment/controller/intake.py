@@ -501,6 +501,13 @@ async def log_call(tenant: _Telecaller, lead_id: str, payload: IntakeCallRequest
     Five of these close the lead as unreachable. A call that was answered is not
     logged here: accepting or rejecting the lead records it.
     """
+    # Calls are the telecaller's: the log is what their numbers are read from, and
+    # five of them close the lead. A manager who rang someone is not that
+    # telecaller, and must not appear as one in the report.
+    if tenant.role != UserRole.telecaller:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the telecaller on a lead logs its calls."
+        )
     lead = await _lead_or_404(tenant, lead_id)
     _own_lead_or_403(tenant, lead)
     _pending_or_409(lead)

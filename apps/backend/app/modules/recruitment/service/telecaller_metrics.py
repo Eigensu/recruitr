@@ -31,11 +31,7 @@ from beanie import PydanticObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.modules.auth.models import UserRole
-from app.modules.recruitment.enums import (
-    MAX_CALL_ATTEMPTS,
-    IntakeDecision,
-    IntakeRejectReason,
-)
+from app.modules.recruitment.enums import IntakeDecision
 from app.modules.recruitment.models import (
     Employee,
     IntakeLead,
@@ -170,9 +166,9 @@ async def _dead_leads(
     """
     match: dict[str, Any] = {
         "brand_id": brand_id,
-        "telecaller_decision": IntakeDecision.reject.value,
-        "telecaller_reject_reason": IntakeRejectReason.not_reachable.value,
-        "call_attempts": {"$gte": MAX_CALL_ATTEMPTS},
+        # Set only by the call limit's own close, never by a telecaller rejecting
+        # as "not reachable": that one is a rejected lead, counted once, there.
+        "closed_unreachable": True,
         "telecaller_actioned_at": {"$gte": start, "$lt": end},
         "telecaller_id": {"$ne": None},
     }
