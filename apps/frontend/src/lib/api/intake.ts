@@ -242,8 +242,8 @@ export interface IntakeCandidateDetails {
   area?: string;
   gender: "male" | "female" | "other";
   age?: number;
-  expected_salary: number;
-  /** Omitted keeps the salary on file; null clears it. */
+  /** Omitted keeps the salary on file; null clears it. Same for `salary`. */
+  expected_salary?: number | null;
   salary?: number | null;
   notice_period: string;
   cv_link?: string;

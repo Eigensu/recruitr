@@ -164,6 +164,63 @@ async def test_clearing_the_current_salary_removes_it(http, caller):
 
 
 @pytest.mark.asyncio
+async def test_accepting_without_either_salary_goes_through(http, caller):
+    lead = await _lead(telecaller=caller)
+    details = {k: v for k, v in DETAILS.items() if k not in ("salary", "expected_salary")}
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": details},
+        headers=await auth_headers("caller"),
+    )
+
+    assert res.status_code == 200, res.text
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.salary is None
+    assert stored.expected_salary is None
+
+
+@pytest.mark.asyncio
+async def test_clearing_the_expected_salary_removes_it(http, caller):
+    lead = await _lead(telecaller=caller)
+    candidate = await Candidate.get(lead.candidate_id)
+    await candidate.set({"expected_salary": 40000})
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": {**DETAILS, "expected_salary": None}},
+        headers=await auth_headers("caller"),
+    )
+
+    assert res.status_code == 200, res.text
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.expected_salary is None
+    assert stored.salary == 360000
+    assert stored.salary_period == "monthly"
+
+
+@pytest.mark.asyncio
+async def test_an_unmarked_expected_salary_kept_from_before_is_not_relabelled(http, caller):
+    lead = await _lead(telecaller=caller)
+    candidate = await Candidate.get(lead.candidate_id)
+    # Set after the insert, so unmarked: a row from before the per-month convention.
+    await candidate.set({"expected_salary": 480000})
+    details = {k: v for k, v in DETAILS.items() if k != "expected_salary"}
+
+    res = await http.post(
+        f"/api/v1/intake/leads/{lead.id}/accept",
+        json={"details": details},
+        headers=await auth_headers("caller"),
+    )
+
+    assert res.status_code == 200, res.text
+    stored = await Candidate.get(lead.candidate_id)
+    assert stored.expected_salary == 480000
+    # Nobody re-entered it, so it must not be relabelled as monthly.
+    assert stored.salary_period is None
+
+
+@pytest.mark.asyncio
 async def test_accept_requires_the_form(http, caller):
     lead = await _lead(telecaller=caller)
     incomplete = {key: value for key, value in DETAILS.items() if key != "notice_period"}

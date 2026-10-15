@@ -25,6 +25,7 @@ import {
   fetchIntakeRoleCatalog,
   fetchLeadCandidate,
   type IntakeCandidateDetails,
+  type IntakeCandidateDraft,
   type IntakeLead,
 } from "@/lib/api/intake";
 
@@ -34,7 +35,7 @@ import {
  * The same required fields as adding a candidate by hand, minus brand
  * experience — the recruiter's to fill, since they are the one placing the
  * person with a brand — and with the CV link optional, because a lead from an
- * ad usually has no CV to link, and current salary optional, because plenty of
+ * ad usually has no CV to link, and both salaries optional, because plenty of
  * leads won't say or have none. The backend enforces the same rules
  * (`IntakeCandidateDetails`); this copy exists so a missing field is caught
  * before the round trip, on a handset, next to the field itself.
@@ -66,7 +67,10 @@ const schema = z.object({
     blankToUndefined,
     z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
   ),
-  expected_salary: numberFrom("Expected Salary is required"),
+  expected_salary: z.preprocess(
+    blankToUndefined,
+    z.number().min(0, "Must be 0 or more").optional(),
+  ),
   salary: z.preprocess(blankToUndefined, z.number().min(0, "Must be 0 or more").optional()),
   notice_period: z.string().min(1, "Notice Period is required"),
   cv_link: z
@@ -103,6 +107,15 @@ const str = (v: string | number | null | undefined): string =>
 /** Only what the form must not contain drops out of an optional field. */
 const orUndefined = (v: string | undefined) => (v ? v : undefined);
 
+/**
+ * A salary as the accept request carries it: omitted when it is still the
+ * figure on file, null when the telecaller cleared it, otherwise what they
+ * entered. Omitting an untouched one is what keeps the backend from stamping
+ * a figure from before the per-month convention as monthly.
+ */
+const salaryChange = (entered: number | undefined, onFile: number | null) =>
+  entered === (onFile ?? undefined) ? undefined : (entered ?? null);
+
 export default function AcceptLeadDialog({
   lead,
   initialNotes = "",
@@ -118,6 +131,10 @@ export default function AcceptLeadDialog({
 }) {
   const apiFetch = useApiFetch();
   const [form, setForm] = useState<FormState | null>(null);
+  const [onFile, setOnFile] = useState<Pick<IntakeCandidateDraft, "salary" | "expected_salary">>({
+    salary: null,
+    expected_salary: null,
+  });
   const [roleCatalog, setRoleCatalog] = useState<Record<string, string[]>>({});
   const [catalogFailed, setCatalogFailed] = useState(false);
   const [hasResume, setHasResume] = useState(false);
@@ -143,6 +160,7 @@ export default function AcceptLeadDialog({
         setRoleCatalog(catalog ?? {});
         setCatalogFailed(catalog === null);
         setHasResume(draft.has_resume);
+        setOnFile({ salary: draft.salary, expected_salary: draft.expected_salary });
         setForm({
           full_name: str(draft.full_name),
           email: str(draft.email),
@@ -211,9 +229,10 @@ export default function AcceptLeadDialog({
           establishment_tag: orUndefined(data.establishment_tag),
           area: orUndefined(data.area),
           cv_link: orUndefined(data.cv_link),
-          // The field starts from the salary on file, so a blank one was
-          // cleared on purpose. Null says so; omitting it would keep the old one.
-          salary: data.salary ?? null,
+          // The fields start from the salaries on file, so a blank one was
+          // cleared on purpose and an unchanged one was left alone.
+          salary: salaryChange(data.salary, onFile.salary),
+          expected_salary: salaryChange(data.expected_salary, onFile.expected_salary),
         },
         form.notes,
       );
@@ -371,6 +390,7 @@ export default function AcceptLeadDialog({
                 error={errors.salary}
               />
               <ExpectedSalaryField
+                required={false}
                 value={form.expected_salary}
                 onChange={(expected_salary) => update({ expected_salary })}
                 error={errors.expected_salary}

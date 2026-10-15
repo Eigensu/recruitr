@@ -308,12 +308,13 @@ export function EducationField(
   return <SelectField label="Highest Education *" options={EDUCATION_LEVELS} {...props} />;
 }
 
-export function ExpectedSalaryField(
-  props: Readonly<{ value: string; onChange: (v: string) => void; error?: string }>,
-) {
+export function ExpectedSalaryField({
+  required = true,
+  ...props
+}: Readonly<{ value: string; onChange: (v: string) => void; error?: string; required?: boolean }>) {
   return (
     <TextField
-      label="Expected Salary (₹/month) *"
+      label={`Expected Salary (₹/month)${required ? " *" : ""}`}
       type="number"
       min="0"
       placeholder="e.g. 35000"
