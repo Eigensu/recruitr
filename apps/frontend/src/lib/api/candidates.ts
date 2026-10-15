@@ -6,6 +6,7 @@ import type {
   PaginatedResponse,
   PipelineStage,
 } from "@/types";
+import type { IntakeNote } from "@/lib/api/intake";
 
 /**
  * Resolves a candidate's best CV reference.
@@ -185,6 +186,11 @@ export function updateCandidate(
 
 export function getCandidateHistory(apiFetch: ApiFetch, id: string): Promise<ApiCandidateHistory> {
   return apiFetch(`/api/v1/candidates/${id}/history`);
+}
+
+/** What each person who screened this candidate wrote, telecaller to recruiter. */
+export function getScreeningNotes(apiFetch: ApiFetch, id: string): Promise<IntakeNote[]> {
+  return apiFetch(`/api/v1/candidates/${id}/screening-notes`);
 }
 
 export function getCandidateMappings(

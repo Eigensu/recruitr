@@ -155,6 +155,18 @@ lead the queue. `GET /intake/calls` (maintainer+) is the all-telecallers log, fi
 and date. Leads from before the field existed have no `call_attempts` in Mongo, so the count guard
 accepts a missing field as zero.
 
+**Screening notes.** `LeadNote` is a permanent, append-only log (no edit, no delete) of what each
+person wrote about a lead at their own step — `service/lead_notes.py`. `POST /intake/leads/{id}/notes`
+stamps the note with its author (name and role snapshotted) and the *stage the lead is at*
+(`telecaller` / `review` / `recruiter`, from `lead_notes.stage_for`; fixed at write time, never
+recomputed). Who may write: the telecaller who holds the lead while it is `pending_telecaller`, the
+recruiter who holds it while `pending_recruiter` or after its first mapping (`actioned`), management
+at any stage — and only management at `pending_review`, which belongs to whoever hands it to a team.
+Who may read (`GET /leads/{id}/notes`): management everything, a recruiter everything on their own
+lead, a telecaller only their own stage's notes on their own lead. `GET /candidates/{id}/screening-notes`
+(staff, not telecallers) is the same history across all of a candidate's leads, for the profile, and
+`GET /intake/notes` (maintainer+) is the all-people log filterable by author, stage and date.
+
 **CV upload links.** Most leads arrive with no CV (Meta's lead-ad form does not ask), so whoever
 holds a lead can make a 7-day link and send it to the candidate themselves. The candidate uploads
 at `/cv/{token}` with no account; the file is merged like a staff upload, shows on the Review card

@@ -34,6 +34,7 @@ from app.modules.recruitment.models import (
     IntakeLead,
     IntakeSourceConfig,
     LeadCall,
+    LeadNote,
     Mapping,
     Notification,
     PaymentBatch,
@@ -97,6 +98,7 @@ async def init_test_db(request) -> AsyncGenerator[None, None]:
             IntakeLead,
             IntakeSourceConfig,
             LeadCall,
+            LeadNote,
             # Gamification
             RecruiterProfile,
             # Leaderboard

@@ -56,9 +56,11 @@ from app.modules.recruitment.schemas import (
     CandidateResponse,
     CandidateUpdate,
     ExperienceFilter,
+    IntakeNoteResponse,
     ResumeConfirm,
     TenantScope,
 )
+from app.modules.recruitment.service import lead_notes
 from app.modules.recruitment.service.intake_service import open_lead_for
 from app.modules.recruitment.utils.constants import RESUME_BATCH_MAX_FILES, RESUME_MAX_BYTES
 from app.modules.recruitment.utils.cv_access import can_view_cv, mask_cv_rows
@@ -1110,6 +1112,20 @@ async def get_candidate_history(tenant: _Tenant, candidate_id: str) -> Candidate
     placements.sort(key=lambda p: p.at, reverse=True)
 
     return CandidateHistoryResponse(events=events, placements=placements)
+
+
+@router.get("/{candidate_id}/screening-notes", response_model=list[IntakeNoteResponse])
+async def get_screening_notes(tenant: _Tenant, candidate_id: str):
+    """What each person who screened this candidate wrote, oldest first.
+
+    The telecaller's, the reviewer's and the recruiter's notes together, each with
+    who wrote it and at which stage, so the next person to speak to the candidate
+    has the history first. Staff only: `_Tenant` refuses telecallers, who read
+    their own stage's notes on their own lead instead.
+    """
+    candidate = await _get_or_404(tenant, candidate_id, include_rejected=True)
+    notes = await lead_notes.notes_for_candidate(tenant.brand_id, candidate.id)
+    return [lead_notes.to_response(n) for n in notes]
 
 
 # ── Resume confirm ─────────────────────────────────────────────────────────────

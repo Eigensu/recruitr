@@ -9,6 +9,7 @@ import {
   IconRefresh,
   IconUsersGroup,
 } from "@tabler/icons-react";
+import LeadNotes from "@/components/leads/LeadNotes";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -293,6 +294,11 @@ export default function ReviewPanel({
                     )}
                   </div>
                 </label>
+                {/* Outside the label: a click in the notes must not toggle the
+                    checkbox, and the label is the whole card. */}
+                <div className="px-3 pb-1">
+                  <LeadNotes leadId={lead.id} />
+                </div>
               </li>
             );
           })}

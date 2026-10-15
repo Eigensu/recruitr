@@ -67,6 +67,7 @@ from app.modules.recruitment.enums import (
     IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
+    IntakeNoteStage,
     IntakeRejectReason,
     IntakeSource,
 )
@@ -76,6 +77,7 @@ from app.modules.recruitment.models import (
     IntakeLead,
     IntakeSourceConfig,
     LeadCall,
+    LeadNote,
     Team,
 )
 from app.modules.recruitment.schemas import (
@@ -94,6 +96,8 @@ from app.modules.recruitment.schemas import (
     IntakeLeadPage,
     IntakeLeadResponse,
     IntakeLogCallResponse,
+    IntakeNoteCreate,
+    IntakeNoteResponse,
     IntakeOverviewResponse,
     IntakePersonStats,
     IntakeReassignRequest,
@@ -111,7 +115,7 @@ from app.modules.recruitment.schemas import (
     ResumeLeadDraft,
     TenantScope,
 )
-from app.modules.recruitment.service import intake_analytics
+from app.modules.recruitment.service import intake_analytics, lead_notes
 from app.modules.recruitment.service.cv_requests import REQUESTABLE_STATUSES, issue_link
 from app.modules.recruitment.service.intake_service import (
     LeadAlreadyDecided,
@@ -525,6 +529,107 @@ async def call_log(
         match["at"] = when
     calls = await LeadCall.find(match).sort("-at").limit(limit).to_list()
     return await _call_responses(calls, names=True)
+
+
+# ── Screening notes ────────────────────────────────────────────────────────────
+
+
+def _write_note_or_403(tenant: TenantScope, lead: IntakeLead) -> None:
+    """Who may add a note: whoever holds the lead at their own step, or management.
+
+    A telecaller while the lead is in their queue, a recruiter once it is theirs
+    (still in Review, or after their first mapping). The review step in between
+    belongs to the admin or maintainer who hands it to a team, so only management
+    writes there. Everyone's note is stamped with the stage the lead is at.
+    """
+    if _is_manager(tenant):
+        return
+    if tenant.role == UserRole.telecaller:
+        holds = (
+            lead.telecaller_id == tenant.employee_id
+            and lead.status == IntakeLeadStatus.pending_telecaller
+        )
+    else:
+        holds = lead.recruiter_id == tenant.employee_id and lead.status in (
+            IntakeLeadStatus.pending_recruiter,
+            IntakeLeadStatus.actioned,
+        )
+    if not holds:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This lead is not in your queue.")
+
+
+def _readable_stages(tenant: TenantScope, lead: IntakeLead) -> set[IntakeNoteStage] | None:
+    """Which stages' notes this caller may read on the lead: None means all.
+
+    A telecaller sees what is written at their own stage and not what the
+    recruiters later wrote about the same person; a recruiter sees the whole
+    history, which is the point of it. A lead that is not theirs is refused.
+    """
+    if _is_manager(tenant):
+        return None
+    if tenant.role == UserRole.telecaller:
+        if lead.telecaller_id != tenant.employee_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "This lead is assigned to another telecaller."
+            )
+        return {IntakeNoteStage.telecaller}
+    if lead.recruiter_id != tenant.employee_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "This lead is not in your queue.")
+    return None
+
+
+@router.post("/leads/{lead_id}/notes", response_model=IntakeNoteResponse)
+async def add_lead_note(tenant: _LeadHolder, lead_id: str, payload: IntakeNoteCreate):
+    """Save a screening note on a lead, stamped with who wrote it and at which stage."""
+    lead = await _lead_or_404(tenant, lead_id)
+    _write_note_or_403(tenant, lead)
+    note = await lead_notes.add_note(lead, author=tenant, body=payload.body)
+    return lead_notes.to_response(note)
+
+
+@router.get("/leads/{lead_id}/notes", response_model=list[IntakeNoteResponse])
+async def lead_note_history(tenant: _LeadHolder, lead_id: str):
+    """The notes written on one lead, oldest first, as far as the caller may read them."""
+    lead = await _lead_or_404(tenant, lead_id)
+    stages = _readable_stages(tenant, lead)
+    notes = await lead_notes.notes_for_lead(tenant.brand_id, lead.id, stages=stages)
+    return [lead_notes.to_response(n) for n in notes]
+
+
+@router.get("/notes", response_model=list[IntakeNoteResponse], dependencies=[_RequireMaintainer])
+async def note_log(
+    tenant: _Staff,
+    author_id: Annotated[str | None, Query()] = None,
+    stage: Annotated[IntakeNoteStage | None, Query()] = None,
+    start_date: _Since = None,
+    end_date: _Until = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+):
+    """Every screening note, newest first, for admins and maintainers.
+
+    The access log: who wrote what, on which person, at which stage and when.
+    Narrowed by author, stage and date range.
+    """
+    match: dict = {"brand_id": tenant.brand_id}
+    if author_id:
+        match["author_id"] = to_object_id(author_id, "author_id")
+    if stage:
+        match["stage"] = stage.value
+    when: dict = {}
+    if start_date:
+        when["$gte"] = start_date
+    if end_date:
+        when["$lte"] = end_date
+    if when:
+        match["created_at"] = when
+    notes = await LeadNote.find(match).sort("-created_at").limit(limit).to_list()
+    names = {
+        c.id: c.full_name
+        for c in await Candidate.find(
+            {"_id": {"$in": list({n.candidate_id for n in notes})}}
+        ).to_list()
+    }
+    return [lead_notes.to_response(n, candidate_name=names.get(n.candidate_id)) for n in notes]
 
 
 # ── Review ─────────────────────────────────────────────────────────────────────

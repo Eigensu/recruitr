@@ -29,6 +29,7 @@ import type {
 } from "@/types";
 import { useApiFetch } from "@/lib/api";
 import { getCandidateHistory, getCandidateMappings, resolveCvRef } from "@/lib/api/candidates";
+import ScreeningNotes from "./ScreeningNotes";
 import { clientUpdateCandidate, clientConfirmResume } from "@/lib/api/candidates.client";
 import { getRoleCatalog } from "@/lib/api/positions";
 import { uploadResumeToCloudinary } from "@/lib/api/storage.client";
@@ -650,6 +651,8 @@ function ViewBody({
         </div>
         <HistoryTimeline loading={loadingHistory} events={history?.events ?? []} />
       </section>
+
+      <ScreeningNotes key={candidate.id} candidateId={candidate.id} />
     </div>
   );
 }
