@@ -34,7 +34,7 @@ import {
  * The same required fields as adding a candidate by hand, minus brand
  * experience — the recruiter's to fill, since they are the one placing the
  * person with a brand — and with the CV link optional, because a lead from an
- * ad usually has no CV to link, and current salary optional, because plenty of
+ * ad usually has no CV to link, and both salaries optional, because plenty of
  * leads won't say or have none. The backend enforces the same rules
  * (`IntakeCandidateDetails`); this copy exists so a missing field is caught
  * before the round trip, on a handset, next to the field itself.
@@ -66,7 +66,10 @@ const schema = z.object({
     blankToUndefined,
     z.number().int("Age must be a whole number").min(1, "Must be 1 or more").optional(),
   ),
-  expected_salary: numberFrom("Expected Salary is required"),
+  expected_salary: z.preprocess(
+    blankToUndefined,
+    z.number().min(0, "Must be 0 or more").optional(),
+  ),
   salary: z.preprocess(blankToUndefined, z.number().min(0, "Must be 0 or more").optional()),
   notice_period: z.string().min(1, "Notice Period is required"),
   cv_link: z
@@ -211,9 +214,10 @@ export default function AcceptLeadDialog({
           establishment_tag: orUndefined(data.establishment_tag),
           area: orUndefined(data.area),
           cv_link: orUndefined(data.cv_link),
-          // The field starts from the salary on file, so a blank one was
+          // The fields start from the salaries on file, so a blank one was
           // cleared on purpose. Null says so; omitting it would keep the old one.
           salary: data.salary ?? null,
+          expected_salary: data.expected_salary ?? null,
         },
         form.notes,
       );
@@ -371,6 +375,7 @@ export default function AcceptLeadDialog({
                 error={errors.salary}
               />
               <ExpectedSalaryField
+                required={false}
                 value={form.expected_salary}
                 onChange={(expected_salary) => update({ expected_salary })}
                 error={errors.expected_salary}

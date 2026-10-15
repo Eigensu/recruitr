@@ -145,8 +145,8 @@ class IntakeCandidateDetails(BaseModel):
     recruiter, who is the one placing the person with a brand. The CV link is
     optional: a telecaller is on the phone, and a lead from an Instagram ad
     usually has no CV to link to — requiring one would make accept impossible.
-    Current salary is optional too: plenty of leads won't say, or have none.
-    Omitting it keeps the one on file; sending null clears it.
+    Both salaries are optional too: plenty of leads won't say, or have none.
+    Omitting one keeps the figure on file; sending null clears it.
     Source is not asked for at all: every lead here is external by definition.
     """
 
@@ -167,8 +167,8 @@ class IntakeCandidateDetails(BaseModel):
     area: str | None = Field(default=None, max_length=100)
     gender: Gender
     age: int | None = Field(default=None, gt=0)
-    expected_salary: float = Field(..., ge=0)
     # Optional, and null is not the same as omitted: see the docstring.
+    expected_salary: float | None = Field(default=None, ge=0)
     salary: float | None = Field(default=None, ge=0)
     notice_period: str = Field(..., min_length=1, max_length=100)
     cv_link: str | None = Field(default=None, max_length=2000)
