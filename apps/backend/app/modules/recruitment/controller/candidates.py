@@ -97,6 +97,7 @@ _ARRAY_ELEM_AT = "$arrayElemAt"
 
 _log = logging.getLogger(__name__)
 
+_EXTERNAL = "external"  # the source filter's value; matched without regard to case
 # Sentinel accepted by the created_by filter for candidates nobody owns.
 _UNASSIGNED = "unassigned"
 # Sentinel accepted by the referee_id filter for candidates with no referee —
@@ -423,13 +424,23 @@ async def list_candidates(
     elif experience == "gt5":
         match["experience_years"] = {"$gt": 5}
 
-    if source == "internal":
-        # Candidates created before `source` existed have none; the pipeline
-        # already reads those as internal ($ifNull), so the Internal tab must too
-        # or it and the External tab would not add up to the full directory.
-        and_clauses.append({"$or": [{"source": "internal"}, {"source": None}]})
-    elif source:
-        match["source"] = source
+    if source:
+        # Matched without regard to case: the public form used to store
+        # "External", and an exact match dropped those people from the filter —
+        # including everyone a recruiter had since accepted from the Review tab,
+        # who then showed up only when searched for by name.
+        #
+        # Internal is "anything that is not external" rather than its own match:
+        # it then covers a candidate with no `source` (the pipeline reads those as
+        # internal via $ifNull) and one with a channel name stored there, so the
+        # two filters always add up to the whole directory.
+        external = {"$regex": f"^{_EXTERNAL}$", "$options": "i"}
+        if source.lower() == "internal":
+            and_clauses.append({"source": {"$not": external}})
+        elif source.lower() == _EXTERNAL:
+            match["source"] = external
+        else:
+            match["source"] = source
 
     if source_channel:
         match["source_channel"] = source_channel
@@ -526,8 +537,32 @@ async def list_candidates(
             }
         },
         {
+            # The newest history entry — added, approved, mapped, moved or
+            # withdrawn — so the directory leads with whoever was worked on
+            # last. Profile edits deliberately don't count: fixing a typo in a
+            # phone number isn't activity. Served by the (brand_id,
+            # candidate_id, at) index as a top-1 per candidate.
+            _LOOKUP: {
+                "from": "candidate_events",
+                "localField": "_id",
+                "foreignField": "candidate_id",
+                "pipeline": [
+                    {_MATCH: {"brand_id": tenant.brand_id}},
+                    {_SORT: {"at": -1}},
+                    {_LIMIT_OP: 1},
+                    {"$project": {"_id": 0, "at": 1}},
+                ],
+                "as": "last_event",
+            }
+        },
+        {
             _ADD_FIELDS: {
                 "id": {_TO_STR: "$_id"},
+                # $max skips a missing side: a candidate with no history (its
+                # event write is best-effort) still sorts by when it was added.
+                "last_actioned_at": {
+                    "$max": ["$created_at", {_ARRAY_ELEM_AT: ["$last_event.at", 0]}]
+                },
                 "mappings_count": {_SIZE: "$cand_maps"},
                 "created_by_id": {_TO_STR: "$created_by_id"},
                 "created_by_name": {_ARRAY_ELEM_AT: ["$owner.name", 0]},
@@ -543,8 +578,8 @@ async def list_candidates(
                 },
             }
         },
-        {_UNSET: ["cand_maps", "owner", "ref"]},
-        {_SORT: {"created_at": -1, "full_name": 1}},
+        {_UNSET: ["cand_maps", "owner", "ref", "last_event"]},
+        {_SORT: {"last_actioned_at": -1, "full_name": 1}},
         _paginate(page, limit),
     ]
     result = await (await Candidate.get_motor_collection().aggregate(pipeline)).to_list(length=None)

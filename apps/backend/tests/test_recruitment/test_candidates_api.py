@@ -6,6 +6,8 @@ Each test runs in a fresh MongoDB database (see conftest.py autouse fixture).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 import pytest_asyncio
 from beanie import PydanticObjectId
@@ -13,8 +15,15 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.dependencies import get_tenant, get_viewer
 from app.core.main import app
+from app.modules.recruitment.enums.candidate_event_type import CandidateEventType
 from app.modules.recruitment.enums.candidate_status import CandidateStatus
-from app.modules.recruitment.models import Candidate, Mapping, Position, RefereeUser
+from app.modules.recruitment.models import (
+    Candidate,
+    CandidateEvent,
+    Mapping,
+    Position,
+    RefereeUser,
+)
 from app.modules.recruitment.schemas import TenantScope
 
 # ── Shared test tenant (two different brands for isolation tests) ──────────────
@@ -104,6 +113,53 @@ async def test_list_returns_brand_candidates(client_a: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_leads_with_the_most_recently_actioned(client_a: AsyncClient) -> None:
+    """Newest history entry first, falling back to when they were added.
+
+    Profile edits are not activity, so a PATCH must not reorder anyone.
+    """
+    day = datetime(2026, 1, 1, tzinfo=UTC)
+    old_but_moved = Candidate(brand_id=_BRAND_A, full_name="Old But Moved", created_at=day)
+    new_untouched = Candidate(
+        brand_id=_BRAND_A, full_name="New Untouched", created_at=day + timedelta(days=5)
+    )
+    no_history = Candidate(
+        brand_id=_BRAND_A, full_name="No History", created_at=day + timedelta(days=3)
+    )
+    for c in (old_but_moved, new_untouched, no_history):
+        await c.insert()
+    await CandidateEvent(
+        brand_id=_BRAND_A,
+        candidate_id=old_but_moved.id,
+        event_type=CandidateEventType.created,
+        at=day,
+    ).insert()
+    await CandidateEvent(
+        brand_id=_BRAND_A,
+        candidate_id=old_but_moved.id,
+        event_type=CandidateEventType.stage_moved,
+        at=day + timedelta(days=9),
+    ).insert()
+    await CandidateEvent(
+        brand_id=_BRAND_A,
+        candidate_id=new_untouched.id,
+        event_type=CandidateEventType.created,
+        at=day + timedelta(days=5),
+    ).insert()
+
+    async def names() -> list[str]:
+        res = await client_a.get("/api/v1/candidates")
+        assert res.status_code == 200, res.text
+        return [c["full_name"] for c in res.json()["items"]]
+
+    assert await names() == ["Old But Moved", "New Untouched", "No History"]
+
+    edited = await client_a.patch(f"/api/v1/candidates/{no_history.id}", json={"city": "Pune"})
+    assert edited.status_code == 200, edited.text
+    assert await names() == ["Old But Moved", "New Untouched", "No History"]
+
+
+@pytest.mark.asyncio
 async def test_a_stored_department_without_specialization_still_reads(
     client_a: AsyncClient,
 ) -> None:
@@ -169,6 +225,42 @@ async def test_list_filter_by_source_treats_missing_source_as_internal(
     # Search and source each contribute an $or; neither may overwrite the other.
     assert await names(source="internal", search="Lee") == {"Legacy Lee"}
     assert await names(source="internal", search="Eve") == set()
+
+
+@pytest.mark.asyncio
+async def test_list_source_filter_ignores_case_and_keeps_the_tabs_complementary(
+    client_a: AsyncClient,
+) -> None:
+    """The public form once stored "External"; an exact match dropped those people
+    from the External filter (while a name search still found them), and a channel
+    name stored as the source fitted neither tab."""
+    for name, source in (
+        ("Lower Lee", "external"),
+        ("Legacy Lou", "External"),
+        ("Intern Ian", "internal"),
+        ("Channel Chi", "LinkedIn"),
+        ("Missing Mo", None),
+    ):
+        await Candidate(
+            brand_id=_BRAND_A,
+            full_name=name,
+            email=f"{name.split()[0].lower()}@test.com",
+            source=source,
+        ).insert()
+
+    async def names(**params: str) -> set[str]:
+        res = await client_a.get("/api/v1/candidates", params=params)
+        assert res.status_code == 200, res.text
+        return {c["full_name"] for c in res.json()["items"]}
+
+    external = await names(source="external")
+    internal = await names(source="internal")
+
+    assert external == {"Lower Lee", "Legacy Lou"}
+    assert await names(source="EXTERNAL") == external
+    assert internal == {"Intern Ian", "Channel Chi", "Missing Mo"}
+    assert external | internal == await names()
+    assert external & internal == set()
 
 
 @pytest.mark.asyncio

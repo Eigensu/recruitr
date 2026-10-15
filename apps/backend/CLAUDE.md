@@ -77,7 +77,7 @@ pending_telecaller ──accept + details form──▶ pending_review ──adm
                                                                    Review tab reject──▶ archived (candidate soft-deleted)
 ```
 
-**The Candidates page has two tabs.** *Candidates* is plain `GET /candidates`: APPROVED people.
+**The Candidates page has three tabs.** *Candidates* is plain `GET /candidates`: APPROVED people.
 *Review* is `GET /intake/leads/review` — a recruiter's own `pending_recruiter` leads with no
 `recruiter_decision` yet, or everyone's for maintainer+ — with `POST /intake/leads/{id}/recruiter-accept`
 / `recruiter-reject` (maintainer+ may act on a recruiter's behalf). **A candidate stays PENDING until
@@ -85,7 +85,9 @@ the recruiter accepts**: team assignment does not approve them, so someone in re
 Review tab and in no APPROVED list anywhere (directory, position pickers, matching, dashboards), and
 cannot be mapped. Accept approves them but is not the recruiter acting on the lead — it stays
 `pending_recruiter`, SLA clock running, until the first mapping, so the clock cannot be stopped with
-a click. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for analytics;
+a click. *REVIEWED* is `GET /intake/leads/reviewed`: the leads a recruiter accepted (decision, not status,
+puts them there, so they stay after the first mapping), newest first, same visibility rules as Review;
+those people are also still in the Candidates tab. Both rejects soft-delete the candidate (`is_active=False`) and keep the lead for analytics;
 the ingest's duplicate check (`_ContactIndex`) still matches rejected rows, and the profile, mappings
 and history endpoints still read them so the Leads page can open a rejected lead.
 `scripts/migrate_candidates_to_leads.py` (report-only unless `--confirm`) queues PENDING candidates

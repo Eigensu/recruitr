@@ -15,6 +15,7 @@ import {
 import { apiErrorMessage, useApiFetch } from "@/lib/api";
 import {
   fetchReviewLeads,
+  fetchReviewedLeads,
   recruiterAcceptLead,
   recruiterRejectLead,
   type IntakeLead,
@@ -28,11 +29,12 @@ import CandidateDrawer from "./CandidateDrawer";
 import AddCandidateForm from "./AddCandidateForm";
 import BulkUploadDrawer from "./BulkUploadDrawer";
 import ReviewLeadCard from "./ReviewLeadCard";
+import ReviewedLeadCard from "./ReviewedLeadCard";
 import CandidateCardSkeleton from "./skeletons/CandidateCardSkeleton";
 
 const PAGE_SIZE = 50;
 
-type Tab = "candidates" | "review";
+type Tab = "candidates" | "review" | "reviewed";
 
 interface Props {
   initialCandidates: ApiCandidate[];
@@ -56,7 +58,7 @@ const selectStyle = {
 };
 
 /**
- * The Candidate Directory: two tabs.
+ * The Candidate Directory: three tabs.
  *
  * Candidates — everyone APPROVED. Un-actioned (PENDING) people are not here at
  * all: they live on the Leads page until a telecaller screens them, and stay
@@ -66,6 +68,11 @@ const selectStyle = {
  * on the recruiter the team's round-robin picked. A recruiter sees their own;
  * a maintainer or admin sees everyone's and may decide on a recruiter's behalf.
  * Accept approves the person into the Candidates tab; reject archives them.
+ *
+ * REVIEWED — the leads a recruiter accepted from Review, newest first, read-only.
+ * They also stay in the Candidates tab: this is the record of what was reviewed,
+ * not a move out of the directory. Fetched on first open, and refetched after
+ * another accept so it is never missing the lead just accepted.
  */
 export default function CandidatesClient({
   initialCandidates,
@@ -104,6 +111,12 @@ export default function CandidatesClient({
   // must not re-enable the other's buttons while its request is still out.
   const [busyLeadIds, setBusyLeadIds] = useState<ReadonlySet<string>>(new Set());
   const reviewRequestRef = useRef(0);
+
+  // ── Reviewed tab ─────────────────────────────────────────────────────────
+  // null until first needed, and reset to null when an accept makes it stale.
+  const [reviewedLeads, setReviewedLeads] = useState<IntakeLead[] | null>(null);
+  const [reviewedFailed, setReviewedFailed] = useState(false);
+  const reviewedRequestRef = useRef(0);
 
   function setLeadBusy(id: string, busy: boolean) {
     setBusyLeadIds((prev) => {
@@ -150,6 +163,33 @@ export default function CandidatesClient({
       setReviewLeads([]);
       toast(apiErrorMessage(err, "Could not load leads to review."), "error");
     }
+  }
+
+  async function loadReviewed(recruiterId: string = reviewRecruiterId) {
+    const requestId = ++reviewedRequestRef.current;
+    setReviewedFailed(false);
+    try {
+      const leads = await fetchReviewedLeads(apiFetch, recruiterId || undefined);
+      if (requestId === reviewedRequestRef.current) setReviewedLeads(leads);
+    } catch (err) {
+      if (requestId !== reviewedRequestRef.current) return;
+      // Left null, not [], so the tab offers a retry instead of claiming that
+      // nobody has been reviewed.
+      setReviewedFailed(true);
+      toast(apiErrorMessage(err, "Could not load reviewed candidates."), "error");
+    }
+  }
+
+  /** Drop the list and any fetch still in flight: its answer predates the change. */
+  function invalidateReviewed() {
+    reviewedRequestRef.current++;
+    setReviewedLeads(null);
+  }
+
+  /** Fetched on first open (and after an accept made it stale), not on mount. */
+  function selectTab(tab: Tab) {
+    setActiveTab(tab);
+    if (tab === "reviewed" && reviewedLeads === null) void loadReviewed();
   }
 
   useEffect(() => {
@@ -264,6 +304,7 @@ export default function CandidatesClient({
       setLeadBusy(lead.id, false);
     }
     dropReviewLead(lead.id);
+    invalidateReviewed(); // stale now: the lead just accepted belongs in it
     toast(`${lead.full_name} moved to Candidates`, "success");
     // They are in the Candidates tab now; refetch rather than splice, since the
     // card there needs the full candidate row, not the lead.
@@ -300,12 +341,21 @@ export default function CandidatesClient({
   function handleReviewRecruiterChange(recruiterId: string) {
     setReviewRecruiterId(recruiterId);
     setReviewLeads(null);
+    invalidateReviewed();
     void loadReview(recruiterId);
+    if (activeTab === "reviewed") void loadReviewed(recruiterId);
   }
 
   const hasMore = candidates.length < total;
   const candidateLabel = total === 1 ? "1 candidate" : `${total} candidates`;
   const countLabel = hasMore ? `Showing ${candidates.length} of ${candidateLabel}` : candidateLabel;
+  const reviewedCount = reviewedLeads?.length ?? 0;
+  const reviewedLabel =
+    reviewedLeads === null
+      ? reviewedFailed
+        ? "Could not load"
+        : "Loading…"
+      : `${reviewedCount} ${reviewedCount === 1 ? "candidate" : "candidates"} reviewed`;
   const reviewCount = reviewLeads?.length ?? 0;
   const reviewLabel =
     reviewLeads === null
@@ -319,12 +369,13 @@ export default function CandidatesClient({
           [
             { key: "candidates", label: "Candidates" },
             { key: "review", label: reviewCount > 0 ? `Review (${reviewCount})` : "Review" },
+            { key: "reviewed", label: "REVIEWED" },
           ] as const
         ).map((tab) => (
           <button
             key={tab.key}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => selectTab(tab.key)}
             className="px-4 py-2 text-sm font-medium transition-colors"
             style={{
               color:
@@ -340,7 +391,11 @@ export default function CandidatesClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-          {activeTab === "candidates" ? countLabel : reviewLabel}
+          {activeTab === "candidates"
+            ? countLabel
+            : activeTab === "review"
+              ? reviewLabel
+              : reviewedLabel}
         </span>
         {activeTab === "candidates" && (
           <div className="flex gap-2">
@@ -372,13 +427,13 @@ export default function CandidatesClient({
             </button>
           </div>
         )}
-        {activeTab === "review" && isMaintainer && (
+        {(activeTab === "review" || activeTab === "reviewed") && isMaintainer && (
           <select
             value={reviewRecruiterId}
             onChange={(e) => handleReviewRecruiterChange(e.target.value)}
             className="rounded-lg px-3 py-1.5 text-sm outline-none"
             style={selectStyle}
-            aria-label="Filter review leads by recruiter"
+            aria-label="Filter leads by recruiter"
           >
             <option value="">All Recruiters</option>
             {recruiters.map((r) => (
@@ -504,6 +559,53 @@ export default function CandidatesClient({
                   showRecruiter={isMaintainer}
                   onAccept={() => handleAcceptLead(lead)}
                   onReject={(reason, notes) => handleRejectLead(lead, reason, notes)}
+                  onViewProfile={() => handleViewLeadProfile(lead)}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "reviewed" && (
+        <>
+          {reviewedLeads === null && reviewedFailed && (
+            <div
+              className="py-12 text-center text-sm"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Could not load reviewed candidates.{" "}
+              <button
+                type="button"
+                onClick={() => void loadReviewed()}
+                className="font-medium underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          {reviewedLeads === null && !reviewedFailed && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <CandidateCardSkeleton key={i} />
+              ))}
+            </div>
+          )}
+          {reviewedLeads?.length === 0 && (
+            <div
+              className="py-12 text-center text-sm"
+              style={{ color: "var(--color-text-secondary)" }}
+            >
+              Nobody reviewed yet. Candidates you accept from the Review tab will be listed here.
+            </div>
+          )}
+          {reviewedLeads && reviewedLeads.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {reviewedLeads.map((lead) => (
+                <ReviewedLeadCard
+                  key={lead.id}
+                  lead={lead}
+                  showRecruiter={isMaintainer}
                   onViewProfile={() => handleViewLeadProfile(lead)}
                 />
               ))}
