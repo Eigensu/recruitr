@@ -113,6 +113,17 @@ export function deletePosition(apiFetch: ApiFetch, positionId: string): Promise<
   return apiFetch(`/api/v1/positions/${positionId}`, { method: "DELETE" });
 }
 
+export function closePosition(
+  apiFetch: ApiFetch,
+  positionId: string,
+  reason: string,
+): Promise<ApiPosition> {
+  return apiFetch(`/api/v1/positions/${positionId}/close`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export function reopenPosition(apiFetch: ApiFetch, positionId: string): Promise<ApiPosition> {
   return apiFetch(`/api/v1/positions/${positionId}/reopen`, { method: "POST" });
 }

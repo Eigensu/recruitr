@@ -77,6 +77,7 @@ from app.modules.recruitment.schemas.position import (
     MapCandidateResponse,
     MappedPreview,
     PositionApprovalRequest,
+    PositionCloseRequest,
     PositionCreate,
     PositionFiltersResponse,
     PositionListItem,
@@ -163,6 +164,7 @@ __all__ = [
     "PositionFiltersResponse",
     "PositionPage",
     "PositionApprovalRequest",
+    "PositionCloseRequest",
     # Client DTOs
     "ClientCreate",
     "ClientUpdate",

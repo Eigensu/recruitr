@@ -255,6 +255,11 @@ class Position(Document):
     date_opened: datetime = Field(default_factory=_utcnow)
     target_close: datetime | None = None
     notes: str | None = None
+    # Why, when and by whom a position was closed. Cleared on reopen, so these
+    # only ever describe the current closure.
+    close_reason: str | None = None
+    closed_at: datetime | None = None
+    closed_by_id: PydanticObjectId | None = None  # FK → employees._id
     is_active: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
