@@ -27,14 +27,17 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from beanie import PydanticObjectId
+from beanie.odm.queries.update import UpdateResponse
 from pydantic import BaseModel, Field
 from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
 from app.modules.auth.models import NON_RECRUITER_ROLES, User, UserRole
 from app.modules.recruitment.enums import (
+    MAX_CALL_ATTEMPTS,
     CandidateEventType,
     CandidateStatus,
+    IntakeCallOutcome,
     IntakeDecision,
     IntakeLeadStatus,
     IntakeRejectReason,
@@ -46,6 +49,7 @@ from app.modules.recruitment.models import (
     IntakeAttribution,
     IntakeLead,
     IntakeSourceConfig,
+    LeadCall,
     Team,
 )
 from app.modules.recruitment.repository import next_seq, record_candidate_event
@@ -1241,6 +1245,139 @@ async def reject_lead(
         )
     await _drop_analytics_cache(lead.brand_id)
     return lead
+
+
+# ── Call log ───────────────────────────────────────────────────────────────────
+
+
+async def _count_call(
+    lead: IntakeLead, now: datetime, *, only_while_pending: bool
+) -> IntakeLead | None:
+    """Add one to the lead's call count and return the lead as it now stands.
+
+    One atomic update, so two calls logged at once get different attempt numbers
+    instead of both reading the same count. `only_while_pending` is the guard for
+    an unanswered call: it must not land on a lead someone else just decided, nor
+    push it past the limit. A decision's own call is counted after the fact, when
+    the lead is no longer pending, so it skips both.
+    """
+    match: dict[str, object] = {"_id": lead.id}
+    if only_while_pending:
+        match["status"] = IntakeLeadStatus.pending_telecaller.value
+        # `$lt` alone would skip a lead from before the field existed, which
+        # Mongo holds with no call_attempts at all.
+        match["$or"] = [
+            {"call_attempts": {"$lt": MAX_CALL_ATTEMPTS}},
+            {"call_attempts": {"$exists": False}},
+        ]
+    updated = await IntakeLead.find_one(match).update(
+        {"$inc": {"call_attempts": 1}, "$set": {"last_call_at": now, "updated_at": now}},
+        response_type=UpdateResponse.NEW_DOCUMENT,
+    )
+    if updated is None:
+        return None
+    lead.call_attempts = updated.call_attempts
+    lead.last_call_at = updated.last_call_at
+    return updated
+
+
+async def _close_as_unreachable(lead: IntakeLead, now: datetime) -> bool:
+    """Reject a lead that has used up its calls. False if someone else decided it first."""
+    try:
+        await reject_lead(
+            lead,
+            reason=IntakeRejectReason.not_reachable,
+            notes=f"Not reached after {MAX_CALL_ATTEMPTS} calls",
+            now=now,
+        )
+    except LeadAlreadyDecided:
+        # A manager decided it between the call and the close; theirs stands.
+        return False
+    return True
+
+
+async def log_unanswered_call(
+    lead: IntakeLead,
+    *,
+    telecaller_id: PydanticObjectId,
+    note: str | None = None,
+    now: datetime | None = None,
+) -> tuple[LeadCall, bool]:
+    """Record a call nobody answered; the fifth one closes the lead as dead.
+
+    Returns the logged call and whether it closed the lead. The close is the
+    ordinary telecaller reject, reason not_reachable, so the candidate is hidden
+    and the lead keeps counting in the reject analytics like any other.
+    """
+    stamp = now or datetime.now(UTC)
+    if await _count_call(lead, stamp, only_while_pending=True) is None:
+        # Either someone decided the lead, or an earlier fifth call was counted and
+        # then failed before it could close the lead (a Mongo error between the two
+        # writes), which would otherwise leave it pending at the limit for good:
+        # every later call would be refused here. Finish that close now.
+        fresh = await IntakeLead.get(lead.id)
+        if (
+            fresh is not None
+            and fresh.status == IntakeLeadStatus.pending_telecaller
+            and fresh.call_attempts >= MAX_CALL_ATTEMPTS
+        ):
+            await _close_as_unreachable(lead, stamp)
+        raise LeadAlreadyDecided(str(lead.id))
+    call = LeadCall(
+        brand_id=lead.brand_id,
+        lead_id=lead.id,
+        candidate_id=lead.candidate_id,
+        telecaller_id=telecaller_id,
+        attempt=lead.call_attempts,
+        outcome=IntakeCallOutcome.no_answer,
+        note=note,
+        at=stamp,
+    )
+    await call.insert()
+
+    dead = False
+    if lead.call_attempts >= MAX_CALL_ATTEMPTS:
+        try:
+            dead = await _close_as_unreachable(lead, stamp)
+        except Exception:
+            # The call is logged and counted; the next attempt finds the lead at
+            # the limit and finishes the close (above), so this must not be a 500
+            # that hides a call which did happen.
+            logger.exception("Could not close lead %s after its last call", lead.id)
+    await _drop_analytics_cache(lead.brand_id)
+    return call, dead
+
+
+async def record_decision_call(
+    lead: IntakeLead,
+    *,
+    telecaller_id: PydanticObjectId,
+    outcome: IntakeCallOutcome,
+    note: str | None = None,
+    now: datetime | None = None,
+) -> None:
+    """Log the call a telecaller's accept or reject ended.
+
+    After the decision, and never able to undo it: the decision is committed, so
+    a failure here is logged and the lead goes on with one call missing from the
+    log rather than the telecaller being told their accept failed.
+    """
+    stamp = now or datetime.now(UTC)
+    try:
+        if await _count_call(lead, stamp, only_while_pending=False) is None:
+            return
+        await LeadCall(
+            brand_id=lead.brand_id,
+            lead_id=lead.id,
+            candidate_id=lead.candidate_id,
+            telecaller_id=telecaller_id,
+            attempt=lead.call_attempts,
+            outcome=outcome,
+            note=note,
+            at=stamp,
+        ).insert()
+    except Exception:
+        logger.exception("Could not log the decision call for lead %s", lead.id)
 
 
 # ── Recruiter's Review tab ─────────────────────────────────────────────────────

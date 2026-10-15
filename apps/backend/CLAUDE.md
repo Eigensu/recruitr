@@ -143,6 +143,18 @@ it — there is a test for exactly that. A third door, `get_lead_holder_tenant`,
 *and* recruiters for the one endpoint either may need on a lead they hold (`POST
 /leads/{id}/cv-link`); it is wider than both, so its handler checks the caller holds that lead.
 
+**Call log.** Every call a telecaller makes is a `LeadCall` row (permanent, no TTL — the telecallers'
+activity log, since `ActivityLog` is the recruiters' 90-day feed). `POST /intake/leads/{id}/calls` logs
+an *unanswered* call with an optional note; `IntakeLead.call_attempts` is the denormalised count, bumped
+atomically by `intake_service._count_call` so concurrent calls get distinct attempt numbers. The fifth
+(`MAX_CALL_ATTEMPTS`) closes the lead as the ordinary telecaller reject with reason `not_reachable`.
+Accept and reject log the call they ended (`record_decision_call`: `connected`, or `no_answer` for a
+`not_reachable` reject) — but only when a *telecaller* decides; a manager acting on their behalf is not
+a call. `GET /leads/mine` sorts `call_attempts` descending then oldest assignment, so half-worked leads
+lead the queue. `GET /intake/calls` (maintainer+) is the all-telecallers log, filterable by telecaller
+and date. Leads from before the field existed have no `call_attempts` in Mongo, so the count guard
+accepts a missing field as zero.
+
 **CV upload links.** Most leads arrive with no CV (Meta's lead-ad form does not ask), so whoever
 holds a lead can make a 7-day link and send it to the candidate themselves. The candidate uploads
 at `/cv/{token}` with no account; the file is merged like a staff upload, shows on the Review card

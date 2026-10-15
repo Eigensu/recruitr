@@ -54,6 +54,19 @@ class IntakeDecision(StrEnum):
     reject = "reject"
 
 
+# A lead nobody picks up is dead after this many calls: the telecaller's fifth
+# unanswered attempt rejects it as not reachable. Five is the agency's rule, not
+# a tuning knob, so it lives here rather than in settings.
+MAX_CALL_ATTEMPTS = 5
+
+
+class IntakeCallOutcome(StrEnum):
+    """How one call to a lead went."""
+
+    no_answer = "no_answer"  # rang out, was busy, or went to voicemail
+    connected = "connected"  # a person answered, and the call ended in a decision
+
+
 class IntakeRejectReason(StrEnum):
     """Why a telecaller turned a lead away.
 

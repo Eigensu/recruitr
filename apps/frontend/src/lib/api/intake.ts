@@ -68,6 +68,10 @@ export interface IntakeLead {
   recruiter_reject_reason: IntakeRejectReason | null;
   recruiter_notes: string | null;
   reassignment_count: number;
+  /** Calls made so far, and the limit: the fifth unanswered one closes the lead. */
+  call_attempts: number;
+  last_call_at: string | null;
+  max_call_attempts: number;
   /** When the latest CV upload link stops working, and when the candidate last used one. */
   cv_link_expires_at: string | null;
   cv_uploaded_at: string | null;
@@ -273,6 +277,44 @@ export function acceptLead(
     method: "POST",
     body: JSON.stringify({ details, notes: notes || null }),
   });
+}
+
+/** One call a telecaller made to a lead. */
+export interface IntakeCall {
+  id: string;
+  lead_id: string;
+  attempt: number;
+  outcome: "no_answer" | "connected";
+  note: string | null;
+  at: string;
+  telecaller_id: string;
+  telecaller_name: string | null;
+  /** Filled on the management log only. */
+  lead_name: string | null;
+}
+
+export interface IntakeLogCallResult {
+  lead: IntakeLead;
+  call: IntakeCall;
+  /** True when this was the last allowed call and it closed the lead as unreachable. */
+  dead: boolean;
+}
+
+/** Log a call nobody answered, with an optional note on how it went. */
+export function logCall(
+  apiFetch: ApiFetch,
+  id: string,
+  note?: string,
+): Promise<IntakeLogCallResult> {
+  return apiFetch<IntakeLogCallResult>(`/api/v1/intake/leads/${id}/calls`, {
+    method: "POST",
+    body: JSON.stringify({ note: note || null }),
+  });
+}
+
+/** The calls made to one lead, oldest first. */
+export function fetchLeadCalls(apiFetch: ApiFetch, id: string): Promise<IntakeCall[]> {
+  return apiFetch<IntakeCall[]>(`/api/v1/intake/leads/${id}/calls`);
 }
 
 export function rejectLead(
